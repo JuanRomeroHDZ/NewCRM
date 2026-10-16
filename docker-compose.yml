@@ -1,0 +1,113 @@
+version: '3.8'
+
+services:
+  # Reverse Proxy & Load Balancer
+  proxy:
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+    container_name: emailsaver_proxy
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8080}:80"
+    networks:
+      - frontend_net
+    depends_on:
+      frontend:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+
+  # Frontend (Vite + React 19 + Tailwind CSS)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: emailsaver_frontend
+    restart: unless-stopped
+    networks:
+      - frontend_net
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  # Backend API (Python 3.12 + FastAPI Async + SQLAlchemy 2.0)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: emailsaver_backend
+    restart: unless-stopped
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-emailsaver}:${POSTGRES_PASSWORD:-emailsaver_secret_pass}@db:5432/${POSTGRES_DB:-emailsaver}
+      - REDIS_URL=redis://redis:6379/0
+      - SERVER_SECRET_KEY=${SERVER_SECRET_KEY:-emailsaver_default_master_encryption_seed_32b_prod}
+      - VAULT_SESSION_TIMEOUT_MINUTES=${VAULT_SESSION_TIMEOUT_MINUTES:-10}
+      - CLIPBOARD_CLEAR_SECONDS=${CLIPBOARD_CLEAR_SECONDS:-30}
+    networks:
+      - frontend_net
+      - backend_net
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - vault_media:/app/media
+
+  # Primary Relational Database (PostgreSQL 16)
+  db:
+    image: postgres:16-alpine
+    container_name: emailsaver_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-emailsaver}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-emailsaver_secret_pass}
+      POSTGRES_DB: ${POSTGRES_DB:-emailsaver}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - backend_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-emailsaver} -d ${POSTGRES_DB:-emailsaver}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # Centralized Session & Ephemeral Cache (Redis 7)
+  redis:
+    image: redis:7-alpine
+    container_name: emailsaver_redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--save", "60", "1"]
+    volumes:
+      - redis_data:/data
+    networks:
+      - backend_net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+networks:
+  # Public network exposed to the reverse proxy and frontend
+  frontend_net:
+    driver: bridge
+
+  # Private internal network completely isolated from exterior access
+  backend_net:
+    driver: bridge
+    internal: true
+
+volumes:
+  postgres_data:
+    name: emailsaver_postgres_data
+  redis_data:
+    name: emailsaver_redis_data
+  vault_media:
+    name: emailsaver_vault_media
