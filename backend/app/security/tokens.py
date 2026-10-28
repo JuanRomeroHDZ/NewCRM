@@ -1,28 +1,57 @@
 import time
+import secrets
 import jwt
 from fastapi import Header, HTTPException, status
 from app.config import settings
+from app.security.sessions import session_manager
+from app.security.crypto import active_vault_key
 
-def create_vault_token(timeout_minutes: int | None = None) -> str:
-    """Generates a signed Vault Level 2 token."""
+def create_vault_token(timeout_minutes: int | None = None, encryption_key: bytes | None = None) -> str:
+    """Generates a signed Vault Level 2 token with unique session ID (jti) and registers session in RAM."""
     if timeout_minutes is None:
         timeout_minutes = settings.VAULT_SESSION_TIMEOUT_MINUTES
-    exp = int(time.time()) + (timeout_minutes * 60)
+    now = int(time.time())
+    exp = now + (timeout_minutes * 60)
+    jti = secrets.token_hex(32)
+
+    # Register ephemeral session with derived AES key in volatile memory
+    session_manager.create_session(jti=jti, key=encryption_key, exp=exp)
+
     payload = {
         "scope": "level2_vault",
+        "jti": jti,
         "exp": exp,
-        "iat": int(time.time())
+        "iat": now
     }
     return jwt.encode(payload, settings.SERVER_SECRET_KEY, algorithm="HS256")
 
 def verify_vault_token(token: str | None) -> bool:
-    """Checks if vault token is valid and not expired."""
+    """Checks if vault token is valid, not expired, and active in the session manager (not revoked)."""
     if not token:
         return False
     try:
         payload = jwt.decode(token, settings.SERVER_SECRET_KEY, algorithms=["HS256"])
-        return payload.get("scope") == "level2_vault"
-    except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
+        if payload.get("scope") != "level2_vault":
+            return False
+        jti = payload.get("jti")
+        if not jti:
+            return False
+        return session_manager.is_session_active(jti)
+    except (jwt.ExpiredSignatureError, jwt.InvalidTokenError, Exception):
+        return False
+
+def revoke_vault_token(token: str | None) -> bool:
+    """Revokes the given vault token in the session manager and wipes the derived key from RAM."""
+    if not token:
+        return False
+    try:
+        # Decode without verifying expiration so even expired or expiring tokens can be explicitly revoked
+        payload = jwt.decode(token, options={"verify_signature": False})
+        jti = payload.get("jti")
+        if jti:
+            return session_manager.revoke_session(jti)
+        return False
+    except Exception:
         return False
 
 def get_vault_remaining_seconds(token: str | None) -> int:
@@ -31,6 +60,9 @@ def get_vault_remaining_seconds(token: str | None) -> int:
         return 0
     try:
         payload = jwt.decode(token, settings.SERVER_SECRET_KEY, algorithms=["HS256"])
+        jti = payload.get("jti")
+        if not jti or not session_manager.is_session_active(jti):
+            return 0
         exp = payload.get("exp", 0)
         remaining = exp - int(time.time())
         return max(0, remaining)
@@ -38,10 +70,39 @@ def get_vault_remaining_seconds(token: str | None) -> int:
         return 0
 
 def require_vault_unlocked(x_vault_token: str | None = Header(None)) -> bool:
-    """FastAPI dependency to strictly guard Level 2 endpoints."""
-    if not verify_vault_token(x_vault_token):
+    """
+    FastAPI dependency to strictly guard Level 2 endpoints.
+    Verifies cryptographic token, verifies session is unrevoked,
+    and binds the ephemeral derived AES-256 key to the current request context.
+    """
+    if not x_vault_token:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
+            status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Bóveda cifrada bloqueada. Ingrese su contraseña maestra para acceder a este recurso."
         )
-    return True
+
+    try:
+        payload = jwt.decode(x_vault_token, settings.SERVER_SECRET_KEY, algorithms=["HS256"])
+        if payload.get("scope") != "level2_vault":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Token de acceso inválido para el ámbito de la bóveda de nivel 2."
+            )
+        jti = payload.get("jti")
+        if not jti or not session_manager.is_session_active(jti):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Sesión de bóveda expirada o bloqueada. Ingrese nuevamente su contraseña maestra."
+            )
+
+        # Retrieve session-derived AES key and bind to request ContextVar
+        key = session_manager.get_session_key(jti)
+        if key:
+            active_vault_key.set(key)
+
+        return True
+    except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Sesión de bóveda expirada o inválida. Ingrese nuevamente su contraseña maestra."
+        )

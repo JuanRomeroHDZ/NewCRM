@@ -3,8 +3,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.services.graph import generate_relational_graph
 from app.schemas import GraphResponse
+from app.security.tokens import require_vault_unlocked
 
-router = APIRouter(prefix="/graph", tags=["graph"])
+router = APIRouter(prefix="/graph", tags=["graph"], dependencies=[Depends(require_vault_unlocked)])
 
 @router.get("", response_model=GraphResponse)
 async def get_graph(db: AsyncSession = Depends(get_db)):

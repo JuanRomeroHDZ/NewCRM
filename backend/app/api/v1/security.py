@@ -1,10 +1,11 @@
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
+import json
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
-from app.models import EmailAccount, PlatformAccount, UserSettings
+from app.models import EmailAccount, PlatformAccount, UserSettings, PasswordHistory
 from app.schemas import SecurityAuditResponse, PasswordReuseGroup, EmergencyKitResponse, PwnedCheckRequest, PwnedCheckResponse
 from app.security.crypto import decrypt_secret, calculate_entropy
 from app.security.tokens import require_vault_unlocked
@@ -12,9 +13,34 @@ from app.security.pwned import check_pwned_password
 
 router = APIRouter(prefix="/security", tags=["security"], dependencies=[Depends(require_vault_unlocked)])
 
+def _parse_json_list(val: str | None) -> list:
+    if not val:
+        return []
+    try:
+        parsed = json.loads(val)
+        return parsed if isinstance(parsed, list) else []
+    except Exception:
+        return []
+
+def _parse_date_str(val: str | None) -> date | None:
+    if not val or not isinstance(val, str):
+        return None
+    try:
+        return date.fromisoformat(val.strip()[:10])
+    except Exception:
+        return None
+
 @router.get("/health", response_model=SecurityAuditResponse)
 async def get_security_health_audit(db: AsyncSession = Depends(get_db)):
-    """Audits password reuse, weak entropy, missing 2FA, and blast radius across the vault."""
+    """Audits password reuse, weak entropy, missing 2FA, stale passwords, and expiring/expired API keys."""
+    settings_row = (await db.execute(select(UserSettings).limit(1))).scalar_one_or_none()
+    root_threshold = int(getattr(settings_row, "password_rotation_days_root", 90) or 90) if settings_row else 90
+    secondary_threshold = int(getattr(settings_row, "password_rotation_days_secondary", 180) or 180) if settings_row else 180
+
+    # Latest password history dates per target_id
+    hist_stmt = select(PasswordHistory.target_id, func.max(PasswordHistory.created_at)).group_by(PasswordHistory.target_id)
+    hist_map = dict((await db.execute(hist_stmt)).all())
+
     # Fetch active emails
     emails = (await db.execute(
         select(EmailAccount).where(EmailAccount.is_deleted == False)
@@ -26,11 +52,16 @@ async def get_security_health_audit(db: AsyncSession = Depends(get_db)):
     )).scalars().all()
 
     email_map = {e.id: e.address for e in emails}
+    now_naive = datetime.now(timezone.utc).replace(tzinfo=None)
+    today = now_naive.date()
 
-    # Group passwords to detect reuse
     pw_clusters = defaultdict(list)
     weak_accounts = []
     unprotected_emails = []
+    stale_accounts = []
+    api_key_alerts = []
+    expired_api_keys_count = 0
+    expiring_api_keys_count = 0
 
     # 1. Inspect emails
     for e in emails:
@@ -60,8 +91,24 @@ async def get_security_health_audit(db: AsyncSession = Depends(get_db)):
                         "entropy": entropy
                     })
 
-    # 2. Inspect platforms
+            pw_dt = getattr(e, "password_updated_at", None) or hist_map.get(e.id) or e.created_at or now_naive
+            if pw_dt.tzinfo is not None:
+                pw_dt = pw_dt.astimezone(timezone.utc).replace(tzinfo=None)
+            age_days = max(0, (now_naive - pw_dt).days)
+            if age_days >= root_threshold:
+                stale_accounts.append({
+                    "id": e.id,
+                    "name": e.address,
+                    "type": "email",
+                    "provider": e.provider,
+                    "age_days": age_days,
+                    "threshold_days": root_threshold,
+                    "last_updated": pw_dt.isoformat()
+                })
+
+    # 2. Inspect platforms (passwords + API keys)
     for p in platforms:
+        parent_email_addr = email_map.get(p.email_id, "Desconocido")
         if p.encrypted_password and p.access_type == "own_password":
             plain_pw = decrypt_secret(p.encrypted_password)
             if plain_pw:
@@ -69,7 +116,7 @@ async def get_security_health_audit(db: AsyncSession = Depends(get_db)):
                     "id": p.id,
                     "name": p.name,
                     "type": "platform",
-                    "parent_email": email_map.get(p.email_id, "Desconocido")
+                    "parent_email": parent_email_addr
                 })
                 entropy = calculate_entropy(plain_pw)
                 if entropy["score"] < 50:
@@ -79,6 +126,57 @@ async def get_security_health_audit(db: AsyncSession = Depends(get_db)):
                         "type": "platform",
                         "entropy": entropy
                     })
+
+            pw_dt = getattr(p, "password_updated_at", None) or hist_map.get(p.id) or p.created_at or now_naive
+            if pw_dt.tzinfo is not None:
+                pw_dt = pw_dt.astimezone(timezone.utc).replace(tzinfo=None)
+            age_days = max(0, (now_naive - pw_dt).days)
+            if age_days >= secondary_threshold:
+                stale_accounts.append({
+                    "id": p.id,
+                    "name": p.name,
+                    "type": "platform",
+                    "parent_email": parent_email_addr,
+                    "age_days": age_days,
+                    "threshold_days": secondary_threshold,
+                    "last_updated": pw_dt.isoformat()
+                })
+
+        # Inspect API keys expiration
+        for ak in _parse_json_list(p.api_keys):
+            if not isinstance(ak, dict):
+                continue
+            exp_date = _parse_date_str(ak.get("expires_at"))
+            if not exp_date:
+                continue
+            days_rem = (exp_date - today).days
+            if days_rem < 0:
+                expired_api_keys_count += 1
+                api_key_alerts.append({
+                    "id": ak.get("id", ""),
+                    "label": ak.get("label", "API Key"),
+                    "platform_id": p.id,
+                    "platform_name": p.name,
+                    "parent_email": parent_email_addr,
+                    "expires_at": exp_date.isoformat(),
+                    "days_remaining": days_rem,
+                    "status": "expired"
+                })
+            elif days_rem <= 15:
+                expiring_api_keys_count += 1
+                api_key_alerts.append({
+                    "id": ak.get("id", ""),
+                    "label": ak.get("label", "API Key"),
+                    "platform_id": p.id,
+                    "platform_name": p.name,
+                    "parent_email": parent_email_addr,
+                    "expires_at": exp_date.isoformat(),
+                    "days_remaining": days_rem,
+                    "status": "expiring_soon"
+                })
+
+    api_key_alerts.sort(key=lambda x: x["days_remaining"])
+    stale_accounts.sort(key=lambda x: x["age_days"], reverse=True)
 
     # Find reuse groups with 2 or more accounts sharing the exact same password
     reuse_groups: list[PasswordReuseGroup] = []
@@ -95,20 +193,21 @@ async def get_security_health_audit(db: AsyncSession = Depends(get_db)):
     total_accounts = len(emails) + len(platforms)
 
     # Calculate Global Health Score (0 - 100)
-    # Deductions:
-    # - 15 points per reuse group (max 40)
-    # - 5 points per weak password (max 30)
-    # - 10 points per email without 2FA (max 30)
     penalty = 0
-    penalty += min(40, len(reuse_groups) * 15)
-    penalty += min(30, len(weak_accounts) * 5)
-    penalty += min(30, len(unprotected_emails) * 10)
+    penalty += min(35, len(reuse_groups) * 15)
+    penalty += min(25, len(weak_accounts) * 5)
+    penalty += min(25, len(unprotected_emails) * 10)
+    penalty += min(30, expired_api_keys_count * 12)
+    penalty += min(15, expiring_api_keys_count * 5)
+    penalty += min(20, len(stale_accounts) * 4)
 
-    health_score = max(10, 100 - penalty)
+    health_score = max(5, 100 - penalty)
     vulnerable_accounts = len(set(
         [item["id"] for rg in reuse_groups for item in rg.entities] +
         [w["id"] for w in weak_accounts] +
-        [u["id"] for u in unprotected_emails]
+        [u["id"] for u in unprotected_emails] +
+        [s["id"] for s in stale_accounts] +
+        [a["platform_id"] for a in api_key_alerts]
     ))
 
     return SecurityAuditResponse(
@@ -118,10 +217,16 @@ async def get_security_health_audit(db: AsyncSession = Depends(get_db)):
         reused_passwords_count=reused_count,
         weak_passwords_count=len(weak_accounts),
         no_2fa_emails_count=len(unprotected_emails),
-        stale_passwords_count=0,
+        stale_passwords_count=len(stale_accounts),
+        expiring_api_keys_count=expiring_api_keys_count,
+        expired_api_keys_count=expired_api_keys_count,
+        password_rotation_days_root=root_threshold,
+        password_rotation_days_secondary=secondary_threshold,
         reuse_groups=reuse_groups,
         weak_accounts=weak_accounts,
-        unprotected_emails=unprotected_emails
+        unprotected_emails=unprotected_emails,
+        stale_accounts=stale_accounts,
+        api_key_alerts=api_key_alerts
     )
 
 @router.get("/emergency-kit", response_model=EmergencyKitResponse)
@@ -182,13 +287,20 @@ async def check_password_pwned(
     if not target_pw:
         raise HTTPException(status_code=400, detail="No se proporcionó contraseña para verificar.")
 
-    is_pwned, count = check_pwned_password(target_pw)
-    if is_pwned:
+    is_pwned, count, pwned_status = await check_pwned_password(target_pw)
+    if pwned_status == "compromised":
         return PwnedCheckResponse(
             is_pwned=True,
             pwned_count=count,
             severity="critical" if count > 1000 else "high",
             message=f"Esta contraseña ha sido expuesta {count:,} veces en filtraciones de datos públicas. Cámbiela inmediatamente."
+        )
+    elif pwned_status == "unknown":
+        return PwnedCheckResponse(
+            is_pwned=False,
+            pwned_count=0,
+            severity="unknown",
+            message="No se pudo contactar el servicio de HaveIBeenPwned (entorno local sin conexión o tiempo de espera agotado)."
         )
     return PwnedCheckResponse(
         is_pwned=False,

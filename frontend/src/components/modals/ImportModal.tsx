@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { X, Upload, FileText, Check, AlertCircle, ArrowRight } from 'lucide-react';
+import { X, Upload } from 'lucide-react';
 import { useVault } from '../../context/VaultContext';
 import { api } from '../../lib/api';
+import { INPUT_LIMITS } from '../../lib/validation';
 
 export const ImportModal: React.FC = () => {
   const { isImportModalOpen, closeImportModal, showToast, triggerDataReload } = useVault();
@@ -91,27 +92,30 @@ export const ImportModal: React.FC = () => {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
       <div 
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="import-modal-title"
         className="relative w-full max-w-xl bg-obsidian-panel border border-obsidian-borderLight rounded-2xl shadow-2xl p-6 overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between pb-4 border-b border-obsidian-border">
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-indigo-500/10 text-indigo-400">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="p-2 rounded-xl bg-indigo-500/10 text-indigo-400 flex-shrink-0">
               <Upload size={20} />
             </div>
-            <div>
-              <h2 className="text-base font-bold text-white tracking-tight">
+            <div className="min-w-0">
+              <h2 id="import-modal-title" className="text-base font-bold text-white tracking-tight truncate">
                 Importador Universal de Bóvedas
               </h2>
-              <p className="text-xs text-obsidian-muted">
-                Importación automática desde Bitwarden, 1Password, Chrome o CSV
+              <p className="text-xs text-obsidian-muted truncate">
+                Importación desde Bitwarden, 1Password, Chrome o CSV
               </p>
             </div>
           </div>
           <button
             type="button"
             onClick={closeImportModal}
-            className="p-1.5 text-obsidian-muted hover:text-white rounded-lg hover:bg-obsidian-surface"
+            className="p-1.5 text-obsidian-muted hover:text-white rounded-lg hover:bg-obsidian-surface flex-shrink-0"
           >
             <X size={18} />
           </button>
@@ -120,7 +124,7 @@ export const ImportModal: React.FC = () => {
         <div className="py-4 space-y-4 text-xs">
           <div>
             <label className="text-obsidian-text font-medium block mb-1.5">Origen de los Datos</label>
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               {[
                 { id: 'bitwarden', label: 'Bitwarden JSON' },
                 { id: '1password', label: '1Password CSV' },
@@ -144,18 +148,20 @@ export const ImportModal: React.FC = () => {
           </div>
 
           <div>
-            <label className="text-obsidian-text font-medium block mb-1.5">
+            <label htmlFor="import-textarea" className="text-obsidian-text font-medium block mb-1.5">
               Pega aquí el contenido JSON o CSV
             </label>
             <textarea
+              id="import-textarea"
               rows={8}
+              maxLength={INPUT_LIMITS.IMPORT_PAYLOAD}
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
               placeholder="Pega el contenido exportado aquí..."
               className="w-full p-3 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-indigo-500 resize-none"
             />
             <span className="text-[11px] text-obsidian-muted block mt-1">
-              El sistema detectará automáticamente los correos padre a partir de los nombres de usuario y cifrará cada credencial con AES-256-GCM.
+              El sistema detectará automáticamente los correos padre y cifrará cada credencial y nota con AES-256-GCM.
             </span>
           </div>
         </div>

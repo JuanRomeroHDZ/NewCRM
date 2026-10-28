@@ -18,6 +18,12 @@ class VaultStatusResponse(BaseModel):
     search_hotkey: str
     accent_color: str = "#6366f1"
     canvas_style: str = "dot-grid"
+    budget_cap_amount: float = 0.0
+    budget_cap_currency: str = "MXN"
+    password_rotation_days_root: int = 90
+    password_rotation_days_secondary: int = 180
+    trash_retention_days: int = 0
+    max_followup_attempts: int = 3
 
 # Email items
 class BackupCodeItem(BaseModel):
@@ -38,6 +44,7 @@ class EmailBase(BaseModel):
     recovery_phone: str | None = None
     two_factor_method: str = "none"
     aliases: list[str] = []
+    scope: str = "business"
 
 class EmailCreate(EmailBase):
     password: str | None = None
@@ -57,6 +64,7 @@ class EmailUpdate(BaseModel):
     backup_codes: list[BackupCodeItem] | None = None
     security_questions: list[SecurityQuestionItem] | None = None
     aliases: list[str] | None = None
+    scope: str | None = None
 
 class EmailResponse(EmailBase):
     id: str
@@ -94,7 +102,12 @@ class TagItem(BaseModel):
 
 class PlatformBase(BaseModel):
     name: str
-    email_id: str
+    email_id: str | None = None
+    prospect_id: str | None = None
+    project_id: str | None = None
+    ownership_type: str = "own"  # own, client, independent
+    scope: str = "business"  # business, personal, shared
+    business_share_percent: float = 100.0
     specific_alias: str | None = None
     login_url: str | None = None
     username: str | None = None
@@ -123,6 +136,11 @@ class PlatformCreate(PlatformBase):
 class PlatformUpdate(BaseModel):
     name: str | None = None
     email_id: str | None = None
+    prospect_id: str | None = None
+    project_id: str | None = None
+    ownership_type: str | None = None
+    scope: str | None = None
+    business_share_percent: float | None = None
     specific_alias: str | None = None
     login_url: str | None = None
     username: str | None = None
@@ -187,29 +205,28 @@ class PaymentMethodBase(BaseModel):
     issuer: str
     alias: str
     last_four: str
+    scope: str = "business"
     expiry_month: str | None = None
     expiry_year: str | None = None
     billing_notes: str | None = None
 
 class PaymentMethodCreate(PaymentMethodBase):
     card_number: str | None = None
-    cvv: str | None = None
 
 class PaymentMethodUpdate(BaseModel):
     issuer: str | None = None
     alias: str | None = None
     last_four: str | None = None
+    scope: str | None = None
     card_number: str | None = None
     expiry_month: str | None = None
     expiry_year: str | None = None
-    cvv: str | None = None
     billing_notes: str | None = None
 
 class PaymentMethodResponse(PaymentMethodBase):
     id: str
     card_number_masked: str = "•••• •••• •••• "
     card_number_plain: str | None = None
-    cvv_plain: str | None = None
     linked_subscriptions_count: int = 0
     is_deleted: bool = False
     created_at: Any = None
@@ -247,6 +264,8 @@ class ExchangeRateResponse(BaseModel):
     rate: float
     is_manual: bool
     updated_at: Any
+    synced: bool = True
+    source: str | None = None
 
 class ExchangeRateUpdate(BaseModel):
     rate: float
@@ -260,6 +279,12 @@ class SettingsResponse(BaseModel):
     search_hotkey: str
     accent_color: str = "#6366f1"
     canvas_style: str = "dot-grid"
+    budget_cap_amount: float = 0.0
+    budget_cap_currency: str = "MXN"
+    password_rotation_days_root: int = 90
+    password_rotation_days_secondary: int = 180
+    trash_retention_days: int = 0
+    max_followup_attempts: int = 3
 
 class SettingsUpdate(BaseModel):
     vault_timeout_minutes: int | None = None
@@ -268,7 +293,26 @@ class SettingsUpdate(BaseModel):
     search_hotkey: str | None = None
     accent_color: str | None = None
     canvas_style: str | None = None
+    budget_cap_amount: float | None = None
+    budget_cap_currency: str | None = None
+    password_rotation_days_root: int | None = None
+    password_rotation_days_secondary: int | None = None
+    trash_retention_days: int | None = None
+    max_followup_attempts: int | None = None
+    current_master_password: str | None = None
     new_master_password: str | None = None
+
+# Billing Record History
+class BillingRecordResponse(BaseModel):
+    id: str
+    platform_id: str
+    platform_name: str
+    amount: float
+    currency: str
+    billing_cycle: str
+    charged_date: str
+    payment_method_id: str | None = None
+    created_at: Any = None
 
 # Security Health & Audit
 class PasswordReuseGroup(BaseModel):
@@ -284,9 +328,15 @@ class SecurityAuditResponse(BaseModel):
     weak_passwords_count: int
     no_2fa_emails_count: int
     stale_passwords_count: int
+    expiring_api_keys_count: int = 0
+    expired_api_keys_count: int = 0
+    password_rotation_days_root: int = 90
+    password_rotation_days_secondary: int = 180
     reuse_groups: list[PasswordReuseGroup]
     weak_accounts: list[dict[str, Any]]
     unprotected_emails: list[dict[str, Any]]
+    stale_accounts: list[dict[str, Any]] = []
+    api_key_alerts: list[dict[str, Any]] = []
 
 class EmergencyKitResponse(BaseModel):
     generated_at: str
@@ -305,9 +355,13 @@ class ProspectBase(BaseModel):
     contact_email: str | None = None
     email_id: str | None = None
     specific_alias: str | None = None
+    scope: str = "business"
     workflow_type: str = "demo_first"  # demo_first, direct_quote
-    status: str = "demo_creada"  # demo_creada, primer_contacto, en_cotizacion, respondido, tiempo_agotado
+    status: str = "demo_creada"  # demo_creada, primer_contacto, en_cotizacion, respondido, tiempo_agotado, archivado_frio
     demo_url: str | None = None
+    estimated_value: float = 0.0
+    currency: str = "MXN"  # MXN, USD
+    billing_type: str = "one_time"  # one_time, monthly_retainer
     whatsapp: str | None = None
     phones: str | None = None
     maps_url: str | None = None
@@ -316,6 +370,8 @@ class ProspectBase(BaseModel):
     tags: list[TagItem] = []
     started_at: str | None = None
     sla_hours: float = 48.0
+    followup_sla_hours: float = 48.0
+    max_followup_attempts: int = 3
 
 class ProspectCreate(ProspectBase):
     pass
@@ -326,9 +382,13 @@ class ProspectUpdate(BaseModel):
     contact_email: str | None = None
     email_id: str | None = None
     specific_alias: str | None = None
+    scope: str | None = None
     workflow_type: str | None = None
     status: str | None = None
     demo_url: str | None = None
+    estimated_value: float | None = None
+    currency: str | None = None
+    billing_type: str | None = None
     whatsapp: str | None = None
     phones: str | None = None
     maps_url: str | None = None
@@ -340,6 +400,17 @@ class ProspectUpdate(BaseModel):
     responded_at: str | None = None
     response_time_seconds: int | None = None
     met_sla: bool | None = None
+    last_contacted_at: str | None = None
+    followup_count: int | None = None
+    last_contact_channel: str | None = None
+    followup_sla_hours: float | None = None
+    max_followup_attempts: int | None = None
+
+class ProspectContactAttemptRequest(BaseModel):
+    channel: str = Field(default="whatsapp", max_length=32)  # whatsapp, email, phone, template
+    note: str | None = Field(default=None, max_length=500)
+    auto_advance_status: bool = True
+    followup_sla_hours: float | None = Field(default=48.0, ge=1.0, le=720.0)
 
 class ProspectResponse(ProspectBase):
     id: str
@@ -352,7 +423,251 @@ class ProspectResponse(ProspectBase):
     elapsed_seconds: int = 0
     sla_seconds: int = 172800
     sla_status: str = "en_tiempo"  # en_tiempo, cumplido, vencido
+    last_contacted_at: Any = None
+    followup_count: int = 0
+    last_contact_channel: str | None = None
+    followup_sla_hours: float = 48.0
+    followup_elapsed_seconds: int = 0
+    followup_sla_seconds: int = 172800
+    followup_remaining_seconds: int = 172800
+    followup_status: str = "en_tiempo"  # en_tiempo, vencido, sin_iniciar, completado
+    max_followup_attempts: int = 3
+    needs_recontact: bool = False
     is_deleted: bool = False
     created_at: Any = None
     updated_at: Any = None
+
+
+# Client Incomes / Pagos Recibidos
+class ClientIncomeBase(BaseModel):
+    prospect_id: str | None = None
+    project_id: str | None = None
+    ownership_type: str = "client"  # client, own, independent
+    scope: str = "business"  # business, personal, shared
+    business_share_percent: float = 100.0
+    client_name: str
+    concept: str
+    category: str = "anticipo"  # open category
+    amount: float = 0.0
+    currency: str = "MXN"  # MXN, USD
+    status: str = "cobrado"  # cobrado, pendiente
+    received_date: str  # YYYY-MM-DD
+    payment_method_label: str | None = None
+    is_recurring: bool = False
+    notes: str | None = None
+
+class ClientIncomeCreate(ClientIncomeBase):
+    pass
+
+class ClientIncomeUpdate(BaseModel):
+    prospect_id: str | None = None
+    project_id: str | None = None
+    ownership_type: str | None = None
+    scope: str | None = None
+    business_share_percent: float | None = None
+    client_name: str | None = None
+    concept: str | None = None
+    category: str | None = None
+    amount: float | None = None
+    currency: str | None = None
+    status: str | None = None
+    received_date: str | None = None
+    payment_method_label: str | None = None
+    is_recurring: bool | None = None
+    notes: str | None = None
+
+class ClientIncomeResponse(ClientIncomeBase):
+    id: str
+    is_deleted: bool = False
+    created_at: Any = None
+    updated_at: Any = None
+
+
+# Domain & Hosting Renewals Monitor
+class DomainRenewalBase(BaseModel):
+    prospect_id: str | None = None
+    project_id: str | None = None
+    platform_id: str | None = None
+    ownership_type: str = "client"  # client, own, independent
+    scope: str = "business"  # business, personal, shared
+    business_share_percent: float = 100.0
+    client_name: str
+    domain_or_service: str
+    service_type: str = "dominio"  # open service_type
+    provider: str | None = None
+    renewal_date: str  # YYYY-MM-DD
+    renewal_cost: float = 0.0
+    client_charge_amount: float = 0.0
+    currency: str = "MXN"  # MXN, USD
+    billing_cycle: str = "yearly"  # yearly, monthly
+    paid_by: str = "client"  # me (Por mi cuenta), client (Por cuenta del cliente)
+    status: str = "activo"  # activo, renovado, vencido, cancelado
+    auto_renew: bool = False
+    notes: str | None = None
+
+class DomainRenewalCreate(DomainRenewalBase):
+    pass
+
+class DomainRenewalUpdate(BaseModel):
+    prospect_id: str | None = None
+    project_id: str | None = None
+    platform_id: str | None = None
+    ownership_type: str | None = None
+    scope: str | None = None
+    business_share_percent: float | None = None
+    client_name: str | None = None
+    domain_or_service: str | None = None
+    service_type: str | None = None
+    provider: str | None = None
+    renewal_date: str | None = None
+    renewal_cost: float | None = None
+    client_charge_amount: float | None = None
+    currency: str | None = None
+    billing_cycle: str | None = None
+    paid_by: str | None = None
+    status: str | None = None
+    auto_renew: bool | None = None
+    notes: str | None = None
+
+class AdvanceRenewalRequest(BaseModel):
+    create_income: bool = False
+    charged_amount: float | None = None
+    charged_currency: str | None = None
+    payment_method_label: str | None = None
+    income_status: str = "cobrado"
+
+class DomainRenewalResponse(DomainRenewalBase):
+    id: str
+    days_remaining: int = 0
+    expiry_semaphore: str = "en_orden"  # en_orden, proximo, urgente, vencido, cancelado
+    created_income_id: str | None = None
+    margin_amount: float | None = None
+    is_deleted: bool = False
+    created_at: Any = None
+    updated_at: Any = None
+
+
+# One-Time Expenses / Gastos Únicos
+class OneTimeExpenseBase(BaseModel):
+    concept: str
+    category: str = "Hardware / Equipo"
+    amount: float = 0.0
+    currency: str = "MXN"
+    expense_date: str  # YYYY-MM-DD
+    scope: str = "business"  # business, personal, shared
+    business_share_percent: float = 100.0
+    ownership_type: str = "own"  # own, client, independent
+    vendor: str | None = None
+    payment_method_label: str | None = None
+    prospect_id: str | None = None
+    project_id: str | None = None
+    notes: str | None = None
+
+class OneTimeExpenseCreate(OneTimeExpenseBase):
+    pass
+
+class OneTimeExpenseUpdate(BaseModel):
+    concept: str | None = None
+    category: str | None = None
+    amount: float | None = None
+    currency: str | None = None
+    expense_date: str | None = None
+    scope: str | None = None
+    business_share_percent: float | None = None
+    ownership_type: str | None = None
+    vendor: str | None = None
+    payment_method_label: str | None = None
+    prospect_id: str | None = None
+    project_id: str | None = None
+    notes: str | None = None
+
+class OneTimeExpenseResponse(OneTimeExpenseBase):
+    id: str
+    is_deleted: bool = False
+    created_at: Any = None
+    updated_at: Any = None
+
+
+# Internal Projects / Proyectos Propios e Infraestructura
+class InternalProjectBase(BaseModel):
+    name: str
+    category: str = "Sistema / SaaS"
+    status: str = "en_desarrollo"  # idea, en_desarrollo, en_produccion, pausado
+    scope: str = "business"  # business, personal, shared
+    email_id: str | None = None
+    production_url: str | None = None
+    repo_url: str | None = None
+    tech_stack: str | None = None
+    monthly_maintenance_cost: float = 0.0
+    currency: str = "MXN"
+    linked_platform_ids: list[str] = []
+    linked_domain_ids: list[str] = []
+    tags: list[TagItem] = []
+    notes: str | None = None
+
+class InternalProjectCreate(InternalProjectBase):
+    pass
+
+class InternalProjectUpdate(BaseModel):
+    name: str | None = None
+    category: str | None = None
+    status: str | None = None
+    scope: str | None = None
+    email_id: str | None = None
+    production_url: str | None = None
+    repo_url: str | None = None
+    tech_stack: str | None = None
+    monthly_maintenance_cost: float | None = None
+    currency: str | None = None
+    linked_platform_ids: list[str] | None = None
+    linked_domain_ids: list[str] | None = None
+    tags: list[TagItem] | None = None
+    notes: str | None = None
+
+class InternalProjectResponse(InternalProjectBase):
+    id: str
+    email_address: str | None = None
+    is_deleted: bool = False
+    created_at: Any = None
+    updated_at: Any = None
+
+
+# Secure Resources & Free Encrypted Notes
+class SecureResourceBase(BaseModel):
+    title: str
+    resource_type: str = "nota_segura"  # env_file, ssh_key, backup_codes, software_license, nota_segura, custom
+    scope: str = "business"  # business, personal, shared
+    ownership_type: str = "own"  # own, client, independent
+    content: str | None = None
+    email_id: str | None = None
+    platform_id: str | None = None
+    prospect_id: str | None = None
+    project_id: str | None = None
+    tags: list[TagItem] = []
+    notes: str | None = None
+
+class SecureResourceCreate(SecureResourceBase):
+    pass
+
+class SecureResourceUpdate(BaseModel):
+    title: str | None = None
+    resource_type: str | None = None
+    scope: str | None = None
+    ownership_type: str | None = None
+    content: str | None = None
+    email_id: str | None = None
+    platform_id: str | None = None
+    prospect_id: str | None = None
+    project_id: str | None = None
+    tags: list[TagItem] | None = None
+    notes: str | None = None
+
+class SecureResourceResponse(SecureResourceBase):
+    id: str
+    content_masked: str = "••••••••••••••••"
+    is_deleted: bool = False
+    created_at: Any = None
+    updated_at: Any = None
+
+
 

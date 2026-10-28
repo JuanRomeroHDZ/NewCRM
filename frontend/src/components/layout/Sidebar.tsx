@@ -25,17 +25,17 @@ export const Sidebar: React.FC = () => {
   };
 
   const menuItems: { id: SectionType; label: string; icon: any; isLevel2?: boolean }[] = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'emails', label: 'Correos Raíz', icon: Mail, isLevel2: true },
-    { id: 'platforms', label: 'Cuentas & Servicios', icon: Globe },
-    { id: 'prospects', label: 'Prospectos & Demos', icon: Rocket },
-    { id: 'passwords', label: 'Contraseñas & APIs', icon: Key, isLevel2: true },
-    { id: 'security_audit', label: 'Auditoría & Salud', icon: ShieldCheck, isLevel2: true },
-    { id: 'audit_logs', label: 'Historial de Eventos', icon: FileText, isLevel2: true },
-    { id: 'graph', label: 'Grafo Relacional', icon: Network },
-    { id: 'subscriptions', label: 'Suscripciones & Pagos', icon: CreditCard },
+    { id: 'dashboard', label: 'Resumen General', icon: LayoutDashboard },
+    { id: 'emails', label: 'Correos Principales', icon: Mail, isLevel2: true },
+    { id: 'platforms', label: 'Cuentas y Servicios', icon: Globe },
+    { id: 'prospects', label: 'Prospectos y Demos', icon: Rocket },
+    { id: 'passwords', label: 'Contraseñas y Llaves', icon: Key, isLevel2: true },
+    { id: 'security_audit', label: 'Nivel de Seguridad', icon: ShieldCheck, isLevel2: true },
+    { id: 'audit_logs', label: 'Historial de Actividad', icon: FileText, isLevel2: true },
+    { id: 'graph', label: 'Mapa de Conexiones', icon: Network },
+    { id: 'subscriptions', label: 'Finanzas e Ingresos', icon: CreditCard },
     { id: 'trash', label: 'Papelera', icon: Trash2, isLevel2: true },
-    { id: 'settings', label: 'Configuración & Bóveda', icon: Settings, isLevel2: true },
+    { id: 'settings', label: 'Ajustes y Seguridad', icon: Settings, isLevel2: true },
   ];
 
   return (
@@ -48,13 +48,13 @@ export const Sidebar: React.FC = () => {
       <div>
         <div className="h-16 flex items-center justify-between px-4 border-b border-obsidian-border">
           {!collapsed && (
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-indigo-600 to-indigo-400 flex items-center justify-center text-white shadow-md shadow-indigo-600/30">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-indigo-600 to-indigo-400 flex items-center justify-center text-white shadow-md shadow-indigo-600/30 shrink-0">
                 <Network size={18} />
               </div>
-              <div>
-                <span className="font-bold text-sm tracking-tight text-white block">EmailSaver</span>
-                <span className="text-[10px] text-obsidian-muted block -mt-0.5">Relational Vault</span>
+              <div className="min-w-0">
+                <span className="font-bold text-sm tracking-tight text-white block truncate">EmailSaver</span>
+                <span className="text-[10px] text-obsidian-muted block -mt-0.5 truncate">Control de Cuentas y Clientes</span>
               </div>
             </div>
           )}
@@ -84,25 +84,25 @@ export const Sidebar: React.FC = () => {
                 : 'bg-obsidian-surface border-obsidian-border text-obsidian-muted'
             }`}
           >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
                 {isUnlocked ? (
-                  <Unlock size={16} className="text-emerald-400" />
+                  <Unlock size={16} className="text-emerald-400 shrink-0" />
                 ) : (
-                  <Lock size={16} className="text-amber-400" />
+                  <Lock size={16} className="text-amber-400 shrink-0" />
                 )}
                 {!collapsed && (
-                  <div>
-                    <div className="text-[11px] font-semibold tracking-wide text-white">
-                      {isUnlocked ? 'Bóveda Desbloqueada' : 'Bóveda Bloqueada'}
+                  <div className="min-w-0">
+                    <div className="text-[11px] font-semibold tracking-wide text-white truncate">
+                      {isUnlocked ? 'Contraseñas Visibles' : 'Contraseñas Ocultas'}
                     </div>
                     {isUnlocked ? (
-                      <div className="text-[10px] text-emerald-400 font-mono">
-                        Cierra en {formatTimer(remainingSeconds)}
+                      <div className="text-[10px] text-emerald-400 font-mono truncate">
+                        Se bloquea en {formatTimer(remainingSeconds)}
                       </div>
                     ) : (
-                      <div className="text-[10px] text-obsidian-muted">
-                        Modo Nivel 1 (Restringido)
+                      <div className="text-[10px] text-obsidian-muted truncate">
+                        Protegido con clave maestra
                       </div>
                     )}
                   </div>
@@ -113,7 +113,7 @@ export const Sidebar: React.FC = () => {
                 <button
                   type="button"
                   onClick={isUnlocked ? lockVault : openUnlockModal}
-                  className={`px-2 py-1 rounded-lg text-[10px] font-semibold transition-all ${
+                  className={`px-2 py-1 rounded-lg text-[10px] font-semibold transition-all shrink-0 ${
                     isUnlocked
                       ? 'bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200'
                       : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm'
@@ -133,12 +133,12 @@ export const Sidebar: React.FC = () => {
             onClick={openCommandPalette}
             className="w-full flex items-center justify-between px-3 py-2 rounded-xl bg-obsidian-bg hover:bg-obsidian-surface border border-obsidian-border text-obsidian-muted hover:text-white transition-all text-xs group"
           >
-            <div className="flex items-center gap-2">
-              <Search size={14} className="group-hover:text-indigo-400 transition-colors" />
-              {!collapsed && <span>Buscador Global</span>}
+            <div className="flex items-center gap-2 min-w-0">
+              <Search size={14} className="group-hover:text-indigo-400 transition-colors shrink-0" />
+              {!collapsed && <span className="truncate">Buscador Rápido</span>}
             </div>
             {!collapsed && (
-              <kbd className="px-1.5 py-0.5 text-[10px] font-mono bg-obsidian-panel border border-obsidian-border rounded">
+              <kbd className="px-1.5 py-0.5 text-[10px] font-mono bg-obsidian-panel border border-obsidian-border rounded shrink-0">
                 {searchHotkey.toUpperCase()}
               </kbd>
             )}
@@ -168,13 +168,13 @@ export const Sidebar: React.FC = () => {
                 }`}
                 title={collapsed ? item.label : undefined}
               >
-                <div className="flex items-center gap-2.5">
-                  <Icon size={16} className={isActive ? 'text-white' : 'text-obsidian-muted'} />
-                  {!collapsed && <span>{item.label}</span>}
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <Icon size={16} className={`shrink-0 ${isActive ? 'text-white' : 'text-obsidian-muted'}`} />
+                  {!collapsed && <span className="truncate">{item.label}</span>}
                 </div>
 
                 {!collapsed && item.isLevel2 && !isUnlocked && (
-                  <span title="Requiere Nivel 2">
+                  <span title="Requiere desbloquear con tu contraseña maestra" className="shrink-0">
                     <Lock size={12} className="text-amber-400 opacity-70" />
                   </span>
                 )}
@@ -190,20 +190,20 @@ export const Sidebar: React.FC = () => {
           type="button"
           onClick={openEnvExport}
           className="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-xl bg-obsidian-surface/60 hover:bg-obsidian-surface text-xs text-obsidian-muted hover:text-white border border-obsidian-border transition-colors group"
-          title="Exportar Bóveda de Variables de Entorno (.env)"
+          title="Descargar archivo .env con tus llaves y variables configuradas"
         >
-          <Code size={14} className="text-cyan-400" />
-          {!collapsed && <span className="font-medium text-[11px]">Exportar .env</span>}
+          <Code size={14} className="text-cyan-400 shrink-0" />
+          {!collapsed && <span className="font-medium text-[11px] truncate">Descargar archivo .env</span>}
         </button>
 
         <button
           type="button"
           onClick={openEmergencyKit}
           className="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-xl bg-obsidian-surface/60 hover:bg-obsidian-surface text-xs text-obsidian-muted hover:text-white border border-obsidian-border transition-colors group"
-          title="Hoja de Emergencia Imprimible"
+          title="Hoja de Recuperación Imprimible"
         >
-          <Shield size={14} className="text-indigo-400" />
-          {!collapsed && <span className="font-medium text-[11px]">Emergency Kit</span>}
+          <Shield size={14} className="text-indigo-400 shrink-0" />
+          {!collapsed && <span className="font-medium text-[11px] truncate">Hoja de Recuperación</span>}
         </button>
 
         <button
@@ -211,8 +211,8 @@ export const Sidebar: React.FC = () => {
           onClick={openPasswordGen}
           className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl bg-obsidian-surface hover:bg-obsidian-border text-xs text-obsidian-text hover:text-white border border-obsidian-border transition-colors group"
         >
-          <Sparkles size={15} className="text-cyan-400 group-hover:rotate-12 transition-transform" />
-          {!collapsed && <span className="font-medium">Generar Clave</span>}
+          <Sparkles size={15} className="text-cyan-400 group-hover:rotate-12 transition-transform shrink-0" />
+          {!collapsed && <span className="font-medium truncate">Generar Contraseña</span>}
         </button>
       </div>
     </aside>

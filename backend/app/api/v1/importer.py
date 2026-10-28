@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models import EmailAccount, PlatformAccount, PasswordHistory
-from app.security.crypto import encrypt_secret, calculate_entropy
+from app.security.crypto import encrypt_secret, encrypt_note, calculate_entropy
 from app.security.tokens import require_vault_unlocked
 from app.services.audit import log_audit_event
 from app.services.favicon import extract_favicon_url
@@ -43,7 +43,7 @@ async def batch_import_vault(payload: BatchImportRequest, db: AsyncSession = Dep
         default_email = EmailAccount(
             address="principal.import@emailsaver.local",
             provider="Custom",
-            notes="Correo creado automáticamente como contenedor de importación"
+            notes=encrypt_note("Correo creado automáticamente como contenedor de importación")
         )
         db.add(default_email)
         await db.flush()
@@ -64,7 +64,7 @@ async def batch_import_vault(payload: BatchImportRequest, db: AsyncSession = Dep
                 new_em = EmailAccount(
                     address=clean_email,
                     provider="Google" if "gmail" in clean_email else "Custom",
-                    notes="Creado automáticamente desde importación"
+                    notes=encrypt_note("Creado automáticamente desde importación")
                 )
                 db.add(new_em)
                 await db.flush()
@@ -86,7 +86,7 @@ async def batch_import_vault(payload: BatchImportRequest, db: AsyncSession = Dep
             email_id=target_email.id,
             username=item.username,
             login_url=item.url,
-            notes=item.notes,
+            notes=encrypt_note(item.notes),
             icon_url=icon_url,
             icon_type="extracted" if item.url else "initials",
             access_type="own_password",

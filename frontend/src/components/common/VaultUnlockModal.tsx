@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Lock, ShieldAlert, KeyRound, ArrowRight, X } from 'lucide-react';
 import { useVault } from '../../context/VaultContext';
+import { INPUT_LIMITS } from '../../lib/validation';
 
 export const VaultUnlockModal: React.FC = () => {
   const { isUnlockModalOpen, closeUnlockModal, unlockVault, isSetup, setupMasterPassword } = useVault();
@@ -21,7 +22,14 @@ export const VaultUnlockModal: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!password) return;
+    if (!password.trim()) {
+      setError('Ingresa tu contraseña maestra para continuar.');
+      return;
+    }
+    if (!isSetup && password.trim().length < 6) {
+      setError('La contraseña maestra debe tener al menos 6 caracteres.');
+      return;
+    }
 
     setIsLoading(true);
     setError(null);
@@ -39,7 +47,12 @@ export const VaultUnlockModal: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-fadeIn">
+    <div 
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-fadeIn"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="vault-modal-title"
+    >
       <div 
         className="relative w-full max-w-md bg-obsidian-panel border border-obsidian-borderLight rounded-2xl shadow-2xl p-6 overflow-hidden"
         onClick={(e) => e.stopPropagation()}
@@ -48,23 +61,23 @@ export const VaultUnlockModal: React.FC = () => {
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-48 h-1 bg-gradient-to-r from-transparent via-indigo-500 to-transparent" />
 
         <div className="flex items-center justify-between mb-5">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="p-2.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex-shrink-0">
               <Lock size={22} />
             </div>
-            <div>
-              <h2 className="text-lg font-semibold text-white tracking-tight">
+            <div className="min-w-0">
+              <h2 id="vault-modal-title" className="text-lg font-semibold text-white tracking-tight truncate">
                 {isSetup ? 'Desbloquear Bóveda Cifrada' : 'Inicializar Bóveda Maestra'}
               </h2>
-              <p className="text-xs text-obsidian-muted">
-                Nivel 2 de Seguridad — Cifrado Argon2id + AES-256-GCM
+              <p className="text-xs text-obsidian-muted truncate">
+                Protección Criptográfica — Argon2id + AES-256-GCM
               </p>
             </div>
           </div>
           <button
             type="button"
             onClick={closeUnlockModal}
-            className="p-1.5 text-obsidian-muted hover:text-white rounded-lg hover:bg-obsidian-surface transition-colors"
+            className="p-1.5 text-obsidian-muted hover:text-white rounded-lg hover:bg-obsidian-surface transition-colors flex-shrink-0"
           >
             <X size={18} />
           </button>
@@ -73,30 +86,41 @@ export const VaultUnlockModal: React.FC = () => {
         {error && (
           <div className="mb-4 p-3 rounded-lg bg-rose-500/10 border border-rose-500/30 flex items-center gap-2.5 text-rose-400 text-xs animate-shake">
             <ShieldAlert size={16} className="flex-shrink-0" />
-            <span>{error}</span>
+            <span className="break-words">{error}</span>
           </div>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-xs font-medium text-obsidian-text/80 mb-1.5">
-              {isSetup ? 'Contraseña Maestra / PIN' : 'Crea tu Contraseña Maestra'}
+              {isSetup ? 'Contraseña Maestra de la Bóveda' : 'Define tu Contraseña Maestra (mínimo 6 caracteres)'}
             </label>
             <div className="relative">
               <input
                 ref={inputRef}
                 type="password"
+                maxLength={INPUT_LIMITS.MASTER_PASSWORD}
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••••••••••"
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  if (error) setError(null);
+                }}
+                placeholder="Ingresa tu clave maestra..."
                 className="w-full px-3.5 py-2.5 pl-10 rounded-xl bg-obsidian-bg border border-obsidian-border text-white placeholder-obsidian-muted/50 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-sm font-mono tracking-wider transition-all"
                 autoComplete="current-password"
                 disabled={isLoading}
               />
               <KeyRound size={16} className="absolute left-3.5 top-3 text-obsidian-muted" />
             </div>
-            <p className="mt-1.5 text-[11px] text-obsidian-muted">
-              Demo predeterminada: <code className="text-indigo-300 font-mono">MasterPassword123!</code>
+            <p className="mt-1.5 text-[11px] text-obsidian-muted leading-relaxed">
+              {isSetup ? (
+                <>
+                  Clave inicial por defecto (modificable en Ajustes):{' '}
+                  <code className="text-indigo-300 font-mono">MasterPassword123!</code>
+                </>
+              ) : (
+                'Esta llave cifrará todas tus contraseñas, llaves API y tarjetas de forma local.'
+              )}
             </p>
           </div>
 
@@ -117,7 +141,7 @@ export const VaultUnlockModal: React.FC = () => {
                 <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
               ) : (
                 <>
-                  <span>Desbloquear Bóveda</span>
+                  <span>{isSetup ? 'Desbloquear Bóveda' : 'Configurar Bóveda'}</span>
                   <ArrowRight size={14} />
                 </>
               )}

@@ -7,12 +7,13 @@ import { useVault, SectionType } from '../../context/VaultContext';
 import { api } from '../../lib/api';
 import { PlatformAccount, EmailAccount, Prospect } from '../../types';
 import { getSlaBadgeMeta } from '../../lib/prospectUtils';
+import { INPUT_LIMITS } from '../../lib/validation';
 
 export const CommandPalette: React.FC = () => {
   const { 
     isCommandPaletteOpen, closeCommandPalette, setActiveSection, 
     openInspector, openPasswordGen, openProspectModal, isUnlocked, openUnlockModal, 
-    lockVault, copyToClipboard, searchHotkey 
+    lockVault, searchHotkey 
   } = useVault();
 
   const [query, setQuery] = useState('');
@@ -183,15 +184,19 @@ export const CommandPalette: React.FC = () => {
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center pt-20 p-4 bg-black/70 backdrop-blur-sm animate-fadeIn">
       <div 
+        role="dialog"
+        aria-modal="true"
+        aria-label="Paleta de comandos"
         className="w-full max-w-2xl bg-obsidian-panel border border-obsidian-borderLight rounded-2xl shadow-2xl overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Search Input */}
         <div className="relative flex items-center px-4 py-3.5 border-b border-obsidian-border">
-          <Search size={18} className="text-obsidian-muted mr-3" />
+          <Search size={18} className="text-obsidian-muted mr-3 flex-shrink-0" />
           <input
             ref={inputRef}
             type="text"
+            maxLength={INPUT_LIMITS.SEARCH}
             value={query}
             onChange={(e) => {
               setQuery(e.target.value);
@@ -199,7 +204,7 @@ export const CommandPalette: React.FC = () => {
             }}
             onKeyDown={handleKeyDown}
             placeholder="Buscar prospecto, página demo, plataforma, correo, alias o comando..."
-            className="w-full bg-transparent text-sm text-white placeholder-obsidian-muted/60 focus:outline-none"
+            className="w-full bg-transparent text-sm text-white placeholder-obsidian-muted/60 focus:outline-none min-w-0"
           />
           <div className="flex items-center gap-1.5 ml-2">
             <kbd className="px-2 py-0.5 text-[10px] font-mono bg-obsidian-surface border border-obsidian-border rounded text-obsidian-muted">

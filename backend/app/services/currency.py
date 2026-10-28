@@ -34,9 +34,9 @@ async def get_current_exchange_rate(db: AsyncSession) -> float:
     await db.commit()
     return FALLBACK_USD_MXN_RATE
 
-async def sync_external_exchange_rate(db: AsyncSession) -> tuple[float, bool]:
-    """Attempts to sync with open exchange rate API with strict timeout (2.0s).
-    If network is unavailable or rate is marked manual, returns cached rate without error.
+async def sync_external_exchange_rate(db: AsyncSession, force: bool = False) -> tuple[float, bool, str]:
+    """Attempts to sync with public exchange rate APIs (Primary + 2 Backups).
+    If network is unavailable, returns cached rate without error.
     """
     stmt = select(ExchangeRate).where(
         ExchangeRate.base_currency == "USD",
@@ -45,35 +45,58 @@ async def sync_external_exchange_rate(db: AsyncSession) -> tuple[float, bool]:
     result = await db.execute(stmt)
     record = result.scalar_one_or_none()
 
-    if record and record.is_manual:
-        return record.rate, False  # Manual override locked by user
+    if record and record.is_manual and not force:
+        return float(record.rate), False, "manual"
 
-    # Public free endpoint
-    api_url = "https://open.er-api.com/v6/latest/USD"
-    try:
-        async with httpx.AsyncClient(timeout=2.0) as client:
-            resp = await client.get(api_url)
-            if resp.status_code == 200:
-                data = resp.json()
-                rate = data.get("rates", {}).get("MXN")
-                if rate and isinstance(rate, (int, float)):
-                    if not record:
-                        record = ExchangeRate(
-                            base_currency="USD",
-                            target_currency="MXN",
-                            rate=float(rate),
-                            is_manual=False
-                        )
-                        db.add(record)
-                    else:
-                        record.rate = float(rate)
-                        record.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
-                    await db.commit()
-                    return float(rate), True
-    except Exception:
-        # Offline or remote failure: Graceful fallback to existing DB rate
-        pass
+    providers = [
+        (
+            "Open Exchange Rates",
+            "https://open.er-api.com/v6/latest/USD",
+            lambda data: data.get("rates", {}).get("MXN"),
+        ),
+        (
+            "ExchangeRate-API",
+            "https://api.exchangerate-api.com/v4/latest/USD",
+            lambda data: data.get("rates", {}).get("MXN"),
+        ),
+        (
+            "Currency-API",
+            "https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json",
+            lambda data: data.get("usd", {}).get("mxn"),
+        ),
+    ]
+
+    now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+
+    async with httpx.AsyncClient(timeout=4.5, follow_redirects=True) as client:
+        for provider_name, api_url, extractor in providers:
+            try:
+                resp = await client.get(api_url)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    raw_rate = extractor(data)
+                    if raw_rate and isinstance(raw_rate, (int, float)) and float(raw_rate) > 1.0:
+                        clean_rate = round(float(raw_rate), 4)
+                        if not record:
+                            record = ExchangeRate(
+                                base_currency="USD",
+                                target_currency="MXN",
+                                rate=clean_rate,
+                                is_manual=False,
+                                updated_at=now_utc,
+                            )
+                            db.add(record)
+                        else:
+                            record.rate = clean_rate
+                            record.is_manual = False
+                            record.updated_at = now_utc
+                        await db.commit()
+                        await db.refresh(record)
+                        return clean_rate, True, provider_name
+            except Exception:
+                continue
 
     if record:
-        return float(record.rate), False
-    return FALLBACK_USD_MXN_RATE, False
+        return float(record.rate), False, "cache_local"
+    return FALLBACK_USD_MXN_RATE, False, "fallback_local"
+

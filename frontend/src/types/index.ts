@@ -28,10 +28,15 @@ export interface TagItem {
   color?: string;
 }
 
+export type ScopeFilter = 'all' | 'business' | 'personal';
+export type EntityScope = 'business' | 'personal' | 'shared';
+export type OwnershipType = 'client' | 'own' | 'independent';
+
 export interface EmailAccount {
   id: string;
   address: string;
   provider: string;
+  scope?: EntityScope;
   inbox_url?: string;
   icon?: string;
   notes?: string;
@@ -62,8 +67,13 @@ export interface EmailAccount {
 export interface PlatformAccount {
   id: string;
   name: string;
-  email_id: string;
+  email_id?: string | null;
   email_address?: string;
+  scope?: EntityScope;
+  ownership_type?: OwnershipType;
+  prospect_id?: string | null;
+  project_id?: string | null;
+  business_share_percent?: number;
   payment_alias?: string;
   specific_alias?: string;
   login_url?: string;
@@ -102,11 +112,11 @@ export interface PaymentMethod {
   issuer: string;
   alias: string;
   last_four: string;
+  scope?: EntityScope;
   expiry_month?: string;
   expiry_year?: string;
   card_number_masked: string;
   card_number_plain?: string;
-  cvv_plain?: string;
   billing_notes?: string;
   linked_subscriptions_count: number;
   is_deleted: boolean;
@@ -124,12 +134,41 @@ export interface VaultStatus {
   search_hotkey: string;
   accent_color: string;
   canvas_style: string;
+  budget_cap_amount?: number;
+  budget_cap_currency?: 'MXN' | 'USD';
+  password_rotation_days_root?: number;
+  password_rotation_days_secondary?: number;
+  trash_retention_days?: number;
+  max_followup_attempts?: number;
 }
 
 export interface PasswordReuseGroup {
   password_masked: string;
   count: number;
   entities: { id: string; name: string; type: string; provider?: string; parent_email?: string }[];
+}
+
+export interface StaleAccountItem {
+  id: string;
+  name: string;
+  type: 'email' | 'platform';
+  provider?: string;
+  parent_email?: string;
+  age_days: number;
+  threshold_days: number;
+  last_updated?: string;
+}
+
+export interface ApiKeyAlertItem {
+  id: string;
+  label: string;
+  key_prefix?: string;
+  platform_id: string;
+  platform_name: string;
+  parent_email?: string;
+  expires_at: string;
+  days_remaining: number;
+  status: 'expired' | 'expiring_soon';
 }
 
 export interface SecurityAuditResponse {
@@ -140,9 +179,29 @@ export interface SecurityAuditResponse {
   weak_passwords_count: number;
   no_2fa_emails_count: number;
   stale_passwords_count: number;
+  expiring_api_keys_count?: number;
+  expiring_soon_api_keys_count?: number;
+  expired_api_keys_count?: number;
+  password_rotation_days_root?: number;
+  password_rotation_days_secondary?: number;
   reuse_groups: PasswordReuseGroup[];
   weak_accounts: { id: string; name: string; type: string; entropy: any }[];
   unprotected_emails: { id: string; address: string; provider: string; platform_count: number }[];
+  stale_accounts?: StaleAccountItem[];
+  api_key_alerts?: ApiKeyAlertItem[];
+}
+
+export interface BillingRecord {
+  id: string;
+  platform_id: string;
+  platform_name: string;
+  amount: number;
+  currency: 'MXN' | 'USD';
+  billing_cycle: string;
+  charged_date: string;
+  billing_date?: string;
+  payment_method_id?: string;
+  created_at?: string;
 }
 
 export interface EmergencyKitResponse {
@@ -162,6 +221,8 @@ export interface ExchangeRate {
   rate: number;
   is_manual: boolean;
   updated_at: string;
+  synced?: boolean;
+  source?: string;
 }
 
 export interface GraphNode {
@@ -210,6 +271,7 @@ export interface VaultCredentialItem {
   id: string;
   entity_id: string;
   category: string;
+  scope?: EntityScope;
   name: string;
   username?: string;
   provider?: string;
@@ -225,6 +287,7 @@ export interface VaultCredentialItem {
     label: string;
     color: string;
   };
+  expires_at?: string;
   last_updated?: string;
 }
 
@@ -254,9 +317,12 @@ export type ProspectStatus =
   | 'primer_contacto'
   | 'en_cotizacion'
   | 'respondido'
-  | 'tiempo_agotado';
+  | 'tiempo_agotado'
+  | 'archivado_frio';
 
 export type ProspectSlaStatus = 'en_tiempo' | 'cumplido' | 'vencido';
+
+export type ProspectFollowupStatus = 'en_tiempo' | 'vencido' | 'sin_iniciar' | 'completado';
 
 export interface Prospect {
   id: string;
@@ -267,9 +333,13 @@ export interface Prospect {
   email_address?: string;
   email_provider?: string;
   specific_alias?: string;
+  scope?: EntityScope;
   workflow_type: ProspectWorkflowType;
   status: ProspectStatus;
   demo_url?: string;
+  estimated_value?: number;
+  currency?: 'MXN' | 'USD';
+  billing_type?: 'one_time' | 'monthly_retainer';
   whatsapp?: string;
   phones?: string;
   maps_url?: string;
@@ -284,9 +354,160 @@ export interface Prospect {
   elapsed_seconds: number;
   sla_seconds: number;
   sla_status: ProspectSlaStatus;
+  last_contacted_at?: string;
+  followup_count?: number;
+  last_contact_channel?: string;
+  followup_sla_hours?: number;
+  followup_elapsed_seconds?: number;
+  followup_sla_seconds?: number;
+  followup_remaining_seconds?: number;
+  followup_status?: ProspectFollowupStatus;
+  max_followup_attempts?: number;
+  needs_recontact?: boolean;
   is_deleted: boolean;
   created_at?: string;
   updated_at?: string;
 }
+
+export type IncomeCategory = 'anticipo' | 'liquidacion' | 'iguala_mensual' | 'dominio_hosting' | 'renovacion_dominio_hosting' | 'otro' | string;
+export type IncomeStatus = 'cobrado' | 'pendiente';
+
+export interface ClientIncome {
+  id: string;
+  prospect_id?: string | null;
+  project_id?: string | null;
+  ownership_type?: OwnershipType;
+  scope?: EntityScope;
+  business_share_percent?: number;
+  client_name: string;
+  concept: string;
+  category: IncomeCategory;
+  amount: number;
+  currency: 'MXN' | 'USD';
+  status: IncomeStatus;
+  received_date: string;
+  payment_method_label?: string | null;
+  is_recurring: boolean;
+  notes?: string | null;
+  is_deleted: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export type RenewalServiceType = 'dominio' | 'hosting' | 'dominio_y_hosting' | 'ssl_otro' | string;
+export type RenewalPaidBy = 'me' | 'client';
+export type RenewalStatus = 'activo' | 'renovado' | 'vencido' | 'cancelado';
+export type RenewalExpirySemaphore = 'en_orden' | 'proximo' | 'urgente' | 'vencido' | 'cancelado';
+
+export interface AdvanceRenewalPayload {
+  create_income?: boolean;
+  charged_amount?: number;
+  charged_currency?: 'MXN' | 'USD';
+  payment_method_label?: string;
+  income_status?: IncomeStatus;
+}
+
+export interface DomainRenewal {
+  id: string;
+  prospect_id?: string | null;
+  project_id?: string | null;
+  platform_id?: string | null;
+  ownership_type?: OwnershipType;
+  scope?: EntityScope;
+  business_share_percent?: number;
+  client_name: string;
+  domain_or_service: string;
+  service_type: RenewalServiceType;
+  provider?: string | null;
+  renewal_date: string;
+  renewal_cost: number;
+  client_charge_amount?: number;
+  currency: 'MXN' | 'USD';
+  billing_cycle: 'yearly' | 'monthly';
+  paid_by: RenewalPaidBy;
+  status: RenewalStatus;
+  auto_renew: boolean;
+  notes?: string | null;
+  days_remaining: number;
+  expiry_semaphore: RenewalExpirySemaphore;
+  created_income_id?: string | null;
+  margin_amount?: number | null;
+  is_deleted: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface OneTimeExpense {
+  id: string;
+  concept: string;
+  category: string;
+  amount: number;
+  currency: 'MXN' | 'USD';
+  expense_date: string;
+  scope: EntityScope;
+  business_share_percent: number;
+  ownership_type: OwnershipType;
+  vendor?: string | null;
+  payment_method_label?: string | null;
+  prospect_id?: string | null;
+  project_id?: string | null;
+  notes?: string | null;
+  is_deleted: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export type InternalProjectStatus = 'idea' | 'en_desarrollo' | 'en_produccion' | 'pausado';
+
+export interface InternalProject {
+  id: string;
+  name: string;
+  category: string;
+  status: InternalProjectStatus;
+  scope: EntityScope;
+  email_id?: string | null;
+  email_address?: string | null;
+  production_url?: string | null;
+  repo_url?: string | null;
+  tech_stack?: string | null;
+  monthly_maintenance_cost: number;
+  currency: 'MXN' | 'USD';
+  linked_platform_ids: string[];
+  linked_domain_ids: string[];
+  tags: TagItem[];
+  notes?: string | null;
+  is_deleted: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export type SecureResourceType =
+  | 'env_file'
+  | 'ssh_key'
+  | 'backup_codes'
+  | 'software_license'
+  | 'nota_segura'
+  | string;
+
+export interface SecureResource {
+  id: string;
+  title: string;
+  resource_type: SecureResourceType;
+  scope: EntityScope;
+  ownership_type: OwnershipType;
+  content?: string | null;
+  content_masked: string;
+  email_id?: string | null;
+  platform_id?: string | null;
+  prospect_id?: string | null;
+  project_id?: string | null;
+  tags: TagItem[];
+  notes?: string | null;
+  is_deleted: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+
 
 

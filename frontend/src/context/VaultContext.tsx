@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { VaultStatus, ExchangeRate } from '../types';
+import { VaultStatus, ExchangeRate, PaymentMethod, ScopeFilter, EntityScope } from '../types';
 import { api, setApiVaultToken, getApiVaultToken } from '../lib/api';
 
 export type SectionType = 
@@ -37,6 +37,12 @@ interface VaultContextType {
   setAccentColor: (color: string) => void;
   canvasStyle: string;
   setCanvasStyle: (style: string) => void;
+
+  // Global Scope Filter (Todo | Empresa | Personal)
+  activeScope: ScopeFilter;
+  setActiveScope: (scope: ScopeFilter) => void;
+  matchesScope: (itemScope?: EntityScope | string) => boolean;
+  defaultEntityScope: EntityScope;
   
   // Actions
   unlockVault: (password: string) => Promise<void>;
@@ -100,8 +106,9 @@ interface VaultContextType {
   editingProspectId?: string;
 
   isPaymentModalOpen: boolean;
-  openPaymentModal: () => void;
+  openPaymentModal: (editPayment?: PaymentMethod) => void;
   closePaymentModal: () => void;
+  editingPayment?: PaymentMethod;
 
   // Exchange Rate
   exchangeRate: ExchangeRate | null;
@@ -130,6 +137,30 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [accentColor, setAccentColor] = useState<string>('#6366f1');
   const [canvasStyle, setCanvasStyle] = useState<string>('dot-grid');
 
+  // Global Scope Filter
+  const [activeScope, setActiveScopeState] = useState<ScopeFilter>(() => {
+    const saved = localStorage.getItem('emailsaver_active_scope');
+    if (saved === 'business' || saved === 'personal' || saved === 'all') return saved;
+    return 'all';
+  });
+
+  const setActiveScope = useCallback((scope: ScopeFilter) => {
+    setActiveScopeState(scope);
+    localStorage.setItem('emailsaver_active_scope', scope);
+  }, []);
+
+  const matchesScope = useCallback(
+    (itemScope?: EntityScope | string) => {
+      if (activeScope === 'all') return true;
+      const normalized = itemScope || 'business';
+      if (normalized === 'shared') return true;
+      return normalized === activeScope;
+    },
+    [activeScope]
+  );
+
+  const defaultEntityScope: EntityScope = activeScope === 'personal' ? 'personal' : 'business';
+
   // Navigation
   const [activeSection, setActiveSection] = useState<SectionType>('dashboard');
   const [selectedEntity, setSelectedEntity] = useState<{ type: InspectorEntityType; id: string } | null>(null);
@@ -155,6 +186,7 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [editingProspectId, setEditingProspectId] = useState<string | undefined>();
 
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [editingPayment, setEditingPayment] = useState<PaymentMethod | undefined>();
 
   // Exchange rate & data reload
   const [exchangeRate, setExchangeRate] = useState<ExchangeRate | null>(null);
@@ -211,6 +243,12 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   useEffect(() => {
     refreshVaultStatus();
     refreshExchangeRate();
+    const handleVaultLocked = () => {
+      setIsUnlocked(false);
+      setRemainingSeconds(0);
+    };
+    window.addEventListener('vault_locked', handleVaultLocked);
+    return () => window.removeEventListener('vault_locked', handleVaultLocked);
   }, [refreshVaultStatus, refreshExchangeRate]);
 
   // Countdown timer for vault auto-lock
@@ -233,17 +271,45 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return () => clearInterval(interval);
   }, [isUnlocked, remainingSeconds, showToast]);
 
-  // Global hotkey handler (Ctrl+K or custom)
+  // Global hotkey handler (Ctrl+K or Escape to close modals)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
         setIsCommandPaletteOpen((prev) => !prev);
+        return;
+      }
+      if (e.key === 'Escape') {
+        if (isCommandPaletteOpen) { setIsCommandPaletteOpen(false); return; }
+        if (isUnlockModalOpen) { setIsUnlockModalOpen(false); return; }
+        if (isPasswordGenOpen) { setIsPasswordGenOpen(false); return; }
+        if (isEmailModalOpen) { setEditingEmailId(undefined); setIsEmailModalOpen(false); return; }
+        if (isPlatformModalOpen) { setPlatformModalDefaultEmailId(undefined); setEditingPlatformId(undefined); setIsPlatformModalOpen(false); return; }
+        if (isProspectModalOpen) { setProspectModalDefaultEmailId(undefined); setEditingProspectId(undefined); setIsProspectModalOpen(false); return; }
+        if (isPaymentModalOpen) { setEditingPayment(undefined); setIsPaymentModalOpen(false); return; }
+        if (isEmergencyKitOpen) { setIsEmergencyKitOpen(false); return; }
+        if (isImportModalOpen) { setIsImportModalOpen(false); return; }
+        if (isEncryptedBackupOpen) { setIsEncryptedBackupOpen(false); return; }
+        if (isEnvExportOpen) { setIsEnvExportOpen(false); return; }
+        if (selectedEntity) { setSelectedEntity(null); return; }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [
+    isCommandPaletteOpen,
+    isUnlockModalOpen,
+    isPasswordGenOpen,
+    isEmailModalOpen,
+    isPlatformModalOpen,
+    isProspectModalOpen,
+    isPaymentModalOpen,
+    isEmergencyKitOpen,
+    isImportModalOpen,
+    isEncryptedBackupOpen,
+    isEnvExportOpen,
+    selectedEntity,
+  ]);
 
   const unlockVault = async (password: string) => {
     const res = await api.unlockVault(password);
@@ -288,7 +354,7 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setIsPlatformModalOpen(false);
     setIsProspectModalOpen(false);
     setIsPaymentModalOpen(false);
-    showToast('🚨 Bloqueo de pánico: Bóveda cerrada y portapapeles purgado.', 'warning');
+    showToast('Bloqueo de pánico activado: Bóveda cerrada y portapapeles purgado.', 'warning');
     triggerDataReload();
   };
 
@@ -385,8 +451,14 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setIsProspectModalOpen(false);
   };
 
-  const openPaymentModal = () => setIsPaymentModalOpen(true);
-  const closePaymentModal = () => setIsPaymentModalOpen(false);
+  const openPaymentModal = (editPayment?: PaymentMethod) => {
+    setEditingPayment(editPayment);
+    setIsPaymentModalOpen(true);
+  };
+  const closePaymentModal = () => {
+    setEditingPayment(undefined);
+    setIsPaymentModalOpen(false);
+  };
 
   const openEmergencyKit = () => setIsEmergencyKitOpen(true);
   const closeEmergencyKit = () => setIsEmergencyKitOpen(false);
@@ -414,6 +486,10 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         setAccentColor,
         canvasStyle,
         setCanvasStyle,
+        activeScope,
+        setActiveScope,
+        matchesScope,
+        defaultEntityScope,
         unlockVault,
         lockVault,
         panicLock,
@@ -463,6 +539,7 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         isPaymentModalOpen,
         openPaymentModal,
         closePaymentModal,
+        editingPayment,
         exchangeRate,
         refreshExchangeRate,
         toasts,

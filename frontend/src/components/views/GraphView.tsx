@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Network, AlertTriangle, ZoomIn, ZoomOut, RotateCcw, 
-  ShieldAlert, Layers, Filter, Eye, Info 
+  ShieldAlert, Layers, Filter, Eye, Info, Plus 
 } from 'lucide-react';
 import { useVault } from '../../context/VaultContext';
 import { api } from '../../lib/api';
 import { GraphData, GraphNode, GraphLink } from '../../types';
 
 export const GraphView: React.FC = () => {
-  const { openInspector, dataVersion } = useVault();
+  const { openInspector, openEmailModal, openProspectModal, dataVersion } = useVault();
 
   const [graphData, setGraphData] = useState<GraphData | null>(null);
   const [filterType, setFilterType] = useState<'all' | 'emails' | 'platforms'>('all');
@@ -427,7 +427,7 @@ export const GraphView: React.FC = () => {
             }`}
           >
             <ShieldAlert size={14} />
-            <span>Puntos de Falla (SPOF)</span>
+            <span>Resaltar Correos Indispensables</span>
           </button>
         </div>
 
@@ -435,7 +435,7 @@ export const GraphView: React.FC = () => {
         {graphData?.cycles_detected && graphData.cycles_detected.length > 0 && (
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs backdrop-blur-md">
             <AlertTriangle size={14} className="text-amber-400" />
-            <span>Ciclo detectado en recuperación de correos</span>
+            <span>Correos de respaldo conectados en círculo</span>
           </div>
         )}
       </div>
@@ -448,7 +448,7 @@ export const GraphView: React.FC = () => {
             transformRef.current.scale = Math.min(2.5, transformRef.current.scale * 1.2);
             draw();
           }}
-          title="Zoom in"
+          title="Acercar"
           className="p-2 hover:text-white hover:bg-obsidian-surface rounded-lg transition-colors"
         >
           <ZoomIn size={16} />
@@ -459,7 +459,7 @@ export const GraphView: React.FC = () => {
             transformRef.current.scale = Math.max(0.3, transformRef.current.scale * 0.8);
             draw();
           }}
-          title="Zoom out"
+          title="Alejar"
           className="p-2 hover:text-white hover:bg-obsidian-surface rounded-lg transition-colors"
         >
           <ZoomOut size={16} />
@@ -476,28 +476,60 @@ export const GraphView: React.FC = () => {
 
       {/* Legend Card */}
       <div className="absolute bottom-6 left-6 z-10 p-3 rounded-xl bg-obsidian-panel/90 backdrop-blur-md border border-obsidian-border shadow-xl text-[11px] space-y-1.5 text-obsidian-muted max-w-xs">
-        <div className="font-semibold text-white text-xs mb-1">Leyenda del Grafo</div>
+        <div className="font-semibold text-white text-xs mb-1">Guía del Mapa</div>
         <div className="flex items-center gap-2">
           <span className="w-3 h-3 rounded-full border-2 border-indigo-500 bg-obsidian-card" />
-          <span>Correo Raíz (Padre)</span>
+          <span>Correo Principal</span>
         </div>
         <div className="flex items-center gap-2">
           <span className="w-3 h-3 rounded-full border-2 border-cyan-400 bg-obsidian-card" />
-          <span>Plataforma / Servicio (Hijo)</span>
+          <span>Cuenta o Servicio</span>
         </div>
         <div className="flex items-center gap-2">
           <span className="w-3 h-3 rounded-full border-2 border-amber-400 bg-obsidian-card" />
-          <span>Prospecto / Demo (CRM)</span>
+          <span>Prospecto / Demo</span>
         </div>
         <div className="flex items-center gap-2">
           <span className="w-4 h-0.5 border-t border-dashed border-cyan-400" />
-          <span>Cadena de Recuperación ($A \rightarrow B$)</span>
+          <span>Correo de Respaldo (A recupera a B)</span>
         </div>
         <div className="flex items-center gap-2">
           <span className="w-3 h-3 rounded-full border-2 border-rose-500 bg-rose-500/20" />
-          <span>Punto Único de Fallo (SPOF crítico)</span>
+          <span>Correo Indispensable (muchas cuentas dependen de él)</span>
         </div>
       </div>
+
+      {/* Empty State Overlay when there are no nodes */}
+      {graphData && graphData.nodes.length === 0 && (
+        <div className="absolute inset-0 z-20 flex items-center justify-center p-6 pointer-events-none">
+          <div className="max-w-md w-full p-8 rounded-2xl bg-obsidian-panel/95 backdrop-blur-md border border-obsidian-border shadow-2xl text-center space-y-4 pointer-events-auto">
+            <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 mx-auto">
+              <Network size={22} />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-white">Mapa de Conexiones Vacío</h3>
+            </div>
+            <div className="flex flex-wrap items-center justify-center gap-2.5 pt-1">
+              <button
+                type="button"
+                onClick={() => openEmailModal()}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition-all"
+              >
+                <Plus size={14} />
+                <span>Agregar Correo Principal</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => openProspectModal()}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-obsidian-surface hover:bg-obsidian-border border border-obsidian-border text-white text-xs font-semibold transition-all"
+              >
+                <Plus size={14} className="text-amber-400" />
+                <span>Nuevo Prospecto</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* The HTML5 Canvas */}
       <canvas

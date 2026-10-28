@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { X, Shield, Download, Upload, Lock, Key, CheckCircle2, AlertTriangle, FileCode } from 'lucide-react';
+import { X, Shield, Download, Upload, Lock, AlertTriangle, FileCode } from 'lucide-react';
 import { useVault } from '../../context/VaultContext';
 import { api } from '../../lib/api';
+import { INPUT_LIMITS } from '../../lib/validation';
 
 export const EncryptedBackupModal: React.FC = () => {
   const { isEncryptedBackupOpen, closeEncryptedBackup, showToast, triggerDataReload, isUnlocked, openUnlockModal } = useVault();
@@ -106,21 +107,26 @@ export const EncryptedBackupModal: React.FC = () => {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
-      <div className="relative w-full max-w-xl rounded-2xl border border-obsidian-border bg-obsidian-panel p-6 shadow-2xl space-y-6">
+      <div 
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="backup-modal-title"
+        className="relative w-full max-w-xl rounded-2xl border border-obsidian-border bg-obsidian-panel p-6 shadow-2xl space-y-6"
+      >
         {/* Header */}
         <div className="flex items-center justify-between pb-4 border-b border-obsidian-border">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 flex-shrink-0">
               <Shield className="w-5 h-5" />
             </div>
-            <div>
-              <h2 className="text-lg font-bold text-white">Respaldo Cifrado Zero-Knowledge</h2>
-              <p className="text-xs text-white/50">Exportación e importación segura con Argon2id + AES-256-GCM (.emailsaver)</p>
+            <div className="min-w-0">
+              <h2 id="backup-modal-title" className="text-lg font-bold text-white truncate">Respaldo Cifrado de Bóveda</h2>
+              <p className="text-xs text-white/50 truncate">Exportación e importación segura con Argon2id + AES-256-GCM (.emailsaver)</p>
             </div>
           </div>
           <button 
             onClick={closeEncryptedBackup} 
-            className="p-2 rounded-lg text-white/40 hover:text-white hover:bg-white/5 transition-all"
+            className="p-2 rounded-lg text-white/40 hover:text-white hover:bg-white/5 transition-all flex-shrink-0"
           >
             <X className="w-5 h-5" />
           </button>
@@ -156,17 +162,19 @@ export const EncryptedBackupModal: React.FC = () => {
                 <Lock className="w-3.5 h-3.5" /> Cifrado de Transporte Autónomo
               </div>
               <p className="text-[11px] leading-relaxed">
-                Toda la base de datos se cifra con una clave derivada al vuelo de tu contraseña elegida. Nadie sin esta clave podrá leer el archivo.
+                Toda la base de datos se cifra con una clave derivada de tu contraseña elegida.
               </p>
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-white/70 mb-1.5">
+              <label htmlFor="export-backup-password" className="block text-xs font-medium text-white/70 mb-1.5">
                 Contraseña de Cifrado del Respaldo
               </label>
               <input
+                id="export-backup-password"
                 type="password"
                 required
+                maxLength={INPUT_LIMITS.MASTER_PASSWORD}
                 placeholder="Mínimo 8 caracteres..."
                 value={exportPassword}
                 onChange={(e) => setExportPassword(e.target.value)}
@@ -175,12 +183,14 @@ export const EncryptedBackupModal: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-white/70 mb-1.5">
+              <label htmlFor="confirm-backup-password" className="block text-xs font-medium text-white/70 mb-1.5">
                 Confirmar Contraseña
               </label>
               <input
+                id="confirm-backup-password"
                 type="password"
                 required
+                maxLength={INPUT_LIMITS.MASTER_PASSWORD}
                 placeholder="Repite la contraseña..."
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
@@ -211,10 +221,10 @@ export const EncryptedBackupModal: React.FC = () => {
           <form onSubmit={handleRestore} className="space-y-4">
             <div className="p-3.5 rounded-xl bg-amber-500/5 border border-amber-500/20 text-xs text-amber-300/80 space-y-1">
               <div className="font-semibold text-amber-200 flex items-center gap-1.5">
-                <AlertTriangle className="w-3.5 h-3.5" /> Restauración Transaccional ACID
+                <AlertTriangle className="w-3.5 h-3.5" /> Restauración Transaccional Aditiva
               </div>
               <p className="text-[11px] leading-relaxed">
-                Los registros del respaldo se integrarán de forma segura en la base de datos sin duplicar cuentas existentes.
+                Los registros del respaldo se integrarán de forma segura en la base de datos sin sobrescribir ni duplicar cuentas existentes.
               </p>
             </div>
 
@@ -227,19 +237,21 @@ export const EncryptedBackupModal: React.FC = () => {
                 className="absolute inset-0 opacity-0 cursor-pointer"
               />
               <FileCode className="w-8 h-8 mx-auto mb-2 text-indigo-400/80" />
-              <div className="text-xs font-medium text-white">
+              <div className="text-xs font-medium text-white truncate">
                 {fileName ? fileName : 'Selecciona o arrastra tu archivo .emailsaver'}
               </div>
               <div className="text-[10px] text-white/40 mt-1">Formato cifrado estándar de EmailSaver</div>
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-white/70 mb-1.5">
+              <label htmlFor="restore-backup-password" className="block text-xs font-medium text-white/70 mb-1.5">
                 Contraseña de Descifrado del Respaldo
               </label>
               <input
+                id="restore-backup-password"
                 type="password"
                 required
+                maxLength={INPUT_LIMITS.MASTER_PASSWORD}
                 placeholder="Contraseña con la que se creó el respaldo..."
                 value={restorePassword}
                 onChange={(e) => setRestorePassword(e.target.value)}

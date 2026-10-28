@@ -97,7 +97,11 @@ const MainLayout: React.FC = () => {
       <EnvExportModal />
 
       {/* Global Toast Container */}
-      <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-2 max-w-sm pointer-events-none">
+      <div 
+        className="fixed bottom-6 right-6 z-50 flex flex-col gap-2 max-w-sm pointer-events-none"
+        aria-live="polite"
+        aria-atomic="true"
+      >
         {toasts.map((toast) => (
           <div
             key={toast.id}

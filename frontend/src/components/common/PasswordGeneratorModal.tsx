@@ -63,6 +63,9 @@ export const PasswordGeneratorModal: React.FC = () => {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-fadeIn">
       <div 
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="password-gen-title"
         className="relative w-full max-w-lg bg-obsidian-panel border border-obsidian-borderLight rounded-2xl shadow-2xl p-6 overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
@@ -75,7 +78,7 @@ export const PasswordGeneratorModal: React.FC = () => {
               <Sparkles size={20} />
             </div>
             <div>
-              <h2 className="text-base font-semibold text-white tracking-tight">
+              <h2 id="password-gen-title" className="text-base font-semibold text-white tracking-tight">
                 Generador de Contraseñas & Passphrases
               </h2>
               <p className="text-xs text-obsidian-muted">

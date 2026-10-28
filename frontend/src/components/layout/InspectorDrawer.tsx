@@ -4,11 +4,11 @@ import {
   History, Copy, Check, Lock, Edit3, Trash2, AlertTriangle, 
   Clock, ShieldAlert, Sparkles, Shield, RefreshCw, Rocket,
   MessageCircle, Phone, MapPin, Globe, CheckCircle2, RotateCcw,
-  Mail, Share2, Plus
+  Mail, Share2, Plus, Archive, Timer, DollarSign
 } from 'lucide-react';
 import { useVault } from '../../context/VaultContext';
 import { api } from '../../lib/api';
-import { PlatformAccount, EmailAccount, PaymentMethod, PwnedCheckResponse, Prospect, ProspectStatus } from '../../types';
+import { PlatformAccount, EmailAccount, PaymentMethod, PwnedCheckResponse, Prospect, ProspectStatus, ClientIncome, DomainRenewal } from '../../types';
 import { PlatformIcon } from '../common/PlatformIcon';
 import { TagBadge } from '../common/TagBadge';
 import { SecretField } from '../common/SecretField';
@@ -22,14 +22,19 @@ import {
   formatDuration,
   formatSlaHoursLabel,
   computeLiveSla,
-  buildWhatsAppUrl
+  computeLiveFollowUpSla,
+  buildWhatsAppUrl,
+  buildMailtoUrl,
+  buildFollowUpMessage,
+  formatRelativeContactTime
 } from '../../lib/prospectUtils';
+import { INPUT_LIMITS } from '../../lib/validation';
 
 export const InspectorDrawer: React.FC = () => {
   const { 
     selectedEntity, openInspector, closeInspector, isUnlocked, openUnlockModal, 
     copyToClipboard, openPlatformModal, openEmailModal, openProspectModal, showToast, 
-    triggerDataReload, dataVersion 
+    triggerDataReload, dataVersion, exchangeRate 
   } = useVault();
 
   const [activeTab, setActiveTab] = useState<'general' | 'credentials' | 'api_keys' | 'subscription' | 'history'>('general');
@@ -44,6 +49,36 @@ export const InspectorDrawer: React.FC = () => {
   const [isAddingTotp, setIsAddingTotp] = useState(false);
   const [totpInput, setTotpInput] = useState('');
   const [nowMs, setNowMs] = useState<number>(Date.now());
+  const [followupWindowHours, setFollowupWindowHours] = useState<24 | 48 | 72>(48);
+
+  // Client financial & domain monitor state
+  const [clientIncomes, setClientIncomes] = useState<ClientIncome[]>([]);
+  const [clientRenewals, setClientRenewals] = useState<DomainRenewal[]>([]);
+  const [showAddIncome, setShowAddIncome] = useState(false);
+  const [incConcept, setIncConcept] = useState('');
+  const [incAmount, setIncAmount] = useState('');
+  const [incCurrency, setIncCurrency] = useState<'MXN' | 'USD'>('MXN');
+  const [incCategory, setIncCategory] = useState('anticipo');
+  const [incStatus, setIncStatus] = useState<'cobrado' | 'pendiente'>('cobrado');
+  const [incDate, setIncDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [incRecurring, setIncRecurring] = useState(false);
+  const [incLoading, setIncLoading] = useState(false);
+
+  const [showAddDomain, setShowAddDomain] = useState(false);
+  const [domName, setDomName] = useState('');
+  const [domType, setDomType] = useState('dominio');
+  const [domProvider, setDomProvider] = useState('');
+  const [domCost, setDomCost] = useState('');
+  const [domCharge, setDomCharge] = useState('');
+  const [domCurrency, setDomCurrency] = useState<'MXN' | 'USD'>('MXN');
+  const [domCycle, setDomCycle] = useState<'yearly' | 'monthly'>('yearly');
+  const [domPaidBy, setDomPaidBy] = useState<'me' | 'client'>('client');
+  const [domDate, setDomDate] = useState(() => {
+    const d = new Date();
+    d.setFullYear(d.getFullYear() + 1);
+    return d.toISOString().split('T')[0];
+  });
+  const [domLoading, setDomLoading] = useState(false);
 
   useEffect(() => {
     if (selectedEntity?.type !== 'prospect') return;
@@ -97,8 +132,27 @@ export const InspectorDrawer: React.FC = () => {
       api.getProspectDetail(selectedEntity.id)
         .then((res) => {
           setProspectData(res);
+          const fh = res.followup_sla_hours;
+          if (fh === 24 || fh === 48 || fh === 72) {
+            setFollowupWindowHours(fh);
+          }
           setEmailData(null);
           setPlatformData(null);
+
+          // Fetch financial history & domain renewals for this client
+          api.getIncomes().then((allInc) => {
+            const filtered = allInc.filter(
+              (i) => i.prospect_id === res.id || i.client_name.toLowerCase() === res.company_name.toLowerCase()
+            );
+            setClientIncomes(filtered);
+          }).catch(() => setClientIncomes([]));
+
+          api.getRenewals().then((allRen) => {
+            const filtered = allRen.filter(
+              (r) => r.prospect_id === res.id || r.client_name.toLowerCase() === res.company_name.toLowerCase()
+            );
+            setClientRenewals(filtered);
+          }).catch(() => setClientRenewals([]));
         })
         .catch((err) => showToast(err.message, 'error'))
         .finally(() => setLoading(false));
@@ -106,6 +160,96 @@ export const InspectorDrawer: React.FC = () => {
       setLoading(false);
     }
   }, [selectedEntity, isUnlocked, dataVersion]);
+
+  const handleCreateIncome = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!prospectData) return;
+    if (!incConcept.trim()) {
+      showToast('El concepto del pago es obligatorio.', 'warning');
+      return;
+    }
+    const amountVal = parseFloat(incAmount);
+    if (isNaN(amountVal) || amountVal <= 0) {
+      showToast('Ingresa un monto válido mayor a 0.', 'warning');
+      return;
+    }
+    setIncLoading(true);
+    try {
+      const created = await api.createIncome({
+        prospect_id: prospectData.id,
+        client_name: prospectData.company_name,
+        concept: incConcept.trim(),
+        category: incCategory,
+        amount: amountVal,
+        currency: incCurrency,
+        status: incStatus,
+        received_date: incDate,
+        is_recurring: incRecurring,
+        scope: prospectData.scope || 'business',
+      });
+      setClientIncomes((prev) => [created, ...prev]);
+      setShowAddIncome(false);
+      setIncConcept('');
+      setIncAmount('');
+      showToast('Pago registrado correctamente para este cliente.', 'success');
+      triggerDataReload();
+    } catch (err: any) {
+      showToast(err.message || 'Error al registrar el pago.', 'error');
+    } finally {
+      setIncLoading(false);
+    }
+  };
+
+  const handleCreateRenewal = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!prospectData) return;
+    if (!domName.trim()) {
+      showToast('El nombre del dominio o servicio es obligatorio.', 'warning');
+      return;
+    }
+    const costVal = parseFloat(domCost) || 0;
+    const chargeVal = parseFloat(domCharge) || 0;
+    setDomLoading(true);
+    try {
+      const created = await api.createRenewal({
+        prospect_id: prospectData.id,
+        client_name: prospectData.company_name,
+        domain_or_service: domName.trim(),
+        service_type: domType,
+        provider: domProvider.trim() || null,
+        renewal_cost: costVal,
+        client_charge_amount: chargeVal,
+        currency: domCurrency,
+        billing_cycle: domCycle,
+        paid_by: domPaidBy,
+        renewal_date: domDate,
+        scope: prospectData.scope || 'business',
+      });
+      setClientRenewals((prev) => [...prev, created]);
+      setShowAddDomain(false);
+      setDomName('');
+      setDomCost('');
+      setDomCharge('');
+      setDomProvider('');
+      showToast('Vencimiento de dominio/hosting asociado con éxito.', 'success');
+      triggerDataReload();
+    } catch (err: any) {
+      showToast(err.message || 'Error al asociar vencimiento.', 'error');
+    } finally {
+      setDomLoading(false);
+    }
+  };
+
+  const handleAdvanceRenewal = async (renId: string) => {
+    try {
+      const updated = await api.advanceRenewalCycle(renId);
+      setClientRenewals((prev) => prev.map((r) => (r.id === renId ? updated : r)));
+      showToast(`Ciclo avanzado (+1 año). Próximo vencimiento: ${updated.renewal_date}`, 'success');
+      triggerDataReload();
+    } catch (err: any) {
+      showToast(err.message || 'Error al renovar ciclo.', 'error');
+    }
+  };
 
   if (!selectedEntity) return null;
 
@@ -159,6 +303,7 @@ export const InspectorDrawer: React.FC = () => {
     : `Usuario: ${platformData?.username || 'N/A'}`;
 
   const prospectLive = prospectData ? computeLiveSla(prospectData, nowMs) : null;
+  const prospectFollowupLive = prospectData ? computeLiveFollowUpSla(prospectData, nowMs) : null;
   const prospectWaUrl = prospectData
     ? buildWhatsAppUrl(prospectData.whatsapp, prospectData.company_name, prospectData.demo_url)
     : null;
@@ -166,20 +311,20 @@ export const InspectorDrawer: React.FC = () => {
   return (
     <div className="fixed inset-y-0 right-0 z-40 w-full max-w-lg bg-obsidian-panel border-l border-obsidian-border shadow-2xl flex flex-col animate-slideLeft">
       {/* Top Header */}
-      <div className="p-4 border-b border-obsidian-border flex items-center justify-between bg-obsidian-card">
-        <div className="flex items-center gap-3">
+      <div className="p-4 border-b border-obsidian-border flex items-center justify-between gap-2 bg-obsidian-card">
+        <div className="flex items-center gap-3 min-w-0">
           <PlatformIcon
             name={title || 'Item'}
             iconUrl={isPlatform ? platformData?.icon_url : undefined}
             size="md"
           />
-          <div>
-            <h2 className="text-sm font-bold text-white tracking-tight">{title || 'Cargando...'}</h2>
-            <p className="text-[11px] text-obsidian-muted">{subtitle}</p>
+          <div className="min-w-0">
+            <h2 className="text-sm font-bold text-white tracking-tight truncate">{title || 'Cargando...'}</h2>
+            <p className="text-[11px] text-obsidian-muted truncate">{subtitle}</p>
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 flex-shrink-0">
           <button
             type="button"
             onClick={handleEdit}
@@ -215,7 +360,7 @@ export const InspectorDrawer: React.FC = () => {
             activeTab === 'general' ? 'border-indigo-500 text-white font-semibold' : 'border-transparent text-obsidian-muted hover:text-white'
           }`}
         >
-          {isProspect ? 'Ficha & SLA' : 'General'}
+          {isProspect ? 'Ficha y Seguimiento' : 'General'}
         </button>
         {!isProspect && (
           <button
@@ -226,7 +371,7 @@ export const InspectorDrawer: React.FC = () => {
             }`}
           >
             <Key size={13} />
-            <span>Credenciales</span>
+            <span>Contraseñas</span>
             {!isUnlocked && <Lock size={11} className="text-amber-400" />}
           </button>
         )}
@@ -239,7 +384,7 @@ export const InspectorDrawer: React.FC = () => {
             }`}
           >
             <Code size={13} />
-            <span>APIs & Env</span>
+            <span>Llaves API</span>
             {!isUnlocked && <Lock size={11} className="text-amber-400" />}
           </button>
         )}
@@ -285,14 +430,14 @@ export const InspectorDrawer: React.FC = () => {
                   <>
                     <div className="p-3 rounded-xl bg-obsidian-surface border border-obsidian-border space-y-2">
                       <div className="text-obsidian-muted">Dirección Principal</div>
-                      <div className="flex items-center justify-between">
-                        <span className="font-mono text-sm text-white font-medium select-all">{emailData.address}</span>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-mono text-sm text-white font-medium select-all break-all">{emailData.address}</span>
                         <CopyButton value={emailData.address} label="Correo" />
                       </div>
                     </div>
 
                     {emailData.inbox_url && (
-                      <div className="flex items-center justify-between p-3 rounded-xl bg-obsidian-surface border border-obsidian-border">
+                      <div className="flex items-center justify-between gap-2 p-3 rounded-xl bg-obsidian-surface border border-obsidian-border">
                         <span className="text-obsidian-muted">Bandeja de Entrada</span>
                         <a
                           href={emailData.inbox_url}
@@ -311,8 +456,8 @@ export const InspectorDrawer: React.FC = () => {
                         <span className="text-obsidian-muted block">Alias / Sub-direcciones vinculadas</span>
                         <div className="space-y-1">
                           {emailData.aliases.map((al, idx) => (
-                            <div key={idx} className="flex items-center justify-between text-obsidian-text font-mono text-[11px] p-1.5 rounded bg-obsidian-bg">
-                              <span>{al}</span>
+                            <div key={idx} className="flex items-center justify-between gap-2 text-obsidian-text font-mono text-[11px] p-1.5 rounded bg-obsidian-bg">
+                              <span className="truncate">{al}</span>
                               <CopyButton value={al} label="Alias" />
                             </div>
                           ))}
@@ -321,16 +466,16 @@ export const InspectorDrawer: React.FC = () => {
                     )}
 
                     <div className="p-3 rounded-xl bg-obsidian-surface border border-obsidian-border space-y-1">
-                      <span className="text-obsidian-muted block">Plataformas Asociadas</span>
+                      <span className="text-obsidian-muted block">Cuentas y Servicios Asociados</span>
                       <span className="font-semibold text-white text-sm">{emailData.platform_count} servicios dependen de este correo</span>
                     </div>
 
                     {/* Correlated Prospects / Demos for this Email */}
                     <div className="p-3.5 rounded-xl bg-obsidian-surface border border-obsidian-border space-y-2.5">
-                      <div className="flex items-center justify-between">
+                      <div className="flex items-center justify-between gap-2">
                         <span className="text-obsidian-muted font-medium flex items-center gap-1.5">
                           <Rocket size={13} className="text-indigo-400" />
-                          <span>Prospectos & Demos Vinculados ({emailProspects.length})</span>
+                          <span>Prospectos y Demos Vinculados ({emailProspects.length})</span>
                         </span>
                         <button
                           type="button"
@@ -351,7 +496,7 @@ export const InspectorDrawer: React.FC = () => {
                               <div
                                 key={pr.id}
                                 onClick={() => openInspector('prospect', pr.id)}
-                                className="p-2.5 rounded-lg bg-obsidian-bg hover:bg-obsidian-card border border-obsidian-border flex items-center justify-between cursor-pointer transition-colors"
+                                className="p-2.5 rounded-lg bg-obsidian-bg hover:bg-obsidian-card border border-obsidian-border flex items-center justify-between gap-2 cursor-pointer transition-colors"
                               >
                                 <div className="min-w-0">
                                   <div className="font-semibold text-white text-xs truncate">{pr.company_name}</div>
@@ -376,24 +521,24 @@ export const InspectorDrawer: React.FC = () => {
                     {emailData.notes && (
                       <div className="p-3 rounded-xl bg-obsidian-surface border border-obsidian-border space-y-1">
                         <span className="text-obsidian-muted block">Notas</span>
-                        <p className="text-obsidian-text leading-relaxed whitespace-pre-wrap">{emailData.notes}</p>
+                        <p className="text-obsidian-text leading-relaxed whitespace-pre-wrap break-words">{emailData.notes}</p>
                       </div>
                     )}
                   </>
                 )}
 
-                {isProspect && prospectData && prospectLive && (
+                {isProspect && prospectData && prospectLive && prospectFollowupLive && (
                   <>
-                    {/* Flow & Status control */}
+                    {/* Flow, Status & Commercial Value control */}
                     <div className="p-3.5 rounded-xl bg-obsidian-surface border border-obsidian-border space-y-2.5">
-                      <div className="flex items-center justify-between">
-                        <span className="text-obsidian-muted">Flujo de Trabajo</span>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-obsidian-muted">Modalidad del Flujo</span>
                         <span className={`px-2.5 py-0.5 rounded-lg text-[10px] font-semibold border ${getWorkflowMeta(prospectData.workflow_type).badgeClass}`}>
                           {getWorkflowMeta(prospectData.workflow_type).label}
                         </span>
                       </div>
 
-                      <div className="flex items-center justify-between pt-1">
+                      <div className="flex items-center justify-between gap-2 pt-1">
                         <span className="text-obsidian-muted">Estado del Prospecto</span>
                         <select
                           value={prospectData.status}
@@ -417,139 +562,158 @@ export const InspectorDrawer: React.FC = () => {
                           ))}
                         </select>
                       </div>
-                    </div>
 
-                    {/* Live SLA Timer & Semáforo Card */}
-                    <div className="p-4 rounded-xl bg-obsidian-surface border border-obsidian-border space-y-3">
-                      <div className="flex items-center justify-between">
-                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border ${getSlaBadgeMeta(prospectLive.slaStatus).badgeClass}`}>
-                          <span className={`w-2 h-2 rounded-full ${getSlaBadgeMeta(prospectLive.slaStatus).dotClass}`} />
-                          <span>{getSlaBadgeMeta(prospectLive.slaStatus).label}</span>
-                        </span>
+                      {(prospectData.estimated_value || 0) > 0 && (
+                        <div className="flex items-center justify-between gap-2 pt-2 border-t border-obsidian-border/60">
+                          <span className="text-obsidian-muted flex items-center gap-1">
+                            <DollarSign size={12} className="text-emerald-400" />
+                            <span>Valor Comercial Estimado</span>
+                          </span>
+                          <span className="font-mono font-bold text-emerald-300 text-xs">
+                            ${Number(prospectData.estimated_value).toLocaleString()} {prospectData.currency || 'MXN'}{' '}
+                            <span className="text-[10px] text-obsidian-muted font-sans font-normal">
+                              ({prospectData.billing_type === 'monthly_retainer' ? 'Iguala Mensual' : 'Pago Único'})
+                            </span>
+                          </span>
+                        </div>
+                      )}
 
-                        {!prospectLive.isResponded ? (
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              try {
-                                const updated = await api.markProspectResponded(prospectData.id);
-                                setProspectData(updated);
-                                const formatted = formatDuration(updated.response_time_seconds || updated.elapsed_seconds, false);
-                                showToast(
-                                  updated.met_sla
-                                    ? `✓ ¡Cliente respondió en ${formatted}! SLA Cumplido.`
-                                    : `Cliente marcado como respondido (${formatted}).`,
-                                  updated.met_sla ? 'success' : 'warning'
-                                );
-                                triggerDataReload();
-                              } catch (err: any) {
-                                showToast(err.message, 'error');
-                              }
-                            }}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/35 text-xs font-semibold transition-all"
-                          >
-                            <CheckCircle2 size={14} className="text-emerald-400" />
-                            <span>Marcar "Ya respondió"</span>
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              try {
-                                const updated = await api.resetProspectTimer(prospectData.id, true);
-                                setProspectData(updated);
-                                showToast('Contador SLA reiniciado desde ahora.', 'info');
-                                triggerDataReload();
-                              } catch (err: any) {
-                                showToast(err.message, 'error');
-                              }
-                            }}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-obsidian-bg hover:bg-obsidian-border text-obsidian-muted hover:text-white border border-obsidian-border text-[11px]"
-                          >
-                            <RotateCcw size={12} />
-                            <span>Reiniciar Timer</span>
-                          </button>
-                        )}
-                      </div>
-
-                      <div className="p-3 rounded-xl bg-obsidian-bg border border-obsidian-border flex items-center justify-between">
-                        <div>
-                          <div className="text-[10px] text-obsidian-muted uppercase tracking-wider">
-                            {prospectLive.isResponded ? 'Tiempo Total de Respuesta' : 'Tiempo Transcurrido en Vivo'}
-                          </div>
-                          <div className="font-mono text-lg font-bold text-white mt-0.5">
-                            {formatDuration(prospectLive.elapsedSeconds, true)}
+                      {prospectData.status === 'archivado_frio' && (
+                        <div className="pt-2 border-t border-obsidian-border/60 flex flex-wrap items-center justify-between gap-2">
+                          <span className="text-[11px] text-slate-300 flex items-center gap-1.5">
+                            <Archive size={13} className="text-slate-400" />
+                            <span>Archivado por límite de intentos</span>
+                          </span>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                try {
+                                  const updated = await api.reactivateProspect(prospectData.id, followupWindowHours);
+                                  setProspectData(updated);
+                                  showToast(`Prospecto reactivado (+${followupWindowHours}h).`, 'success');
+                                  triggerDataReload();
+                                } catch (err: any) {
+                                  showToast(err.message, 'error');
+                                }
+                              }}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-600/25 hover:bg-indigo-600/40 text-indigo-200 border border-indigo-500/40 text-[10px] font-semibold"
+                            >
+                              <RefreshCw size={11} />
+                              <span>Reactivar prospecto</span>
+                            </button>
+                            {prospectData.demo_url && (
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  if (!window.confirm('¿Liberar/reciclar la URL Demo para usarla con otro prospecto?')) return;
+                                  try {
+                                    const updated = await api.recycleProspectDemo(prospectData.id);
+                                    setProspectData(updated);
+                                    showToast('URL Demo liberada y archivada en notas.', 'info');
+                                    triggerDataReload();
+                                  } catch (err: any) {
+                                    showToast(err.message, 'error');
+                                  }
+                                }}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/35 text-[10px] font-semibold"
+                              >
+                                <RotateCcw size={11} />
+                                <span>Liberar/Reciclar Demo</span>
+                              </button>
+                            )}
                           </div>
                         </div>
-                        <div className="text-right">
-                          <div className="text-[10px] text-obsidian-muted uppercase tracking-wider">
-                            Límite Estipulado
-                          </div>
-                          <div className="font-mono text-xs font-semibold text-indigo-300 mt-0.5">
-                            {formatSlaHoursLabel(prospectData.sla_hours)}
-                          </div>
+                      )}
+                    </div>
+
+                    {/* BLOQUE 1: Correlación de Emails */}
+                    <div className="p-3.5 rounded-xl bg-obsidian-surface border border-obsidian-border space-y-2.5">
+                      <span className="text-white font-semibold uppercase text-[10px] tracking-wider flex items-center gap-1.5">
+                        <Mail size={12} className="text-indigo-400" />
+                        <span>1. Correos Relacionados</span>
+                      </span>
+
+                      <div className="p-2.5 rounded-lg bg-obsidian-bg border border-obsidian-border flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <span className="text-[10px] text-obsidian-muted block">Mi Correo Principal Vinculado</span>
+                          <span className="font-mono text-cyan-300 font-medium truncate block">
+                            {prospectData.specific_alias || prospectData.email_address || 'Sin correo vinculado'}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          {(prospectData.specific_alias || prospectData.email_address) && (
+                            <CopyButton value={prospectData.specific_alias || prospectData.email_address || ''} label="Mi correo" />
+                          )}
+                          {prospectData.email_id && (
+                            <button
+                              type="button"
+                              onClick={() => openInspector('email', prospectData.email_id!)}
+                              className="px-2.5 py-1 rounded-lg bg-obsidian-surface hover:bg-obsidian-border text-indigo-300 border border-obsidian-border text-[11px] font-medium"
+                            >
+                              Ver Correo
+                            </button>
+                          )}
                         </div>
                       </div>
 
-                      <div className="w-full h-2 rounded-full bg-obsidian-bg overflow-hidden">
-                        <div
-                          className={`h-full transition-all duration-500 ${getSlaBadgeMeta(prospectLive.slaStatus).barClass}`}
-                          style={{ width: `${prospectLive.progressPercent}%` }}
-                        />
-                      </div>
-
-                      <div className="space-y-1 text-[11px] text-obsidian-muted font-mono">
-                        {prospectData.started_at && (
-                          <div>Inicio: {new Date(prospectData.started_at).toLocaleString()}</div>
-                        )}
-                        {prospectData.responded_at && (
-                          <div className="text-emerald-300">
-                            Respondido: {new Date(prospectData.responded_at).toLocaleString()}
+                      {prospectData.contact_email && (
+                        <div className="flex items-center justify-between gap-2 p-2.5 rounded-lg bg-obsidian-bg border border-obsidian-border">
+                          <div className="min-w-0">
+                            <span className="text-[10px] text-obsidian-muted block">Correo del Cliente / Prospecto</span>
+                            <span className="font-mono text-white truncate block">{prospectData.contact_email}</span>
                           </div>
-                        )}
-                      </div>
+                          <CopyButton value={prospectData.contact_email} label="Correo del cliente" />
+                        </div>
+                      )}
                     </div>
 
-                    {/* Demo URL */}
-                    {prospectData.demo_url && (
-                      <div className="p-3 rounded-xl bg-obsidian-surface border border-obsidian-border space-y-2">
-                        <span className="text-obsidian-muted block">URL de la Página Demo Creada</span>
-                        <div className="flex items-center justify-between gap-2">
-                          <a
-                            href={prospectData.demo_url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="font-mono text-indigo-400 hover:text-indigo-300 truncate underline"
-                          >
-                            {prospectData.demo_url}
-                          </a>
-                          <div className="flex items-center gap-1 flex-shrink-0">
-                            <CopyButton value={prospectData.demo_url} label="URL Demo" />
+                    {/* BLOQUE 2: Datos del Prospecto y Página Demo */}
+                    <div className="p-3.5 rounded-xl bg-obsidian-surface border border-obsidian-border space-y-2.5">
+                      <span className="text-white font-semibold uppercase text-[10px] tracking-wider flex items-center gap-1.5">
+                        <Globe size={12} className="text-cyan-400" />
+                        <span>2. Datos del Prospecto y Página Demo</span>
+                      </span>
+
+                      {prospectData.demo_url ? (
+                        <div className="p-2.5 rounded-lg bg-obsidian-bg border border-obsidian-border space-y-1.5">
+                          <span className="text-[10px] text-obsidian-muted block">URL de la Página Demo Creada</span>
+                          <div className="flex items-center justify-between gap-2">
                             <a
                               href={prospectData.demo_url}
                               target="_blank"
                               rel="noreferrer"
-                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-semibold"
+                              className="font-mono text-indigo-400 hover:text-indigo-300 truncate underline"
                             >
-                              <span>Abrir</span>
-                              <ExternalLink size={11} />
+                              {prospectData.demo_url}
                             </a>
+                            <div className="flex items-center gap-1 flex-shrink-0">
+                              <CopyButton value={prospectData.demo_url} label="URL Demo" />
+                              <a
+                                href={prospectData.demo_url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-semibold"
+                              >
+                                <span>Abrir</span>
+                                <ExternalLink size={11} />
+                              </a>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    )}
-
-                    {/* Quick Omnichannel Actions: WhatsApp, Phone, Maps */}
-                    <div className="p-3.5 rounded-xl bg-obsidian-surface border border-obsidian-border space-y-2.5">
-                      <span className="text-obsidian-muted block font-medium">Canales de Contacto & Ubicación</span>
+                      ) : (
+                        <div className="p-2.5 rounded-lg bg-obsidian-bg border border-obsidian-border text-obsidian-muted italic">
+                          Sin URL de página demo asignada.
+                        </div>
+                      )}
 
                       {prospectData.whatsapp && prospectWaUrl && (
-                        <div className="flex items-center justify-between p-2.5 rounded-lg bg-obsidian-bg border border-obsidian-border">
-                          <div className="flex items-center gap-2">
-                            <MessageCircle size={14} className="text-emerald-400" />
-                            <span className="font-mono text-white">{prospectData.whatsapp}</span>
+                        <div className="flex items-center justify-between gap-2 p-2.5 rounded-lg bg-obsidian-bg border border-obsidian-border">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <MessageCircle size={14} className="text-emerald-400 flex-shrink-0" />
+                            <span className="font-mono text-white truncate">{prospectData.whatsapp}</span>
                           </div>
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex items-center gap-1.5 flex-shrink-0">
                             <CopyButton value={prospectData.whatsapp} label="WhatsApp" />
                             <a
                               href={prospectWaUrl}
@@ -565,79 +729,581 @@ export const InspectorDrawer: React.FC = () => {
                       )}
 
                       {prospectData.phones && (
-                        <div className="flex items-center justify-between p-2.5 rounded-lg bg-obsidian-bg border border-obsidian-border">
-                          <div className="flex items-center gap-2">
-                            <Phone size={14} className="text-cyan-400" />
-                            <span className="font-mono text-white">{prospectData.phones}</span>
+                        <div className="flex items-center justify-between gap-2 p-2.5 rounded-lg bg-obsidian-bg border border-obsidian-border">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <Phone size={14} className="text-cyan-400 flex-shrink-0" />
+                            <span className="font-mono text-white truncate">{prospectData.phones}</span>
                           </div>
                           <CopyButton value={prospectData.phones} label="Teléfono" />
                         </div>
                       )}
 
                       {prospectData.maps_url && (
-                        <div className="flex items-center justify-between p-2.5 rounded-lg bg-obsidian-bg border border-obsidian-border">
+                        <div className="flex items-center justify-between gap-2 p-2.5 rounded-lg bg-obsidian-bg border border-obsidian-border">
                           <div className="flex items-center gap-2 min-w-0">
                             <MapPin size={14} className="text-amber-400 flex-shrink-0" />
                             <span className="text-obsidian-text truncate">Ubicación en Google Maps</span>
                           </div>
-                          <a
-                            href={prospectData.maps_url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 text-[11px] font-semibold flex-shrink-0"
-                          >
-                            <span>Abrir Mapa</span>
-                            <ExternalLink size={11} />
-                          </a>
-                        </div>
-                      )}
-
-                      {prospectData.contact_email && (
-                        <div className="flex items-center justify-between p-2.5 rounded-lg bg-obsidian-bg border border-obsidian-border">
-                          <div className="flex items-center gap-2">
-                            <Mail size={14} className="text-indigo-400" />
-                            <span className="font-mono text-white">{prospectData.contact_email}</span>
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            <CopyButton value={prospectData.maps_url} label="Enlace Google Maps" />
+                            <a
+                              href={prospectData.maps_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 text-[11px] font-semibold"
+                            >
+                              <span>Abrir Mapa</span>
+                              <ExternalLink size={11} />
+                            </a>
                           </div>
-                          <CopyButton value={prospectData.contact_email} label="Correo del cliente" />
                         </div>
                       )}
                     </div>
 
-                    {/* Linked Root Email */}
-                    {prospectData.email_address && (
-                      <div className="p-3 rounded-xl bg-obsidian-surface border border-obsidian-border flex items-center justify-between">
-                        <div>
-                          <span className="text-obsidian-muted block">Correo Raíz Vinculado (EmailSaver)</span>
-                          <span className="font-mono text-cyan-300 font-medium">
-                            {prospectData.specific_alias || prospectData.email_address}
+                    {/* Acciones Rápidas de Seguimiento y Contacto Directo */}
+                    <div className="p-3.5 rounded-xl bg-indigo-500/5 border border-indigo-500/25 space-y-2.5">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="text-indigo-300 font-semibold uppercase text-[10px] tracking-wider flex items-center gap-1.5">
+                          <MessageCircle size={12} className="text-indigo-400" />
+                          <span>Acciones Rápidas de Seguimiento</span>
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-obsidian-bg border border-obsidian-border text-[10px]">
+                            {([24, 48, 72] as const).map((hrs) => (
+                              <button
+                                key={hrs}
+                                type="button"
+                                onClick={() => setFollowupWindowHours(hrs)}
+                                className={`px-1.5 py-0.5 rounded font-mono transition-colors ${
+                                  followupWindowHours === hrs
+                                    ? 'bg-indigo-600 text-white font-semibold'
+                                    : 'text-obsidian-muted hover:text-white'
+                                }`}
+                              >
+                                +{hrs}h
+                              </button>
+                            ))}
+                          </div>
+                          <span className="text-[10px] font-mono text-obsidian-muted">
+                            Int: <strong className="text-white">{prospectData.followup_count || 0}/{prospectData.max_followup_attempts || 3}</strong>
                           </span>
                         </div>
-                        {prospectData.email_id && (
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        {prospectWaUrl && (
                           <button
                             type="button"
-                            onClick={() => openInspector('email', prospectData.email_id!)}
-                            className="px-2.5 py-1 rounded-lg bg-obsidian-bg hover:bg-obsidian-border text-indigo-300 border border-obsidian-border text-[11px] font-medium"
+                            onClick={async () => {
+                              window.open(prospectWaUrl, '_blank', 'noopener,noreferrer');
+                              try {
+                                const updated = await api.recordProspectContactAttempt(prospectData.id, 'whatsapp', followupWindowHours);
+                                setProspectData(updated);
+                                triggerDataReload();
+                                showToast(`Seguimiento por WhatsApp registrado (+${followupWindowHours}h).`, 'success');
+                              } catch (err: any) {
+                                showToast(err.message, 'error');
+                              }
+                            }}
+                            className="inline-flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 text-[11px] font-semibold transition-all"
                           >
-                            Ver Correo
+                            <MessageCircle size={13} />
+                            <span>WhatsApp</span>
                           </button>
                         )}
+
+                        {prospectData.contact_email && (
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              const mailUrl = buildMailtoUrl(prospectData);
+                              if (mailUrl) window.location.href = mailUrl;
+                              try {
+                                const updated = await api.recordProspectContactAttempt(prospectData.id, 'email', followupWindowHours);
+                                setProspectData(updated);
+                                triggerDataReload();
+                                showToast(`Seguimiento por correo registrado (+${followupWindowHours}h).`, 'success');
+                              } catch (err: any) {
+                                showToast(err.message, 'error');
+                              }
+                            }}
+                            className="inline-flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/30 text-[11px] font-semibold transition-all"
+                          >
+                            <Mail size={13} />
+                            <span>Enviar Correo</span>
+                          </button>
+                        )}
+
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const msg = buildFollowUpMessage(prospectData);
+                            await copyToClipboard(msg, 'Plantilla de seguimiento');
+                            try {
+                              const updated = await api.recordProspectContactAttempt(prospectData.id, 'template', followupWindowHours);
+                              setProspectData(updated);
+                              triggerDataReload();
+                              showToast(`Plantilla copiada y seguimiento (+${followupWindowHours}h) activado.`, 'success');
+                            } catch (err: any) {
+                              showToast(err.message, 'error');
+                            }
+                          }}
+                          className="inline-flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-xl bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 border border-indigo-500/30 text-[11px] font-semibold transition-all"
+                        >
+                          <Copy size={13} />
+                          <span>Copiar Plantilla</span>
+                        </button>
                       </div>
-                    )}
+
+                      <div className="flex items-center justify-between text-[10px] text-obsidian-muted pt-1 border-t border-indigo-500/15">
+                        <span>Último intento: <strong className="text-slate-300">{formatRelativeContactTime(prospectData.last_contacted_at, nowMs)}</strong></span>
+                        {prospectData.last_contact_channel && (
+                          <span className="uppercase font-mono text-indigo-300">{prospectData.last_contact_channel}</span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* BLOQUE 3: Doble Cronómetro (Tiempo Total Transcurrido + Seguimiento Actual) */}
+                    <div className="p-4 rounded-xl bg-obsidian-surface border border-obsidian-border space-y-3">
+                      <span className="text-white font-semibold uppercase text-[10px] tracking-wider flex items-center gap-1.5">
+                        <Clock size={12} className="text-amber-400" />
+                        <span>3. Tiempo de Respuesta y Seguimiento</span>
+                      </span>
+
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border ${getSlaBadgeMeta(prospectLive.slaStatus).badgeClass}`}>
+                          <span className={`w-2 h-2 rounded-full ${getSlaBadgeMeta(prospectLive.slaStatus).dotClass}`} />
+                          <span>{getSlaBadgeMeta(prospectLive.slaStatus).label}</span>
+                        </span>
+
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {!prospectLive.isResponded && (
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                try {
+                                  const updated = await api.markProspectResponded(prospectData.id);
+                                  setProspectData(updated);
+                                  const formatted = formatDuration(updated.response_time_seconds || updated.elapsed_seconds, false);
+                                  showToast(
+                                    updated.met_sla
+                                      ? `Cliente respondió en ${formatted}. Respondido a tiempo.`
+                                      : `Cliente marcado como respondido (${formatted}).`,
+                                    updated.met_sla ? 'success' : 'warning'
+                                  );
+                                  triggerDataReload();
+                                } catch (err: any) {
+                                  showToast(err.message, 'error');
+                                }
+                              }}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/35 text-xs font-semibold transition-all"
+                            >
+                              <CheckCircle2 size={14} className="text-emerald-400" />
+                              <span>Ya respondió</span>
+                            </button>
+                          )}
+
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              try {
+                                const updated = await api.resetProspectTimer(prospectData.id, true);
+                                setProspectData(updated);
+                                showToast('Contador reiniciado desde ahora.', 'info');
+                                triggerDataReload();
+                              } catch (err: any) {
+                                showToast(err.message, 'error');
+                              }
+                            }}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-obsidian-bg hover:bg-obsidian-border text-obsidian-muted hover:text-white border border-obsidian-border text-[11px]"
+                          >
+                            <RotateCcw size={12} />
+                            <span>Reiniciar</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="p-3 rounded-xl bg-obsidian-bg border border-obsidian-border flex items-center justify-between gap-2">
+                        <div>
+                          <div className="text-[10px] text-obsidian-muted uppercase tracking-wider">
+                            {prospectLive.isResponded ? 'Tiempo Total de Respuesta' : 'Tiempo Total Transcurrido (Original)'}
+                          </div>
+                          <div className="font-mono text-lg font-bold text-white mt-0.5">
+                            {formatDuration(prospectLive.elapsedSeconds, true)}
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-[10px] text-obsidian-muted uppercase tracking-wider">
+                            Límite Original
+                          </div>
+                          <div className="font-mono text-xs font-semibold text-indigo-300 mt-0.5">
+                            {formatSlaHoursLabel(prospectData.sla_hours)}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="w-full h-2 rounded-full bg-obsidian-bg overflow-hidden">
+                        <div
+                          className={`h-full transition-all duration-500 ${getSlaBadgeMeta(prospectLive.slaStatus).barClass}`}
+                          style={{ width: `${prospectLive.progressPercent}%` }}
+                        />
+                      </div>
+
+                      {/* Secondary Follow-up SLA Readout */}
+                      {prospectFollowupLive.active && !prospectLive.isResponded && (
+                        <div className="p-3 rounded-xl bg-obsidian-bg border border-indigo-500/30 space-y-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-[10px] text-indigo-300 uppercase tracking-wider font-semibold flex items-center gap-1">
+                              <Timer size={12} />
+                              <span>Plazo de Espera Actual (+{prospectData.followup_sla_hours || 48}h)</span>
+                            </span>
+                            <span className={`text-[10px] font-mono font-semibold ${
+                              prospectFollowupLive.status === 'vencido' ? 'text-rose-400' : 'text-indigo-300'
+                            }`}>
+                              {prospectFollowupLive.status === 'vencido'
+                                ? `Vencido por ${formatDuration(prospectFollowupLive.overdueSeconds, false)}`
+                                : `Vence en ${formatDuration(prospectFollowupLive.remainingSeconds, false)}`}
+                            </span>
+                          </div>
+                          <div className="w-full h-1.5 rounded-full bg-obsidian-surface overflow-hidden">
+                            <div
+                              className={`h-full transition-all duration-500 ${
+                                prospectFollowupLive.status === 'vencido' ? 'bg-rose-500' : 'bg-indigo-500'
+                              }`}
+                              style={{ width: `${prospectFollowupLive.progressPercent}%` }}
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="space-y-1 text-[11px] text-obsidian-muted font-mono">
+                        {prospectData.started_at && (
+                          <div>Inicio original: {new Date(prospectData.started_at).toLocaleString()}</div>
+                        )}
+                        {prospectData.last_contacted_at && (
+                          <div className="text-indigo-300">
+                            Último seguimiento: {new Date(prospectData.last_contacted_at).toLocaleString()}
+                          </div>
+                        )}
+                        {prospectData.responded_at && (
+                          <div className="text-emerald-300">
+                            Respondido: {new Date(prospectData.responded_at).toLocaleString()}
+                          </div>
+                        )}
+                      </div>
+                    </div>
 
                     {/* Social Links & Notes */}
                     {prospectData.social_links && (
                       <div className="p-3 rounded-xl bg-obsidian-surface border border-obsidian-border space-y-1">
                         <span className="text-obsidian-muted block">Redes Sociales / Web Actual</span>
-                        <p className="text-obsidian-text whitespace-pre-wrap">{prospectData.social_links}</p>
+                        <p className="text-obsidian-text whitespace-pre-wrap break-words">{prospectData.social_links}</p>
                       </div>
                     )}
 
                     {prospectData.notes && (
                       <div className="p-3 rounded-xl bg-obsidian-surface border border-obsidian-border space-y-1">
                         <span className="text-obsidian-muted block">Notas Adicionales</span>
-                        <p className="text-obsidian-text leading-relaxed whitespace-pre-wrap">{prospectData.notes}</p>
+                        <p className="text-obsidian-text leading-relaxed whitespace-pre-wrap break-words">{prospectData.notes}</p>
                       </div>
                     )}
+
+                    {/* HISTORIAL FINANCIERO / PAGOS DE ESTE CLIENTE */}
+                    <div className="p-3.5 rounded-xl bg-obsidian-surface border border-obsidian-border space-y-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5">
+                          <DollarSign size={14} className="text-emerald-400" />
+                          <span className="font-semibold text-white text-xs">Pagos Realizados por este Cliente</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setShowAddIncome(!showAddIncome)}
+                          className="px-2 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[11px] font-semibold flex items-center gap-1"
+                        >
+                          <Plus size={12} />
+                          <span>{showAddIncome ? 'Cerrar' : '+ Registrar Pago'}</span>
+                        </button>
+                      </div>
+
+                      {/* Summary Metrics */}
+                      {(() => {
+                        const totalCobradoMXN = clientIncomes
+                          .filter((i) => i.status === 'cobrado')
+                          .reduce((acc, i) => acc + (i.currency === 'USD' ? (i.amount * (exchangeRate?.rate || 18.5)) : i.amount), 0);
+                        const totalPendienteMXN = clientIncomes
+                          .filter((i) => i.status === 'pendiente')
+                          .reduce((acc, i) => acc + (i.currency === 'USD' ? (i.amount * (exchangeRate?.rate || 18.5)) : i.amount), 0);
+
+                        return (
+                          <div className="grid grid-cols-2 gap-2 text-center">
+                            <div className="p-2 rounded-lg bg-obsidian-bg border border-obsidian-border">
+                              <span className="text-[10px] text-obsidian-muted block">Total Cobrado</span>
+                              <span className="text-xs font-mono font-bold text-emerald-400">
+                                ${totalCobradoMXN.toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN
+                              </span>
+                            </div>
+                            <div className="p-2 rounded-lg bg-obsidian-bg border border-obsidian-border">
+                              <span className="text-[10px] text-obsidian-muted block">Total Pendiente</span>
+                              <span className="text-xs font-mono font-bold text-amber-400">
+                                ${totalPendienteMXN.toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })()}
+
+                      {/* Quick Add Income Form */}
+                      {showAddIncome && (
+                        <form onSubmit={handleCreateIncome} className="p-2.5 rounded-lg bg-obsidian-bg border border-emerald-500/40 space-y-2">
+                          <span className="text-[11px] font-semibold text-white block">Nuevo Pago Recibido:</span>
+                          <input
+                            type="text"
+                            required
+                            value={incConcept}
+                            onChange={(e) => setIncConcept(e.target.value)}
+                            placeholder="Concepto (ej. Anticipo 50% Página Web)"
+                            className="w-full px-2.5 py-1.5 rounded bg-obsidian-surface border border-obsidian-border text-white text-xs focus:outline-none focus:border-emerald-500"
+                          />
+                          <div className="grid grid-cols-3 gap-1.5">
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              required
+                              value={incAmount}
+                              onChange={(e) => setIncAmount(e.target.value)}
+                              placeholder="Monto"
+                              className="px-2.5 py-1.5 rounded bg-obsidian-surface border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-emerald-500"
+                            />
+                            <select
+                              value={incCurrency}
+                              onChange={(e) => setIncCurrency(e.target.value as any)}
+                              className="px-2 py-1.5 rounded bg-obsidian-surface border border-obsidian-border text-white text-xs"
+                            >
+                              <option value="MXN">MXN</option>
+                              <option value="USD">USD</option>
+                            </select>
+                            <select
+                              value={incStatus}
+                              onChange={(e) => setIncStatus(e.target.value as any)}
+                              className="px-2 py-1.5 rounded bg-obsidian-surface border border-obsidian-border text-white text-xs"
+                            >
+                              <option value="cobrado">Cobrado</option>
+                              <option value="pendiente">Pendiente</option>
+                            </select>
+                          </div>
+                          <div className="grid grid-cols-2 gap-1.5">
+                            <select
+                              value={incCategory}
+                              onChange={(e) => setIncCategory(e.target.value)}
+                              className="px-2 py-1.5 rounded bg-obsidian-surface border border-obsidian-border text-white text-xs"
+                            >
+                              <option value="anticipo">Anticipo</option>
+                              <option value="liquidacion">Liquidación</option>
+                              <option value="iguala_mensual">Iguala Mensual</option>
+                              <option value="renovacion_dominio_hosting">Renovación Dominio/Hosting</option>
+                              <option value="otro">Otro</option>
+                            </select>
+                            <input
+                              type="date"
+                              value={incDate}
+                              onChange={(e) => setIncDate(e.target.value)}
+                              className="px-2 py-1.5 rounded bg-obsidian-surface border border-obsidian-border text-white text-xs font-mono"
+                            />
+                          </div>
+                          <div className="flex items-center justify-between pt-1">
+                            <label className="inline-flex items-center gap-1.5 text-[11px] text-obsidian-muted">
+                              <input
+                                type="checkbox"
+                                checked={incRecurring}
+                                onChange={(e) => setIncRecurring(e.target.checked)}
+                              />
+                              <span>Es cobro recurrente (Iguala)</span>
+                            </label>
+                            <button
+                              type="submit"
+                              disabled={incLoading}
+                              className="px-3 py-1.5 rounded bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold"
+                            >
+                              {incLoading ? 'Guardando...' : 'Guardar Pago'}
+                            </button>
+                          </div>
+                        </form>
+                      )}
+
+                      {/* Incomes List */}
+                      <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                        {clientIncomes.length === 0 ? (
+                          <div className="text-center py-3 text-obsidian-muted text-[11px] italic">
+                            Sin pagos registrados para este cliente.
+                          </div>
+                        ) : (
+                          clientIncomes.map((inc) => (
+                            <div
+                              key={inc.id}
+                              className="p-2 rounded-lg bg-obsidian-bg border border-obsidian-border flex items-center justify-between gap-2"
+                            >
+                              <div className="min-w-0">
+                                <span className="font-semibold text-white text-xs block truncate">{inc.concept}</span>
+                                <span className="text-[10px] text-obsidian-muted font-mono">{inc.received_date} • {inc.category}</span>
+                              </div>
+                              <div className="text-right shrink-0">
+                                <span className={`text-xs font-mono font-bold block ${inc.status === 'cobrado' ? 'text-emerald-400' : 'text-amber-400'}`}>
+                                  ${inc.amount.toLocaleString('es-MX', { minimumFractionDigits: 2 })} {inc.currency}
+                                </span>
+                                <span className={`text-[9px] px-1.5 py-0.5 rounded font-semibold ${
+                                  inc.status === 'cobrado' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-amber-500/20 text-amber-300'
+                                }`}>
+                                  {inc.status === 'cobrado' ? 'Cobrado' : 'Pendiente'}
+                                </span>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+
+                    {/* DOMINIOS Y HOSTING ASOCIADOS */}
+                    <div className="p-3.5 rounded-xl bg-obsidian-surface border border-obsidian-border space-y-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5">
+                          <Globe size={14} className="text-indigo-400" />
+                          <span className="font-semibold text-white text-xs">Dominios y Hosting Asociados</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setShowAddDomain(!showAddDomain)}
+                          className="px-2 py-1 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-[11px] font-semibold flex items-center gap-1"
+                        >
+                          <Plus size={12} />
+                          <span>{showAddDomain ? 'Cerrar' : '+ Asociar'}</span>
+                        </button>
+                      </div>
+
+                      {/* Quick Add Domain Form */}
+                      {showAddDomain && (
+                        <form onSubmit={handleCreateRenewal} className="p-2.5 rounded-lg bg-obsidian-bg border border-indigo-500/40 space-y-2">
+                          <span className="text-[11px] font-semibold text-white block">Asociar Dominio o Hosting:</span>
+                          <input
+                            type="text"
+                            required
+                            value={domName}
+                            onChange={(e) => setDomName(e.target.value)}
+                            placeholder="Dominio o Servicio (ej. www.cliente.com)"
+                            className="w-full px-2.5 py-1.5 rounded bg-obsidian-surface border border-obsidian-border text-white text-xs focus:outline-none focus:border-indigo-500"
+                          />
+                          <div className="grid grid-cols-2 gap-1.5">
+                            <select
+                              value={domType}
+                              onChange={(e) => setDomType(e.target.value)}
+                              className="px-2 py-1.5 rounded bg-obsidian-surface border border-obsidian-border text-white text-xs"
+                            >
+                              <option value="dominio">Dominio</option>
+                              <option value="hosting">Hosting</option>
+                              <option value="dominio_y_hosting">Dominio + Hosting</option>
+                              <option value="ssl_otro">SSL / Otro</option>
+                            </select>
+                            <input
+                              type="text"
+                              value={domProvider}
+                              onChange={(e) => setDomProvider(e.target.value)}
+                              placeholder="Proveedor (ej. Namecheap)"
+                              className="px-2.5 py-1.5 rounded bg-obsidian-surface border border-obsidian-border text-white text-xs"
+                            />
+                          </div>
+                          <div className="grid grid-cols-3 gap-1.5">
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={domCost}
+                              onChange={(e) => setDomCost(e.target.value)}
+                              placeholder="Costo base"
+                              className="px-2.5 py-1.5 rounded bg-obsidian-surface border border-obsidian-border text-white text-xs font-mono"
+                            />
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={domCharge}
+                              onChange={(e) => setDomCharge(e.target.value)}
+                              placeholder="Cobro cliente"
+                              className="px-2.5 py-1.5 rounded bg-obsidian-surface border border-obsidian-border text-white text-xs font-mono"
+                            />
+                            <select
+                              value={domPaidBy}
+                              onChange={(e) => setDomPaidBy(e.target.value as any)}
+                              className="px-2 py-1.5 rounded bg-obsidian-surface border border-obsidian-border text-white text-xs"
+                            >
+                              <option value="client">Por cuenta del cliente</option>
+                              <option value="me">Por mi cuenta</option>
+                            </select>
+                          </div>
+                          <div className="grid grid-cols-2 gap-1.5">
+                            <input
+                              type="date"
+                              value={domDate}
+                              onChange={(e) => setDomDate(e.target.value)}
+                              className="px-2 py-1.5 rounded bg-obsidian-surface border border-obsidian-border text-white text-xs font-mono"
+                            />
+                            <button
+                              type="submit"
+                              disabled={domLoading}
+                              className="px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold"
+                            >
+                              {domLoading ? 'Guardando...' : 'Asociar Vencimiento'}
+                            </button>
+                          </div>
+                        </form>
+                      )}
+
+                      {/* Domain Renewals List */}
+                      <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                        {clientRenewals.length === 0 ? (
+                          <div className="text-center py-3 text-obsidian-muted text-[11px] italic">
+                            Sin dominios ni hosting asociados a este cliente.
+                          </div>
+                        ) : (
+                          clientRenewals.map((ren) => (
+                            <div
+                              key={ren.id}
+                              className="p-2.5 rounded-lg bg-obsidian-bg border border-obsidian-border flex items-center justify-between gap-2"
+                            >
+                              <div className="min-w-0">
+                                <span className="font-semibold text-white text-xs block truncate">{ren.domain_or_service}</span>
+                                <span className="text-[10px] text-obsidian-muted block truncate">
+                                  {ren.service_type} • Vence: <span className="font-mono text-white">{ren.renewal_date}</span>
+                                </span>
+                                <span className="text-[9px] text-obsidian-muted">
+                                  {ren.paid_by === 'me' ? 'Por mi cuenta' : 'Por cuenta del cliente'} • Costo: ${ren.renewal_cost} {ren.currency}
+                                </span>
+                              </div>
+                              <div className="flex flex-col items-end gap-1 shrink-0">
+                                <span className={`text-[9px] px-1.5 py-0.5 rounded font-semibold ${
+                                  ren.days_remaining < 0 || ren.expiry_semaphore === 'vencido'
+                                    ? 'bg-rose-500/20 text-rose-300'
+                                    : ren.days_remaining <= 7 || ren.expiry_semaphore === 'urgente'
+                                    ? 'bg-amber-500/20 text-amber-300'
+                                    : 'bg-emerald-500/20 text-emerald-300'
+                                }`}>
+                                  {ren.days_remaining < 0
+                                    ? `Vencido (${Math.abs(ren.days_remaining)}d)`
+                                    : `${ren.days_remaining} días restantes`}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleAdvanceRenewal(ren.id)}
+                                  className="px-2 py-0.5 rounded bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-[10px] font-semibold"
+                                  title="Avanzar 1 ciclo de renovación"
+                                >
+                                  +1 ciclo
+                                </button>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
 
                     {/* Tags */}
                     <div className="p-3 rounded-xl bg-obsidian-surface border border-obsidian-border space-y-2">
@@ -656,9 +1322,12 @@ export const InspectorDrawer: React.FC = () => {
                 {isPlatform && platformData && (
                   <>
                     <div className="p-3 rounded-xl bg-obsidian-surface border border-obsidian-border space-y-2">
-                      <div className="text-obsidian-muted">Usuario / Handle / Email de Login</div>
-                      <div className="flex items-center justify-between">
-                        <span className="font-mono text-sm text-white font-medium select-all">
+                      <div className="text-obsidian-muted">Usuario o Correo de Acceso</div>
+                      <div className="flex items-center justify-between gap-2 min-w-0">
+                        <span
+                          className="font-mono text-sm text-white font-medium select-all truncate"
+                          title={platformData.username || platformData.specific_alias || platformData.email_address}
+                        >
                           {platformData.username || platformData.specific_alias || platformData.email_address}
                         </span>
                         <CopyButton 
@@ -666,14 +1335,25 @@ export const InspectorDrawer: React.FC = () => {
                           label="Usuario" 
                         />
                       </div>
-                      <div className="text-[11px] text-obsidian-muted">
-                        Correo padre: <span className="text-indigo-300">{platformData.email_address}</span>
+                      <div className="flex items-center justify-between gap-2 pt-1 border-t border-obsidian-border/50 text-[11px] text-obsidian-muted min-w-0">
+                        <span className="truncate" title={platformData.email_address}>
+                          Correo principal: <span className="text-indigo-300 font-mono">{platformData.email_address}</span>
+                        </span>
+                        {platformData.email_id && (
+                          <button
+                            type="button"
+                            onClick={() => platformData.email_id && openInspector('email', platformData.email_id)}
+                            className="px-2 py-0.5 rounded bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/25 text-[10px] font-semibold shrink-0"
+                          >
+                            Abrir Correo
+                          </button>
+                        )}
                       </div>
                     </div>
 
                     {platformData.login_url && (
                       <div className="flex items-center justify-between p-3 rounded-xl bg-obsidian-surface border border-obsidian-border">
-                        <span className="text-obsidian-muted">URL Oficial de Acceso</span>
+                        <span className="text-obsidian-muted">Enlace de Acceso</span>
                         <a
                           href={platformData.login_url}
                           target="_blank"
@@ -687,7 +1367,7 @@ export const InspectorDrawer: React.FC = () => {
                     )}
 
                     <div className="p-3 rounded-xl bg-obsidian-surface border border-obsidian-border space-y-2">
-                      <span className="text-obsidian-muted block">Etiquetas (Tags)</span>
+                      <span className="text-obsidian-muted block">Etiquetas</span>
                       <div className="flex flex-wrap gap-1.5">
                         {platformData.tags && platformData.tags.length > 0 ? (
                           platformData.tags.map((t, idx) => (
@@ -701,7 +1381,7 @@ export const InspectorDrawer: React.FC = () => {
 
                     {platformData.notes && (
                       <div className="p-3 rounded-xl bg-obsidian-surface border border-obsidian-border space-y-1">
-                        <span className="text-obsidian-muted block">Notas Enriquecidas</span>
+                        <span className="text-obsidian-muted block">Notas</span>
                         <p className="text-obsidian-text leading-relaxed whitespace-pre-wrap">{platformData.notes}</p>
                       </div>
                     )}
@@ -716,10 +1396,7 @@ export const InspectorDrawer: React.FC = () => {
                 {!isUnlocked ? (
                   <div className="p-5 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-center space-y-3">
                     <Lock size={28} className="mx-auto text-amber-400" />
-                    <h3 className="font-semibold text-white">Bóveda Cifrada Bloqueada</h3>
-                    <p className="text-obsidian-muted text-[11px] max-w-xs mx-auto">
-                      Las contraseñas, PINs y códigos de recuperación están protegidos por cifrado autenticado AES-256-GCM.
-                    </p>
+                    <h3 className="font-semibold text-white">Contraseñas Protegidas</h3>
                     <button
                       type="button"
                       onClick={openUnlockModal}
@@ -737,7 +1414,7 @@ export const InspectorDrawer: React.FC = () => {
                         <span>Contraseña de Acceso</span>
                         {isEmail && emailData?.entropy_details && (
                           <span className="text-[10px] font-semibold" style={{ color: emailData.entropy_details.color }}>
-                            Entropía: {emailData.entropy_details.label} ({emailData.entropy_details.score}/100)
+                            Seguridad: {emailData.entropy_details.label} ({emailData.entropy_details.score}/100)
                           </span>
                         )}
                       </div>
@@ -789,7 +1466,7 @@ export const InspectorDrawer: React.FC = () => {
                             className="inline-flex items-center gap-1.5 text-[11px] font-medium text-white/50 hover:text-indigo-300 transition-colors"
                           >
                             <Shield className={`w-3.5 h-3.5 text-indigo-400 ${checkingPwned ? 'animate-spin' : ''}`} />
-                            <span>{checkingPwned ? 'Consultando k-Anonimato...' : 'Verificar si fue filtrada (HaveIBeenPwned)'}</span>
+                            <span>{checkingPwned ? 'Revisando filtraciones...' : 'Revisar si esta contraseña ha sido filtrada'}</span>
                           </button>
                         )}
                       </div>
@@ -830,6 +1507,7 @@ export const InspectorDrawer: React.FC = () => {
                               <span className="text-white font-semibold text-xs block">Vincular Secreto TOTP (Base32)</span>
                               <input
                                 type="text"
+                                maxLength={INPUT_LIMITS.TOTP_SECRET}
                                 placeholder="ej: JBSWY3DPEHPK3PXP..."
                                 value={totpInput}
                                 onChange={(e) => setTotpInput(e.target.value)}
@@ -889,7 +1567,7 @@ export const InspectorDrawer: React.FC = () => {
                     {isEmail && emailData && (
                       <div className="p-3 rounded-xl bg-obsidian-surface border border-obsidian-border space-y-2">
                         <div className="flex items-center justify-between">
-                          <span className="text-obsidian-muted">Método 2FA Activo</span>
+                          <span className="text-obsidian-muted">Verificación en 2 Pasos</span>
                           <span className="px-2 py-0.5 rounded text-[10px] font-semibold uppercase bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
                             {emailData.two_factor_method}
                           </span>
@@ -901,7 +1579,7 @@ export const InspectorDrawer: React.FC = () => {
                         )}
                         {emailData.recovery_email_address && (
                           <div className="text-[11px] text-obsidian-muted">
-                            Correo de recuperación padre: <span className="text-cyan-300 font-mono">{emailData.recovery_email_address}</span>
+                            Correo de respaldo: <span className="text-cyan-300 font-mono">{emailData.recovery_email_address}</span>
                           </div>
                         )}
                       </div>
@@ -910,7 +1588,7 @@ export const InspectorDrawer: React.FC = () => {
                     {/* Backup codes */}
                     {isEmail && emailData?.backup_codes && emailData.backup_codes.length > 0 && (
                       <div className="p-3 rounded-xl bg-obsidian-surface border border-obsidian-border space-y-2">
-                        <span className="text-obsidian-muted block">Códigos de Respaldo de Emergencia</span>
+                        <span className="text-obsidian-muted block">Códigos de Respaldo</span>
                         <div className="space-y-1.5">
                           {emailData.backup_codes.map((bc, idx) => (
                             <div key={idx} className="flex items-center justify-between p-2 rounded bg-obsidian-bg border border-obsidian-border text-xs">
@@ -957,10 +1635,7 @@ export const InspectorDrawer: React.FC = () => {
                 {!isUnlocked ? (
                   <div className="p-5 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-center space-y-2">
                     <Lock size={24} className="mx-auto text-amber-400" />
-                    <h3 className="font-semibold text-white">Bóveda Cifrada Bloqueada</h3>
-                    <p className="text-obsidian-muted text-[11px]">
-                      Desbloquea la bóveda para ver y copiar API Keys y variables de entorno.
-                    </p>
+                    <h3 className="font-semibold text-white">Llaves Protegidas</h3>
                     <button
                       type="button"
                       onClick={openUnlockModal}
@@ -1000,7 +1675,7 @@ export const InspectorDrawer: React.FC = () => {
                         ))
                       ) : (
                         <div className="p-4 rounded-xl bg-obsidian-surface border border-obsidian-border text-center text-obsidian-muted">
-                          No hay API Keys configuradas para esta plataforma.
+                          No hay llaves API configuradas para esta cuenta.
                         </div>
                       )}
                     </div>
@@ -1008,7 +1683,7 @@ export const InspectorDrawer: React.FC = () => {
                     {/* ENV Variables */}
                     <div className="space-y-2 pt-2">
                       <span className="text-obsidian-muted font-semibold uppercase tracking-wider text-[11px] block">
-                        Variables de Entorno & Secretos (KEY=VALUE)
+                        Variables de Entorno (KEY=VALUE)
                       </span>
 
                       {platformData.env_variables && platformData.env_variables.length > 0 ? (
@@ -1063,7 +1738,7 @@ export const InspectorDrawer: React.FC = () => {
                   <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-start gap-2.5 text-amber-300">
                     <AlertTriangle size={16} className="flex-shrink-0 mt-0.5" />
                     <div>
-                      <div className="font-semibold text-xs">Prueba Gratuita (Free Trial)</div>
+                      <div className="font-semibold text-xs">Prueba Gratuita</div>
                       <div className="text-[11px] text-amber-200/80">
                         Finaliza el {platformData.trial_end_date}. Se aplicará el cobro automático si no se cancela antes.
                       </div>
@@ -1091,13 +1766,13 @@ export const InspectorDrawer: React.FC = () => {
             {activeTab === 'history' && (
               <div className="space-y-3 text-xs">
                 <span className="text-obsidian-muted font-semibold uppercase tracking-wider text-[11px] block">
-                  Bitácora Inmutable de Rotación de Contraseñas
+                  Historial de Contraseñas Anteriores
                 </span>
 
                 {!isUnlocked ? (
                   <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 text-center text-amber-300">
                     <Lock size={20} className="mx-auto mb-1 text-amber-400" />
-                    El historial histórico de contraseñas requiere validación de contraseña maestra.
+                    Ingresa tu contraseña maestra para ver las contraseñas anteriores.
                   </div>
                 ) : historyData.length > 0 ? (
                   historyData.map((h) => (
@@ -1114,7 +1789,7 @@ export const InspectorDrawer: React.FC = () => {
                   ))
                 ) : (
                   <div className="p-4 rounded-xl bg-obsidian-surface border border-obsidian-border text-center text-obsidian-muted">
-                    No se han registrado rotaciones previas para este elemento.
+                    No se han registrado contraseñas anteriores para este elemento.
                   </div>
                 )}
               </div>

@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  FileText, Shield, Download, RefreshCw, Filter, 
-  Search, Lock, Key, Trash2, ArrowUpRight, CheckCircle2 
+  Shield, Download, RefreshCw, Filter, 
+  Search, Lock 
 } from 'lucide-react';
 import { useVault } from '../../context/VaultContext';
 import { api } from '../../lib/api';
 import { AuditLogItem } from '../../types';
+import { InfoTooltip } from '../common/InfoTooltip';
+import { INPUT_LIMITS } from '../../lib/validation';
 
 export const AuditLogsView: React.FC = () => {
   const { isUnlocked, openUnlockModal, showToast } = useVault();
@@ -69,12 +71,28 @@ export const AuditLogsView: React.FC = () => {
         return <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-amber-500/10 text-amber-400 border border-amber-500/20">Restauración</span>;
       case 'create':
         return <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Creación</span>;
+      case 'update':
+        return <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">Actualización</span>;
       case 'delete':
         return <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-rose-500/10 text-rose-400 border border-rose-500/20">Eliminación</span>;
       case 'copy_secret':
         return <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-purple-500/10 text-purple-400 border border-purple-500/20">Copia Secreto</span>;
       case 'update_2fa':
         return <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-blue-500/10 text-blue-400 border border-blue-500/20">2FA / TOTP</span>;
+      case 'contact_followup':
+      case 'contact_attempt':
+        return <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-amber-500/10 text-amber-300 border border-amber-500/20">Seguimiento</span>;
+      case 'billing_renewal':
+        return <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">Renovación</span>;
+      case 'auto_archive':
+        return <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-slate-500/10 text-slate-300 border border-slate-500/20">Archivo Frío</span>;
+      case 'reactivate':
+        return <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-cyan-500/10 text-cyan-300 border border-cyan-500/20">Reactivación</span>;
+      case 'recycle_demo':
+        return <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">Demo Reciclada</span>;
+      case 'auto_purge':
+      case 'permanent_delete':
+        return <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-rose-500/10 text-rose-300 border border-rose-500/20">Auto-Purga / Purga</span>;
       default:
         return <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-white/5 text-white/60 border border-white/10">{action}</span>;
     }
@@ -86,48 +104,52 @@ export const AuditLogsView: React.FC = () => {
         <div className="w-16 h-16 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 mb-4">
           <Shield className="w-8 h-8" />
         </div>
-        <h2 className="text-xl font-bold text-white mb-2">Bóveda Cifrada Bloqueada</h2>
-        <p className="text-sm text-white/50 max-w-md mb-6">
-          Los registros inmutables de auditoría y accesos están protegidos bajo la clave maestra para garantizar la privacidad y trazabilidad.
-        </p>
+        <div className="flex items-center justify-center gap-2 mb-6">
+          <h2 className="text-xl font-bold text-white">Historial Protegido</h2>
+          <InfoTooltip
+            title="Protección con Contraseña Maestra"
+            content="El historial de acciones y accesos está protegido con tu contraseña maestra."
+          />
+        </div>
         <button
           onClick={openUnlockModal}
           className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-medium transition-all shadow-lg shadow-indigo-600/30 flex items-center gap-2"
         >
-          <Lock className="w-4 h-4" /> Desbloquear Bóveda
+          <Lock className="w-4 h-4" /> Desbloquear con Contraseña Maestra
         </button>
       </div>
     );
   }
 
   return (
-    <div className="p-8 max-w-7xl mx-auto space-y-6">
+    <div className="p-4 sm:p-8 max-w-7xl mx-auto space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-obsidian-border">
-        <div>
-          <div className="flex items-center gap-2 text-xs font-mono uppercase tracking-wider text-indigo-400">
-            <Shield className="w-4 h-4" /> Registro Inmutable de Seguridad
-          </div>
-          <h1 className="text-2xl font-bold text-white mt-1">Historial de Auditoría & Trazabilidad</h1>
-          <p className="text-xs text-white/50 mt-1">
-            Registro secuencial de eventos criptográficos, accesos y modificaciones en la bóveda ({total} eventos totales).
-          </p>
+      <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-obsidian-border">
+        <div className="flex items-center gap-2 min-w-0">
+          <Shield className="w-4 h-4 text-indigo-400 flex-shrink-0" />
+          <h1 className="text-base font-bold text-white truncate">
+            Historial de Actividad ({total} registros)
+          </h1>
+          <InfoTooltip
+            title="Registro de Actividad"
+            content="Historial cronológico de inicios de sesión, copias de contraseñas, seguimientos y cambios guardados."
+          />
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5 flex-shrink-0">
           <button
             onClick={fetchLogs}
             disabled={loading}
-            className="p-2.5 rounded-xl bg-obsidian-surface border border-obsidian-border hover:border-obsidian-borderLight text-white/70 hover:text-white transition-all"
-            title="Refrescar eventos"
+            className="p-2 rounded-xl bg-obsidian-surface border border-obsidian-border hover:border-obsidian-borderLight text-white/70 hover:text-white transition-all"
+            title="Actualizar registros"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
           <button
             onClick={exportLogsAsJson}
-            className="px-4 py-2.5 rounded-xl bg-obsidian-surface border border-obsidian-border hover:border-obsidian-borderLight text-white text-xs font-medium flex items-center gap-2 transition-all hover:bg-white/5"
+            className="px-3.5 py-2 rounded-xl bg-obsidian-surface border border-obsidian-border hover:border-obsidian-borderLight text-white text-xs font-medium flex items-center gap-2 transition-all hover:bg-white/5"
           >
-            <Download className="w-4 h-4 text-white/60" /> Exportar Auditoría
+            <Download className="w-4 h-4 text-white/60" /> Descargar Historial
           </button>
         </div>
       </div>
@@ -138,6 +160,7 @@ export const AuditLogsView: React.FC = () => {
           <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-white/30" />
           <input
             type="text"
+            maxLength={INPUT_LIMITS.SEARCH}
             placeholder="Buscar por entidad, acción o detalle..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -146,10 +169,10 @@ export const AuditLogsView: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0">
-          <span className="text-xs text-white/40 flex items-center gap-1">
+          <span className="text-xs text-white/40 flex items-center gap-1 flex-shrink-0">
             <Filter className="w-3.5 h-3.5" /> Filtrar:
           </span>
-          {['all', 'vault_unlock', 'copy_secret', 'create', 'update_2fa', 'export', 'delete'].map((action) => (
+          {['all', 'vault_unlock', 'copy_secret', 'create', 'update', 'contact_followup', 'billing_renewal', 'auto_archive', 'reactivate', 'recycle_demo', 'auto_purge', 'update_2fa', 'export', 'delete'].map((action) => (
             <button
               key={action}
               onClick={() => setSelectedAction(action)}
@@ -159,7 +182,7 @@ export const AuditLogsView: React.FC = () => {
                   : 'bg-obsidian-surface border border-obsidian-border text-white/60 hover:text-white'
               }`}
             >
-              {action === 'all' ? 'Todos' : action.replace('_', ' ')}
+              {action === 'all' ? 'Todos' : action.replace(/_/g, ' ')}
             </button>
           ))}
         </div>
@@ -199,13 +222,13 @@ export const AuditLogsView: React.FC = () => {
                     <td className="py-3 px-4 text-white/50 whitespace-nowrap">
                       {new Date(log.timestamp).toLocaleString()}
                     </td>
-                    <td className="py-3 px-4">
+                    <td className="py-3 px-4 whitespace-nowrap">
                       {getActionBadge(log.action)}
                     </td>
-                    <td className="py-3 px-4 text-white/70 capitalize">
+                    <td className="py-3 px-4 text-white/70 capitalize whitespace-nowrap">
                       {log.entity_type || '—'}
                     </td>
-                    <td className="py-3 px-4 text-white font-medium">
+                    <td className="py-3 px-4 text-white font-medium max-w-[200px] truncate" title={log.entity_name || log.entity_id || ''}>
                       {log.entity_name || log.entity_id ? (
                         <span className="text-indigo-300">{log.entity_name || log.entity_id}</span>
                       ) : (
@@ -215,7 +238,7 @@ export const AuditLogsView: React.FC = () => {
                     <td className="py-3 px-4 text-white/70 max-w-xs truncate" title={log.details || ''}>
                       {log.details || '—'}
                     </td>
-                    <td className="py-3 px-4 text-white/40 text-[11px]">
+                    <td className="py-3 px-4 text-white/40 text-[11px] whitespace-nowrap">
                       {log.ip_address || 'Localhost / Docker'}
                     </td>
                   </tr>

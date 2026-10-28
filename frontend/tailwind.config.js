@@ -17,7 +17,7 @@ export default {
           borderLight: '#323744',
           muted: '#858d98',
           text: '#e2e8f0',
-          accent: '#6366f1',
+          accent: 'var(--brand-accent, #6366f1)',
           accentGlow: 'rgba(99, 102, 241, 0.25)',
           emerald: '#10b981',
           amber: '#f59e0b',

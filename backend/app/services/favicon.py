@@ -15,30 +15,33 @@ def generate_initials_svg(name: str, bg_color: str = "#262a33", text_color: str 
     else:
         initials = "PL"
 
-    svg = f"""<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
-      <rect width="64" height="64" rx="14" fill="{bg_color}" />
-      <text x="50%" y="54%" font-family="Inter, system-ui, sans-serif" font-weight="700" font-size="24" fill="{text_color}" text-anchor="middle" dominant-baseline="middle">{initials}</text>
-    </svg>"""
+    svg = (
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">'
+        f'<rect width="64" height="64" rx="14" fill="{bg_color}"/>'
+        f'<text x="50%" y="54%" font-family="Inter,sans-serif" font-weight="700" font-size="24" '
+        f'fill="{text_color}" text-anchor="middle" dominant-baseline="middle">{initials}</text></svg>'
+    )
     encoded = urllib.parse.quote(svg)
     return f"data:image/svg+xml;utf8,{encoded}"
 
 async def extract_favicon_url(domain_or_url: str) -> str:
-    """Attempts to extract favicon from official domain via Google Favicon or DuckDuckGo API,
-    or falls back to typographic initials immediately.
+    """Attempts to extract favicon from official domain via Google Favicon API,
+    or falls back to compact typographic initials immediately.
     """
     if not domain_or_url:
         return generate_initials_svg("App")
 
-    parsed = urllib.parse.urlparse(domain_or_url)
-    domain = parsed.netloc or parsed.path
-    domain = domain.split("/")[0].strip()
+    candidate = domain_or_url.strip()
+    if "://" not in candidate:
+        candidate = f"https://{candidate}"
+    parsed = urllib.parse.urlparse(candidate)
+    domain = (parsed.netloc or parsed.path).split("/")[0].split(":")[0].strip()
     if not domain:
         return generate_initials_svg(domain_or_url)
 
-    # Use Google's reliable CDN with 1.5s timeout check
     google_favicon = f"https://www.google.com/s2/favicons?domain={domain}&sz=128"
     try:
-        async with httpx.AsyncClient(timeout=1.5) as client:
+        async with httpx.AsyncClient(timeout=2.0, follow_redirects=True) as client:
             resp = await client.head(google_favicon)
             if resp.status_code == 200:
                 return google_favicon

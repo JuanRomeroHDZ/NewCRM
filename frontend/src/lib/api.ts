@@ -1,6 +1,8 @@
 import { 
   EmailAccount, PlatformAccount, PaymentMethod, VaultStatus, 
-  ExchangeRate, GraphData, AuditLogItem, VaultCredentialItem, Prospect 
+  ExchangeRate, GraphData, AuditLogItem, VaultCredentialItem, Prospect,
+  ClientIncome, DomainRenewal, AdvanceRenewalPayload,
+  OneTimeExpense, InternalProject, SecureResource
 } from '../types';
 
 const API_BASE = '/api/v1';
@@ -36,6 +38,12 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
   });
 
   if (!response.ok) {
+    if ((response.status === 401 || response.status === 403) && !endpoint.startsWith('/auth/unlock') && !endpoint.startsWith('/auth/status')) {
+      setApiVaultToken(null);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('vault_locked'));
+      }
+    }
     let errorDetail = 'Error en la petición al servidor';
     try {
       const err = await response.json();
@@ -96,10 +104,12 @@ export const api = {
     if (itemId) params.append('item_id', itemId);
     return request<{ value: string; label: string }>(`/platforms/${platformId}/secret?${params.toString()}`);
   },
+  getBillingHistory: (limit = 100) => request<any[]>(`/platforms/billing-history?limit=${limit}`),
 
   // Payment Methods
   getPaymentMethods: () => request<PaymentMethod[]>('/payments'),
   createPaymentMethod: (data: any) => request<PaymentMethod>('/payments', { method: 'POST', body: JSON.stringify(data) }),
+  updatePaymentMethod: (id: string, data: any) => request<PaymentMethod>(`/payments/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deletePaymentMethod: (id: string) => request<{ message: string }>(`/payments/${id}`, { method: 'DELETE' }),
 
   // Passwords
@@ -203,7 +213,84 @@ export const api = {
   createProspect: (data: any) => request<Prospect>('/prospects', { method: 'POST', body: JSON.stringify(data) }),
   updateProspect: (id: string, data: any) => request<Prospect>(`/prospects/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   markProspectResponded: (id: string) => request<Prospect>(`/prospects/${id}/respond`, { method: 'POST' }),
+  recordProspectContactAttempt: (
+    id: string,
+    channel: 'whatsapp' | 'email' | 'phone' | 'template',
+    followupSlaHoursOrNote?: number | string,
+    auto_advance_status: boolean = true,
+    followup_sla_hours: number = 48
+  ) => {
+    const isNumberArg = typeof followupSlaHoursOrNote === 'number';
+    const finalSlaHours = isNumberArg ? followupSlaHoursOrNote : followup_sla_hours;
+    const finalNote = isNumberArg ? undefined : followupSlaHoursOrNote;
+    return request<Prospect>(`/prospects/${id}/contact-attempt`, {
+      method: 'POST',
+      body: JSON.stringify({
+        channel,
+        note: finalNote,
+        auto_advance_status,
+        followup_sla_hours: finalSlaHours
+      })
+    });
+  },
+  reactivateProspect: (id: string, followupSlaHours: number = 48) =>
+    request<Prospect>(`/prospects/${id}/reactivate?followup_sla_hours=${followupSlaHours}`, { method: 'POST' }),
+  recycleProspectDemo: (id: string) =>
+    request<Prospect>(`/prospects/${id}/recycle-demo`, { method: 'POST' }),
   resetProspectTimer: (id: string, restartFromNow: boolean = true) =>
     request<Prospect>(`/prospects/${id}/reset-timer?restart_from_now=${restartFromNow}`, { method: 'POST' }),
-  deleteProspect: (id: string) => request<{ message: string }>(`/prospects/${id}`, { method: 'DELETE' })
+  deleteProspect: (id: string) => request<{ message: string }>(`/prospects/${id}`, { method: 'DELETE' }),
+
+  // Client Incomes / Pagos Recibidos
+  getIncomes: () => request<ClientIncome[]>('/finances/incomes'),
+  createIncome: (data: Partial<ClientIncome>) =>
+    request<ClientIncome>('/finances/incomes', { method: 'POST', body: JSON.stringify(data) }),
+  cloneIncomeNextMonth: (id: string) =>
+    request<ClientIncome>(`/finances/incomes/${id}/clone-next-month`, { method: 'POST' }),
+  updateIncome: (id: string, data: Partial<ClientIncome>) =>
+    request<ClientIncome>(`/finances/incomes/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteIncome: (id: string) =>
+    request<{ message: string }>(`/finances/incomes/${id}`, { method: 'DELETE' }),
+
+  // Domain & Hosting Renewals Monitor
+  getRenewals: () => request<DomainRenewal[]>('/finances/renewals'),
+  createRenewal: (data: Partial<DomainRenewal>) =>
+    request<DomainRenewal>('/finances/renewals', { method: 'POST', body: JSON.stringify(data) }),
+  updateRenewal: (id: string, data: Partial<DomainRenewal>) =>
+    request<DomainRenewal>(`/finances/renewals/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  advanceRenewalCycle: (id: string, payload?: AdvanceRenewalPayload) =>
+    request<DomainRenewal>(`/finances/renewals/${id}/advance-cycle`, {
+      method: 'POST',
+      body: payload ? JSON.stringify(payload) : undefined,
+    }),
+  deleteRenewal: (id: string) =>
+    request<{ message: string }>(`/finances/renewals/${id}`, { method: 'DELETE' }),
+
+  // One-Time Expenses / Gastos Únicos
+  getExpenses: () => request<OneTimeExpense[]>('/finances/expenses'),
+  createExpense: (data: Partial<OneTimeExpense>) =>
+    request<OneTimeExpense>('/finances/expenses', { method: 'POST', body: JSON.stringify(data) }),
+  updateExpense: (id: string, data: Partial<OneTimeExpense>) =>
+    request<OneTimeExpense>(`/finances/expenses/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteExpense: (id: string) =>
+    request<{ message: string }>(`/finances/expenses/${id}`, { method: 'DELETE' }),
+
+  // Internal Projects / Proyectos Propios
+  getProjects: () => request<InternalProject[]>('/finances/projects'),
+  createProject: (data: Partial<InternalProject>) =>
+    request<InternalProject>('/finances/projects', { method: 'POST', body: JSON.stringify(data) }),
+  updateProject: (id: string, data: Partial<InternalProject>) =>
+    request<InternalProject>(`/finances/projects/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteProject: (id: string) =>
+    request<{ message: string }>(`/finances/projects/${id}`, { method: 'DELETE' }),
+
+  // Secure Resources & Encrypted Notes
+  getResources: () => request<SecureResource[]>('/finances/resources'),
+  createResource: (data: Partial<SecureResource>) =>
+    request<SecureResource>('/finances/resources', { method: 'POST', body: JSON.stringify(data) }),
+  updateResource: (id: string, data: Partial<SecureResource>) =>
+    request<SecureResource>(`/finances/resources/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteResource: (id: string) =>
+    request<{ message: string }>(`/finances/resources/${id}`, { method: 'DELETE' }),
 };
+

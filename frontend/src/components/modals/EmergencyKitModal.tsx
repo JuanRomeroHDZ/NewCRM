@@ -33,6 +33,9 @@ export const EmergencyKitModal: React.FC = () => {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
       <div 
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="emergency-kit-title"
         className="relative w-full max-w-2xl bg-obsidian-panel border border-obsidian-borderLight rounded-2xl shadow-2xl p-6 overflow-hidden max-h-[92vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
@@ -43,12 +46,9 @@ export const EmergencyKitModal: React.FC = () => {
               <Shield size={20} />
             </div>
             <div>
-              <h2 className="text-base font-bold text-white tracking-tight">
-                Hoja de Recuperación & Kit de Emergencia
+              <h2 id="emergency-kit-title" className="text-base font-bold text-white tracking-tight">
+                Hoja de Recuperación Imprimible
               </h2>
-              <p className="text-xs text-obsidian-muted">
-                Documento de rescate criptográfico en frío (Cold Storage Sheet)
-              </p>
             </div>
           </div>
 
@@ -78,7 +78,7 @@ export const EmergencyKitModal: React.FC = () => {
             <div className="flex items-center justify-between">
               <div>
                 <span className="text-sm font-bold text-white tracking-tight block print:text-black">
-                  EmailSaver Emergency Kit
+                  Hoja de Respaldo EmailSaver
                 </span>
                 <span className="text-[11px] text-obsidian-muted print:text-gray-600 font-mono">
                   Identificador de Bóveda: {kit.vault_id}
@@ -90,14 +90,14 @@ export const EmergencyKitModal: React.FC = () => {
               </div>
             </div>
             <div className="text-[11px] text-obsidian-muted print:text-gray-700 pt-1">
-              Parámetro de Derivación (Salt): <code className="font-mono text-indigo-300 print:text-black">{kit.master_salt}</code>
+              Código de Verificación de Bóveda: <code className="font-mono text-indigo-300 print:text-black">{kit.master_salt}</code>
             </div>
           </div>
 
           {/* Root Emails & Recovery Chains */}
           <div className="space-y-3">
             <h3 className="font-bold text-white text-xs uppercase tracking-wider print:text-black">
-              1. Directorio de Correos Raíz & Estado 2FA
+              1. Directorio de Correos Principales y Verificación 2FA
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
               {kit.root_emails.map((e, idx) => (
@@ -115,7 +115,7 @@ export const EmergencyKitModal: React.FC = () => {
           {kit.recovery_chains.length > 0 && (
             <div className="space-y-3">
               <h3 className="font-bold text-white text-xs uppercase tracking-wider print:text-black">
-                2. Cadenas de Recuperación entre Correos
+                2. Correos de Respaldo Conectados
               </h3>
               <div className="p-3 rounded-lg bg-obsidian-surface border border-obsidian-border space-y-1.5 print:border-gray-400 print:bg-white">
                 {kit.recovery_chains.map((rc, idx) => (
@@ -132,7 +132,7 @@ export const EmergencyKitModal: React.FC = () => {
           {/* Instructions */}
           <div className="space-y-2">
             <h3 className="font-bold text-white text-xs uppercase tracking-wider print:text-black">
-              3. Instrucciones de Seguridad para Almacenamiento en Frío
+              3. Recomendaciones para Guardar esta Hoja
             </h3>
             <ul className="space-y-1 text-[11px] text-obsidian-muted list-disc list-inside print:text-gray-800">
               {kit.instructions.map((inst, idx) => (

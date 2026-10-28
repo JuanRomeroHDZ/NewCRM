@@ -10,7 +10,7 @@ from app.models import EmailAccount, PlatformAccount, PasswordHistory
 from app.security.crypto import decrypt_secret, calculate_entropy
 from app.security.tokens import require_vault_unlocked
 
-router = APIRouter(prefix="/passwords", tags=["passwords"])
+router = APIRouter(prefix="/passwords", tags=["passwords"], dependencies=[Depends(require_vault_unlocked)])
 
 # Curated word list for memorable passphrase generation
 MEMORABLE_WORDS = [
@@ -86,22 +86,25 @@ async def get_all_vault_credentials(db: AsyncSession = Depends(get_db)):
         items.append({
             "id": f"email_{e.id}",
             "entity_id": e.id,
-            "category": "Correo Raíz",
+            "category": "Correo Principal",
             "name": e.address,
             "provider": e.provider,
             "parent_email": None,
+            "scope": getattr(e, "scope", "business") or "business",
             "type": "email_password",
             "has_credential": bool(dec_pw),
             "credential_masked": "••••••••" if dec_pw else "Sin clave",
             "credential_plain": dec_pw,
             "entropy": calculate_entropy(dec_pw) if dec_pw else None,
-            "last_updated": e.updated_at
+            "last_updated": getattr(e, "password_updated_at", None) or e.updated_at
         })
 
     # 2. Platforms
     for p in platforms:
         dec_pw = decrypt_secret(p.encrypted_password) if p.encrypted_password else None
         dec_pin = decrypt_secret(p.encrypted_pin) if p.encrypted_pin else None
+        p_scope = getattr(p, "scope", "business") or "business"
+        parent_addr = email_map.get(p.email_id, "Sin correo vinculado") if p.email_id else "Sin correo vinculado"
 
         # Password item
         items.append({
@@ -110,14 +113,15 @@ async def get_all_vault_credentials(db: AsyncSession = Depends(get_db)):
             "category": "Plataforma",
             "name": p.name,
             "username": p.username,
-            "parent_email": email_map.get(p.email_id, "Desconocido"),
+            "parent_email": parent_addr,
+            "scope": p_scope,
             "type": "platform_password",
             "access_type": p.access_type,
             "has_credential": bool(dec_pw),
-            "credential_masked": "••••••••" if dec_pw else ("SSO / Federado" if p.access_type == "sso" else "Sin clave"),
+            "credential_masked": "••••••••" if dec_pw else ("Inicio con correo" if p.access_type == "sso" else "Sin clave"),
             "credential_plain": dec_pw,
             "entropy": calculate_entropy(dec_pw) if dec_pw else None,
-            "last_updated": p.updated_at
+            "last_updated": getattr(p, "password_updated_at", None) or p.updated_at
         })
 
         # PIN if present
@@ -128,7 +132,8 @@ async def get_all_vault_credentials(db: AsyncSession = Depends(get_db)):
                 "category": "PIN de Plataforma",
                 "name": f"{p.name} (PIN)",
                 "username": p.username,
-                "parent_email": email_map.get(p.email_id),
+                "parent_email": parent_addr,
+                "scope": p_scope,
                 "type": "pin",
                 "has_credential": True,
                 "credential_masked": "••••",
@@ -146,14 +151,16 @@ async def get_all_vault_credentials(db: AsyncSession = Depends(get_db)):
                     items.append({
                         "id": f"api_key_{ak.get('id')}",
                         "entity_id": p.id,
-                        "category": "API Key",
+                        "category": "Llave API",
                         "name": f"{p.name} — {ak.get('label')}",
-                        "parent_email": email_map.get(p.email_id),
+                        "parent_email": parent_addr,
+                        "scope": p_scope,
                         "type": "api_key",
                         "has_credential": bool(dec_k),
                         "credential_masked": "••••••••••••••••",
                         "credential_plain": dec_k,
                         "entropy": None,
+                        "expires_at": ak.get("expires_at"),
                         "last_updated": ak.get("created_at") or p.updated_at
                     })
             except Exception:

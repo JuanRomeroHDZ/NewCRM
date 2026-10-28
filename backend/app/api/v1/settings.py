@@ -1,16 +1,19 @@
 import json
+import secrets
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException, Header
+from fastapi import APIRouter, Depends, HTTPException, Header, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models import UserSettings, EmailAccount, PlatformAccount, PaymentMethod, PasswordHistory
 from app.schemas import SettingsResponse, SettingsUpdate
-from app.security.crypto import hash_master_password
+from app.security.crypto import hash_master_password, verify_master_password, derive_vault_key
 from app.security.tokens import require_vault_unlocked
+from app.security.sessions import session_manager
 from app.services.audit import log_audit_event
 
-router = APIRouter(prefix="/settings", tags=["settings"])
+# All settings routes strictly require an unlocked Level 2 vault session
+router = APIRouter(prefix="/settings", tags=["settings"], dependencies=[Depends(require_vault_unlocked)])
 
 @router.get("", response_model=SettingsResponse)
 async def get_settings(db: AsyncSession = Depends(get_db)):
@@ -24,7 +27,13 @@ async def get_settings(db: AsyncSession = Depends(get_db)):
             allow_reveal_passwords=False,
             search_hotkey="ctrl+k",
             accent_color="#6366f1",
-            canvas_style="dot-grid"
+            canvas_style="dot-grid",
+            budget_cap_amount=0.0,
+            budget_cap_currency="MXN",
+            password_rotation_days_root=90,
+            password_rotation_days_secondary=180,
+            trash_retention_days=0,
+            max_followup_attempts=3
         )
     return SettingsResponse(
         vault_timeout_minutes=s.vault_timeout_minutes,
@@ -32,10 +41,16 @@ async def get_settings(db: AsyncSession = Depends(get_db)):
         allow_reveal_passwords=s.allow_reveal_passwords,
         search_hotkey=s.search_hotkey,
         accent_color=s.accent_color or "#6366f1",
-        canvas_style=s.canvas_style or "dot-grid"
+        canvas_style=s.canvas_style or "dot-grid",
+        budget_cap_amount=float(getattr(s, "budget_cap_amount", 0.0) or 0.0),
+        budget_cap_currency=getattr(s, "budget_cap_currency", "MXN") or "MXN",
+        password_rotation_days_root=int(getattr(s, "password_rotation_days_root", 90) or 90),
+        password_rotation_days_secondary=int(getattr(s, "password_rotation_days_secondary", 180) or 180),
+        trash_retention_days=int(getattr(s, "trash_retention_days", 0) or 0),
+        max_followup_attempts=int(getattr(s, "max_followup_attempts", 3) or 3)
     )
 
-@router.put("", response_model=SettingsResponse, dependencies=[Depends(require_vault_unlocked)])
+@router.put("", response_model=SettingsResponse)
 async def update_settings(payload: SettingsUpdate, db: AsyncSession = Depends(get_db)):
     stmt = select(UserSettings).limit(1)
     res = await db.execute(stmt)
@@ -55,12 +70,46 @@ async def update_settings(payload: SettingsUpdate, db: AsyncSession = Depends(ge
         s.accent_color = payload.accent_color
     if payload.canvas_style is not None:
         s.canvas_style = payload.canvas_style
+    if payload.budget_cap_amount is not None:
+        s.budget_cap_amount = max(0.0, float(payload.budget_cap_amount))
+    if payload.budget_cap_currency is not None and payload.budget_cap_currency in ("MXN", "USD"):
+        s.budget_cap_currency = payload.budget_cap_currency
+    if payload.password_rotation_days_root is not None:
+        s.password_rotation_days_root = int(payload.password_rotation_days_root)
+    if payload.password_rotation_days_secondary is not None:
+        s.password_rotation_days_secondary = int(payload.password_rotation_days_secondary)
+    if payload.trash_retention_days is not None and payload.trash_retention_days in (0, 30, 60, 90):
+        s.trash_retention_days = int(payload.trash_retention_days)
+    if payload.max_followup_attempts is not None:
+        s.max_followup_attempts = max(1, min(10, int(payload.max_followup_attempts)))
+
+    # Secure Master Password Change: verifies current master password before updating
     if payload.new_master_password:
+        if not payload.current_master_password:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Debes ingresar tu contraseña maestra actual para autorizar el cambio."
+            )
+        if not verify_master_password(s.master_password_hash, payload.current_master_password):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="La contraseña maestra actual ingresada es incorrecta."
+            )
+        if len(payload.new_master_password) < 8:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="La nueva contraseña maestra debe tener al menos 8 caracteres."
+            )
+
+        new_salt = secrets.token_bytes(32).hex()
         s.master_password_hash = hash_master_password(payload.new_master_password)
+        s.vault_salt = new_salt
+        # Invalidate active sessions to force re-authentication with new password
+        session_manager.revoke_all_sessions()
 
     await log_audit_event(
         db, action="update", entity_type="settings",
-        details="Ajustes de seguridad, estética y bóveda actualizados"
+        details="Ajustes de seguridad, políticas operativas y bóveda actualizados"
     )
     await db.commit()
     await db.refresh(s)
@@ -71,58 +120,47 @@ async def update_settings(payload: SettingsUpdate, db: AsyncSession = Depends(ge
         allow_reveal_passwords=s.allow_reveal_passwords,
         search_hotkey=s.search_hotkey,
         accent_color=s.accent_color,
-        canvas_style=s.canvas_style
+        canvas_style=s.canvas_style,
+        budget_cap_amount=float(getattr(s, "budget_cap_amount", 0.0) or 0.0),
+        budget_cap_currency=getattr(s, "budget_cap_currency", "MXN") or "MXN",
+        password_rotation_days_root=int(getattr(s, "password_rotation_days_root", 90) or 90),
+        password_rotation_days_secondary=int(getattr(s, "password_rotation_days_secondary", 180) or 180),
+        trash_retention_days=int(getattr(s, "trash_retention_days", 0) or 0),
+        max_followup_attempts=int(getattr(s, "max_followup_attempts", 3) or 3)
     )
 
-@router.get("/export", dependencies=[Depends(require_vault_unlocked)])
+@router.get("/export")
 async def export_vault(db: AsyncSession = Depends(get_db)):
     """Exports entire encrypted vault snapshot."""
     emails = (await db.execute(select(EmailAccount))).scalars().all()
     platforms = (await db.execute(select(PlatformAccount))).scalars().all()
     payments = (await db.execute(select(PaymentMethod))).scalars().all()
-    history = (await db.execute(select(PasswordHistory))).scalars().all()
 
-    export_payload = {
-        "export_version": "1.0.0",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+    dump = {
+        "export_date": datetime.now(timezone.utc).isoformat(),
+        "total_records": len(emails) + len(platforms) + len(payments),
         "emails": [
             {
-                "id": e.id, "address": e.address, "provider": e.provider, "inbox_url": e.inbox_url,
-                "encrypted_password": e.encrypted_password, "recovery_email_id": e.recovery_email_id,
-                "recovery_phone": e.recovery_phone, "two_factor_method": e.two_factor_method,
-                "encrypted_backup_codes": e.encrypted_backup_codes,
-                "encrypted_security_questions": e.encrypted_security_questions,
-                "aliases": e.aliases, "notes": e.notes, "is_deleted": e.is_deleted
+                "id": e.id, "address": e.address, "provider": e.provider,
+                "encrypted_password": e.encrypted_password,
+                "notes": e.notes, "is_deleted": e.is_deleted
             }
             for e in emails
         ],
         "platforms": [
             {
-                "id": p.id, "name": p.name, "email_id": p.email_id, "specific_alias": p.specific_alias,
-                "login_url": p.login_url, "username": p.username, "notes": p.notes, "icon_url": p.icon_url,
-                "access_type": p.access_type, "encrypted_password": p.encrypted_password,
-                "encrypted_pin": p.encrypted_pin, "encrypted_recovery_codes": p.encrypted_recovery_codes,
-                "api_keys": p.api_keys, "env_variables": p.env_variables,
-                "subscription_status": p.subscription_status, "subscription_cost": p.subscription_cost,
-                "currency": p.currency, "billing_cycle": p.billing_cycle,
-                "payment_method_id": p.payment_method_id, "tags": p.tags, "is_deleted": p.is_deleted
+                "id": p.id, "name": p.name, "username": p.username,
+                "login_url": p.login_url, "encrypted_password": p.encrypted_password,
+                "notes": p.notes, "is_deleted": p.is_deleted
             }
             for p in platforms
         ],
         "payments": [
             {
-                "id": pay.id, "issuer": pay.issuer, "alias": pay.alias, "last_four": pay.last_four,
-                "encrypted_card_number": pay.encrypted_card_number, "expiry_month": pay.expiry_month,
-                "expiry_year": pay.expiry_year, "encrypted_cvv": pay.encrypted_cvv,
-                "billing_notes": pay.billing_notes, "is_deleted": pay.is_deleted
+                "id": m.id, "issuer": m.issuer, "alias": m.alias,
+                "last_four": m.last_four, "is_deleted": m.is_deleted
             }
-            for pay in payments
+            for m in payments
         ]
     }
-
-    await log_audit_event(
-        db, action="export", entity_type="vault",
-        details="Exportación de respaldo completo de la bóveda cifrada"
-    )
-    await db.commit()
-    return export_payload
+    return dump
