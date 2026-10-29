@@ -1,13 +1,52 @@
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { 
   Briefcase, Clock, Sparkles, Rocket, 
   Layers, MessageSquare, ShieldAlert, CheckCircle2,
   Users, Timer, ArrowUpRight
 } from 'lucide-react';
 import { useVault } from '../../context/VaultContext';
+import { api } from '../../lib/api';
+import type { Prospect } from '../../types';
 
 export const ProspectsView: React.FC = () => {
-  const { setActiveSection } = useVault();
+  const { setActiveSection, isUnlocked, openUnlockModal, openProspectModal, openInspector, dataVersion, matchesScope } = useVault();
+  const [prospects, setProspects] = useState<Prospect[]>([]);
+  const [search, setSearch] = useState('');
+  const [status, setStatus] = useState('todos');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [attempt, setAttempt] = useState(0);
+
+  useEffect(() => {
+    if (!isUnlocked) {
+      setProspects([]);
+      setError('');
+      setLoading(false);
+      return;
+    }
+    let active = true;
+    setLoading(true);
+    setError('');
+    api.getProspects()
+      .then((items) => { if (active) setProspects(items); })
+      .catch(() => { if (active) setError('No se pudieron cargar los prospectos. Vuelve a intentarlo.'); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [isUnlocked, dataVersion, attempt]);
+
+  const visibleProspects = useMemo(() => {
+    const term = search.trim().toLocaleLowerCase();
+    return prospects.filter((prospect) => {
+      const text = [prospect.company_name, prospect.contact_name, prospect.contact_email]
+        .filter(Boolean).join(' ').toLocaleLowerCase();
+      return matchesScope(prospect.scope) && (status === 'todos' || prospect.status === status) && (!term || text.includes(term));
+    });
+  }, [prospects, search, status, matchesScope]);
+
+  const statusLabels: Record<string, string> = {
+    demo_creada: 'Demo creada', primer_contacto: 'Primer contacto', en_cotizacion: 'En cotización',
+    respondido: 'Respondió', tiempo_agotado: 'Tiempo agotado', archivado_frio: 'Archivado',
+  };
 
   const plannedModules = [
     {
@@ -52,11 +91,11 @@ export const ProspectsView: React.FC = () => {
                   Módulo CRM & Prospectos
                 </h1>
                 <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/30">
-                  En Definición
+                  En desarrollo
                 </span>
               </div>
               <p className="text-xs sm:text-sm text-obsidian-muted mt-1 max-w-xl leading-relaxed">
-                Este apartado está reservado arquitectónicamente. La lógica de negocio, reglas comerciales y flujos de seguimiento se integrarán en una fase posterior una vez definidas las especificaciones funcionales.
+                Consulta tus prospectos y accede a su seguimiento. Las nuevas etapas comerciales y comunicaciones se incorporarán progresivamente.
               </p>
             </div>
           </div>
@@ -79,6 +118,58 @@ export const ProspectsView: React.FC = () => {
         </div>
       </div>
 
+      <section aria-labelledby="prospectos-lista" className="rounded-2xl bg-obsidian-card border border-obsidian-border p-4 sm:p-6 space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 id="prospectos-lista" className="text-base font-semibold text-white">Prospectos</h2>
+            <p className="text-xs text-obsidian-muted mt-1">Consulta el estado y abre la ficha para revisar o editar cada registro.</p>
+          </div>
+          <button type="button" onClick={() => isUnlocked ? openProspectModal() : openUnlockModal()}
+            className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium">
+            Nuevo prospecto
+          </button>
+        </div>
+        {!isUnlocked ? (
+          <div className="text-sm text-obsidian-muted">
+            Desbloquea la bóveda para consultar los prospectos.{' '}
+            <button type="button" onClick={openUnlockModal} className="text-indigo-300 underline">Desbloquear</button>
+          </div>
+        ) : (
+          <>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="text-xs text-obsidian-muted">Buscar por empresa, contacto o correo
+                <input type="search" value={search} onChange={(event) => setSearch(event.target.value)}
+                  className="mt-1 w-full rounded-lg border border-obsidian-border bg-obsidian-bg px-3 py-2 text-sm text-white" />
+              </label>
+              <label className="text-xs text-obsidian-muted">Estado
+                <select value={status} onChange={(event) => setStatus(event.target.value)}
+                  className="mt-1 w-full rounded-lg border border-obsidian-border bg-obsidian-bg px-3 py-2 text-sm text-white">
+                  <option value="todos">Todos</option>
+                  {Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                </select>
+              </label>
+            </div>
+            {loading ? <p role="status" className="text-sm text-obsidian-muted">Cargando prospectos...</p>
+              : error ? <div role="alert" className="text-sm text-rose-300">{error}{' '}
+                  <button type="button" onClick={() => setAttempt((value) => value + 1)} className="underline">Reintentar</button>
+                </div>
+              : visibleProspects.length === 0 ? <p className="text-sm text-obsidian-muted">No hay prospectos que coincidan con los filtros.</p>
+              : <ul className="divide-y divide-obsidian-border">
+                  {visibleProspects.map((prospect) => (
+                    <li key={prospect.id}>
+                      <button type="button" onClick={() => openInspector('prospect', prospect.id)}
+                        className="w-full py-3 flex flex-wrap items-center justify-between gap-2 text-left hover:bg-obsidian-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400">
+                        <span className="min-w-0"><span className="block text-sm font-medium text-white">{prospect.company_name}</span>
+                          <span className="block text-xs text-obsidian-muted">{prospect.contact_name || 'Sin contacto registrado'}</span></span>
+                        <span className="text-xs text-obsidian-muted">{statusLabels[prospect.status] || prospect.status}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>}
+          </>
+        )}
+      </section>
+
       {/* Notice Card */}
       <div className="p-4 rounded-xl bg-obsidian-card border border-obsidian-border flex items-start gap-3 text-xs">
         <div className="p-2 rounded-lg bg-indigo-500/10 text-indigo-400 flex-shrink-0 mt-0.5">
@@ -87,7 +178,7 @@ export const ProspectsView: React.FC = () => {
         <div className="space-y-1">
           <h2 className="text-xs font-semibold text-white">Estado actual de la sección</h2>
           <p className="text-[11px] text-obsidian-muted leading-relaxed">
-            Todas las rutas y modelos backend correspondientes al CRM se encuentran debidamente asegurados y aislados bajo la bóveda cifrada. Las funcionalidades interactivas (creación de prospectos, contadores de SLA y automatizaciones) permanecen desactivadas en la interfaz de usuario para garantizar la estabilidad y consistencia del producto hasta que se definan sus reglas.
+            La sección utiliza los prospectos y el seguimiento existentes. El pipeline ampliado y la bandeja de comunicaciones aún están pendientes.
           </p>
         </div>
       </div>
@@ -143,7 +234,7 @@ export const ProspectsView: React.FC = () => {
           </div>
           <div className="p-3 rounded-xl bg-obsidian-bg border border-obsidian-border flex items-center gap-2.5">
             <CheckCircle2 size={16} className="text-emerald-400 flex-shrink-0" />
-            <span className="text-obsidian-text">Aislamiento por Scope (Empresa/Personal)</span>
+            <span className="text-obsidian-text">Filtros por ámbito disponibles</span>
           </div>
         </div>
       </div>

@@ -29,6 +29,11 @@ from app.services.audit import log_audit_event
 router = APIRouter(prefix="/finances", tags=["finances"], dependencies=[Depends(require_vault_unlocked)])
 
 
+def _business_share(row) -> float:
+    value = getattr(row, "business_share_percent", None)
+    return float(value if value is not None else 100.0)
+
+
 def _add_billing_period(src_date: date, billing_cycle: str) -> date:
     if billing_cycle == "monthly":
         month = src_date.month + 1
@@ -91,7 +96,7 @@ def _build_income_response(row: ClientIncome) -> ClientIncomeResponse:
         project_id=getattr(row, "project_id", None),
         ownership_type=getattr(row, "ownership_type", None) or "client",
         scope=getattr(row, "scope", None) or "business",
-        business_share_percent=float(getattr(row, "business_share_percent", 100.0) or 100.0),
+        business_share_percent=_business_share(row),
         client_name=row.client_name,
         concept=row.concept,
         category=row.category or "anticipo",
@@ -121,7 +126,7 @@ def _build_renewal_response(
         platform_id=row.platform_id,
         ownership_type=getattr(row, "ownership_type", None) or "client",
         scope=getattr(row, "scope", None) or "business",
-        business_share_percent=float(getattr(row, "business_share_percent", 100.0) or 100.0),
+        business_share_percent=_business_share(row),
         client_name=row.client_name,
         domain_or_service=row.domain_or_service,
         service_type=row.service_type or "dominio",
@@ -154,7 +159,7 @@ def _build_expense_response(row: OneTimeExpense) -> OneTimeExpenseResponse:
         currency=row.currency or "MXN",
         expense_date=row.expense_date,
         scope=row.scope or "business",
-        business_share_percent=float(row.business_share_percent or 100.0),
+        business_share_percent=_business_share(row),
         ownership_type=row.ownership_type or "own",
         vendor=row.vendor,
         payment_method_label=row.payment_method_label,
@@ -310,7 +315,7 @@ async def clone_income_next_month(income_id: str, db: AsyncSession = Depends(get
         project_id=getattr(source, "project_id", None),
         ownership_type=getattr(source, "ownership_type", None) or "client",
         scope=getattr(source, "scope", None) or "business",
-        business_share_percent=float(getattr(source, "business_share_percent", 100.0) or 100.0),
+        business_share_percent=_business_share(source),
         client_name=source.client_name,
         concept=source.concept,
         category=source.category or "iguala_mensual",
@@ -587,7 +592,7 @@ async def advance_renewal_cycle(
                 project_id=getattr(item, "project_id", None),
                 ownership_type=getattr(item, "ownership_type", None) or "client",
                 scope=getattr(item, "scope", None) or "business",
-                business_share_percent=float(getattr(item, "business_share_percent", 100.0) or 100.0),
+                business_share_percent=_business_share(item),
                 client_name=item.client_name or "Cliente",
                 concept=f"Renovación {item.domain_or_service}",
                 category="renovacion_dominio_hosting",

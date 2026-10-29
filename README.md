@@ -1,5 +1,7 @@
 # EmailSaver — Gestor Relacional de Identidades, Contraseñas, APIs & Finanzas
 
+> **Estado de revisión:** el respaldo `.emailsaver` actual es parcial y su restauración puede modificar registros existentes. No sustituye un respaldo completo de la base de datos. La reorganización hacia Contact | LESSSO está en curso; consulta [HALLAZGOS.md](HALLAZGOS.md) y [PLAN_MIGRACION.md](PLAN_MIGRACION.md). Las descripciones históricas de este archivo requieren revisión.
+
 Plataforma web autohospedada (**self-hosted**) que reemplaza las listas planas de los gestores tradicionales por un **modelo relacional jerárquico en grafo**, con una estética minimalista y fluida inspirada en **Notion** y **Obsidian** (Dark Mode grafito/carbón, lienzo de puntos *dot-grid*, inspector lateral deslizable de 3 columnas y atajos con paleta de comandos `Ctrl + K`).
 
 ---

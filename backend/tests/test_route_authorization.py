@@ -1,4 +1,6 @@
 import pytest
+import re
+from app.main import app
 
 @pytest.mark.asyncio
 async def test_protected_routes_reject_unauthenticated(client):
@@ -55,3 +57,23 @@ async def test_public_routes_accessible(client):
 
     status_res = await client.get("/api/v1/auth/status")
     assert status_res.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_all_business_routes_require_an_active_session(client):
+    """Comprueba cada ruta de negocio, incluidas las acciones que modifican datos."""
+    checked = []
+    for route, operations in app.openapi()['paths'].items():
+        if not route.startswith('/api/v1/'):
+            continue
+        if route.startswith('/api/v1/auth/'):
+            continue
+        path = re.sub(r'\{[^}]+\}', 'registro-ficticio', route)
+        for operation in sorted(operations):
+            method = operation.upper()
+            if method not in {'GET', 'POST', 'PUT', 'PATCH', 'DELETE'}:
+                continue
+            response = await client.request(method, path, json={} if method in {'POST', 'PUT', 'PATCH'} else None)
+            assert response.status_code == 401, f'{method} {route}: {response.status_code}'
+            checked.append((method, route))
+    assert len(checked) >= 70

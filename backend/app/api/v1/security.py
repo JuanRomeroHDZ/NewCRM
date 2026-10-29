@@ -309,3 +309,83 @@ async def check_password_pwned(
         message="Excelente: esta contraseña no figura en ninguna brecha pública conocida de HaveIBeenPwned."
     )
 
+from pydantic import BaseModel
+from fastapi import Request
+from app.models import SecureResource
+from app.security.crypto import verify_master_password
+from app.services.activity_service import record_event
+
+class SecretRevealRequest(BaseModel):
+    target_type: str  # email, platform, resource
+    target_id: str
+    field_name: str = "password"  # password, pin, totp_secret, api_key, content
+    master_password: str
+
+class SecretRevealResponse(BaseModel):
+    decrypted_value: str
+    revealed_at: str
+
+@router.post("/reveal", response_model=SecretRevealResponse)
+async def reveal_secret_with_reauth(
+    payload: SecretRevealRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Exige reautenticación con contraseña maestra y registra auditoría inmutable
+    antes de descifrar y entregar un secreto individual.
+    """
+    settings_row = (await db.execute(select(UserSettings).limit(1))).scalar_one_or_none()
+    if not settings_row or not verify_master_password(settings_row.master_password_hash, payload.master_password):
+        raise HTTPException(status_code=401, detail="Contraseña de reautenticación incorrecta.")
+
+    encrypted_val = None
+    target_name = payload.target_id
+
+    if payload.target_type == "email":
+        row = (await db.execute(select(EmailAccount).where(EmailAccount.id == payload.target_id))).scalar_one_or_none()
+        if row:
+            target_name = row.address
+            encrypted_val = row.encrypted_password
+    elif payload.target_type == "platform":
+        row = (await db.execute(select(PlatformAccount).where(PlatformAccount.id == payload.target_id))).scalar_one_or_none()
+        if row:
+            target_name = row.name
+            if payload.field_name == "pin":
+                encrypted_val = row.encrypted_pin
+            elif payload.field_name == "totp_secret":
+                encrypted_val = row.encrypted_totp_secret
+            else:
+                encrypted_val = row.encrypted_password
+    elif payload.target_type == "resource":
+        row = (await db.execute(select(SecureResource).where(SecureResource.id == payload.target_id))).scalar_one_or_none()
+        if row:
+            target_name = row.title
+            encrypted_val = row.encrypted_content
+
+    if not encrypted_val:
+        raise HTTPException(status_code=404, detail="Recurso o secreto no encontrado.")
+
+    plain = decrypt_secret(encrypted_val)
+    if not plain:
+        raise HTTPException(status_code=500, detail="No se pudo descifrar el secreto.")
+
+    ip_addr = request.client.host if request.client else None
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    await record_event(
+        db,
+        module="vault",
+        action="unlock",
+        entity_type=payload.target_type,
+        entity_id=payload.target_id,
+        summary=f"Revelado auditado de {payload.field_name} para {target_name}",
+        ip_address=ip_addr
+    )
+    await db.commit()
+
+    return SecretRevealResponse(
+        decrypted_value=plain,
+        revealed_at=now_iso
+    )
+

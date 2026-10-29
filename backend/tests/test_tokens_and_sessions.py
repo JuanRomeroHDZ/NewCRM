@@ -1,5 +1,7 @@
 import pytest
 import time
+import jwt
+from app.config import settings
 from app.security.tokens import (
     create_vault_token,
     verify_vault_token,
@@ -31,3 +33,12 @@ def test_invalid_and_expired_token():
     assert verify_vault_token(None) is False
     assert verify_vault_token("invalid.jwt.token") is False
     assert verify_vault_token("") is False
+
+
+def test_revocation_rejects_forged_token():
+    token = create_vault_token(timeout_minutes=5, encryption_key=b"3" * 32)
+    payload = jwt.decode(token, settings.SERVER_SECRET_KEY, algorithms=["HS256"])
+    forged = jwt.encode(payload, "clave-ficticia-diferente-para-prueba-123", algorithm="HS256")
+    assert revoke_vault_token(forged) is False
+    assert verify_vault_token(token) is True
+    assert revoke_vault_token(token) is True

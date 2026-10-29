@@ -31,6 +31,11 @@ async def extract_favicon_url(domain_or_url: str) -> str:
     if not domain_or_url:
         return generate_initials_svg("App")
 
+    # La consulta externa requiere activación explícita en la configuración.
+    from app.config import settings
+    if settings.LOCAL_MODE or not settings.ALLOW_EXTERNAL_FAVICONS:
+        return generate_initials_svg(domain_or_url)
+
     candidate = domain_or_url.strip()
     if "://" not in candidate:
         candidate = f"https://{candidate}"

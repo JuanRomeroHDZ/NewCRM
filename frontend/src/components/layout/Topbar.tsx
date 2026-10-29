@@ -42,7 +42,7 @@ export const Topbar: React.FC = () => {
       if (updated && updated.synced === false) {
         setManualRateInput(updated.rate.toFixed(2));
         setIsEditingManualRate(true);
-        showToast('Sin conexión al servidor de divisas. Puedes ajustar el tipo de cambio manualmente.', 'warning');
+        showToast(updated.source === 'modo_local' ? 'Modo local activo. Puedes ajustar el tipo de cambio manualmente.' : 'Sin conexión al servidor de divisas. Puedes ajustar el tipo de cambio manualmente.', 'warning');
       } else {
         const rateStr = updated?.rate ? updated.rate.toFixed(2) : exchangeRate?.rate.toFixed(2);
         showToast(`Tipo de cambio actualizado: 1 USD = $${rateStr} MXN`, 'success');

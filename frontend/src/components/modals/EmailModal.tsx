@@ -102,7 +102,7 @@ export const EmailModal: React.FC = () => {
         showToast(urlCheck.error || 'URL de Bandeja de Entrada inválida.', 'error');
         return;
       }
-      normalizedInboxUrl = urlCheck.normalized;
+      normalizedInboxUrl = urlCheck.normalized || '';
     }
 
     if (recoveryPhone.trim() && !isValidPhone(recoveryPhone)) {

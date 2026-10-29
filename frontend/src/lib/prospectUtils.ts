@@ -370,7 +370,7 @@ export function buildWhatsAppUrl(
 }
 
 export function buildMailtoUrl(prospect: Prospect): string | null {
-  const targetEmail = prospect.contact_email || prospect.email_address;
+  const targetEmail = prospect.contact_email?.trim();
   if (!targetEmail) return null;
   const isFollowUp = (prospect.followup_count || 0) > 0 || prospect.status !== 'demo_creada';
   const subject = isFollowUp

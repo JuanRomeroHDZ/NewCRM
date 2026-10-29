@@ -214,7 +214,7 @@ export const PlatformModal: React.FC = () => {
         showToast(urlCheck.error || 'URL de Acceso inválida.', 'error');
         return;
       }
-      normalizedLoginUrl = urlCheck.normalized;
+      normalizedLoginUrl = urlCheck.normalized || '';
     }
 
     const numericCost = Number(subscriptionCost);

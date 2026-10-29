@@ -50,6 +50,8 @@ export const InspectorDrawer: React.FC = () => {
   const [totpInput, setTotpInput] = useState('');
   const [nowMs, setNowMs] = useState<number>(Date.now());
   const [followupWindowHours, setFollowupWindowHours] = useState<24 | 48 | 72>(48);
+  const [contactChannel, setContactChannel] = useState<'' | 'whatsapp' | 'email' | 'phone' | 'template'>('');
+  const [recordingContact, setRecordingContact] = useState(false);
 
   // Client financial & domain monitor state
   const [clientIncomes, setClientIncomes] = useState<ClientIncome[]>([]);
@@ -79,6 +81,10 @@ export const InspectorDrawer: React.FC = () => {
     return d.toISOString().split('T')[0];
   });
   const [domLoading, setDomLoading] = useState(false);
+
+  useEffect(() => {
+    setContactChannel('');
+  }, [selectedEntity?.id]);
 
   useEffect(() => {
     if (selectedEntity?.type !== 'prospect') return;
@@ -794,16 +800,10 @@ export const InspectorDrawer: React.FC = () => {
                         {prospectWaUrl && (
                           <button
                             type="button"
-                            onClick={async () => {
+                            onClick={() => {
                               window.open(prospectWaUrl, '_blank', 'noopener,noreferrer');
-                              try {
-                                const updated = await api.recordProspectContactAttempt(prospectData.id, 'whatsapp', followupWindowHours);
-                                setProspectData(updated);
-                                triggerDataReload();
-                                showToast(`Seguimiento por WhatsApp registrado (+${followupWindowHours}h).`, 'success');
-                              } catch (err: any) {
-                                showToast(err.message, 'error');
-                              }
+                              setContactChannel('whatsapp');
+                              showToast('Mensaje preparado. Registra el contacto después de enviarlo.', 'info');
                             }}
                             className="inline-flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 text-[11px] font-semibold transition-all"
                           >
@@ -815,17 +815,11 @@ export const InspectorDrawer: React.FC = () => {
                         {prospectData.contact_email && (
                           <button
                             type="button"
-                            onClick={async () => {
+                            onClick={() => {
                               const mailUrl = buildMailtoUrl(prospectData);
                               if (mailUrl) window.location.href = mailUrl;
-                              try {
-                                const updated = await api.recordProspectContactAttempt(prospectData.id, 'email', followupWindowHours);
-                                setProspectData(updated);
-                                triggerDataReload();
-                                showToast(`Seguimiento por correo registrado (+${followupWindowHours}h).`, 'success');
-                              } catch (err: any) {
-                                showToast(err.message, 'error');
-                              }
+                              setContactChannel('email');
+                              showToast('Correo preparado. Registra el contacto después de enviarlo.', 'info');
                             }}
                             className="inline-flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/30 text-[11px] font-semibold transition-all"
                           >
@@ -839,19 +833,39 @@ export const InspectorDrawer: React.FC = () => {
                           onClick={async () => {
                             const msg = buildFollowUpMessage(prospectData);
                             await copyToClipboard(msg, 'Plantilla de seguimiento');
-                            try {
-                              const updated = await api.recordProspectContactAttempt(prospectData.id, 'template', followupWindowHours);
-                              setProspectData(updated);
-                              triggerDataReload();
-                              showToast(`Plantilla copiada y seguimiento (+${followupWindowHours}h) activado.`, 'success');
-                            } catch (err: any) {
-                              showToast(err.message, 'error');
-                            }
+                            setContactChannel('template');
                           }}
                           className="inline-flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-xl bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 border border-indigo-500/30 text-[11px] font-semibold transition-all"
                         >
                           <Copy size={13} />
                           <span>Copiar Plantilla</span>
+                        </button>
+                      </div>
+
+                      <div className="flex flex-wrap items-end gap-2">
+                        <label className="text-xs text-obsidian-muted">Canal del contacto
+                          <select value={contactChannel} onChange={(event) => setContactChannel(event.target.value as typeof contactChannel)}
+                            className="block mt-1 rounded-lg border border-obsidian-border bg-obsidian-bg px-2 py-1.5 text-white">
+                            <option value="">Selecciona un canal</option>
+                            <option value="whatsapp">WhatsApp</option><option value="email">Correo</option>
+                            <option value="phone">Llamada</option><option value="template">Otro mensaje</option>
+                          </select>
+                        </label>
+                        <button type="button" disabled={recordingContact || !contactChannel} onClick={async () => {
+                          if (!contactChannel) return;
+                          setRecordingContact(true);
+                          try {
+                            const updated = await api.recordProspectContactAttempt(prospectData.id, contactChannel, followupWindowHours);
+                            setProspectData(updated);
+                            triggerDataReload();
+                            showToast('Contacto registrado.', 'success');
+                          } catch (err: any) {
+                            showToast(err.message || 'No se pudo registrar el contacto.', 'error');
+                          } finally {
+                            setRecordingContact(false);
+                          }
+                        }} className="rounded-lg bg-indigo-600 hover:bg-indigo-500 px-3 py-2 text-xs font-medium text-white disabled:opacity-50">
+                          {recordingContact ? 'Registrando...' : 'Registrar contacto'}
                         </button>
                       </div>
 

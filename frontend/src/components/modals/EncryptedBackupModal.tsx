@@ -162,7 +162,7 @@ export const EncryptedBackupModal: React.FC = () => {
                 <Lock className="w-3.5 h-3.5" /> Cifrado de Transporte Autónomo
               </div>
               <p className="text-[11px] leading-relaxed">
-                Toda la base de datos se cifra con una clave derivada de tu contraseña elegida.
+                Este archivo contiene solo una parte de la información. No incluye prospectos ni historial de actividad y no sustituye un respaldo completo de la base de datos.
               </p>
             </div>
 
@@ -224,7 +224,7 @@ export const EncryptedBackupModal: React.FC = () => {
                 <AlertTriangle className="w-3.5 h-3.5" /> Restauración Transaccional Aditiva
               </div>
               <p className="text-[11px] leading-relaxed">
-                Los registros del respaldo se integrarán de forma segura en la base de datos sin sobrescribir ni duplicar cuentas existentes.
+                La restauración es parcial y puede modificar cuentas y métodos de pago existentes. Algunos datos exportados no se restauran. Conserva un respaldo completo independiente antes de continuar.
               </p>
             </div>
 

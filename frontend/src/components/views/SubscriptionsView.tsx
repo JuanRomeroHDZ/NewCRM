@@ -232,7 +232,7 @@ export const SubscriptionsView: React.FC = () => {
       triggerDataReload();
       if (updated && updated.synced === false) {
         setIsEditingRate(true);
-        showToast('Sin conexión al servidor de divisas. Puedes ajustar el valor manualmente.', 'warning');
+        showToast(updated.source === 'modo_local' ? 'Modo local activo. Puedes ajustar el valor manualmente.' : 'Sin conexión al servidor de divisas. Puedes ajustar el valor manualmente.', 'warning');
       } else {
         showToast(`Tipo de cambio actualizado: 1 USD = $${updated.rate.toFixed(2)} MXN`, 'success');
       }
@@ -690,6 +690,11 @@ export const SubscriptionsView: React.FC = () => {
 
   return (
     <div className="p-4 sm:p-8 max-w-7xl mx-auto space-y-7 animate-fadeIn">
+      {(!exchangeRate || !exchangeRate.is_manual) && (
+        <p role="status" className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-200">
+          Verifica el tipo de cambio antes de usar los totales convertidos: el valor disponible puede ser una referencia o estar desactualizado.
+        </p>
+      )}
       {/* Header and Exchange Rate Controls */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-2 min-w-0">

@@ -121,3 +121,168 @@ async def lock_vault(x_vault_token: str | None = Header(None)):
     if x_vault_token:
         revoke_vault_token(x_vault_token)
     return {"message": "Bóveda bloqueada exitosamente y sesión revocada."}
+
+# Endpoints de Autenticación de Usuarios del Núcleo
+from fastapi import Request
+from app.models.core import User, DbSession
+from app.schemas import (
+    UserLoginRequest, UserLoginResponse, UserResponse,
+    TotpSetupResponse, TotpVerifyRequest
+)
+from app.services.core_auth import (
+    authenticate_user, create_user_session, get_current_user_from_token,
+    get_or_create_initial_owner, hash_token, utc_now
+)
+from app.security.totp import generate_random_totp_secret, verify_totp_code
+import json
+
+@router.post("/login", response_model=UserLoginResponse)
+async def user_login(
+    payload: UserLoginRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db)
+):
+    # Ensure at least owner exists
+    await get_or_create_initial_owner(db)
+    
+    ip_addr = request.client.host if request.client else None
+    user, err = await authenticate_user(
+        db,
+        username_or_email=payload.username_or_email,
+        password=payload.password,
+        ip_address=ip_addr
+    )
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=err or "Credenciales incorrectas o cuenta bloqueada"
+        )
+
+    # If 2FA is active, verify code or recovery code
+    if user.is_totp_enabled:
+        if not payload.totp_code:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Se requiere código de verificación en dos pasos (2FA)."
+            )
+        
+        valid_totp = False
+        if user.totp_secret and verify_totp_code(user.totp_secret, payload.totp_code):
+            valid_totp = True
+        elif user.recovery_codes:
+            try:
+                rec_list = json.loads(user.recovery_codes)
+                code_hash = hash_token(payload.totp_code.strip())
+                if code_hash in rec_list:
+                    rec_list.remove(code_hash)
+                    user.recovery_codes = json.dumps(rec_list)
+                    valid_totp = True
+                    await db.commit()
+            except Exception:
+                pass
+                
+        if not valid_totp:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Código de verificación en dos pasos inválido."
+            )
+
+    user_agent = request.headers.get("User-Agent")
+    token_str, db_sess = await create_user_session(
+        db,
+        user=user,
+        ip_address=ip_addr,
+        user_agent=user_agent
+    )
+
+    user_resp = UserResponse(
+        id=user.id,
+        username=user.username,
+        email=user.email,
+        full_name=user.full_name,
+        role=user.role,
+        is_active=user.is_active,
+        is_totp_enabled=user.is_totp_enabled,
+        must_change_password=user.must_change_password,
+        created_at=user.created_at
+    )
+
+    return UserLoginResponse(
+        token=token_str,
+        user=user_resp,
+        expires_in_minutes=120
+    )
+
+@router.post("/logout")
+async def user_logout(
+    request: Request,
+    db: AsyncSession = Depends(get_db)
+):
+    auth_header = request.headers.get("Authorization")
+    token = None
+    if auth_header and auth_header.startswith("Bearer "):
+        token = auth_header[7:].strip()
+    elif request.cookies.get("lessso_session"):
+        token = request.cookies.get("lessso_session")
+
+    if token:
+        thash = hash_token(token)
+        from sqlalchemy import update
+        await db.execute(
+            update(DbSession)
+            .where(DbSession.token_hash == thash)
+            .values(is_revoked=True)
+        )
+        await db.commit()
+
+    return {"message": "Sesión cerrada exitosamente."}
+
+@router.get("/me", response_model=UserResponse)
+async def get_current_user_profile(
+    current_user: User = Depends(get_current_user_from_token)
+):
+    return UserResponse(
+        id=current_user.id,
+        username=current_user.username,
+        email=current_user.email,
+        full_name=current_user.full_name,
+        role=current_user.role,
+        is_active=current_user.is_active,
+        is_totp_enabled=current_user.is_totp_enabled,
+        must_change_password=current_user.must_change_password,
+        created_at=current_user.created_at
+    )
+
+@router.post("/setup-2fa", response_model=TotpSetupResponse)
+async def setup_two_factor(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user_from_token)
+):
+    secret = generate_random_totp_secret()
+    raw_recovery_codes = [secrets.token_hex(4).upper() for _ in range(8)]
+    hashed_codes = [hash_token(c) for c in raw_recovery_codes]
+
+    current_user.totp_secret = secret
+    current_user.recovery_codes = json.dumps(hashed_codes)
+    await db.commit()
+
+    return TotpSetupResponse(
+        secret=secret,
+        recovery_codes=raw_recovery_codes
+    )
+
+@router.post("/verify-2fa")
+async def verify_two_factor(
+    payload: TotpVerifyRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user_from_token)
+):
+    if not current_user.totp_secret:
+        raise HTTPException(status_code=400, detail="Debe solicitar primero la configuración 2FA.")
+
+    if not verify_totp_code(current_user.totp_secret, payload.code):
+        raise HTTPException(status_code=400, detail="Código 2FA incorrecto.")
+
+    current_user.is_totp_enabled = True
+    await db.commit()
+    return {"message": "Verificación en dos pasos (2FA) activada correctamente."}

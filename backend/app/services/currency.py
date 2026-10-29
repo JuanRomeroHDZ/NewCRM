@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import ExchangeRate
+from app.config import settings
 
 # Fallback default rate if completely offline and DB empty
 FALLBACK_USD_MXN_RATE = 18.50
@@ -47,6 +48,9 @@ async def sync_external_exchange_rate(db: AsyncSession, force: bool = False) -> 
 
     if record and record.is_manual and not force:
         return float(record.rate), False, "manual"
+
+    if settings.LOCAL_MODE:
+        return (float(record.rate) if record else FALLBACK_USD_MXN_RATE), False, "modo_local"
 
     providers = [
         (

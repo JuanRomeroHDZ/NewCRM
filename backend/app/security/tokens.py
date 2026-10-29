@@ -45,8 +45,13 @@ def revoke_vault_token(token: str | None) -> bool:
     if not token:
         return False
     try:
-        # Decode without verifying expiration so even expired or expiring tokens can be explicitly revoked
-        payload = jwt.decode(token, options={"verify_signature": False})
+        # La firma debe verificarse incluso cuando se permite un token caducado.
+        payload = jwt.decode(
+            token, settings.SERVER_SECRET_KEY, algorithms=["HS256"],
+            options={"verify_exp": False}
+        )
+        if payload.get("scope") != "level2_vault":
+            return False
         jti = payload.get("jti")
         if jti:
             return session_manager.revoke_session(jti)
@@ -69,7 +74,7 @@ def get_vault_remaining_seconds(token: str | None) -> int:
     except Exception:
         return 0
 
-def require_vault_unlocked(x_vault_token: str | None = Header(None)) -> bool:
+async def require_vault_unlocked(x_vault_token: str | None = Header(None)) -> bool:
     """
     FastAPI dependency to strictly guard Level 2 endpoints.
     Verifies cryptographic token, verifies session is unrevoked,

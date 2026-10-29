@@ -1,12 +1,21 @@
 import pytest
 import pytest_asyncio
+import os
 from httpx import AsyncClient, ASGITransport
+from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from app.database import Base, get_db
 from app.main import app
 
-# Test in-memory database
-TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
+# La base externa solo se permite con habilitación explícita y un nombre de prueba concreto.
+TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL", "sqlite+aiosqlite:///:memory:")
+if not TEST_DATABASE_URL.startswith("sqlite+aiosqlite:///:memory:"):
+    parsed_url = make_url(TEST_DATABASE_URL)
+    if (os.environ.get("EMAILCRM_DISPOSABLE_DATABASE") != "1"
+            or parsed_url.drivername != "postgresql+asyncpg"
+            or parsed_url.database != "emailcrm_disposable_test"
+            or parsed_url.host not in ("localhost", "127.0.0.1")):
+        raise RuntimeError("La base de pruebas debe ser una base PostgreSQL temporal y autorizada explícitamente.")
 
 @pytest_asyncio.fixture
 async def test_engine():
@@ -31,6 +40,12 @@ async def client(test_engine):
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
     app.dependency_overrides.clear()
+
+@pytest_asyncio.fixture
+async def db_session(test_engine):
+    async_session = async_sessionmaker(test_engine, class_=AsyncSession, expire_on_commit=False)
+    async with async_session() as session:
+        yield session
 
 @pytest_asyncio.fixture
 async def auth_token(client):

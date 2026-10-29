@@ -1,5 +1,6 @@
 import hashlib
 import httpx
+from app.config import settings
 
 # In-memory LRU-like cache for k-anonymity prefixes: prefix -> dict[suffix, count]
 _PWNED_PREFIX_CACHE: dict[str, dict[str, int]] = {}
@@ -27,6 +28,9 @@ async def check_pwned_password(password: str) -> tuple[bool | None, int, str]:
         if suffix in suffix_map:
             return True, suffix_map[suffix], "compromised"
         return False, 0, "safe"
+
+    if settings.LOCAL_MODE:
+        return None, 0, "unknown"
 
     url = f"https://api.pwnedpasswords.com/range/{prefix}"
     headers = {

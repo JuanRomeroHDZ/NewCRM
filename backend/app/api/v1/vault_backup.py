@@ -187,7 +187,7 @@ async def export_encrypted_vault(
 
     await log_audit_event(
         db, action="export", entity_type="vault",
-        details="Generación de respaldo completo cifrado con AES-256-GCM"
+        details="Generación de exportación parcial cifrada con AES-256-GCM"
     )
     await db.commit()
 
@@ -343,12 +343,12 @@ async def restore_encrypted_vault(
 
     await log_audit_event(
         db, action="restore", entity_type="vault",
-        details="Restauración exitosa y validada de respaldo cifrado completo"
+        details="Restauración parcial de una exportación cifrada"
     )
     await db.commit()
 
     return {
-        "message": "Bóveda restaurada exitosamente desde archivo cifrado.",
+        "message": "Restauración parcial completada. No se restauran todos los datos de la aplicación.",
         "restored_emails": len(vault_dump.get("emails", [])),
         "restored_platforms": len(vault_dump.get("platforms", [])),
         "restored_payments": len(vault_dump.get("payments", [])),

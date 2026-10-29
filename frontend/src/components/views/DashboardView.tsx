@@ -112,14 +112,11 @@ export const DashboardView: React.FC = () => {
         await navigator.clipboard.writeText(followUpMsg);
       }
 
-      const apiChannel = channel === 'template_copy' ? 'template' : channel;
-      const updated = await api.recordProspectContactAttempt(prospect.id, apiChannel, prospect.followup_sla_hours || 48);
-      setProspects((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
       showToast(
         channel === 'template_copy'
-          ? `Mensaje copiado y seguimiento #${updated.followup_count || 1} registrado.`
-          : `Seguimiento #${updated.followup_count || 1} registrado para "${prospect.company_name}".`,
-        'success'
+          ? 'Mensaje copiado. Registra el contacto después de enviarlo.'
+          : 'Mensaje preparado. Registra el contacto después de enviarlo.',
+        'info'
       );
     } catch (err: any) {
       showToast(err.message || 'Error al registrar seguimiento', 'error');
@@ -182,6 +179,11 @@ export const DashboardView: React.FC = () => {
 
   return (
     <div className="p-4 sm:p-8 max-w-7xl mx-auto space-y-7 animate-fadeIn">
+      {(!exchangeRate || !exchangeRate.is_manual) && (
+        <p role="status" className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-200">
+          Verifica el tipo de cambio antes de usar los totales convertidos: el valor disponible puede ser una referencia o estar desactualizado.
+        </p>
+      )}
       {/* Free Trials Alert Banner if present */}
       {expiringTrials.length > 0 && (
         <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex flex-col sm:flex-row items-start justify-between gap-4 shadow-lg shadow-amber-500/5">
@@ -624,7 +626,7 @@ export const DashboardView: React.FC = () => {
                           <span>WA</span>
                         </button>
                       )}
-                      {prospect.email_address && (
+                      {prospect.contact_email && (
                         <button
                           type="button"
                           onClick={(e) => handleQuickContact(e, prospect, 'email')}
@@ -641,6 +643,11 @@ export const DashboardView: React.FC = () => {
                         className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-obsidian-panel hover:bg-obsidian-card text-obsidian-muted hover:text-white border border-obsidian-border text-[10px] font-medium transition-colors"
                       >
                         <Copy size={11} />
+                      </button>
+                      <button type="button" onClick={() => openInspector('prospect', prospect.id)}
+                        title="Abrir ficha para registrar contacto"
+                        className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-obsidian-panel hover:bg-obsidian-card text-obsidian-muted hover:text-white border border-obsidian-border text-[10px] font-medium">
+                        Registrar contacto
                       </button>
                     </div>
 

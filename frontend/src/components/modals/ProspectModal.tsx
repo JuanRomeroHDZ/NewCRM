@@ -183,7 +183,7 @@ export const ProspectModal: React.FC = () => {
         showToast(demoCheck.error || 'URL de la Página Demo inválida.', 'error');
         return;
       }
-      normalizedDemoUrl = demoCheck.normalized;
+      normalizedDemoUrl = demoCheck.normalized || '';
     }
 
     let normalizedMapsUrl = '';
@@ -194,7 +194,7 @@ export const ProspectModal: React.FC = () => {
         showToast(mapsCheck.error || 'Link de Google Maps inválido.', 'error');
         return;
       }
-      normalizedMapsUrl = mapsCheck.normalized;
+      normalizedMapsUrl = mapsCheck.normalized || '';
     }
 
     if (whatsapp.trim() && !isValidPhone(whatsapp)) {
@@ -251,7 +251,7 @@ export const ProspectModal: React.FC = () => {
         social_links: socialLinks.trim() || null,
         notes: notes.trim() || null,
         started_at: startedIso,
-        sla_hours: slaValidation.value,
+        sla_hours: slaValidation.hours ?? 24,
         followup_sla_hours: followupSlaHours,
         max_followup_attempts: maxFollowupAttempts,
         tags

@@ -80,3 +80,43 @@ async def test_finances_clone_idempotency(client, auth_token):
     list_res = await client.get("/api/v1/finances/incomes", headers=headers)
     acme_incomes = [i for i in list_res.json() if i["client_name"] == "Acme Corp"]
     assert len(acme_incomes) == 2
+
+
+@pytest.mark.asyncio
+async def test_zero_business_share_is_preserved_in_income_and_clone(client, auth_token):
+    headers = {"X-Vault-Token": auth_token}
+    response = await client.post("/api/v1/finances/incomes", headers=headers, json={
+        "client_name": "Cliente ficticio", "concept": "Servicio ficticio", "amount": 100,
+        "received_date": "2026-05-15", "is_recurring": True, "business_share_percent": 0,
+    })
+    assert response.status_code == 200
+    assert response.json()["business_share_percent"] == 0
+    income_id = response.json()["id"]
+    clone = await client.post(f"/api/v1/finances/incomes/{income_id}/clone-next-month", headers=headers)
+    assert clone.status_code == 200
+    assert clone.json()["business_share_percent"] == 0
+    items = (await client.get("/api/v1/finances/incomes", headers=headers)).json()
+    assert all(item["business_share_percent"] == 0 for item in items)
+
+
+@pytest.mark.asyncio
+async def test_zero_business_share_is_preserved_in_expenses(client, auth_token):
+    headers = {"X-Vault-Token": auth_token}
+    response = await client.post("/api/v1/finances/expenses", headers=headers, json={
+        "concept": "Gasto ficticio", "amount": 25, "expense_date": "2026-05-15",
+        "business_share_percent": 0,
+    })
+    assert response.status_code == 200
+    assert response.json()["business_share_percent"] == 0
+    items = (await client.get("/api/v1/finances/expenses", headers=headers)).json()
+    assert items[0]["business_share_percent"] == 0
+
+
+@pytest.mark.asyncio
+async def test_financial_input_rejects_invalid_amounts_dates_and_percentages(client, auth_token):
+    headers = {"X-Vault-Token": auth_token}
+    base = {"concept": "Gasto ficticio", "amount": 25, "expense_date": "2026-05-15"}
+    for invalid in ({"amount": -1}, {"expense_date": "2026-02-30"}, {"business_share_percent": 101}):
+        response = await client.post("/api/v1/finances/expenses", headers=headers, json={**base, **invalid})
+        assert response.status_code == 422
+    assert (await client.get("/api/v1/finances/expenses", headers=headers)).json() == []

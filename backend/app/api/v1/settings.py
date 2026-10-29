@@ -7,7 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models import UserSettings, EmailAccount, PlatformAccount, PaymentMethod, PasswordHistory
 from app.schemas import SettingsResponse, SettingsUpdate
-from app.security.crypto import hash_master_password, verify_master_password, derive_vault_key
+from app.security.crypto import hash_master_password, verify_master_password, derive_vault_key, active_vault_key
+from app.security.rekey import RekeyError, rekey_vault
 from app.security.tokens import require_vault_unlocked
 from app.security.sessions import session_manager
 from app.services.audit import log_audit_event
@@ -58,6 +59,38 @@ async def update_settings(payload: SettingsUpdate, db: AsyncSession = Depends(ge
     if not s:
         raise HTTPException(status_code=400, detail="Bóveda no inicializada.")
 
+    # Secure Master Password Change: verifies current master password before updating
+    if payload.new_master_password:
+        if not payload.current_master_password:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Debes ingresar tu contraseña maestra actual para autorizar el cambio."
+            )
+        if not verify_master_password(s.master_password_hash, payload.current_master_password):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="La contraseña maestra actual ingresada es incorrecta."
+            )
+        if len(payload.new_master_password) < 8:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="La nueva contraseña maestra debe tener al menos 8 caracteres."
+            )
+
+        new_salt = secrets.token_bytes(32).hex()
+        new_key = derive_vault_key(payload.new_master_password, new_salt)
+        old_key = active_vault_key.get()
+        try:
+            await rekey_vault(db, old_key or b"", new_key)
+            await db.refresh(s)
+            if not verify_master_password(s.master_password_hash, payload.current_master_password):
+                raise RekeyError("La contraseña cambió durante la operación.")
+        except RekeyError:
+            await db.rollback()
+            raise HTTPException(status_code=409, detail="No se pudo verificar toda la bóveda. No se cambió la contraseña ni se modificaron los datos.")
+        s.master_password_hash = hash_master_password(payload.new_master_password)
+        s.vault_salt = new_salt
+
     if payload.vault_timeout_minutes is not None:
         s.vault_timeout_minutes = payload.vault_timeout_minutes
     if payload.clipboard_clear_seconds is not None:
@@ -83,35 +116,13 @@ async def update_settings(payload: SettingsUpdate, db: AsyncSession = Depends(ge
     if payload.max_followup_attempts is not None:
         s.max_followup_attempts = max(1, min(10, int(payload.max_followup_attempts)))
 
-    # Secure Master Password Change: verifies current master password before updating
-    if payload.new_master_password:
-        if not payload.current_master_password:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Debes ingresar tu contraseña maestra actual para autorizar el cambio."
-            )
-        if not verify_master_password(s.master_password_hash, payload.current_master_password):
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="La contraseña maestra actual ingresada es incorrecta."
-            )
-        if len(payload.new_master_password) < 8:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="La nueva contraseña maestra debe tener al menos 8 caracteres."
-            )
-
-        new_salt = secrets.token_bytes(32).hex()
-        s.master_password_hash = hash_master_password(payload.new_master_password)
-        s.vault_salt = new_salt
-        # Invalidate active sessions to force re-authentication with new password
-        session_manager.revoke_all_sessions()
-
     await log_audit_event(
         db, action="update", entity_type="settings",
         details="Ajustes de seguridad, políticas operativas y bóveda actualizados"
     )
     await db.commit()
+    if payload.new_master_password:
+        session_manager.revoke_all_sessions()
     await db.refresh(s)
 
     return SettingsResponse(

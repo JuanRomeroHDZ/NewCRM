@@ -369,7 +369,12 @@ async def update_prospect(
     if payload.contact_email is not None:
         p.contact_email = payload.contact_email.strip() if payload.contact_email else None
     if payload.email_id is not None:
-        p.email_id = payload.email_id if payload.email_id != "" else None
+        email_id = payload.email_id.strip() or None
+        if email_id:
+            email = await db.get(EmailAccount, email_id)
+            if not email or email.is_deleted:
+                raise HTTPException(status_code=400, detail="El correo principal seleccionado no existe o está en la papelera.")
+        p.email_id = email_id
     if payload.specific_alias is not None:
         p.specific_alias = payload.specific_alias.strip() if payload.specific_alias != "" else None
     if payload.scope is not None:

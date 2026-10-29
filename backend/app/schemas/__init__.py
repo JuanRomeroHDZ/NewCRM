@@ -1,5 +1,7 @@
 from typing import Any
-from pydantic import BaseModel, EmailStr, Field
+from datetime import date
+import math
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 # Auth & Vault
 class MasterPasswordSetup(BaseModel):
@@ -238,6 +240,7 @@ class GraphNode(BaseModel):
     entity_id: str | None = None
     label: str
     type: str  # email, platform, payment, prospect
+    module: str | None = "vault"
     sub_type: str | None = None  # provider, access_type, etc.
     icon: str | None = None
     status: str | None = None
@@ -374,7 +377,13 @@ class ProspectBase(BaseModel):
     max_followup_attempts: int = 3
 
 class ProspectCreate(ProspectBase):
-    pass
+    @field_validator('company_name')
+    @classmethod
+    def validate_company_name(cls, value: str) -> str:
+        value = value.strip()
+        if not value or len(value) > 180:
+            raise ValueError('El nombre debe contener entre 1 y 180 caracteres.')
+        return value
 
 class ProspectUpdate(BaseModel):
     company_name: str | None = None
@@ -405,6 +414,16 @@ class ProspectUpdate(BaseModel):
     last_contact_channel: str | None = None
     followup_sla_hours: float | None = None
     max_followup_attempts: int | None = None
+
+    @field_validator('company_name')
+    @classmethod
+    def validate_company_name(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = value.strip()
+        if not value or len(value) > 180:
+            raise ValueError('El nombre debe contener entre 1 y 180 caracteres.')
+        return value
 
 class ProspectContactAttemptRequest(BaseModel):
     channel: str = Field(default="whatsapp", max_length=32)  # whatsapp, email, phone, template
@@ -439,6 +458,34 @@ class ProspectResponse(ProspectBase):
 
 
 # Client Incomes / Pagos Recibidos
+class FinancialInputValidation(BaseModel):
+    @field_validator('amount', 'renewal_cost', 'client_charge_amount', 'charged_amount', check_fields=False)
+    @classmethod
+    def validate_amount(cls, value: float | None) -> float | None:
+        if value is not None and (not math.isfinite(value) or value < 0):
+            raise ValueError('El monto debe ser un número finito y no negativo.')
+        return value
+
+    @field_validator('business_share_percent', check_fields=False)
+    @classmethod
+    def validate_share(cls, value: float | None) -> float | None:
+        if value is not None and (not math.isfinite(value) or not 0 <= value <= 100):
+            raise ValueError('El porcentaje debe estar entre 0 y 100.')
+        return value
+
+    @field_validator('received_date', 'renewal_date', 'expense_date', check_fields=False)
+    @classmethod
+    def validate_date(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        try:
+            if len(value) != 10 or date.fromisoformat(value).isoformat() != value:
+                raise ValueError
+        except ValueError:
+            raise ValueError('La fecha debe ser válida y tener el formato AAAA-MM-DD.')
+        return value
+
+
 class ClientIncomeBase(BaseModel):
     prospect_id: str | None = None
     project_id: str | None = None
@@ -456,10 +503,10 @@ class ClientIncomeBase(BaseModel):
     is_recurring: bool = False
     notes: str | None = None
 
-class ClientIncomeCreate(ClientIncomeBase):
+class ClientIncomeCreate(FinancialInputValidation, ClientIncomeBase):
     pass
 
-class ClientIncomeUpdate(BaseModel):
+class ClientIncomeUpdate(FinancialInputValidation):
     prospect_id: str | None = None
     project_id: str | None = None
     ownership_type: str | None = None
@@ -505,10 +552,10 @@ class DomainRenewalBase(BaseModel):
     auto_renew: bool = False
     notes: str | None = None
 
-class DomainRenewalCreate(DomainRenewalBase):
+class DomainRenewalCreate(FinancialInputValidation, DomainRenewalBase):
     pass
 
-class DomainRenewalUpdate(BaseModel):
+class DomainRenewalUpdate(FinancialInputValidation):
     prospect_id: str | None = None
     project_id: str | None = None
     platform_id: str | None = None
@@ -529,7 +576,7 @@ class DomainRenewalUpdate(BaseModel):
     auto_renew: bool | None = None
     notes: str | None = None
 
-class AdvanceRenewalRequest(BaseModel):
+class AdvanceRenewalRequest(FinancialInputValidation):
     create_income: bool = False
     charged_amount: float | None = None
     charged_currency: str | None = None
@@ -563,10 +610,10 @@ class OneTimeExpenseBase(BaseModel):
     project_id: str | None = None
     notes: str | None = None
 
-class OneTimeExpenseCreate(OneTimeExpenseBase):
+class OneTimeExpenseCreate(FinancialInputValidation, OneTimeExpenseBase):
     pass
 
-class OneTimeExpenseUpdate(BaseModel):
+class OneTimeExpenseUpdate(FinancialInputValidation):
     concept: str | None = None
     category: str | None = None
     amount: float | None = None
@@ -669,5 +716,64 @@ class SecureResourceResponse(SecureResourceBase):
     created_at: Any = None
     updated_at: Any = None
 
+# Núcleo / Core Schemas
+class UserLoginRequest(BaseModel):
+    username_or_email: str
+    password: str
+    totp_code: str | None = None
 
+class UserResponse(BaseModel):
+    id: str
+    username: str
+    email: str
+    full_name: str
+    role: str
+    is_active: bool
+    is_totp_enabled: bool
+    must_change_password: bool
+    created_at: Any = None
 
+class UserLoginResponse(BaseModel):
+    token: str
+    user: UserResponse
+    expires_in_minutes: int
+
+class UserCreateRequest(BaseModel):
+    username: str = Field(..., min_length=3, max_length=64)
+    email: str = Field(..., pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+    full_name: str = Field(..., min_length=2, max_length=128)
+    role: str = Field("seller", pattern="^(owner|business_admin|seller|readonly)$")
+
+class UserCreateResponse(UserResponse):
+    temporary_password: str
+
+class UserUpdateRequest(BaseModel):
+    full_name: str | None = None
+    role: str | None = Field(None, pattern="^(owner|business_admin|seller|readonly)$")
+    is_active: bool | None = None
+    unlock: bool = False
+
+class TotpSetupResponse(BaseModel):
+    secret: str
+    recovery_codes: list[str]
+
+class TotpVerifyRequest(BaseModel):
+    code: str
+
+class CatalogUpdateRequest(BaseModel):
+    items: list[Any]
+
+class ConfigParamUpdateRequest(BaseModel):
+    value: Any
+    description: str | None = None
+
+class JobResponse(BaseModel):
+    id: str
+    queue_name: str
+    job_type: str
+    status: str
+    attempts: int
+    max_attempts: int
+    scheduled_at: Any = None
+    last_error: str | None = None
+    created_at: Any = None

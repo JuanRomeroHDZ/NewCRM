@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+import asyncio
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text, select
@@ -13,8 +14,12 @@ from app.seed_data import seed_initial_demo_data
 from app.api.v1 import (
     auth, emails, platforms, payments, passwords,
     graph, trash, exchange, settings as settings_api, health,
-    security, importer, prospects, audit, vault_backup, finances
+    security, importer, prospects, audit, vault_backup, finances,
+    users, system_config, jobs, activity, personal_finances, workshop, crm_capture,
+    crm_sales, agenda, communications, integrations, metrics_and_inbound
 )
+from app.services.config_service import initialize_default_catalogs
+from app.services.core_auth import get_or_create_initial_owner
 
 async def run_additive_schema_migrations():
     """Applies strictly additive, non-destructive schema alterations for existing databases."""
@@ -119,8 +124,13 @@ async def lifespan(app: FastAPI):
         except Exception:
             await session.rollback()
 
-    # Ensure all notes at rest are encrypted with AES-256-GCM
-    await migrate_plaintext_notes_to_encrypted()
+    # Ensure default modular catalogs and initial owner account exist
+    async with AsyncSessionLocal() as session:
+        try:
+            await get_or_create_initial_owner(session)
+            await initialize_default_catalogs(session)
+        except Exception:
+            await session.rollback()
 
     yield
     await engine.dispose()
@@ -131,6 +141,17 @@ app = FastAPI(
     description="Gestor Relacional de Identidades, Contraseñas, Llaves API, Suscripciones y CRM de Prospectos/Demos inspirado en Notion y Obsidian",
     lifespan=lifespan
 )
+
+# Medida transitoria para que ninguna petición autorizada use una clave antigua
+# mientras se cambia la contraseña. Se sustituirá por sesiones compartidas.
+vault_request_lock = asyncio.Lock()
+
+@app.middleware("http")
+async def serialize_vault_requests(request, call_next):
+    if request.url.path.startswith("/api/v1/"):
+        async with vault_request_lock:
+            return await call_next(request)
+    return await call_next(request)
 
 cors_origins = [
     "http://localhost",
@@ -170,6 +191,18 @@ app.include_router(importer.router, prefix=settings.API_V1_PREFIX)
 app.include_router(audit.router, prefix=settings.API_V1_PREFIX)
 app.include_router(vault_backup.router, prefix=settings.API_V1_PREFIX)
 app.include_router(finances.router, prefix=settings.API_V1_PREFIX)
+app.include_router(users.router, prefix=settings.API_V1_PREFIX)
+app.include_router(system_config.router, prefix=settings.API_V1_PREFIX)
+app.include_router(jobs.router, prefix=settings.API_V1_PREFIX)
+app.include_router(activity.router, prefix=settings.API_V1_PREFIX)
+app.include_router(personal_finances.router, prefix=settings.API_V1_PREFIX)
+app.include_router(workshop.router, prefix=settings.API_V1_PREFIX)
+app.include_router(crm_capture.router, prefix=settings.API_V1_PREFIX)
+app.include_router(crm_sales.router, prefix=settings.API_V1_PREFIX)
+app.include_router(agenda.router, prefix=settings.API_V1_PREFIX)
+app.include_router(communications.router, prefix=settings.API_V1_PREFIX)
+app.include_router(integrations.router, prefix=settings.API_V1_PREFIX)
+app.include_router(metrics_and_inbound.router, prefix=settings.API_V1_PREFIX)
 
 @app.get("/")
 def root():

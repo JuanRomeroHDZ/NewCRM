@@ -7,7 +7,7 @@ COPY package*.json ./
 RUN npm ci
 
 COPY . .
-RUN npm run build
+RUN npm test && npm run build
 
 # Runtime Stage: Lightweight Nginx Alpine
 FROM nginx:alpine-slim AS runner
@@ -22,6 +22,7 @@ COPY --from=builder /app/dist /usr/share/nginx/html
 RUN cat <<'EOF' > /etc/nginx/conf.d/default.conf
 server {
     listen 80;
+    listen [::]:80;
     server_name localhost;
 
     root /usr/share/nginx/html;

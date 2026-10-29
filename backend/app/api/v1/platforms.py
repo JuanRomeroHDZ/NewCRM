@@ -161,7 +161,7 @@ async def _build_platform_response(
         project_id=getattr(p, "project_id", None),
         ownership_type=getattr(p, "ownership_type", "own") or "own",
         scope=getattr(p, "scope", "business") or "business",
-        business_share_percent=float(getattr(p, "business_share_percent", 100.0) or 100.0),
+        business_share_percent=float(p.business_share_percent if p.business_share_percent is not None else 100.0),
         email_address=email_addr,
         payment_alias=payment_alias,
         specific_alias=p.specific_alias,
@@ -315,10 +315,10 @@ async def create_platform(
     icon_url = payload.icon_url
     icon_type = payload.icon_type or "catalog"
     if not icon_url and payload.login_url:
-        extracted = extract_favicon_url(payload.login_url)
+        extracted = await extract_favicon_url(payload.login_url)
         if extracted:
             icon_url = extracted
-            icon_type = "extracted"
+            icon_type = "initials" if extracted.startswith("data:image/svg+xml") else "extracted"
         else:
             icon_url = generate_initials_svg(payload.name)
             icon_type = "initials"

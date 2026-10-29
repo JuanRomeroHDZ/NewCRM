@@ -201,6 +201,17 @@ async def restore_item(item_type: str, item_id: str, db: AsyncSession = Depends(
 @router.delete("/purge/{item_type}/{item_id}")
 async def purge_item_permanent(item_type: str, item_id: str, db: AsyncSession = Depends(get_db)):
     """Permanently purges an item from the database."""
+    models = {
+        "email": EmailAccount, "platform": PlatformAccount, "prospect": Prospect,
+        "payment": PaymentMethod, "income": ClientIncome, "renewal": DomainRenewal,
+        "expense": OneTimeExpense, "project": InternalProject, "resource": SecureResource,
+    }
+    model = models.get(item_type)
+    if model is None:
+        raise HTTPException(status_code=400, detail="Tipo de elemento inválido.")
+    candidate = (await db.execute(select(model).where(model.id == item_id).with_for_update())).scalar_one_or_none()
+    if not candidate or not candidate.is_deleted:
+        raise HTTPException(status_code=404, detail="Elemento no encontrado en papelera.")
     name = ""
     if item_type == "email":
         stmt = select(EmailAccount).where(EmailAccount.id == item_id)
