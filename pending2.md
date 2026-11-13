@@ -242,4 +242,14 @@ Todos los módulos del frontend quedaron refactorizados (cero emojis y cero diá
 
 En ejecución ahora: compilación final de producción (tsc && vite build) y suite completa de pruebas backend (pytest). En cuanto concluyan, reconstruiremos los contenedores Docker y ejecutaremos la auditoría Playwright + axe-core sobre las 13 vistas y 4 resoluciones.
 
-Model unavailable, retrying in 15s (attempt 4/9)
+Ejecutadas con éxito las suites de verificación (17/17 pruebas de frontend incluyendo regresión anti-emojis/anti-diálogos nativos, 123/123 pruebas de backend y tsc && vite build sin errores).
+
+El stack Docker (./scripts/up.sh) se está reconstruyendo en este momento para proceder a la auditoría integral en navegador real (Playwright + axe-core) sobre las 13 vistas y 4 resoluciones.
+
+Audit All Sections
+
+El stack Docker se reconstruyó y arrancó con éxito (http://localhost:59155 y https://localhost:8443). Actualmente está corriendo la auditoría automatizada con Playwright + axe-core sobre las 13 vistas en 4 resoluciones (375px, 768px, 1024px, 1440px) verificando CSP estricta, desbordamiento horizontal, emojis y accesibilidad WCAG 2.1 AA.
+
+En cuanto termine el reporte, revisaremos cualquier hallazgo encontrado antes de hacer la limpieza final.
+
+Model unavailable, retrying in 19s (attempt 6/9)
