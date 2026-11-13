@@ -1,37 +1,59 @@
-import React from 'react';
+import React, { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { VaultProvider, useVault } from './context/VaultContext';
 import { Sidebar } from './components/layout/Sidebar';
 import { Topbar } from './components/layout/Topbar';
-import { InspectorDrawer } from './components/layout/InspectorDrawer';
 
-// Modals
-import { VaultUnlockModal } from './components/common/VaultUnlockModal';
-import { PasswordGeneratorModal } from './components/common/PasswordGeneratorModal';
-import { CommandPalette } from './components/common/CommandPalette';
-import { EmailModal } from './components/modals/EmailModal';
-import { PlatformModal } from './components/modals/PlatformModal';
-import { ProspectModal } from './components/modals/ProspectModal';
-import { PaymentModal } from './components/modals/PaymentModal';
-import { EmergencyKitModal } from './components/modals/EmergencyKitModal';
-import { ImportModal } from './components/modals/ImportModal';
-import { EncryptedBackupModal } from './components/modals/EncryptedBackupModal';
-import { EnvExportModal } from './components/modals/EnvExportModal';
+// Views and overlays are split into on-demand chunks so the dashboard does not
+// download the map, audit screens, or large forms before the user opens them.
+const InspectorDrawer = lazy(() => import('./components/layout/InspectorDrawer').then((module) => ({ default: module.InspectorDrawer })));
+const VaultUnlockModal = lazy(() => import('./components/common/VaultUnlockModal').then((module) => ({ default: module.VaultUnlockModal })));
+const PasswordGeneratorModal = lazy(() => import('./components/common/PasswordGeneratorModal').then((module) => ({ default: module.PasswordGeneratorModal })));
+const CommandPalette = lazy(() => import('./components/common/CommandPalette').then((module) => ({ default: module.CommandPalette })));
+const EmailModal = lazy(() => import('./components/modals/EmailModal').then((module) => ({ default: module.EmailModal })));
+const PlatformModal = lazy(() => import('./components/modals/PlatformModal').then((module) => ({ default: module.PlatformModal })));
+const ProspectModal = lazy(() => import('./components/modals/ProspectModal').then((module) => ({ default: module.ProspectModal })));
+const PaymentModal = lazy(() => import('./components/modals/PaymentModal').then((module) => ({ default: module.PaymentModal })));
+const EmergencyKitModal = lazy(() => import('./components/modals/EmergencyKitModal').then((module) => ({ default: module.EmergencyKitModal })));
+const ImportModal = lazy(() => import('./components/modals/ImportModal').then((module) => ({ default: module.ImportModal })));
+const EncryptedBackupModal = lazy(() => import('./components/modals/EncryptedBackupModal').then((module) => ({ default: module.EncryptedBackupModal })));
+const EnvExportModal = lazy(() => import('./components/modals/EnvExportModal').then((module) => ({ default: module.EnvExportModal })));
 
-// Views
-import { DashboardView } from './components/views/DashboardView';
-import { EmailsView } from './components/views/EmailsView';
-import { PlatformsView } from './components/views/PlatformsView';
-import { ProspectsView } from './components/views/ProspectsView';
-import { PasswordsView } from './components/views/PasswordsView';
-import { GraphView } from './components/views/GraphView';
-import { SubscriptionsView } from './components/views/SubscriptionsView';
-import { TrashView } from './components/views/TrashView';
-import { SettingsView } from './components/views/SettingsView';
-import { SecurityAuditView } from './components/views/SecurityAuditView';
-import { AuditLogsView } from './components/views/AuditLogsView';
+const DashboardView = lazy(() => import('./components/views/DashboardView').then((module) => ({ default: module.DashboardView })));
+const EmailsView = lazy(() => import('./components/views/EmailsView').then((module) => ({ default: module.EmailsView })));
+const PlatformsView = lazy(() => import('./components/views/PlatformsView').then((module) => ({ default: module.PlatformsView })));
+const ProspectsView = lazy(() => import('./components/views/ProspectsView').then((module) => ({ default: module.ProspectsView })));
+const MapCaptureView = lazy(() => import('./components/views/MapCaptureView').then((module) => ({ default: module.MapCaptureView })));
+const PasswordsView = lazy(() => import('./components/views/PasswordsView').then((module) => ({ default: module.PasswordsView })));
+const GraphView = lazy(() => import('./components/views/GraphView').then((module) => ({ default: module.GraphView })));
+const SubscriptionsView = lazy(() => import('./components/views/SubscriptionsView').then((module) => ({ default: module.SubscriptionsView })));
+const TrashView = lazy(() => import('./components/views/TrashView').then((module) => ({ default: module.TrashView })));
+const SettingsView = lazy(() => import('./components/views/SettingsView').then((module) => ({ default: module.SettingsView })));
+const SecurityAuditView = lazy(() => import('./components/views/SecurityAuditView').then((module) => ({ default: module.SecurityAuditView })));
+const AuditLogsView = lazy(() => import('./components/views/AuditLogsView').then((module) => ({ default: module.AuditLogsView })));
 
 const MainLayout: React.FC = () => {
-  const { activeSection, toasts, dismissToast, canvasStyle, accentColor } = useVault();
+  const {
+    activeSection,
+    toasts,
+    dismissToast,
+    canvasStyle,
+    accentColor,
+    selectedEntity,
+    isUnlockModalOpen,
+    isPasswordGenOpen,
+    isCommandPaletteOpen,
+    isEmergencyKitOpen,
+    isImportModalOpen,
+    isEncryptedBackupOpen,
+    isEnvExportOpen,
+    isEmailModalOpen,
+    isPlatformModalOpen,
+    isProspectModalOpen,
+    isPaymentModalOpen,
+  } = useVault();
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const menuTriggerRef = useRef<HTMLButtonElement>(null);
+  const wasMobileNavOpen = useRef(false);
 
   const canvasClass = canvasStyle === 'dot-grid' ? 'dot-grid-canvas' : canvasStyle === 'subtle-grid' ? 'subtle-grid' : '';
 
@@ -43,6 +65,8 @@ const MainLayout: React.FC = () => {
         return <EmailsView />;
       case 'platforms':
         return <PlatformsView />;
+      case 'capture':
+        return <MapCaptureView />;
       case 'prospects':
         return <ProspectsView />;
       case 'passwords':
@@ -64,49 +88,78 @@ const MainLayout: React.FC = () => {
     }
   };
 
+  useEffect(() => {
+    if (!mobileNavOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMobileNavOpen(false);
+    };
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [mobileNavOpen]);
+
+  useEffect(() => {
+    if (wasMobileNavOpen.current && !mobileNavOpen) menuTriggerRef.current?.focus();
+    wasMobileNavOpen.current = mobileNavOpen;
+  }, [mobileNavOpen]);
+
   return (
     <div 
-      className={`flex h-screen w-screen overflow-hidden bg-obsidian-bg text-obsidian-text ${canvasClass}`}
+      className={`flex h-[100dvh] min-h-[100dvh] w-full overflow-hidden bg-obsidian-bg text-obsidian-text ${canvasClass}`}
       style={{ ['--brand-accent' as any]: accentColor }}
     >
       {/* Zone 1: Left Sidebar (Collapsible) */}
-      <Sidebar />
+      <Sidebar isMobileOpen={mobileNavOpen} onCloseMobile={() => setMobileNavOpen(false)} />
+      {mobileNavOpen && (
+        <button
+          type="button"
+          aria-label="Cerrar menú de navegación"
+          onClick={() => setMobileNavOpen(false)}
+          className="fixed inset-0 z-40 bg-black/65 backdrop-blur-[2px] lg:hidden"
+        />
+      )}
 
       {/* Zone 2: Main Workspace */}
-      <div className="flex-1 flex flex-col h-screen overflow-hidden">
-        <Topbar />
-        <main className="flex-1 overflow-y-auto">
-          {renderSection()}
+      <div className="flex min-w-0 min-h-0 flex-1 flex-col overflow-hidden">
+        <Topbar onMenuClick={() => setMobileNavOpen(true)} menuTriggerRef={menuTriggerRef} />
+        <main className="min-w-0 min-h-0 flex-1 overflow-y-auto overscroll-contain">
+          <Suspense fallback={<div className="p-6 text-sm text-obsidian-muted" role="status">Cargando vista…</div>}>
+            {renderSection()}
+          </Suspense>
         </main>
       </div>
 
       {/* Zone 3: Sliding Right Inspector */}
-      <InspectorDrawer />
+      {selectedEntity && (
+        <Suspense fallback={null}>
+          <InspectorDrawer />
+        </Suspense>
+      )}
 
       {/* Floating Modals */}
-      <VaultUnlockModal />
-      <PasswordGeneratorModal />
-      <CommandPalette />
-      <EmailModal />
-      <PlatformModal />
-      <ProspectModal />
-      <PaymentModal />
-      <EmergencyKitModal />
-      <ImportModal />
-      <EncryptedBackupModal />
-      <EnvExportModal />
+      <Suspense fallback={null}>
+        {isUnlockModalOpen && <VaultUnlockModal />}
+        {isPasswordGenOpen && <PasswordGeneratorModal />}
+        {isCommandPaletteOpen && <CommandPalette />}
+        {isEmailModalOpen && <EmailModal />}
+        {isPlatformModalOpen && <PlatformModal />}
+        {isProspectModalOpen && <ProspectModal />}
+        {isPaymentModalOpen && <PaymentModal />}
+        {isEmergencyKitOpen && <EmergencyKitModal />}
+        {isImportModalOpen && <ImportModal />}
+        {isEncryptedBackupOpen && <EncryptedBackupModal />}
+        {isEnvExportOpen && <EnvExportModal />}
+      </Suspense>
 
       {/* Global Toast Container */}
-      <div 
-        className="fixed bottom-6 right-6 z-50 flex flex-col gap-2 max-w-sm pointer-events-none"
-        aria-live="polite"
-        aria-atomic="true"
+      <div
+        className="pointer-events-none fixed bottom-4 right-4 z-50 flex w-[calc(100vw-2rem)] max-w-sm flex-col gap-2 sm:bottom-6 sm:right-6"
+        aria-atomic="false"
       >
         {toasts.map((toast) => (
           <div
             key={toast.id}
-            onClick={() => dismissToast(toast.id)}
-            className={`pointer-events-auto p-3.5 rounded-xl border shadow-2xl backdrop-blur-md text-xs font-medium flex items-center justify-between gap-3 cursor-pointer transition-all animate-slideUp ${
+            role={toast.type === 'error' ? 'alert' : 'status'}
+            className={`pointer-events-auto p-3.5 rounded-xl border shadow-2xl backdrop-blur-md text-xs font-medium flex items-center justify-between gap-3 transition-all animate-slideUp ${
               toast.type === 'success'
                 ? 'bg-emerald-950/90 border-emerald-500/40 text-emerald-200'
                 : toast.type === 'warning'
@@ -117,7 +170,14 @@ const MainLayout: React.FC = () => {
             }`}
           >
             <span>{toast.message}</span>
-            <span className="text-white/40 hover:text-white text-sm font-bold">&times;</span>
+            <button
+              type="button"
+              onClick={() => dismissToast(toast.id)}
+              aria-label="Cerrar notificación"
+              className="shrink-0 rounded p-1 text-white/50 hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+            >
+              <span aria-hidden="true" className="text-sm font-bold">&times;</span>
+            </button>
           </div>
         ))}
       </div>

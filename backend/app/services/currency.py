@@ -5,9 +5,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import ExchangeRate
 from app.config import settings
 
-# Fallback default rate if completely offline and DB empty
-FALLBACK_USD_MXN_RATE = 18.50
-
 async def get_current_exchange_rate(db: AsyncSession) -> float:
     """Returns the current USD to MXN exchange rate.
     Prioritizes manual user setting or recent cached rate.
@@ -27,13 +24,13 @@ async def get_current_exchange_rate(db: AsyncSession) -> float:
     new_rate = ExchangeRate(
         base_currency="USD",
         target_currency="MXN",
-        rate=FALLBACK_USD_MXN_RATE,
+        rate=settings.FALLBACK_USD_MXN_RATE,
         is_manual=False,
         updated_at=datetime.now(timezone.utc).replace(tzinfo=None)
     )
     db.add(new_rate)
     await db.commit()
-    return FALLBACK_USD_MXN_RATE
+    return settings.FALLBACK_USD_MXN_RATE
 
 async def sync_external_exchange_rate(db: AsyncSession, force: bool = False) -> tuple[float, bool, str]:
     """Attempts to sync with public exchange rate APIs (Primary + 2 Backups).
@@ -50,22 +47,22 @@ async def sync_external_exchange_rate(db: AsyncSession, force: bool = False) -> 
         return float(record.rate), False, "manual"
 
     if settings.LOCAL_MODE:
-        return (float(record.rate) if record else FALLBACK_USD_MXN_RATE), False, "modo_local"
+        return (float(record.rate) if record else settings.FALLBACK_USD_MXN_RATE), False, "modo_local"
 
     providers = [
         (
             "Open Exchange Rates",
-            "https://open.er-api.com/v6/latest/USD",
+            settings.EXCHANGE_RATE_PRIMARY_URL,
             lambda data: data.get("rates", {}).get("MXN"),
         ),
         (
             "ExchangeRate-API",
-            "https://api.exchangerate-api.com/v4/latest/USD",
+            settings.EXCHANGE_RATE_SECONDARY_URL,
             lambda data: data.get("rates", {}).get("MXN"),
         ),
         (
             "Currency-API",
-            "https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json",
+            settings.EXCHANGE_RATE_TERTIARY_URL,
             lambda data: data.get("usd", {}).get("mxn"),
         ),
     ]
@@ -102,5 +99,5 @@ async def sync_external_exchange_rate(db: AsyncSession, force: bool = False) -> 
 
     if record:
         return float(record.rate), False, "cache_local"
-    return FALLBACK_USD_MXN_RATE, False, "fallback_local"
+    return settings.FALLBACK_USD_MXN_RATE, False, "fallback_local"
 

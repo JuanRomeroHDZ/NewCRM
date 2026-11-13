@@ -36,7 +36,7 @@ export const EnvExportModal: React.FC = () => {
   let envOutput = '';
   if (includeComments) {
     envOutput += `# ========================================================\n`;
-    envOutput += `# EmailSaver Vault - Environment Variables (.env)\n`;
+    envOutput += `# Contact | LESSSO - Variables de entorno (.env)\n`;
     envOutput += `# Generated on: ${new Date().toISOString()}\n`;
     envOutput += `# Total Services: ${techPlatforms.length}\n`;
     envOutput += `# ========================================================\n\n`;
@@ -83,7 +83,7 @@ export const EnvExportModal: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
+    <div className="responsive-overlay fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
       <div className="relative w-full max-w-2xl rounded-2xl border border-obsidian-border bg-obsidian-panel p-6 shadow-2xl space-y-5">
         {/* Header */}
         <div className="flex items-center justify-between pb-4 border-b border-obsidian-border">

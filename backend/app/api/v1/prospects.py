@@ -474,7 +474,7 @@ async def record_prospect_contact_attempt(
     elif not getattr(p, "followup_sla_hours", None):
         p.followup_sla_hours = 48.0
 
-    if payload.auto_advance_status and p.status in ("demo_creada", "tiempo_agotado", "archivado_frio") and p.responded_at is None:
+    if payload.auto_advance_status and p.status in ("nuevo", "demo_creada", "tiempo_agotado", "archivado_frio") and p.responded_at is None:
         p.status = "primer_contacto"
 
     if payload.note and payload.note.strip():

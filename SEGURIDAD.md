@@ -1,63 +1,29 @@
-# Política Integral de Seguridad y Privacidad de Datos | Contact LESSSO
+# Seguridad y manejo de datos
 
-## 1. Clasificación de Datos
+## Secretos de instalación
 
-Toda entidad e información manipulada por el sistema se clasifica estrictamente en cuatro niveles:
+- `SERVER_SECRET_KEY`, credenciales de PostgreSQL y contraseña inicial del propietario se configuran en `.env`, excluido de Git.
+- La configuración de una instalación existente debe coincidir con el usuario, contraseña y base de datos guardados en su volumen PostgreSQL; cambiar Compose no rota las credenciales internas.
+- El servidor no tiene semillas ni contraseñas iniciales de respaldo en el código.
+- `LEGACY_SERVER_SECRET_KEYS` acepta claves previas solo durante una rotación controlada. Conserva la clave antigua hasta verificar que los registros existentes siguen siendo legibles.
+- Los certificados TLS y claves privadas se generan localmente en `nginx/certs/local/`. El proxy los monta en lectura; no se copian a la imagen.
 
-| Nivel de Clasificación | Definición y Ejemplos | Reglas de Almacenamiento, Consulta y Visualización |
-|---|---|---|
-| **Clase A: Secretos Críticos** | Contraseñas, claves de API, secretos TOTP, tokens OAuth, datos de medios de pago autorizados (Opción B) | Cifrado simétrico AES-256-GCM por registro. Quedan excluidos de búsquedas globales, registros de log, exportaciones abiertas y mapa de conexiones. En interfaces se muestran enmascarados; su revelación exige reautenticación y queda registrada en auditoría. |
-| **Clase B: Financieros y Personales** | Ingresos, presupuestos, gastos, deudas, RFC, comprobantes fiscales, contratos y documentos de clientes | Cifrado a nivel de campo para campos sensibles. Indexación y búsqueda permitida solo por campos no sensibles (alias, fechas, conceptos generales). Las bitácoras registran mutaciones redactadas ("se modificó presupuesto") sin valores brutos. |
-| **Clase C: Negocio y Contacto** | Nombre de prospectos, clientes, teléfonos, correos comerciales, notas de seguimiento | Protegidos por permisos de rol. Teléfonos y correos enmascarados para roles sin autorización de contacto. Indexables en el motor de búsqueda global. Contenido de mensajes solo indexable si el usuario lo activa explícitamente. |
-| **Clase D: No Sensibles** | Catálogos de configuración, etapas de pipeline, plantillas estándar, etiquetas y tipos de servicios | Sin restricciones criptográficas especiales; accesibles para lectura por los roles autorizados. |
+## Bóveda y sesiones
 
----
+- Las contraseñas maestras se procesan con Argon2id. Los valores cifrados usan AES-GCM con nonce aleatorio.
+- La aplicación permite bloquear la bóveda por inactividad y limpiar el portapapeles.
+- El backend incluye sesiones de usuario con tokens aleatorios, caducidad y protección por intentos fallidos. Las políticas de intentos y expiración son configurables.
+- Mantén `SERVER_SECRET_KEY` y la contraseña maestra en gestores separados. Una no sustituye a la otra.
 
-## 2. Arquitectura Criptográfica y Gestión de Claves
+## Red y servicios externos
 
-1. **Derivación de Clave Maestra**: Se utiliza **Argon2id** (iteraciones y memoria según recomendaciones OWASP) con sal criptográfica única almacenada en `user_settings`.
-2. **Cifrado en Reposo**:
-   - Algoritmo: **AES-256-GCM** autenticado.
-   - Vector de Inicialización (IV): 12 bytes aleatorios generados de forma independiente por cada operación de cifrado y prefijados al texto cifrado (`enc:v1:...`).
-   - Autenticación: Tag de integridad de 16 bytes que previene modificaciones maliciosas o silenciosas en la base de datos.
-3. **Recifrado Atómico (`rekey.py`)**:
-   - Al cambiar la contraseña maestra, una transacción única descifra todos los registros con la clave previa y los recifra con la nueva clave derivada.
-   - Si un solo registro genera error de integridad, la operación se revierte por completo (`ROLLBACK`) manteniendo la contraseña anterior sin corrupción.
-4. **Higiene de Memoria y Portapapeles**:
-   - La clave derivada reside únicamente en memoria durante el tiempo de sesión activa.
-   - Al bloquear la bóveda o expirar el temporizador, la clave se sobrescribe y purga.
-   - El portapapeles se limpia automáticamente tras $N$ segundos configurables (por defecto 30 segundos).
+- El proxy publica `127.0.0.1` por defecto. Para acceso en LAN, cambia `HOST_BIND_IP` a `0.0.0.0` y restringe el puerto con el firewall.
+- Nginx termina TLS y limita solicitudes de autenticación. No expongas los puertos del proxy a Internet sin diseñar una configuración de despliegue específica.
+- La API sirve el frontend desde el mismo origen y no habilita CORS global. Si se agrega otro origen, decláralo de forma explícita en `CORS_ORIGINS`.
+- La captación consulta Overpass y carga mosaicos de mapa bajo demanda. Los resultados se identifican como datos de OpenStreetMap y cada registro se guarda manualmente.
 
----
+## Datos de prospectos
 
-## 3. Autenticación, Sesiones y Roles
+Los resultados de OpenStreetMap pueden estar incompletos o desactualizados. Antes de contactar un negocio, revisa el enlace fuente y confirma sus datos. Un número publicado no implica que acepte WhatsApp.
 
-- **Control de Intentos Fallidos**: Se impone bloqueo progresivo temporal tras 5 intentos fallidos consecutivos por origen IP y cuenta.
-- **Mensajes Genéricos**: El sistema responde siempre "Credenciales incorrectas o cuenta bloqueada" para impedir la enumeración de usuarios.
-- **Sesiones en Base de Datos**: Cada sesión genera un token aleatorio con `jti`. Se valida contra la tabla de sesiones en PostgreSQL. La invocación de cierre (`/auth/lock`) invalida de forma inmediata la sesión en base de datos.
-- **Verificación en Dos Pasos (2FA/TOTP)**: Algoritmo RFC 6238 con códigos de respaldo de un solo uso para administradores.
-- **Matriz de Permisos por Rol**:
-  - `Propietario`: Acceso completo a Núcleo, Bóveda, Finanzas, CRM, Agenda, Comunicaciones y Taller.
-  - `Administrador de Negocio`: CRM, Comunicaciones, Agenda y Taller; sin acceso a Bóveda ni Finanzas personales.
-  - `Vendedor`: Acceso delimitado a sus prospectos asignados en CRM y Agenda.
-  - `Solo Lectura`: Consulta de catálogos y reportes no sensibles sin capacidad de mutación.
-
----
-
-## 4. Seguridad de Red y Prevención de SSRF
-
-- **Red Local Única**: El sistema no expone puertos públicos a internet. La comunicación con clientes ocurre exclusivamente dentro de la red local (LAN) bajo TLS 1.3 con certificados emitidos por la CA privada local.
-- **Prevención de SSRF (Llamadas Salientes)**:
-  - Todo validador de URL externa (auditoría de sitios de clientes, favicons) resuelve la dirección IP antes de conectar.
-  - Se rechazan terminantemente conexiones dirigidas a:
-    - Loopback: `127.0.0.0/8`, `::1`
-    - Redes privadas (RFC 1918): `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`
-    - Direcciones de enlace local y API de metadatos de nube: `169.254.0.0/16`, `fe80::/10`
-  - Se establecen límites estrictos: tiempo máximo de respuesta (5s), tamaño máximo de carga (2MB) y máximo de 2 redirecciones validadas.
-
----
-
-## 5. Privacidad y Derechos ARCO
-
-- El sistema cuenta con formulario y bitácora interna para atender solicitudes de Acceso, Rectificación, Cancelación y Oposición (ARCO).
-- La eliminación definitiva de prospectos y contactos desvincula y anonimiza las referencias cruzadas respetando los periodos legales de conservación fiscal para facturas del SAT (RESICO: 5 años).
+Los cambios de rol, acceso, red, certificados o claves deben documentarse con su motivo y conservar una copia de recuperación segura antes de modificar la instalación.

@@ -4,10 +4,18 @@ set -euo pipefail
 # Generador de Autoridad Certificadora Privada y Certificados TLS Locales
 # para Contact | LESSSO (servidor activo: lessso-srv)
 
-CERTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../nginx/certs" && pwd)"
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+CERTS_DIR="$PROJECT_ROOT/nginx/certs/local"
 mkdir -p "$CERTS_DIR"
 
+if [ -z "${SERVER_NAME:-}" ] && [ -f "$PROJECT_ROOT/.env" ]; then
+    SERVER_NAME="$(awk -F= '$1 == "SERVER_NAME" { print $2; exit }' "$PROJECT_ROOT/.env" | tr -d '\r')"
+fi
 SERVER_NAME="${SERVER_NAME:-lessso-srv}"
+if [[ ! "$SERVER_NAME" =~ ^[A-Za-z0-9.-]+$ ]]; then
+    echo "SERVER_NAME debe contener solo letras, números, puntos y guiones." >&2
+    exit 1
+fi
 
 echo "Generando Autoridad Certificadora Privada en: $CERTS_DIR"
 

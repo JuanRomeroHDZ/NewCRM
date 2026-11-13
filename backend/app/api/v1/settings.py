@@ -64,17 +64,17 @@ async def update_settings(payload: SettingsUpdate, db: AsyncSession = Depends(ge
         if not payload.current_master_password:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Debes ingresar tu contraseña maestra actual para autorizar el cambio."
+                detail="Debes ingresar tu contraseña de acceso actual para autorizar el cambio."
             )
         if not verify_master_password(s.master_password_hash, payload.current_master_password):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="La contraseña maestra actual ingresada es incorrecta."
+                detail="La contraseña de acceso actual ingresada es incorrecta."
             )
         if len(payload.new_master_password) < 8:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="La nueva contraseña maestra debe tener al menos 8 caracteres."
+                detail="La nueva contraseña de acceso debe tener al menos 8 caracteres."
             )
 
         new_salt = secrets.token_bytes(32).hex()

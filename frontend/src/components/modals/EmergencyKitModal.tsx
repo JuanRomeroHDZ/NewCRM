@@ -31,7 +31,7 @@ export const EmergencyKitModal: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
+    <div className="responsive-overlay fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
       <div 
         role="dialog"
         aria-modal="true"
@@ -78,7 +78,7 @@ export const EmergencyKitModal: React.FC = () => {
             <div className="flex items-center justify-between">
               <div>
                 <span className="text-sm font-bold text-white tracking-tight block print:text-black">
-                  Hoja de Respaldo EmailSaver
+                  Hoja de recuperación LESSSO
                 </span>
                 <span className="text-[11px] text-obsidian-muted print:text-gray-600 font-mono">
                   Identificador de Bóveda: {kit.vault_id}

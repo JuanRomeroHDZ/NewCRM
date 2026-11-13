@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from sqlalchemy import String, Boolean, Float, Integer, Text, DateTime, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
+from app.config import settings
 
 def gen_uuid() -> str:
     return str(uuid.uuid4())
@@ -171,7 +172,7 @@ class ExchangeRate(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=gen_uuid)
     base_currency: Mapped[str] = mapped_column(String(8), default="USD")
     target_currency: Mapped[str] = mapped_column(String(8), default="MXN")
-    rate: Mapped[float] = mapped_column(Float, default=18.50)
+    rate: Mapped[float] = mapped_column(Float, default=settings.FALLBACK_USD_MXN_RATE)
     is_manual: Mapped[bool] = mapped_column(Boolean, default=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, onupdate=utc_now)
 
@@ -211,7 +212,7 @@ class Prospect(Base):
     contact_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
     contact_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     workflow_type: Mapped[str] = mapped_column(String(32), default="demo_first")  # demo_first, direct_quote
-    status: Mapped[str] = mapped_column(String(32), default="demo_creada", index=True)  # demo_creada, primer_contacto, en_cotizacion, respondido, tiempo_agotado, archivado_frio
+    status: Mapped[str] = mapped_column(String(32), default="demo_creada", index=True)  # nuevo, demo_creada, primer_contacto, en_cotizacion, respondido, tiempo_agotado, archivado_frio
     demo_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
 
     # Commercial Pipeline Value

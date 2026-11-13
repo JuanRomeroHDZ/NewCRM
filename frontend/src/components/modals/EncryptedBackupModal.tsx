@@ -106,7 +106,7 @@ export const EncryptedBackupModal: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
+    <div className="responsive-overlay fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
       <div 
         role="dialog"
         aria-modal="true"
@@ -121,7 +121,7 @@ export const EncryptedBackupModal: React.FC = () => {
             </div>
             <div className="min-w-0">
               <h2 id="backup-modal-title" className="text-lg font-bold text-white truncate">Respaldo Cifrado de Bóveda</h2>
-              <p className="text-xs text-white/50 truncate">Exportación e importación segura con Argon2id + AES-256-GCM (.emailsaver)</p>
+              <p className="text-xs text-white/50 truncate">Guarda o recupera una copia protegida de tus datos</p>
             </div>
           </div>
           <button 
@@ -240,7 +240,7 @@ export const EncryptedBackupModal: React.FC = () => {
               <div className="text-xs font-medium text-white truncate">
                 {fileName ? fileName : 'Selecciona o arrastra tu archivo .emailsaver'}
               </div>
-              <div className="text-[10px] text-white/40 mt-1">Formato cifrado estándar de EmailSaver</div>
+              <div className="text-[10px] text-white/40 mt-1">Respaldo cifrado compatible con archivos .emailsaver</div>
             </div>
 
             <div>

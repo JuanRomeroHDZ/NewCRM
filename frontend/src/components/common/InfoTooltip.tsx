@@ -63,7 +63,7 @@ export const InfoTooltip: React.FC<InfoTooltipProps> = ({
         <span
           role="tooltip"
           onClick={(e) => e.stopPropagation()}
-          className={`pointer-events-auto absolute z-50 w-64 sm:w-72 p-2.5 rounded-lg bg-[#0d0f14]/95 backdrop-blur-md border border-slate-700/80 shadow-2xl text-left font-normal normal-case tracking-normal animate-fade-in ${positionClasses}`}
+          className={`responsive-tooltip pointer-events-auto absolute z-50 w-64 sm:w-72 p-2.5 rounded-lg bg-[#0d0f14]/95 backdrop-blur-md border border-slate-700/80 shadow-2xl text-left font-normal normal-case tracking-normal animate-fade-in ${positionClasses}`}
         >
           {title && (
             <span className="block text-[11px] font-semibold text-indigo-300 mb-1 leading-tight">

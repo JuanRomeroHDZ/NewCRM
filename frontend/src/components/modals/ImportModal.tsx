@@ -90,7 +90,7 @@ export const ImportModal: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
+    <div className="responsive-overlay fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
       <div 
         role="dialog"
         aria-modal="true"
@@ -161,7 +161,7 @@ export const ImportModal: React.FC = () => {
               className="w-full p-3 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-indigo-500 resize-none"
             />
             <span className="text-[11px] text-obsidian-muted block mt-1">
-              El sistema detectará automáticamente los correos padre y cifrará cada credencial y nota con AES-256-GCM.
+              Tus correos y datos privados se guardarán protegidos.
             </span>
           </div>
         </div>

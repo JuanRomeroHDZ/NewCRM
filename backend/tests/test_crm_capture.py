@@ -22,7 +22,22 @@ def test_ssrf_protection_blocks_private_and_loopback_ips():
         validate_url_against_ssrf("http://10.0.0.5/api")
 
 @pytest.mark.asyncio
-async def test_osm_leads_search_caches_queries(db_session):
+async def test_osm_leads_search_caches_queries(db_session, monkeypatch):
+    async def fake_osm_fetch(query):
+        assert 'name"~"ortodoncia"' in query
+        return [{
+            "type": "node",
+            "id": 123456,
+            "lat": 32.526,
+            "lon": -117.018,
+            "tags": {
+                "name": "Clínica Dental de Prueba",
+                "amenity": "dentist",
+                "phone": "+526641234999",
+            },
+        }]
+
+    monkeypatch.setattr(CrmCaptureService, "fetch_osm_elements", staticmethod(fake_osm_fetch))
     # First search creates cache cell
     res1 = await CrmCaptureService.search_osm_leads(
         session=db_session,

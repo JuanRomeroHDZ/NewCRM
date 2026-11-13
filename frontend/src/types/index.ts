@@ -313,6 +313,7 @@ export interface TotpSetupResponse {
 export type ProspectWorkflowType = 'demo_first' | 'direct_quote';
 
 export type ProspectStatus =
+  | 'nuevo'
   | 'demo_creada'
   | 'primer_contacto'
   | 'en_cotizacion'

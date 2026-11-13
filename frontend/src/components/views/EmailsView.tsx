@@ -97,7 +97,7 @@ export const EmailsView: React.FC = () => {
           <div className="flex items-center gap-3 text-xs text-amber-200 min-w-0">
             <Lock size={16} className="text-amber-400 flex-shrink-0" />
             <span className="truncate">
-              Bóveda bloqueada. Desbloquea con tu contraseña maestra para crear, editar o revelar secretos.
+              Bóveda bloqueada. Desbloquea con tu contraseña de acceso para crear, editar o revelar secretos.
             </span>
           </div>
           <button

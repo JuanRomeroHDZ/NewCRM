@@ -71,9 +71,14 @@ def derive_encryption_key(master_password: str, salt: bytes = b"emailsaver_vault
     return hkdf.derive(master_password.encode("utf-8"))
 
 def get_server_seed_key() -> bytes:
-    """Derives a fallback key from SERVER_SECRET_KEY for backward compatibility migration."""
-    seed = settings.SERVER_SECRET_KEY or "emailsaver_fallback_seed_key"
-    return hashlib.sha256(seed.encode("utf-8")).digest()
+    """Derives the configured server seed key; configuration has no fallback secret."""
+    return hashlib.sha256(settings.SERVER_SECRET_KEY.encode("utf-8")).digest()
+
+
+def get_legacy_server_seed_keys() -> list[bytes]:
+    """Returns explicitly configured old keys for a controlled key rotation."""
+    legacy_values = [value.strip() for value in settings.LEGACY_SERVER_SECRET_KEYS.split(",")]
+    return [hashlib.sha256(value.encode("utf-8")).digest() for value in legacy_values if value]
 
 def get_effective_encryption_key(explicit_key: bytes | None = None) -> bytes:
     """
@@ -125,15 +130,18 @@ def decrypt_secret(encrypted_text: str | None, key: bytes | None = None) -> str 
             decrypted = aesgcm.decrypt(nonce, ciphertext, None)
             return decrypted.decode("utf-8")
         except Exception:
-            # 2. If primary key failed and server seed is different, attempt fallback decryption
-            server_key = get_server_seed_key()
-            if server_key != primary_key:
+            # Legacy seeds are accepted only when the operator lists them in
+            # LEGACY_SERVER_SECRET_KEYS during a deliberate migration window.
+            fallback_keys = [get_server_seed_key(), *get_legacy_server_seed_keys()]
+            for fallback_key in fallback_keys:
+                if fallback_key == primary_key:
+                    continue
                 try:
-                    fallback_aes = AESGCM(server_key)
+                    fallback_aes = AESGCM(fallback_key)
                     decrypted = fallback_aes.decrypt(nonce, ciphertext, None)
                     return decrypted.decode("utf-8")
                 except Exception:
-                    pass
+                    continue
         return "••••••••"
     except Exception:
         return "••••••••"

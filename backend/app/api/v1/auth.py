@@ -52,10 +52,10 @@ async def setup_master_password(payload: MasterPasswordSetup, db: AsyncSession =
     stmt = select(UserSettings).limit(1)
     res = await db.execute(stmt)
     if res.scalar_one_or_none():
-        raise HTTPException(status_code=400, detail="La contraseña maestra ya fue configurada previamente.")
+        raise HTTPException(status_code=400, detail="La contraseña de acceso ya fue configurada previamente.")
 
     if len(payload.master_password) < 8:
-        raise HTTPException(status_code=400, detail="La contraseña maestra debe tener al menos 8 caracteres.")
+        raise HTTPException(status_code=400, detail="La contraseña de acceso debe tener al menos 8 caracteres.")
 
     # Generate a unique cryptographic salt for this vault instance
     vault_salt = secrets.token_bytes(32).hex()
@@ -71,7 +71,7 @@ async def setup_master_password(payload: MasterPasswordSetup, db: AsyncSession =
         search_hotkey="ctrl+k"
     )
     db.add(settings)
-    await log_audit_event(db, action="create", entity_type="vault", details="Configuración inicial de contraseña maestra")
+    await log_audit_event(db, action="create", entity_type="vault", details="Configuración inicial de contraseña de acceso")
     await db.commit()
 
     token = create_vault_token(settings.vault_timeout_minutes, encryption_key=derived_aes_key)
@@ -87,12 +87,12 @@ async def unlock_vault(payload: VaultUnlockRequest, db: AsyncSession = Depends(g
     res = await db.execute(stmt)
     settings = res.scalar_one_or_none()
     if not settings:
-        raise HTTPException(status_code=400, detail="Bóveda no inicializada. Configure una contraseña maestra primero.")
+        raise HTTPException(status_code=400, detail="El espacio seguro aún no está configurado. Configure una contraseña de acceso primero.")
 
     if not verify_master_password(settings.master_password_hash, payload.master_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Contraseña maestra incorrecta."
+            detail="Contraseña de acceso incorrecta."
         )
 
     # If vault_salt was missing from a legacy DB migration, generate and save it

@@ -61,12 +61,12 @@ export const PasswordGeneratorModal: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-fadeIn">
+    <div className="responsive-overlay fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/75 backdrop-blur-md animate-fadeIn">
       <div 
         role="dialog"
         aria-modal="true"
         aria-labelledby="password-gen-title"
-        className="relative w-full max-w-lg bg-obsidian-panel border border-obsidian-borderLight rounded-2xl shadow-2xl p-6 overflow-hidden"
+        className="relative w-full max-w-lg bg-obsidian-panel border border-obsidian-borderLight rounded-xl sm:rounded-2xl shadow-2xl p-4 sm:p-6 overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Glow */}
@@ -82,7 +82,7 @@ export const PasswordGeneratorModal: React.FC = () => {
                 Generador de Contraseñas & Passphrases
               </h2>
               <p className="text-xs text-obsidian-muted">
-                Generación criptográfica de alta entropía
+                Crea una contraseña difícil de adivinar
               </p>
             </div>
           </div>
@@ -140,7 +140,7 @@ export const PasswordGeneratorModal: React.FC = () => {
               <ShieldCheck size={14} style={{ color: entropy.color }} />
               Fuerza: <strong style={{ color: entropy.color }}>{entropy.label}</strong>
             </span>
-            <span className="text-obsidian-muted font-mono">{entropy.bits} bits de entropía</span>
+            <span className="text-obsidian-muted">Nivel de seguridad</span>
           </div>
           <div className="w-full h-2 rounded-full bg-obsidian-surface overflow-hidden border border-obsidian-border">
             <div

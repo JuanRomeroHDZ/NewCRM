@@ -1,1 +1,1 @@
-"""EmailSaver Backend Package."""
+"""Contact | LESSSO backend package."""

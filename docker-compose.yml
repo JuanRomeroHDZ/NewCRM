@@ -4,11 +4,12 @@ services:
     build:
       context: ./nginx
       dockerfile: Dockerfile
-    container_name: emailsaver_proxy
     restart: unless-stopped
     ports:
-      - "${PORT:-8080}:80"
-      - "${HTTPS_PORT:-8443}:443"
+      - "${HOST_BIND_IP:-127.0.0.1}:${PORT:-8080}:80"
+      - "${HOST_BIND_IP:-127.0.0.1}:${HTTPS_PORT:-8443}:443"
+    volumes:
+      - ./nginx/certs:/etc/nginx/certs:ro
     networks:
       - frontend_net
     depends_on:
@@ -22,7 +23,6 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    container_name: emailsaver_frontend
     restart: unless-stopped
     networks:
       - frontend_net
@@ -41,16 +41,36 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: emailsaver_backend
     restart: unless-stopped
     environment:
-      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-emailsaver}:${POSTGRES_PASSWORD:-emailsaver_secret_pass}@db:5432/${POSTGRES_DB:-emailsaver}
-      - REDIS_URL=redis://redis:6379/0
-      - SERVER_SECRET_KEY=${SERVER_SECRET_KEY:-emailsaver_default_master_encryption_seed_32b_prod}
-      - VAULT_SESSION_TIMEOUT_MINUTES=${VAULT_SESSION_TIMEOUT_MINUTES:-10}
-      - CLIPBOARD_CLEAR_SECONDS=${CLIPBOARD_CLEAR_SECONDS:-30}
-      - ALLOW_EXTERNAL_FAVICONS=${ALLOW_EXTERNAL_FAVICONS:-false}
-      - LOCAL_MODE=${LOCAL_MODE:-true}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:?Configura POSTGRES_USER en .env}:${POSTGRES_PASSWORD:?Genera POSTGRES_PASSWORD en .env}@db:5432/${POSTGRES_DB:?Configura POSTGRES_DB en .env}
+      REDIS_URL: redis://redis:6379/0
+      SERVER_NAME: ${SERVER_NAME:-lessso-srv}
+      SERVER_SECRET_KEY: ${SERVER_SECRET_KEY:?Genera SERVER_SECRET_KEY en .env}
+      INITIAL_OWNER_USERNAME: ${INITIAL_OWNER_USERNAME:-propietario}
+      INITIAL_OWNER_EMAIL: ${INITIAL_OWNER_EMAIL:-admin@lessso.local}
+      INITIAL_OWNER_NAME: ${INITIAL_OWNER_NAME:-Propietario LESSSO}
+      INITIAL_OWNER_PASSWORD: ${INITIAL_OWNER_PASSWORD:?Genera INITIAL_OWNER_PASSWORD en .env}
+      LEGACY_SERVER_SECRET_KEYS: ${LEGACY_SERVER_SECRET_KEYS:-}
+      VAULT_SESSION_TIMEOUT_MINUTES: ${VAULT_SESSION_TIMEOUT_MINUTES:-10}
+      CLIPBOARD_CLEAR_SECONDS: ${CLIPBOARD_CLEAR_SECONDS:-30}
+      MAX_FAILED_LOGIN_ATTEMPTS: ${MAX_FAILED_LOGIN_ATTEMPTS:-5}
+      LOCKOUT_MINUTES: ${LOCKOUT_MINUTES:-15}
+      ALLOW_EXTERNAL_FAVICONS: ${ALLOW_EXTERNAL_FAVICONS:-false}
+      LOCAL_MODE: ${LOCAL_MODE:-true}
+      CORS_ORIGINS: ${CORS_ORIGINS:-[]}
+      BACKUP_LOCAL_PATH: ${BACKUP_LOCAL_PATH:-/app/backups}
+      OSM_OVERPASS_URL: ${OSM_OVERPASS_URL:-https://overpass-api.de/api/interpreter}
+      OSM_TILE_URL_TEMPLATE: ${OSM_TILE_URL_TEMPLATE:?Configura OSM_TILE_URL_TEMPLATE en .env}
+      OSM_USER_AGENT: ${OSM_USER_AGENT:-ContactLESSSO/2.0 local-prospect-research}
+      OSM_REQUEST_TIMEOUT_SECONDS: ${OSM_REQUEST_TIMEOUT_SECONDS:-20}
+      OSM_MAX_RESULTS: ${OSM_MAX_RESULTS:-100}
+      OSM_OBJECT_URL_TEMPLATE: ${OSM_OBJECT_URL_TEMPLATE:?Configura OSM_OBJECT_URL_TEMPLATE en .env}
+      WEBSITE_AUDITOR_USER_AGENT: ${WEBSITE_AUDITOR_USER_AGENT:-ContactLESSSO/2.0 website-audit}
+      EXCHANGE_RATE_PRIMARY_URL: ${EXCHANGE_RATE_PRIMARY_URL:-https://open.er-api.com/v6/latest/USD}
+      EXCHANGE_RATE_SECONDARY_URL: ${EXCHANGE_RATE_SECONDARY_URL:-https://api.exchangerate-api.com/v4/latest/USD}
+      EXCHANGE_RATE_TERTIARY_URL: ${EXCHANGE_RATE_TERTIARY_URL:-https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json}
+      FALLBACK_USD_MXN_RATE: ${FALLBACK_USD_MXN_RATE:?Configura FALLBACK_USD_MXN_RATE en .env}
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
       interval: 10s
@@ -68,22 +88,22 @@ services:
     volumes:
       - ./backend:/app
       - vault_media:/app/media
+      - backup_data:${BACKUP_LOCAL_PATH:-/app/backups}
 
   # Primary Relational Database (PostgreSQL 16)
   db:
     image: postgres:16-alpine
-    container_name: emailsaver_db
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-emailsaver}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-emailsaver_secret_pass}
-      POSTGRES_DB: ${POSTGRES_DB:-emailsaver}
+      POSTGRES_USER: ${POSTGRES_USER:?Configura POSTGRES_USER en .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Genera POSTGRES_PASSWORD en .env}
+      POSTGRES_DB: ${POSTGRES_DB:?Configura POSTGRES_DB en .env}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
       - backend_net
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-emailsaver} -d ${POSTGRES_DB:-emailsaver}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:?Configura POSTGRES_USER en .env} -d ${POSTGRES_DB:?Configura POSTGRES_DB en .env}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -92,7 +112,6 @@ services:
   # Centralized Session & Ephemeral Cache (Redis 7)
   redis:
     image: redis:7-alpine
-    container_name: emailsaver_redis
     restart: unless-stopped
     command: ["redis-server", "--appendonly", "yes", "--save", "60", "1"]
     volumes:
@@ -123,3 +142,5 @@ volumes:
     name: emailsaver_redis_data
   vault_media:
     name: emailsaver_vault_media
+  backup_data:
+    name: lessso_backup_data

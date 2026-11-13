@@ -153,22 +153,9 @@ async def serialize_vault_requests(request, call_next):
             return await call_next(request)
     return await call_next(request)
 
-cors_origins = [
-    "http://localhost",
-    "http://localhost:80",
-    "http://localhost:8080",
-    "http://localhost:5173",
-    "http://127.0.0.1",
-    "http://127.0.0.1:80",
-    "http://127.0.0.1:8080",
-    "http://127.0.0.1:5173",
-]
-if settings.CORS_ORIGINS and "*" not in settings.CORS_ORIGINS:
-    cors_origins = settings.CORS_ORIGINS
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=cors_origins,
+    allow_origins=settings.CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

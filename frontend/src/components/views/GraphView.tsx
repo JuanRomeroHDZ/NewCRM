@@ -7,6 +7,11 @@ import { useVault } from '../../context/VaultContext';
 import { api } from '../../lib/api';
 import { GraphData, GraphNode, GraphLink } from '../../types';
 
+const fitGraph = (width: number, height: number) => {
+  const scale = Math.max(0.1, Math.min(0.95, (width - 24) / 1000, (height - 24) / 700));
+  return { x: (width - 1000 * scale) / 2, y: (height - 700 * scale) / 2, scale };
+};
+
 export const GraphView: React.FC = () => {
   const { openInspector, openEmailModal, openProspectModal, dataVersion } = useVault();
 
@@ -106,11 +111,7 @@ export const GraphView: React.FC = () => {
       // Center initial canvas view
       if (canvasRef.current) {
         const rect = canvasRef.current.getBoundingClientRect();
-        transformRef.current = {
-          x: (rect.width - width) / 2,
-          y: (rect.height - height) / 2,
-          scale: 0.95
-        };
+        transformRef.current = fitGraph(rect.width, rect.height);
       }
     });
   }, [dataVersion]);
@@ -387,7 +388,7 @@ export const GraphView: React.FC = () => {
   const handleWheel = (e: React.WheelEvent) => {
     e.preventDefault();
     const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
-    const newScale = Math.max(0.3, Math.min(2.5, transformRef.current.scale * zoomFactor));
+    const newScale = Math.max(0.1, Math.min(2.5, transformRef.current.scale * zoomFactor));
 
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -404,18 +405,14 @@ export const GraphView: React.FC = () => {
   const handleResetZoom = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    transformRef.current = {
-      x: canvas.width / 4,
-      y: canvas.height / 5,
-      scale: 0.95
-    };
+    transformRef.current = fitGraph(canvas.width, canvas.height);
     draw();
   };
 
   return (
-    <div className="relative w-full h-[calc(100vh-4rem)] bg-obsidian-bg dot-grid-canvas overflow-hidden select-none">
+    <div className="relative h-[calc(100dvh-4rem)] min-h-0 w-full select-none overflow-hidden bg-obsidian-bg dot-grid-canvas">
       {/* Top Floating Controls */}
-      <div className="absolute top-4 left-6 z-10 flex items-center gap-2">
+      <div className="absolute inset-x-2 top-2 z-10 flex flex-wrap items-start gap-2 sm:left-6 sm:right-6 sm:top-4">
         <div className="flex items-center gap-1.5 p-1 rounded-xl bg-obsidian-panel/90 backdrop-blur-md border border-obsidian-border shadow-xl text-xs">
           <button
             type="button"
@@ -427,7 +424,8 @@ export const GraphView: React.FC = () => {
             }`}
           >
             <ShieldAlert size={14} />
-            <span>Resaltar Correos Indispensables</span>
+            <span className="sm:hidden">Resaltar correos</span>
+            <span className="hidden sm:inline">Resaltar Correos Indispensables</span>
           </button>
         </div>
 
@@ -441,7 +439,7 @@ export const GraphView: React.FC = () => {
       </div>
 
       {/* Floating Zoom & Pan Controls */}
-      <div className="absolute bottom-6 right-6 z-10 flex flex-col gap-1.5 p-1.5 rounded-xl bg-obsidian-panel/90 backdrop-blur-md border border-obsidian-border shadow-xl text-obsidian-muted">
+      <div className="absolute bottom-2 right-2 z-10 flex flex-col gap-1.5 p-1.5 rounded-xl bg-obsidian-panel/90 backdrop-blur-md border border-obsidian-border shadow-xl text-obsidian-muted sm:bottom-6 sm:right-6">
         <button
           type="button"
           onClick={() => {
@@ -456,7 +454,7 @@ export const GraphView: React.FC = () => {
         <button
           type="button"
           onClick={() => {
-            transformRef.current.scale = Math.max(0.3, transformRef.current.scale * 0.8);
+            transformRef.current.scale = Math.max(0.1, transformRef.current.scale * 0.8);
             draw();
           }}
           title="Alejar"
@@ -475,8 +473,9 @@ export const GraphView: React.FC = () => {
       </div>
 
       {/* Legend Card */}
-      <div className="absolute bottom-6 left-6 z-10 p-3 rounded-xl bg-obsidian-panel/90 backdrop-blur-md border border-obsidian-border shadow-xl text-[11px] space-y-1.5 text-obsidian-muted max-w-xs">
-        <div className="font-semibold text-white text-xs mb-1">Guía del Mapa</div>
+      <details className="absolute bottom-2 left-2 z-10 max-h-[calc(100%-4rem)] max-w-[calc(100%-4rem)] overflow-y-auto rounded-xl border border-obsidian-border bg-obsidian-panel/95 p-3 text-[11px] text-obsidian-muted shadow-xl backdrop-blur-md sm:bottom-6 sm:left-6 sm:max-w-xs">
+        <summary className="cursor-pointer font-semibold text-white text-xs">Guía del mapa</summary>
+        <div className="mt-2 space-y-1.5">
         <div className="flex items-center gap-2">
           <span className="w-3 h-3 rounded-full border-2 border-indigo-500 bg-obsidian-card" />
           <span>Correo Principal</span>
@@ -497,12 +496,13 @@ export const GraphView: React.FC = () => {
           <span className="w-3 h-3 rounded-full border-2 border-rose-500 bg-rose-500/20" />
           <span>Correo Indispensable (muchas cuentas dependen de él)</span>
         </div>
-      </div>
+        </div>
+      </details>
 
       {/* Empty State Overlay when there are no nodes */}
       {graphData && graphData.nodes.length === 0 && (
-        <div className="absolute inset-0 z-20 flex items-center justify-center p-6 pointer-events-none">
-          <div className="max-w-md w-full p-8 rounded-2xl bg-obsidian-panel/95 backdrop-blur-md border border-obsidian-border shadow-2xl text-center space-y-4 pointer-events-auto">
+        <div className="absolute inset-0 z-20 flex items-start justify-center overflow-y-auto p-2 sm:items-center sm:p-6">
+          <div className="my-auto w-full max-w-md rounded-2xl border border-obsidian-border bg-obsidian-panel/95 p-4 text-center shadow-2xl backdrop-blur-md space-y-4 pointer-events-auto sm:p-8">
             <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 mx-auto">
               <Network size={22} />
             </div>
@@ -534,10 +534,18 @@ export const GraphView: React.FC = () => {
       {/* The HTML5 Canvas */}
       <canvas
         ref={canvasRef}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
+        onPointerDown={(event) => {
+          event.currentTarget.setPointerCapture(event.pointerId);
+          handleMouseDown(event);
+        }}
+        onPointerMove={handleMouseMove}
+        onPointerUp={handleMouseUp}
+        onPointerCancel={() => {
+          draggedNodeRef.current = null;
+          isDraggingCanvasRef.current = false;
+        }}
         onWheel={handleWheel}
+        style={{ touchAction: 'none' }}
         className="w-full h-full cursor-grab active:cursor-grabbing"
       />
     </div>

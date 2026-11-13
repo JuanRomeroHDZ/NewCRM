@@ -16,6 +16,7 @@ from app.models import (
 )
 from app.security.tokens import require_vault_unlocked
 from app.services.audit import log_audit_event
+from app.config import settings
 
 router = APIRouter(prefix="/vault", tags=["vault"], dependencies=[Depends(require_vault_unlocked)])
 
@@ -171,7 +172,7 @@ async def export_encrypted_vault(
             "budget_cap_currency": getattr(settings, "budget_cap_currency", "MXN") if settings else "MXN",
         },
         "exchange_rate": {
-            "rate": float(rate.rate) if rate else 18.50,
+            "rate": float(rate.rate) if rate else settings.FALLBACK_USD_MXN_RATE,
             "is_manual": rate.is_manual if rate else False
         }
     }

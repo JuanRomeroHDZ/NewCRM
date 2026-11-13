@@ -421,7 +421,7 @@ export const InspectorDrawer: React.FC = () => {
       </div>
 
       {/* Content Area */}
-      <div className="flex-1 overflow-y-auto p-5 space-y-5">
+      <div className="min-h-0 min-w-0 flex-1 overflow-y-auto break-words p-3 space-y-5 sm:p-5 [overflow-wrap:anywhere]">
         {loading ? (
           <div className="py-12 flex flex-col items-center justify-center text-obsidian-muted text-xs">
             <div className="w-6 h-6 border-2 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin mb-2" />
@@ -1041,26 +1041,27 @@ export const InspectorDrawer: React.FC = () => {
 
                       {/* Summary Metrics */}
                       {(() => {
-                        const totalCobradoMXN = clientIncomes
-                          .filter((i) => i.status === 'cobrado')
-                          .reduce((acc, i) => acc + (i.currency === 'USD' ? (i.amount * (exchangeRate?.rate || 18.5)) : i.amount), 0);
-                        const totalPendienteMXN = clientIncomes
-                          .filter((i) => i.status === 'pendiente')
-                          .reduce((acc, i) => acc + (i.currency === 'USD' ? (i.amount * (exchangeRate?.rate || 18.5)) : i.amount), 0);
+                        const totalInMXN = (status: 'cobrado' | 'pendiente') => {
+                          const incomes = clientIncomes.filter((i) => i.status === status);
+                          const rate = exchangeRate?.rate;
+                          if (incomes.some((i) => i.currency === 'USD') && (!rate || rate <= 0)) return null;
+                          return incomes.reduce((acc, i) => acc + (i.currency === 'USD' ? i.amount * (rate || 0) : i.amount), 0);
+                        };
+                        const totalCobradoMXN = totalInMXN('cobrado');
+                        const totalPendienteMXN = totalInMXN('pendiente');
+                        const formatTotal = (total: number | null) => total === null
+                          ? 'Sin tipo de cambio'
+                          : `$${total.toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN`;
 
                         return (
                           <div className="grid grid-cols-2 gap-2 text-center">
                             <div className="p-2 rounded-lg bg-obsidian-bg border border-obsidian-border">
                               <span className="text-[10px] text-obsidian-muted block">Total Cobrado</span>
-                              <span className="text-xs font-mono font-bold text-emerald-400">
-                                ${totalCobradoMXN.toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN
-                              </span>
+                              <span className="text-xs font-mono font-bold text-emerald-400">{formatTotal(totalCobradoMXN)}</span>
                             </div>
                             <div className="p-2 rounded-lg bg-obsidian-bg border border-obsidian-border">
                               <span className="text-[10px] text-obsidian-muted block">Total Pendiente</span>
-                              <span className="text-xs font-mono font-bold text-amber-400">
-                                ${totalPendienteMXN.toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN
-                              </span>
+                              <span className="text-xs font-mono font-bold text-amber-400">{formatTotal(totalPendienteMXN)}</span>
                             </div>
                           </div>
                         );
@@ -1417,7 +1418,7 @@ export const InspectorDrawer: React.FC = () => {
                       className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold shadow-md"
                     >
                       <Key size={14} />
-                      <span>Ingresar Contraseña Maestra</span>
+                      <span>Ingresar contraseña de acceso</span>
                     </button>
                   </div>
                 ) : (
@@ -1786,7 +1787,7 @@ export const InspectorDrawer: React.FC = () => {
                 {!isUnlocked ? (
                   <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 text-center text-amber-300">
                     <Lock size={20} className="mx-auto mb-1 text-amber-400" />
-                    Ingresa tu contraseña maestra para ver las contraseñas anteriores.
+                    Ingresa tu contraseña de acceso para ver las contraseñas anteriores.
                   </div>
                 ) : historyData.length > 0 ? (
                   historyData.map((h) => (

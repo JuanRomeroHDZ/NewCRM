@@ -23,11 +23,11 @@ export const VaultUnlockModal: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!password.trim()) {
-      setError('Ingresa tu contraseña maestra para continuar.');
+      setError('Ingresa tu contraseña de acceso para continuar.');
       return;
     }
-    if (!isSetup && password.trim().length < 6) {
-      setError('La contraseña maestra debe tener al menos 6 caracteres.');
+    if (!isSetup && password.trim().length < 8) {
+      setError('La contraseña de acceso debe tener al menos 8 caracteres.');
       return;
     }
 
@@ -48,7 +48,7 @@ export const VaultUnlockModal: React.FC = () => {
 
   return (
     <div 
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-fadeIn"
+      className="responsive-overlay fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-fadeIn"
       role="dialog"
       aria-modal="true"
       aria-labelledby="vault-modal-title"
@@ -67,10 +67,10 @@ export const VaultUnlockModal: React.FC = () => {
             </div>
             <div className="min-w-0">
               <h2 id="vault-modal-title" className="text-lg font-semibold text-white tracking-tight truncate">
-                {isSetup ? 'Desbloquear Bóveda Cifrada' : 'Inicializar Bóveda Maestra'}
+                {isSetup ? 'Desbloquear espacio seguro' : 'Inicializar espacio seguro'}
               </h2>
               <p className="text-xs text-obsidian-muted truncate">
-                Protección Criptográfica — Argon2id + AES-256-GCM
+                Protege el acceso a tus datos
               </p>
             </div>
           </div>
@@ -93,7 +93,7 @@ export const VaultUnlockModal: React.FC = () => {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-xs font-medium text-obsidian-text/80 mb-1.5">
-              {isSetup ? 'Contraseña Maestra de la Bóveda' : 'Define tu Contraseña Maestra (mínimo 6 caracteres)'}
+              {isSetup ? 'contraseña de acceso de la Bóveda' : 'Define tu contraseña de acceso (mínimo 8 caracteres)'}
             </label>
             <div className="relative">
               <input
@@ -105,22 +105,17 @@ export const VaultUnlockModal: React.FC = () => {
                   setPassword(e.target.value);
                   if (error) setError(null);
                 }}
-                placeholder="Ingresa tu clave maestra..."
+                placeholder={isSetup ? 'Ingresa tu contraseña de acceso...' : 'Crea una contraseña de acceso...'}
                 className="w-full px-3.5 py-2.5 pl-10 rounded-xl bg-obsidian-bg border border-obsidian-border text-white placeholder-obsidian-muted/50 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-sm font-mono tracking-wider transition-all"
-                autoComplete="current-password"
+                autoComplete={isSetup ? 'current-password' : 'new-password'}
                 disabled={isLoading}
               />
               <KeyRound size={16} className="absolute left-3.5 top-3 text-obsidian-muted" />
             </div>
             <p className="mt-1.5 text-[11px] text-obsidian-muted leading-relaxed">
-              {isSetup ? (
-                <>
-                  Clave inicial por defecto (modificable en Ajustes):{' '}
-                  <code className="text-indigo-300 font-mono">MasterPassword123!</code>
-                </>
-              ) : (
-                'Esta llave cifrará todas tus contraseñas, llaves API y tarjetas de forma local.'
-              )}
+              {isSetup
+                ? 'Ingresa la contraseña de acceso que definiste al inicializar la bóveda.'
+                : 'Crea una contraseña de acceso de al menos 8 caracteres. Esta llave cifra tus contraseñas, claves API y tarjetas.'}
             </p>
           </div>
 

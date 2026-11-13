@@ -168,7 +168,7 @@ export const PasswordsView: React.FC = () => {
         showToast(`Recurso "${resTitle}" actualizado exitosamente.`, 'success');
       } else {
         await api.createResource(payload);
-        showToast(`Recurso "${resTitle}" guardado en la bóveda cifrada.`, 'success');
+        showToast(`Recurso "${resTitle}" guardado en la espacio seguro.`, 'success');
       }
 
       setIsResourceModalOpen(false);
@@ -303,8 +303,8 @@ export const PasswordsView: React.FC = () => {
             Contraseñas, Llaves y Recursos Protegidos
           </h2>
           <InfoTooltip
-            title="Protección con Contraseña Maestra"
-            content="Tus contraseñas, PINs, llaves SSH, archivos .env y notas privadas están encriptados con AES-256-GCM y requieren tu contraseña maestra para mostrarse."
+            title="Protección con contraseña de acceso"
+            content="Desbloquea tu espacio para consultar tus contraseñas y notas privadas."
           />
         </div>
         <div className="flex flex-wrap items-center justify-center gap-3">
@@ -314,7 +314,7 @@ export const PasswordsView: React.FC = () => {
             className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-lg shadow-indigo-600/30 transition-all active:scale-95"
           >
             <Key size={15} />
-            <span>Desbloquear con Contraseña Maestra</span>
+            <span>Desbloquear con contraseña de acceso</span>
           </button>
           <button
             type="button"
@@ -349,7 +349,7 @@ export const PasswordsView: React.FC = () => {
             content={
               activeTab === 'passwords'
                 ? 'Todas tus contraseñas se mantienen encriptadas y el portapapeles se borra automáticamente después de copiar.'
-                : 'Bóveda cifrada con AES-256-GCM para variables de entorno (.env), llaves SSH, códigos de recuperación 2FA, seriales y notas estructuradas sin ataduras de usuario.'
+                : 'Guarda tus códigos, licencias y notas privadas en un lugar protegido.'
             }
           />
         </div>
@@ -417,7 +417,7 @@ export const PasswordsView: React.FC = () => {
         <div className="space-y-6">
           {/* Filter toolbar */}
           <div className="p-4 rounded-2xl bg-obsidian-panel border border-obsidian-border flex flex-wrap items-center justify-between gap-3 text-xs">
-            <div className="relative flex-1 min-w-[220px]">
+            <div className="relative min-w-0 w-full flex-1 sm:min-w-[220px]">
               <Search size={14} className="absolute left-3 top-2.5 text-obsidian-muted" />
               <input
                 type="text"
@@ -610,7 +610,7 @@ export const PasswordsView: React.FC = () => {
         <div className="space-y-6">
           {/* Filter Toolbar */}
           <div className="p-4 rounded-2xl bg-obsidian-panel border border-obsidian-border flex flex-wrap items-center justify-between gap-3 text-xs">
-            <div className="relative flex-1 min-w-[220px]">
+            <div className="relative min-w-0 w-full flex-1 sm:min-w-[220px]">
               <Search size={14} className="absolute left-3 top-2.5 text-obsidian-muted" />
               <input
                 type="text"
@@ -794,7 +794,7 @@ export const PasswordsView: React.FC = () => {
                     No hay recursos seguros ni notas en este ámbito
                   </div>
                   <div className="text-xs text-obsidian-muted max-w-md mx-auto">
-                    Guarda variables de entorno (.env), llaves SSH, licencias de software, códigos 2FA y notas privadas cifradas con AES-256-GCM.
+                    Guarda códigos de recuperación, licencias y notas privadas.
                   </div>
                   <div className="pt-2">
                     <button
@@ -817,7 +817,7 @@ export const PasswordsView: React.FC = () => {
 
       {/* SECURE RESOURCE MODAL */}
       {isResourceModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-fadeIn">
+        <div className="responsive-overlay fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-fadeIn">
           <div className="relative w-full max-w-xl rounded-2xl bg-obsidian-panel border border-obsidian-border shadow-2xl overflow-hidden">
             {/* Modal Header */}
             <div className="p-5 border-b border-obsidian-border flex items-center justify-between">
@@ -830,7 +830,7 @@ export const PasswordsView: React.FC = () => {
                     {editingResource ? 'Editar Recurso Seguro' : 'Nuevo Recurso Seguro'}
                   </h3>
                   <div className="text-[11px] text-obsidian-muted">
-                    Bóveda encriptada localmente con AES-256-GCM
+                    Tus datos están protegidos en este equipo
                   </div>
                 </div>
               </div>
@@ -919,7 +919,7 @@ export const PasswordsView: React.FC = () => {
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <label className="block text-obsidian-muted font-medium">
-                    Contenido Sensible (Cifrado con AES-256-GCM)
+                    Contenido privado
                   </label>
                   <span className="text-[10px] text-indigo-400 font-mono">100% Local</span>
                 </div>

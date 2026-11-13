@@ -1,21 +1,32 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+import httpx
 
 from app.database import get_db
 from app.services.core_auth import get_current_user_from_token
+from app.security.tokens import require_vault_unlocked
 from app.models.core import User
 from app.models.crm_capture import LeadCacheCell, LeadAuditScore, LeadDuplicateCandidate, PermanentDiscard
-from app.services.crm_capture import CrmCaptureService
+from app.services.crm_capture import CrmCaptureService, OSMProviderError
+from app.config import settings
 
 router = APIRouter(prefix="/crm/capture", tags=["CRM Capture"])
+
+class SearchBounds(BaseModel):
+    min_lat: float = Field(..., ge=-90, le=90)
+    min_lon: float = Field(..., ge=-180, le=180)
+    max_lat: float = Field(..., ge=-90, le=90)
+    max_lon: float = Field(..., ge=-180, le=180)
+
 
 class SearchRequest(BaseModel):
     sector: str = Field(..., min_length=2, max_length=64)
     zone: str = Field(..., min_length=2, max_length=128)
     subsector: str | None = Field(None, max_length=64)
     max_cache_age_days: int = Field(14, ge=1, le=90)
+    bbox: SearchBounds | None = None
 
 class AuditRequest(BaseModel):
     target_url: str = Field(..., min_length=4, max_length=512)
@@ -36,14 +47,24 @@ class GoogleEstimateRequest(BaseModel):
     field_mask: list[str] = Field(default_factory=list)
 
 @router.get("/zones")
-async def get_zones(current_user: User = Depends(get_current_user_from_token)):
+async def get_zones(_: bool = Depends(require_vault_unlocked)):
     return {"zones": CrmCaptureService.get_tijuana_zones()}
+
+
+@router.get("/map-config")
+async def get_map_config(_: bool = Depends(require_vault_unlocked)):
+    return {
+        "tile_url_template": settings.OSM_TILE_URL_TEMPLATE,
+        "center": [32.527, -117.022],
+        "zoom": 12,
+        "attribution": '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© OpenStreetMap contributors</a>',
+    }
 
 @router.post("/search")
 async def search_leads(
     req: SearchRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user_from_token)
+    _: bool = Depends(require_vault_unlocked)
 ):
     try:
         result = await CrmCaptureService.search_osm_leads(
@@ -51,11 +72,18 @@ async def search_leads(
             sector=req.sector,
             zone=req.zone,
             subsector=req.subsector,
-            max_cache_age_days=req.max_cache_age_days
+            max_cache_age_days=req.max_cache_age_days,
+            custom_bbox=req.bbox.model_dump() if req.bbox else None,
         )
         return result
-    except Exception as e:
+    except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except OSMProviderError as e:
+        raise HTTPException(status_code=e.status_code, detail=str(e))
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="OpenStreetMap tardó demasiado en responder.")
+    except httpx.RequestError:
+        raise HTTPException(status_code=503, detail="No se pudo conectar con OpenStreetMap.")
 
 @router.post("/audit-url")
 async def audit_website(

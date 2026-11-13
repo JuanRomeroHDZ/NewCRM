@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Search, Shield, Key, Mail, Globe, Lock, CreditCard, 
-  Sparkles, Network, ArrowRight, X, Briefcase, Plus 
+  Sparkles, Network, ArrowRight, X, Briefcase, Plus, MapPin
 } from 'lucide-react';
 import { useVault, SectionType } from '../../context/VaultContext';
 import { api } from '../../lib/api';
@@ -65,6 +65,17 @@ export const CommandPalette: React.FC = () => {
   // Global static commands
   const staticCommands = [
     {
+      id: 'cmd_capture_map',
+      title: 'Captación en mapa',
+      subtitle: 'Buscar negocios publicados en OpenStreetMap',
+      icon: MapPin,
+      color: 'text-indigo-300',
+      action: () => {
+        closeCommandPalette();
+        setActiveSection('capture');
+      }
+    },
+    {
       id: 'cmd_new_prospect',
       title: 'Nuevo Prospecto / Demo',
       subtitle: 'Registrar cliente, página demo y contador SLA de respuesta',
@@ -89,7 +100,7 @@ export const CommandPalette: React.FC = () => {
     {
       id: 'cmd_gen_password',
       title: 'Generar Contraseña Segura',
-      subtitle: 'Abre el generador con medidor de entropía',
+      subtitle: 'Crea una contraseña segura',
       icon: Sparkles,
       color: 'text-cyan-400',
       action: () => {
@@ -110,8 +121,8 @@ export const CommandPalette: React.FC = () => {
     },
     {
       id: 'cmd_lock_vault',
-      title: isUnlocked ? 'Bloquear Bóveda Inmediatamente' : 'Desbloquear Bóveda Cifrada',
-      subtitle: isUnlocked ? 'Cierra la sesión privileged Level 2' : 'Ingresar contraseña maestra',
+      title: isUnlocked ? 'Bloquear Bóveda Inmediatamente' : 'Desbloquear espacio seguro',
+      subtitle: isUnlocked ? 'Cierra el acceso a tus datos' : 'Ingresar contraseña de acceso',
       icon: isUnlocked ? Lock : Shield,
       color: isUnlocked ? 'text-rose-400' : 'text-emerald-400',
       action: () => {
@@ -182,7 +193,7 @@ export const CommandPalette: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center pt-20 p-4 bg-black/70 backdrop-blur-sm animate-fadeIn">
+    <div className="responsive-overlay fixed inset-0 z-50 flex items-start justify-center pt-20 p-4 bg-black/70 backdrop-blur-sm animate-fadeIn">
       <div 
         role="dialog"
         aria-modal="true"

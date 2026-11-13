@@ -1,16 +1,21 @@
 import React, { useState } from 'react';
 import { 
   Plus, RefreshCw, DollarSign, ShieldAlert, Rocket, Edit2, Check, X,
-  Briefcase, User, Layers
+  Briefcase, User, Layers, Menu
 } from 'lucide-react';
 import { useVault } from '../../context/VaultContext';
 import { api } from '../../lib/api';
 import { InfoTooltip } from '../common/InfoTooltip';
 
-export const Topbar: React.FC = () => {
+interface TopbarProps {
+  onMenuClick: () => void;
+  menuTriggerRef: React.RefObject<HTMLButtonElement>;
+}
+
+export const Topbar: React.FC<TopbarProps> = ({ onMenuClick, menuTriggerRef }) => {
   const { 
     activeSection, exchangeRate, refreshExchangeRate, triggerDataReload,
-    openEmailModal, openPlatformModal, openProspectModal, 
+    openEmailModal, openPlatformModal, openProspectModal, openUnlockModal, isUnlocked,
     panicLock, showToast, activeScope, setActiveScope
   } = useVault();
 
@@ -22,12 +27,13 @@ export const Topbar: React.FC = () => {
     dashboard: { title: 'Resumen General', tooltip: 'Vista rápida de tus correos principales, seguridad, prospectos, gastos e ingresos reales.' },
     emails: { title: 'Correos Principales', tooltip: 'Tus cuentas de correo principales, a qué teléfono o correo se recuperan y si tienen verificación en 2 pasos.' },
     platforms: { title: 'Cuentas y Servicios', tooltip: 'Todas las páginas, aplicaciones y herramientas vinculadas a tus correos principales.' },
-    prospects: { title: 'Prospectos y Proyectos', tooltip: 'Control de clientes potenciales con seguimiento comercial y tus proyectos propios e infraestructura.' },
+    capture: { title: 'Captación en mapa', tooltip: 'Busca negocios publicados en OpenStreetMap y elige cuáles guardar como prospectos.' },
+    prospects: { title: 'Prospectos', tooltip: 'Oportunidades comerciales y su seguimiento.' },
     passwords: { title: 'Contraseñas y Notas Seguras', tooltip: 'Consulta y copia rápidamente tus contraseñas, PINs, llaves API y recursos o notas cifradas.' },
     graph: { title: 'Mapa de Conexiones', tooltip: 'Diagrama visual que muestra qué servicios y clientes dependen de cada correo y tarjeta.' },
     subscriptions: { title: 'Finanzas, Ingresos y Vencimientos', tooltip: 'Control de suscripciones, gastos únicos, pagos recibidos de clientes (ganancia neta real) y vencimientos de dominios o hosting.' },
     trash: { title: 'Papelera', tooltip: 'Elementos eliminados recientemente que puedes restaurar o borrar de forma definitiva.' },
-    settings: { title: 'Ajustes y Seguridad', tooltip: 'Configura tu contraseña maestra, tiempos de bloqueo automático, presupuesto y respaldos.' },
+    settings: { title: 'Ajustes y Seguridad', tooltip: 'Configura tu contraseña de acceso, tiempos de bloqueo automático, presupuesto y respaldos.' },
     security_audit: { title: 'Nivel de Seguridad', tooltip: 'Revisión automática para detectar cuentas con la misma contraseña, contraseñas fáciles de adivinar o correos sin protección.' },
     audit_logs: { title: 'Historial de Actividad', tooltip: 'Registro cronológico de todos los movimientos y cambios realizados en tu sistema.' },
   };
@@ -79,7 +85,7 @@ export const Topbar: React.FC = () => {
     }
   };
 
-  const currentInfo = sectionTitles[activeSection] || { title: 'EmailSaver' };
+  const currentInfo = sectionTitles[activeSection] || { title: 'Contact | LESSSO' };
 
   const formattedUpdatedAt = exchangeRate?.updated_at
     ? new Date(exchangeRate.updated_at.endsWith('Z') ? exchangeRate.updated_at : `${exchangeRate.updated_at}Z`).toLocaleString('es-MX', {
@@ -89,22 +95,25 @@ export const Topbar: React.FC = () => {
     : '';
 
   return (
-    <header className="min-h-16 py-2.5 px-4 sm:px-6 flex flex-wrap items-center justify-between gap-x-4 gap-y-2.5 bg-obsidian-panel/80 backdrop-blur-md border-b border-obsidian-border select-none z-20">
+    <header className="relative z-20 flex min-w-0 shrink-0 items-center gap-2 border-b border-obsidian-border bg-obsidian-panel/95 px-3 py-2 sm:gap-3 sm:px-4 md:justify-between md:py-2.5">
       {/* Title & Optional Context Tooltip */}
-      <div className="min-w-0 flex items-center gap-2 mr-auto">
+      <div className="flex min-w-0 flex-1 items-center gap-2">
+        <button ref={menuTriggerRef} type="button" onClick={onMenuClick} className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-obsidian-border bg-obsidian-surface text-obsidian-text hover:bg-obsidian-border hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 lg:hidden" aria-label="Abrir menú de navegación" aria-haspopup="true">
+          <Menu size={18} />
+        </button>
         <h1 className="text-sm sm:text-base font-semibold text-white tracking-tight truncate" title={currentInfo.title}>
           {currentInfo.title}
         </h1>
-        {currentInfo.tooltip && (
+        {currentInfo.tooltip && <span className="hidden sm:inline-flex">
           <InfoTooltip text={currentInfo.tooltip} position="bottom" />
-        )}
+        </span>}
       </div>
 
       {/* Right Controls: Scope Filter + Exchange ticker + Actions */}
-      <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 shrink-0">
+      <div className="flex shrink-0 items-center justify-end gap-1.5 sm:gap-2.5">
         {/* Global Scope Selector (Todo | Empresa | Personal) */}
         <div
-          className="flex items-center p-0.5 rounded-xl bg-obsidian-surface border border-obsidian-border shrink-0"
+          className="hidden items-center rounded-xl border border-obsidian-border bg-obsidian-surface p-0.5 lg:flex"
           title="Filtrar toda la aplicación por ámbito: Todo, Empresa o Personal"
         >
           <button
@@ -146,7 +155,7 @@ export const Topbar: React.FC = () => {
         </div>
         {/* USD / MXN live pill + Manual override inline popover */}
         {exchangeRate && (
-          <div className="relative flex items-center shrink-0">
+          <div className="relative hidden shrink-0 items-center xl:flex">
             <div className="flex items-center rounded-xl bg-obsidian-surface border border-obsidian-border hover:border-obsidian-borderLight transition-all overflow-hidden">
               <button
                 type="button"
@@ -206,7 +215,7 @@ export const Topbar: React.FC = () => {
                     value={manualRateInput}
                     onChange={(e) => setManualRateInput(e.target.value)}
                     className="w-full px-2.5 py-1.5 rounded-lg bg-obsidian-bg border border-obsidian-border text-xs text-white font-mono focus:outline-none focus:border-indigo-500 min-w-0"
-                    placeholder="18.50"
+                    placeholder="Tipo de cambio"
                     autoFocus
                   />
                   <button
@@ -231,29 +240,30 @@ export const Topbar: React.FC = () => {
         <button
           type="button"
           onClick={panicLock}
-          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-300 text-xs font-semibold transition-all group active:scale-95 shrink-0"
+          className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-xl border border-rose-500/30 bg-rose-500/10 px-2.5 py-1.5 text-xs font-semibold text-rose-300 transition-colors hover:bg-rose-500/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-rose-300"
           title="Bloquear todo de inmediato y limpiar portapapeles (Ctrl + Shift + L)"
+          aria-label="Bloquear todo de inmediato"
         >
-          <ShieldAlert size={14} className="text-rose-400 group-hover:scale-110 transition-transform shrink-0" />
+          <ShieldAlert size={14} className="shrink-0 text-rose-400" />
           <span className="hidden md:inline">Bloquear Todo</span>
         </button>
 
         {/* Action Buttons */}
         <button
           type="button"
-          onClick={() => openProspectModal()}
-          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-obsidian-surface hover:bg-obsidian-border border border-obsidian-border text-xs font-medium text-obsidian-text hover:text-white transition-all active:scale-95 shrink-0 whitespace-nowrap"
+          onClick={() => isUnlocked ? openProspectModal() : openUnlockModal()}
+          aria-label="Nuevo prospecto"
+          className="inline-flex min-h-10 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl border border-obsidian-border bg-obsidian-surface px-2.5 py-1.5 text-xs font-medium text-obsidian-text transition-colors hover:bg-obsidian-border hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
           title="Registrar nuevo prospecto o página demo"
         >
           <Rocket size={13} className="text-indigo-400 shrink-0" />
-          <span className="hidden lg:inline">Nuevo Prospecto</span>
-          <span className="lg:hidden">Prospecto</span>
+          <span className="hidden sm:inline">Nuevo prospecto</span>
         </button>
 
         <button
           type="button"
           onClick={() => openEmailModal()}
-          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-obsidian-surface hover:bg-obsidian-border border border-obsidian-border text-xs font-medium text-obsidian-text hover:text-white transition-all active:scale-95 shrink-0 whitespace-nowrap"
+          className="hidden min-h-10 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl border border-obsidian-border bg-obsidian-surface px-2.5 py-1.5 text-xs font-medium text-obsidian-text transition-colors hover:bg-obsidian-border hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 md:inline-flex"
           title="Registrar nuevo correo principal"
         >
           <Plus size={14} className="text-indigo-400 shrink-0" />
@@ -264,7 +274,7 @@ export const Topbar: React.FC = () => {
         <button
           type="button"
           onClick={() => openPlatformModal()}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md shadow-indigo-600/20 transition-all active:scale-95 shrink-0 whitespace-nowrap"
+          className="hidden min-h-10 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-md shadow-indigo-600/20 transition-colors hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 xl:inline-flex"
         >
           <Plus size={14} className="shrink-0" />
           <span>Agregar Cuenta</span>

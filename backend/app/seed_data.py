@@ -1,6 +1,7 @@
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import ExchangeRate
+from app.config import settings
 
 async def seed_initial_demo_data(db: AsyncSession):
     """
@@ -14,7 +15,7 @@ async def seed_initial_demo_data(db: AsyncSession):
         rate = ExchangeRate(
             base_currency="USD",
             target_currency="MXN",
-            rate=18.50,
+            rate=settings.FALLBACK_USD_MXN_RATE,
             is_manual=False
         )
         db.add(rate)

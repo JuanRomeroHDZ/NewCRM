@@ -36,7 +36,7 @@ export const SecurityAuditView: React.FC = () => {
         <div className="space-y-1">
           <h2 className="text-xl font-bold text-white tracking-tight flex items-center justify-center gap-2">
             <span>Nivel de Seguridad de tus Cuentas</span>
-            <InfoTooltip text="Para revisar qué contraseñas están repetidas o son fáciles de adivinar, primero desbloquea con tu contraseña maestra." />
+            <InfoTooltip text="Para revisar qué contraseñas están repetidas o son fáciles de adivinar, primero desbloquea con tu contraseña de acceso." />
           </h2>
         </div>
         <button
@@ -44,7 +44,7 @@ export const SecurityAuditView: React.FC = () => {
           onClick={openUnlockModal}
           className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-lg shadow-indigo-600/30"
         >
-          <span>Desbloquear con Contraseña Maestra</span>
+          <span>Desbloquear con contraseña de acceso</span>
         </button>
       </div>
     );
@@ -148,7 +148,7 @@ export const SecurityAuditView: React.FC = () => {
         </div>
 
         {/* Quick Audit Metrics - Responsive Non-Overlapping Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 w-full xl:w-auto shrink-0">
+        <div className="grid grid-cols-1 min-[360px]:grid-cols-2 sm:grid-cols-5 gap-2.5 w-full xl:w-auto shrink-0">
           <div className="px-3.5 py-2.5 rounded-xl bg-obsidian-bg border border-obsidian-border min-w-0 flex flex-col items-center justify-center text-center">
             <span className="text-lg font-mono font-bold text-rose-400 block leading-tight">
               {audit?.reused_passwords_count || 0}
@@ -173,7 +173,7 @@ export const SecurityAuditView: React.FC = () => {
             </span>
             <span className="text-[10px] text-obsidian-muted mt-0.5 truncate max-w-full">Llaves por vencer</span>
           </div>
-          <div className="px-3.5 py-2.5 rounded-xl bg-obsidian-bg border border-obsidian-border min-w-0 flex flex-col items-center justify-center text-center col-span-2 sm:col-span-1">
+          <div className="px-3.5 py-2.5 rounded-xl bg-obsidian-bg border border-obsidian-border min-w-0 flex flex-col items-center justify-center text-center min-[360px]:col-span-2 sm:col-span-1">
             <span className="text-lg font-mono font-bold text-indigo-300 block leading-tight">
               {stalePassCount}
             </span>

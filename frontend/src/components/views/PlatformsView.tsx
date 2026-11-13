@@ -105,7 +105,7 @@ export const PlatformsView: React.FC = () => {
       <div className="p-4 rounded-2xl bg-obsidian-panel border border-obsidian-border flex flex-wrap items-center justify-between gap-3 text-xs">
         <div className="flex flex-wrap items-center gap-2 flex-1 min-w-0">
           {/* Search box */}
-          <div className="relative flex-1 min-w-[180px]">
+          <div className="relative min-w-0 w-full flex-1 sm:min-w-[180px]">
             <Search size={14} className="absolute left-3 top-2.5 text-obsidian-muted" />
             <input
               type="text"

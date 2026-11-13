@@ -7,6 +7,12 @@ export const PROSPECT_STATUS_OPTIONS: {
   dotClass: string;
 }[] = [
   {
+    value: 'nuevo',
+    label: 'Nuevo',
+    badgeClass: 'bg-cyan-500/10 text-cyan-300 border-cyan-500/25',
+    dotClass: 'bg-cyan-400'
+  },
+  {
     value: 'demo_creada',
     label: 'Demo Creada',
     badgeClass: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/25',
@@ -268,7 +274,7 @@ export function computeCommercialPipelineSummary(
   usdRateInput?: number,
   monthlyOperatingMXN: number = 0
 ): CommercialPipelineSummary {
-  const rate = usdRateInput && usdRateInput > 0 ? usdRateInput : 18.5;
+  const rate = usdRateInput && usdRateInput > 0 ? usdRateInput : 0;
   const toMXN = (val: number, curr?: string) => (curr === 'USD' ? val * rate : val);
 
   let activePipelineMXN = 0;
@@ -333,7 +339,7 @@ export function computeCommercialPipelineSummary(
 
 export function buildFollowUpMessage(prospect: Prospect): string {
   const greetingName = prospect.contact_name ? prospect.contact_name.split(' ')[0] : prospect.company_name;
-  const isFollowUp = (prospect.followup_count || 0) > 0 || prospect.status !== 'demo_creada';
+  const isFollowUp = (prospect.followup_count || 0) > 0 || !['demo_creada', 'nuevo'].includes(prospect.status);
 
   if (prospect.workflow_type === 'demo_first') {
     if (isFollowUp) {
@@ -372,7 +378,7 @@ export function buildWhatsAppUrl(
 export function buildMailtoUrl(prospect: Prospect): string | null {
   const targetEmail = prospect.contact_email?.trim();
   if (!targetEmail) return null;
-  const isFollowUp = (prospect.followup_count || 0) > 0 || prospect.status !== 'demo_creada';
+  const isFollowUp = (prospect.followup_count || 0) > 0 || !['demo_creada', 'nuevo'].includes(prospect.status);
   const subject = isFollowUp
     ? `Seguimiento: Propuesta y Demo para ${prospect.company_name}`
     : `Propuesta y Demostración Interactiva — ${prospect.company_name}`;

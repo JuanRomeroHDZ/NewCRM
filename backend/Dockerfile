@@ -1,4 +1,4 @@
-# Multi-stage hardened Dockerfile for EmailSaver FastAPI Backend
+# Multi-stage hardened Dockerfile for Contact | LESSSO FastAPI backend
 FROM python:3.12-slim AS builder
 
 WORKDIR /app
@@ -25,7 +25,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Create unprivileged non-root user
 RUN groupadd -g 1001 appgroup && \
-    useradd -u 1001 -g appgroup -s /bin/bash -m appuser
+    useradd -u 1001 -g appgroup -s /bin/bash -m appuser && \
+    chmod 755 /home/appuser
 
 # Copy installed packages from builder
 COPY --from=builder /root/.local /home/appuser/.local

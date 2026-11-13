@@ -84,7 +84,7 @@ export const TrashView: React.FC = () => {
           </h2>
           <InfoTooltip
             title="Autorización Requerida"
-            content="Restaurar o eliminar elementos permanentemente requiere tu contraseña maestra."
+            content="Restaurar o eliminar elementos permanentemente requiere tu contraseña de acceso."
           />
         </div>
         <button
@@ -92,7 +92,7 @@ export const TrashView: React.FC = () => {
           onClick={openUnlockModal}
           className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-lg shadow-indigo-600/30"
         >
-          <span>Desbloquear con Contraseña Maestra</span>
+          <span>Desbloquear con contraseña de acceso</span>
         </button>
       </div>
     );

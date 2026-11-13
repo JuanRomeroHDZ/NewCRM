@@ -17,13 +17,15 @@ from app.services.job_queue import (
     enqueue_job, fetch_next_job, mark_job_completed, mark_job_failed, mark_job_uncertain
 )
 from app.services.activity_service import record_event, get_activity_feed, get_audit_trail
+from app.config import settings
 
 @pytest.mark.asyncio
 async def test_owner_initialization_and_argon2id(db_session):
     owner = await get_or_create_initial_owner(db_session)
     assert owner is not None
     assert owner.role == "owner"
-    assert verify_master_password(owner.hashed_password, "AdminLESSSO2026!")
+    assert verify_master_password(owner.hashed_password, settings.INITIAL_OWNER_PASSWORD)
+    assert owner.must_change_password is True
 
 @pytest.mark.asyncio
 async def test_user_authentication_and_lockout(db_session):

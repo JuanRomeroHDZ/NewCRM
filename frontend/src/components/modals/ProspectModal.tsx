@@ -63,10 +63,12 @@ export const ProspectModal: React.FC = () => {
 
   const [formError, setFormError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [showFollowupConfig, setShowFollowupConfig] = useState(false);
 
   useEffect(() => {
     if (isProspectModalOpen) {
       setFormError(null);
+      setShowFollowupConfig(Boolean(editingProspectId));
       api.getEmails().then((eList) => {
         setEmails(eList);
         if (prospectModalDefaultEmailId) {
@@ -213,6 +215,7 @@ export const ProspectModal: React.FC = () => {
 
     const slaValidation = validateSlaHours(slaHours);
     if (!slaValidation.valid) {
+      setShowFollowupConfig(true);
       setFormError(slaValidation.error || 'Tiempo límite estipulado (SLA) inválido.');
       showToast(slaValidation.error || 'Tiempo límite estipulado (SLA) inválido.', 'error');
       return;
@@ -291,9 +294,12 @@ export const ProspectModal: React.FC = () => {
   const numericSlaPreview = Number(slaHours) || 0;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-fadeIn">
+    <div className="responsive-overlay fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-2 sm:p-4 bg-black/75 backdrop-blur-md animate-fadeIn">
       <div 
-        className="relative w-full max-w-2xl bg-obsidian-panel border border-obsidian-borderLight rounded-2xl shadow-2xl p-6 overflow-hidden max-h-[90vh] flex flex-col"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="prospect-modal-title"
+        className="relative w-full max-w-2xl bg-obsidian-panel border border-obsidian-borderLight rounded-xl sm:rounded-2xl shadow-2xl p-4 sm:p-6 overflow-hidden max-h-[calc(100dvh-1rem)] sm:max-h-[90dvh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}
@@ -303,7 +309,7 @@ export const ProspectModal: React.FC = () => {
               <Rocket size={20} />
             </div>
             <div className="min-w-0">
-              <h2 className="text-base font-bold text-white tracking-tight truncate">
+              <h2 id="prospect-modal-title" className="text-base font-bold text-white tracking-tight truncate">
                 {editingProspectId ? 'Editar Ficha de Prospecto / Página Demo' : 'Registrar Prospecto / Página Demo'}
               </h2>
             </div>
@@ -311,6 +317,7 @@ export const ProspectModal: React.FC = () => {
           <button
             type="button"
             onClick={closeProspectModal}
+            aria-label="Cerrar formulario"
             className="p-1.5 text-obsidian-muted hover:text-white rounded-lg hover:bg-obsidian-surface flex-shrink-0"
           >
             <X size={18} />
@@ -584,6 +591,15 @@ export const ProspectModal: React.FC = () => {
             </div>
           </div>
 
+          <details
+            open={showFollowupConfig}
+            onToggle={(event) => setShowFollowupConfig(event.currentTarget.open)}
+            className="rounded-xl border border-obsidian-border bg-obsidian-panel/60"
+          >
+            <summary className="cursor-pointer rounded-xl px-4 py-3 text-xs font-semibold text-obsidian-text marker:text-indigo-300 hover:bg-obsidian-surface/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300">
+              Correo y reglas de seguimiento <span className="ml-1 font-normal text-obsidian-muted">· SLA {slaHours || '—'} h · cadencia +{followupSlaHours} h</span>
+            </summary>
+            <div className="space-y-3 p-3 pt-0">
           {/* BLOQUE 2: Correlación de Emails */}
           <div className="p-4 rounded-xl bg-obsidian-surface/60 border border-obsidian-border space-y-3">
             <div>
@@ -731,7 +747,6 @@ export const ProspectModal: React.FC = () => {
                     type="text"
                     inputMode="decimal"
                     maxLength={INPUT_LIMITS.SLA_HOURS}
-                    required
                     value={slaHours}
                     onChange={(e) => setSlaHours(e.target.value.replace(/[^0-9.]/g, ''))}
                     className="w-28 px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-indigo-500"
@@ -810,6 +825,9 @@ export const ProspectModal: React.FC = () => {
               </div>
             </div>
           </div>
+
+            </div>
+          </details>
 
           {/* Tags & Notes */}
           <div className="grid grid-cols-1 gap-3">

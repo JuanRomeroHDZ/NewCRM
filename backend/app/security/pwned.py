@@ -34,7 +34,7 @@ async def check_pwned_password(password: str) -> tuple[bool | None, int, str]:
 
     url = f"https://api.pwnedpasswords.com/range/{prefix}"
     headers = {
-        "User-Agent": "EmailSaver-SelfHosted-Vault/1.0",
+        "User-Agent": "ContactLESSSO/2.0",
         "Add-Padding": "true"
     }
 

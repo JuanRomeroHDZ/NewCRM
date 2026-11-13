@@ -70,8 +70,8 @@ export const SettingsView: React.FC = () => {
             Ajustes Protegidos
           </h2>
           <InfoTooltip
-            title="Protección con Contraseña Maestra"
-            content="Ingresa tu contraseña maestra para cambiar ajustes de seguridad o descargar respaldos."
+            title="Protección con contraseña de acceso"
+            content="Ingresa tu contraseña de acceso para cambiar ajustes de seguridad o descargar respaldos."
           />
         </div>
         <button
@@ -79,7 +79,7 @@ export const SettingsView: React.FC = () => {
           onClick={openUnlockModal}
           className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-lg shadow-indigo-600/30"
         >
-          <span>Desbloquear con Contraseña Maestra</span>
+          <span>Desbloquear con contraseña de acceso</span>
         </button>
       </div>
     );
@@ -112,7 +112,7 @@ export const SettingsView: React.FC = () => {
           return;
         }
         if (newMasterPassword !== confirmMasterPassword) {
-          showToast('Las contraseñas maestras no coinciden.', 'error');
+          showToast('Las contraseñas de acceso no coinciden.', 'error');
           setIsSaving(false);
           return;
         }
@@ -407,14 +407,14 @@ export const SettingsView: React.FC = () => {
         <div className="p-6 rounded-2xl bg-obsidian-panel border border-obsidian-border space-y-4">
           <div className="flex items-center gap-2">
             <Key size={16} className="text-indigo-400" />
-            <h3 className="text-sm font-bold text-white">Cambiar Contraseña Maestra</h3>
-            <InfoTooltip content="Cambia la contraseña maestra con la que desbloqueas tus datos. Recuerda actualizar tu Hoja de Recuperación después del cambio." />
+            <h3 className="text-sm font-bold text-white">Cambiar contraseña de acceso</h3>
+            <InfoTooltip content="Cambia la contraseña de acceso con la que desbloqueas tus datos. Recuerda actualizar tu Hoja de Recuperación después del cambio." />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
             <div className="space-y-1.5">
               <label className="text-obsidian-text font-medium block">
-                Nueva Contraseña Maestra
+                Nueva contraseña de acceso
               </label>
               <input
                 type="password"
@@ -428,7 +428,7 @@ export const SettingsView: React.FC = () => {
 
             <div className="space-y-1.5">
               <label className="text-obsidian-text font-medium block">
-                Confirmar Nueva Contraseña Maestra
+                Confirmar Nueva contraseña de acceso
               </label>
               <input
                 type="password"

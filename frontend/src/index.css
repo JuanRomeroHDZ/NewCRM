@@ -71,3 +71,71 @@
 .animate-soft-pulse {
   animation: softPulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
+
+/* At short viewport heights the entire dialog scrolls, including its actions. */
+@media (max-height: 480px) {
+  .responsive-sidebar {
+    overflow-y: auto;
+  }
+
+  .responsive-sidebar > nav {
+    flex: 0 0 auto;
+    overflow: visible;
+  }
+
+  .responsive-overlay {
+    align-items: flex-start;
+    overflow-y: auto;
+    padding: 8px;
+  }
+
+  .responsive-overlay > div {
+    flex-shrink: 0;
+    margin-block: auto;
+    max-height: none;
+    overflow: visible;
+  }
+
+  .responsive-overlay > div > form,
+  .responsive-overlay .overflow-y-auto {
+    flex: 0 0 auto;
+    max-height: none;
+    overflow-y: visible;
+  }
+}
+
+@media (max-width: 360px) {
+  .responsive-overlay {
+    padding-inline: 8px;
+  }
+
+  .responsive-overlay > div {
+    min-width: 0;
+    padding: 12px;
+  }
+
+  .responsive-overlay .grid.grid-cols-2 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .responsive-overlay button {
+    max-width: 100%;
+    white-space: normal;
+  }
+
+  .responsive-overlay .justify-end {
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 420px) {
+  .responsive-tooltip {
+    position: fixed;
+    inset: auto 8px 8px;
+    width: auto;
+    max-height: calc(100dvh - 16px);
+    overflow-y: auto;
+    margin: 0;
+    transform: none;
+  }
+}

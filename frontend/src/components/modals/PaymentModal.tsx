@@ -108,7 +108,7 @@ export const PaymentModal: React.FC = () => {
 
   return (
     <div 
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-fadeIn"
+      className="responsive-overlay fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-fadeIn"
       role="dialog"
       aria-modal="true"
       aria-labelledby="payment-modal-title"
@@ -235,16 +235,16 @@ export const PaymentModal: React.FC = () => {
             <div className="flex items-center gap-1.5 text-obsidian-muted">
               <ShieldCheck size={14} className="text-emerald-400" />
               <span className="font-semibold text-white uppercase text-[10px] tracking-wider">
-                Seguridad PCI DSS — Cumplimiento Estricto
+                Protección de datos de pago
               </span>
             </div>
             <p className="text-[11px] text-obsidian-muted leading-relaxed">
-              EmailSaver no almacena códigos de seguridad CVV/CVC bajo ninguna circunstancia, cumpliendo con los estándares PCI DSS. Solo se almacena el alias, emisor y los últimos 4 dígitos.
+              El CVV/CVC no se solicita ni se guarda. El número completo de tarjeta es opcional y, si lo agregas, queda cifrado en la bóveda.
             </p>
 
             <div className="pt-2">
               <label htmlFor="payment-card-number" className="text-obsidian-muted block mb-1">
-                Número Completo de Tarjeta (Opcional — Cifrado AES-256-GCM)
+                Número de tarjeta (opcional)
               </label>
               <input
                 id="payment-card-number"
@@ -260,7 +260,7 @@ export const PaymentModal: React.FC = () => {
 
           <div>
             <label htmlFor="payment-billing-notes" className="text-obsidian-text font-medium block mb-1">
-              Notas de Facturación (Cifradas AES-256-GCM){' '}
+              Notas de facturación{' '}
               <span className="text-[10px] text-obsidian-muted font-mono">
                 ({billingNotes.length}/{INPUT_LIMITS.BILLING_NOTES})
               </span>

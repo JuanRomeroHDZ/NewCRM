@@ -689,7 +689,7 @@ export const SubscriptionsView: React.FC = () => {
 
 
   return (
-    <div className="p-4 sm:p-8 max-w-7xl mx-auto space-y-7 animate-fadeIn">
+    <div className="mx-auto max-w-7xl min-w-0 space-y-5 p-3 sm:space-y-7 sm:p-8 animate-fadeIn">
       {(!exchangeRate || !exchangeRate.is_manual) && (
         <p role="status" className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-200">
           Verifica el tipo de cambio antes de usar los totales convertidos: el valor disponible puede ser una referencia o estar desactualizado.
@@ -708,9 +708,9 @@ export const SubscriptionsView: React.FC = () => {
           />
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto">
           {/* Compact Exchange Rate Control */}
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-obsidian-panel border border-obsidian-border">
+          <div className="flex max-w-full min-w-0 flex-wrap items-center gap-2 rounded-xl border border-obsidian-border bg-obsidian-panel px-3 py-1.5">
             <DollarSign size={14} className="text-emerald-400 flex-shrink-0" />
             {isEditingRate ? (
               <div className="flex items-center gap-1.5">
@@ -775,7 +775,7 @@ export const SubscriptionsView: React.FC = () => {
           <button
             type="button"
             onClick={openNewIncomeModal}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-md shadow-emerald-600/20 transition-all whitespace-nowrap flex-shrink-0"
+            className="inline-flex max-w-full items-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 text-left text-xs font-semibold text-white shadow-md shadow-emerald-600/20 transition-all hover:bg-emerald-500"
           >
             <Plus size={14} />
             <span>Registrar Pago Recibido</span>
@@ -784,7 +784,7 @@ export const SubscriptionsView: React.FC = () => {
           <button
             type="button"
             onClick={openNewRenewalModal}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-obsidian-surface hover:bg-obsidian-border border border-obsidian-border text-white text-xs font-semibold transition-all whitespace-nowrap flex-shrink-0"
+            className="inline-flex max-w-full items-center gap-1.5 rounded-xl border border-obsidian-border bg-obsidian-surface px-3 py-2 text-left text-xs font-semibold text-white transition-all hover:bg-obsidian-border"
           >
             <Globe size={14} className="text-cyan-400" />
             <span>Nuevo Dominio / Hosting</span>
@@ -793,7 +793,7 @@ export const SubscriptionsView: React.FC = () => {
           <button
             type="button"
             onClick={openNewExpenseModal}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/30 text-purple-200 text-xs font-semibold transition-all whitespace-nowrap flex-shrink-0"
+            className="inline-flex max-w-full items-center gap-1.5 rounded-xl border border-purple-500/30 bg-purple-600/20 px-3 py-2 text-left text-xs font-semibold text-purple-200 transition-all hover:bg-purple-600/30"
           >
             <Receipt size={14} className="text-purple-300" />
             <span>Nuevo Gasto Único</span>
@@ -805,7 +805,7 @@ export const SubscriptionsView: React.FC = () => {
               if (!isUnlocked) openUnlockModal();
               else openPaymentModal();
             }}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md shadow-indigo-600/20 transition-all whitespace-nowrap flex-shrink-0"
+            className="inline-flex max-w-full items-center gap-1.5 rounded-xl bg-indigo-600 px-3 py-2 text-left text-xs font-semibold text-white shadow-md shadow-indigo-600/20 transition-all hover:bg-indigo-500"
           >
             <Plus size={14} />
             <span>Nueva Tarjeta</span>
@@ -816,7 +816,7 @@ export const SubscriptionsView: React.FC = () => {
       {/* ===================================================================== */}
       {/* RESUMEN EJECUTIVO: GASTOS, INGRESOS REALES Y GANANCIA NETA            */}
       {/* ===================================================================== */}
-      <div className="p-5 sm:p-6 rounded-2xl bg-obsidian-panel border border-obsidian-border space-y-6 shadow-xl">
+      <div className="min-w-0 rounded-2xl border border-obsidian-border bg-obsidian-panel p-3 shadow-xl sm:p-6 space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-obsidian-border/70">
           <div className="flex items-center gap-2 min-w-0">
             <BarChart3 size={16} className="text-indigo-400 flex-shrink-0" />
@@ -1000,7 +1000,7 @@ export const SubscriptionsView: React.FC = () => {
               </span>
               <PiggyBank size={14} className="text-emerald-400 flex-shrink-0" />
             </div>
-            <div className="text-sm font-bold font-mono text-white truncate" title={`Promedio: $${formatMoney(fin.avgMonthlyPerActiveMXN)} MXN ($${formatMoney(fin.avgMonthlyPerActiveUSD)} USD)`}>
+            <div className="break-words text-sm font-bold font-mono text-white" title={`Promedio: $${formatMoney(fin.avgMonthlyPerActiveMXN)} MXN ($${formatMoney(fin.avgMonthlyPerActiveUSD)} USD)`}>
               Prom: ${formatMoney(fin.avgMonthlyPerActiveMXN)} MXN <span className="text-[10px] text-obsidian-muted">(${formatMoney(fin.avgMonthlyPerActiveUSD)} USD)</span>
             </div>
             <div className="text-[11px] font-mono text-emerald-400 truncate" title={`Ahorro potencial anual: $${formatMoney(fin.totalOptimizationPotentialYearlyMXN)} MXN`}>
@@ -2107,7 +2107,7 @@ export const SubscriptionsView: React.FC = () => {
       {/* MODAL: REGISTRAR / EDITAR PAGO RECIBIDO DE CLIENTE                    */}
       {/* ===================================================================== */}
       {isIncomeModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
+        <div className="responsive-overlay fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
           <div
             className="relative w-full max-w-lg bg-obsidian-panel border border-obsidian-borderLight rounded-2xl shadow-2xl p-6 overflow-y-auto max-h-[92vh]"
             onClick={(e) => e.stopPropagation()}
@@ -2267,7 +2267,7 @@ export const SubscriptionsView: React.FC = () => {
                 />
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <div>
                   <label className="block text-obsidian-text font-medium mb-1">Monto *</label>
                   <input
@@ -2381,7 +2381,7 @@ export const SubscriptionsView: React.FC = () => {
       {/* MODAL: REGISTRAR / EDITAR VENCIMIENTO DE DOMINIO O HOSTING            */}
       {/* ===================================================================== */}
       {isRenewalModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
+        <div className="responsive-overlay fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
           <div
             className="relative w-full max-w-lg bg-obsidian-panel border border-obsidian-borderLight rounded-2xl shadow-2xl p-6 overflow-y-auto max-h-[92vh]"
             onClick={(e) => e.stopPropagation()}
@@ -2601,7 +2601,7 @@ export const SubscriptionsView: React.FC = () => {
                 <label className="block text-obsidian-text font-medium mb-1.5">
                   ¿Quién cubre el pago de la renovación? *
                 </label>
-                <div className="grid grid-cols-2 gap-2.5">
+                <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
                   <button
                     type="button"
                     onClick={() => setRenPaidBy('client')}
@@ -2705,7 +2705,7 @@ export const SubscriptionsView: React.FC = () => {
       {/* MODAL ATÓMICO: CONFIRMAR RENOVACIÓN DE CICLO (+1 CICLO)               */}
       {/* ===================================================================== */}
       {advanceRenewalTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
+        <div className="responsive-overlay fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
           <div
             className="relative w-full max-w-md bg-obsidian-panel border border-emerald-500/40 rounded-2xl shadow-2xl p-6 space-y-4"
             onClick={(e) => e.stopPropagation()}
@@ -2818,7 +2818,7 @@ export const SubscriptionsView: React.FC = () => {
       {/* MODAL: REGISTRAR / EDITAR GASTO ÚNICO VARIABLE                        */}
       {/* ===================================================================== */}
       {isExpenseModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
+        <div className="responsive-overlay fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
           <div
             className="relative w-full max-w-lg bg-obsidian-panel border border-obsidian-borderLight rounded-2xl shadow-2xl p-6 overflow-y-auto max-h-[92vh]"
             onClick={(e) => e.stopPropagation()}

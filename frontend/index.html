@@ -6,9 +6,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Contact | LESSSO — Sistema Personal y CRM</title>
     <meta name="description" content="Sistema personal con Bóveda, Finanzas, CRM de prospectos y ventas, Comunicaciones, Agenda y Taller" />
+    <style>
+      .startup-screen{min-height:100dvh;display:grid;place-items:center;background:#080b16;color:#a9b1c5;font:500 14px system-ui,sans-serif}
+      .startup-message{display:flex;align-items:center;gap:12px}
+      .startup-spinner{width:12px;height:12px;border:2px solid #31364a;border-top-color:#a98242;border-radius:50%;animation:startup-spin .8s linear infinite}
+      @keyframes startup-spin{to{transform:rotate(360deg)}}
+      @media(prefers-reduced-motion:reduce){.startup-spinner{animation:none}}
+    </style>
   </head>
   <body class="bg-obsidian-bg text-obsidian-text font-sans antialiased selection:bg-obsidian-accent/30 selection:text-white min-h-screen">
-    <div id="root"></div>
+    <div id="root">
+      <main class="startup-screen" role="status"><div class="startup-message"><span class="startup-spinner" aria-hidden="true"></span><span>Abriendo Contact | LESSSO…</span></div></main>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

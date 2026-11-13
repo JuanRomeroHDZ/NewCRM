@@ -25,16 +25,15 @@ async def get_or_create_initial_owner(session: AsyncSession) -> User:
     res = await session.execute(select(User).where(User.role == "owner"))
     owner = res.scalar_one_or_none()
     if not owner:
-        # Default initial owner using server secret seed
-        default_pwd = hash_master_password("AdminLESSSO2026!")
+        initial_pwd = hash_master_password(settings.INITIAL_OWNER_PASSWORD)
         owner = User(
-            username="propietario",
-            email="admin@lessso.local",
-            full_name="Propietario LESSSO",
+            username=settings.INITIAL_OWNER_USERNAME,
+            email=settings.INITIAL_OWNER_EMAIL,
+            full_name=settings.INITIAL_OWNER_NAME,
             role="owner",
-            hashed_password=default_pwd,
+            hashed_password=initial_pwd,
             is_active=True,
-            must_change_password=False
+            must_change_password=True
         )
         session.add(owner)
         await session.commit()

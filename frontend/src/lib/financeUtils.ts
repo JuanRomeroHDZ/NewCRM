@@ -141,9 +141,9 @@ export function evaluateBudgetCap(
   peakMonthMXN = 0,
   budgetCapAmount = 0,
   budgetCapCurrency = 'MXN',
-  usdRate = 18.0
+  usdRate = 0
 ): BudgetCapEvaluation {
-  const rate = usdRate > 0 ? usdRate : 18.0;
+  const rate = usdRate > 0 ? usdRate : 0;
   const enabled = budgetCapAmount > 0;
   const capMXN = enabled
     ? budgetCapCurrency === 'USD'
@@ -153,7 +153,7 @@ export function evaluateBudgetCap(
   const capUSD = enabled
     ? budgetCapCurrency === 'USD'
       ? budgetCapAmount
-      : budgetCapAmount / rate
+      : rate > 0 ? budgetCapAmount / rate : 0
     : 0;
 
   const usagePercent = capMXN > 0 ? Math.round((monthlyMXN / capMXN) * 100) : 0;
@@ -208,7 +208,7 @@ export function computeFinancialExecutiveSummary(
   activeScope = 'all',
   expenses: OneTimeExpense[] = []
 ): FinancialExecutiveSummary {
-  const usdRate = usdRateInput && usdRateInput > 0 ? usdRateInput : 18.0;
+  const usdRate = usdRateInput && usdRateInput > 0 ? usdRateInput : 0;
 
   const filteredPlatforms = platforms.filter(
     (p: any) => activeScope === 'all' || !p.scope || p.scope === 'all' || p.scope === activeScope
@@ -456,7 +456,9 @@ export function computeRealProfitAndRenewalsSummary(
   expenses: OneTimeExpense[] = [],
   activeScope = 'all'
 ): RealProfitSummary {
-  const usdRate = usdRateInput && usdRateInput > 0 ? usdRateInput : fin?.usdRate || 18.0;
+  const usdRate = usdRateInput && usdRateInput > 0
+    ? usdRateInput
+    : fin?.usdRate && fin.usdRate > 0 ? fin.usdRate : 0;
 
   const filteredIncomes = incomes.filter(
     (i: any) => activeScope === 'all' || !i.scope || i.scope === 'all' || i.scope === activeScope

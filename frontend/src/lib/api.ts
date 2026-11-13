@@ -7,6 +7,61 @@ import {
 
 const API_BASE = '/api/v1';
 
+export interface OSMBounds {
+  min_lat: number;
+  min_lon: number;
+  max_lat: number;
+  max_lon: number;
+}
+
+export interface OSMZone {
+  slug: string;
+  zone: string;
+  center: [number, number];
+  zoom: number;
+  bbox: OSMBounds;
+  colonias: string[];
+}
+
+export interface OSMMapConfig {
+  tile_url_template: string;
+  center: [number, number];
+  zoom: number;
+  attribution: string;
+}
+
+export interface OSMLead {
+  osm_id: string;
+  osm_url: string;
+  name: string;
+  sector: string;
+  subsector?: string | null;
+  category: string;
+  zone: string;
+  address?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  whatsapp?: string | null;
+  website?: string | null;
+  opening_hours?: string | null;
+  lat: number;
+  lon: number;
+  source: 'openstreetmap';
+}
+
+export interface OSMSearchResponse {
+  source: 'cache' | 'openstreetmap';
+  attribution: string;
+  cell_id: string;
+  sector: string;
+  zone: string;
+  search_bounds: OSMBounds;
+  fetched_at: string;
+  expires_at: string;
+  result_count: number;
+  results: OSMLead[];
+}
+
 let currentVaultToken: string | null = localStorage.getItem('emailsaver_vault_token');
 
 export function setApiVaultToken(token: string | null) {
@@ -240,6 +295,20 @@ export const api = {
   resetProspectTimer: (id: string, restartFromNow: boolean = true) =>
     request<Prospect>(`/prospects/${id}/reset-timer?restart_from_now=${restartFromNow}`, { method: 'POST' }),
   deleteProspect: (id: string) => request<{ message: string }>(`/prospects/${id}`, { method: 'DELETE' }),
+
+  // OpenStreetMap prospect capture
+  getCaptureZones: () => request<{ zones: OSMZone[] }>('/crm/capture/zones'),
+  getCaptureMapConfig: () => request<OSMMapConfig>('/crm/capture/map-config'),
+  searchOSMLeads: (payload: {
+    sector: string;
+    zone: string;
+    subsector?: string;
+    max_cache_age_days?: number;
+    bbox?: OSMBounds;
+  }) => request<OSMSearchResponse>('/crm/capture/search', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }),
 
   // Client Incomes / Pagos Recibidos
   getIncomes: () => request<ClientIncome[]>('/finances/incomes'),

@@ -5,7 +5,7 @@ from pydantic import BaseModel, EmailStr, Field, field_validator
 
 # Auth & Vault
 class MasterPasswordSetup(BaseModel):
-    master_password: str = Field(..., min_length=6)
+    master_password: str = Field(..., min_length=8)
 
 class VaultUnlockRequest(BaseModel):
     master_password: str
@@ -360,7 +360,7 @@ class ProspectBase(BaseModel):
     specific_alias: str | None = None
     scope: str = "business"
     workflow_type: str = "demo_first"  # demo_first, direct_quote
-    status: str = "demo_creada"  # demo_creada, primer_contacto, en_cotizacion, respondido, tiempo_agotado, archivado_frio
+    status: str = "demo_creada"  # nuevo, demo_creada, primer_contacto, en_cotizacion, respondido, tiempo_agotado, archivado_frio
     demo_url: str | None = None
     estimated_value: float = 0.0
     currency: str = "MXN"  # MXN, USD

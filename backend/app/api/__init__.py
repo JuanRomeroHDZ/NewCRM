@@ -1,1 +1,1 @@
-"""EmailSaver API Package."""
+"""Contact | LESSSO API package."""

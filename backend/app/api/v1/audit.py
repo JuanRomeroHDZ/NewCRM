@@ -11,7 +11,7 @@ def require_vault_unlocked(x_vault_token: str | None = Header(None)):
     if not verify_vault_token(x_vault_token):
         raise HTTPException(
             status_code=401,
-            detail="Bóveda cifrada bloqueada. Ingrese su contraseña maestra para acceder a los registros de auditoría."
+            detail="El espacio seguro está bloqueado. Ingrese su contraseña de acceso para acceder a los registros de auditoría."
         )
     return True
 

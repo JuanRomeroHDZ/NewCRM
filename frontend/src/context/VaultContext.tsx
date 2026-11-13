@@ -6,6 +6,7 @@ export type SectionType =
   | 'dashboard'
   | 'emails'
   | 'platforms'
+  | 'capture'
   | 'prospects'
   | 'passwords'
   | 'graph'
@@ -242,14 +243,21 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   useEffect(() => {
     refreshVaultStatus();
-    refreshExchangeRate();
     const handleVaultLocked = () => {
       setIsUnlocked(false);
       setRemainingSeconds(0);
     };
     window.addEventListener('vault_locked', handleVaultLocked);
     return () => window.removeEventListener('vault_locked', handleVaultLocked);
-  }, [refreshVaultStatus, refreshExchangeRate]);
+  }, [refreshVaultStatus]);
+
+  useEffect(() => {
+    if (!isUnlocked) {
+      setExchangeRate(null);
+      return;
+    }
+    refreshExchangeRate();
+  }, [isUnlocked, refreshExchangeRate]);
 
   // Countdown timer for vault auto-lock
   useEffect(() => {
@@ -375,7 +383,7 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setIsSetup(true);
     setIsUnlocked(true);
     setRemainingSeconds(res.timeout_minutes * 60);
-    showToast('Contraseña maestra configurada exitosamente.', 'success');
+    showToast('Contraseña de acceso configurada.', 'success');
     triggerDataReload();
   };
 

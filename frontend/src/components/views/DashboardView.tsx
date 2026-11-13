@@ -43,6 +43,20 @@ export const DashboardView: React.FC = () => {
   const [, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!isUnlocked) {
+      setEmails([]);
+      setPlatforms([]);
+      setPayments([]);
+      setProspects([]);
+      setIncomes([]);
+      setRenewals([]);
+      setExpenses([]);
+      setVaultSettings(null);
+      setLoading(false);
+      return;
+    }
+
+    let requestIsActive = true;
     setLoading(true);
     Promise.all([
       api.getEmails(),
@@ -54,6 +68,7 @@ export const DashboardView: React.FC = () => {
       api.getExpenses().catch(() => [] as OneTimeExpense[]),
       api.getVaultStatus().catch(() => null)
     ]).then(([emList, plList, payList, prList, incList, renList, expList, vStatus]) => {
+      if (!requestIsActive) return;
       setEmails(emList);
       setPlatforms(plList);
       setPayments(payList);
@@ -62,8 +77,17 @@ export const DashboardView: React.FC = () => {
       setRenewals(renList);
       setExpenses(expList);
       if (vStatus) setVaultSettings(vStatus);
-    }).finally(() => setLoading(false));
-  }, [dataVersion]);
+    }).catch((error) => {
+      if (requestIsActive && isUnlocked) {
+        showToast(error.message || 'No se pudo cargar el resumen.', 'error');
+      }
+    }).finally(() => {
+      if (requestIsActive) setLoading(false);
+    });
+    return () => {
+      requestIsActive = false;
+    };
+  }, [dataVersion, isUnlocked, showToast]);
 
   useEffect(() => {
     const interval = setInterval(() => setNowMs(Date.now()), 1000);
@@ -178,7 +202,7 @@ export const DashboardView: React.FC = () => {
     .slice(0, 5);
 
   return (
-    <div className="p-4 sm:p-8 max-w-7xl mx-auto space-y-7 animate-fadeIn">
+    <div className="mx-auto max-w-7xl min-w-0 space-y-5 p-3 sm:space-y-7 sm:p-8 animate-fadeIn">
       {(!exchangeRate || !exchangeRate.is_manual) && (
         <p role="status" className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-200">
           Verifica el tipo de cambio antes de usar los totales convertidos: el valor disponible puede ser una referencia o estar desactualizado.
@@ -308,11 +332,11 @@ export const DashboardView: React.FC = () => {
       </div>
 
       {/* High-Level Financial Executive Summary Widget + Ganancia Neta Real + Vencimientos */}
-      <div className="p-5 sm:p-6 rounded-2xl bg-obsidian-panel border border-obsidian-border space-y-4">
+      <div className="min-w-0 rounded-2xl border border-obsidian-border bg-obsidian-panel p-3 sm:p-6 space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
             <BarChart3 size={16} className="text-emerald-400 flex-shrink-0" />
-            <h2 className="text-sm font-bold text-white tracking-tight truncate">
+            <h2 className="min-w-0 break-words text-sm font-bold tracking-tight text-white">
               Resumen de Finanzas, Ganancia Neta y Dominios
             </h2>
             <InfoTooltip content="Compara tus ingresos cobrados contra tus gastos de suscripciones por semana, mes y año, además de alertarte sobre dominios o hostings próximos a vencer." />
@@ -335,19 +359,19 @@ export const DashboardView: React.FC = () => {
               <span className="truncate">Ganancia Neta Real</span>
             </div>
             <div className="mt-1.5 space-y-1 text-xs font-mono">
-              <div className="flex justify-between gap-2">
+              <div className="flex min-w-0 flex-wrap justify-between gap-x-2 gap-y-1">
                 <span className="text-obsidian-muted">Semana:</span>
                 <span className={`font-semibold truncate ${realProfit.netWeekMXN >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                   {realProfit.netWeekMXN >= 0 ? '+' : '-'}${formatMoney(Math.abs(realProfit.netWeekMXN))} MXN
                 </span>
               </div>
-              <div className="flex justify-between gap-2">
+              <div className="flex min-w-0 flex-wrap justify-between gap-x-2 gap-y-1">
                 <span className="text-obsidian-muted">Mes:</span>
                 <span className={`font-bold truncate ${realProfit.netMonthMXN >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                   {realProfit.netMonthMXN >= 0 ? '+' : '-'}${formatMoney(Math.abs(realProfit.netMonthMXN))} MXN
                 </span>
               </div>
-              <div className="flex justify-between gap-2">
+              <div className="flex min-w-0 flex-wrap justify-between gap-x-2 gap-y-1">
                 <span className="text-obsidian-muted">Año:</span>
                 <span className={`font-semibold truncate ${realProfit.netYearMXN >= 0 ? 'text-indigo-300' : 'text-rose-400'}`}>
                   {realProfit.netYearMXN >= 0 ? '+' : '-'}${formatMoney(Math.abs(realProfit.netYearMXN))} MXN
@@ -359,15 +383,15 @@ export const DashboardView: React.FC = () => {
           <div className="p-3.5 rounded-xl bg-obsidian-surface/60 border border-obsidian-border min-w-0">
             <div className="text-[10px] font-semibold text-obsidian-muted uppercase">Gastos en Suscripciones</div>
             <div className="mt-1.5 space-y-1 text-xs font-mono">
-              <div className="flex justify-between gap-2">
+              <div className="flex min-w-0 flex-wrap justify-between gap-x-2 gap-y-1">
                 <span className="text-obsidian-muted">Semanal:</span>
                 <span className="text-white font-semibold truncate">${formatMoney(fin.weeklyMXN)} MXN</span>
               </div>
-              <div className="flex justify-between gap-2">
+              <div className="flex min-w-0 flex-wrap justify-between gap-x-2 gap-y-1">
                 <span className="text-obsidian-muted">Mensual:</span>
                 <span className="text-emerald-400 font-bold truncate">${formatMoney(fin.monthlyMXN)} MXN</span>
               </div>
-              <div className="flex justify-between gap-2">
+              <div className="flex min-w-0 flex-wrap justify-between gap-x-2 gap-y-1">
                 <span className="text-obsidian-muted">Anual:</span>
                 <span className="text-indigo-300 font-semibold truncate">${formatMoney(fin.yearlyMXN)} MXN</span>
               </div>
@@ -380,15 +404,15 @@ export const DashboardView: React.FC = () => {
               <span className="truncate">Mes con Más y Menos Gasto</span>
             </div>
             <div className="mt-1.5 space-y-1 text-xs font-mono">
-              <div className="flex justify-between gap-2">
+              <div className="flex min-w-0 flex-wrap justify-between gap-x-2 gap-y-1">
                 <span className="text-rose-300">Más alto ({fin.peakMonth.shortName}):</span>
                 <span className="text-white font-bold truncate">${formatMoney(fin.peakMonth.totalMXN)} MXN</span>
               </div>
-              <div className="flex justify-between gap-2">
+              <div className="flex min-w-0 flex-wrap justify-between gap-x-2 gap-y-1">
                 <span className="text-emerald-300">Más bajo ({fin.lowestMonth.shortName}):</span>
                 <span className="text-white font-semibold truncate">${formatMoney(fin.lowestMonth.totalMXN)} MXN</span>
               </div>
-              <div className="flex justify-between gap-2">
+              <div className="flex min-w-0 flex-wrap justify-between gap-x-2 gap-y-1">
                 <span className="text-amber-300">Semana pesada:</span>
                 <span className="text-white truncate">{fin.peakWeek.label} (${formatMoney(fin.peakWeek.totalMXN, 0)})</span>
               </div>
@@ -401,17 +425,17 @@ export const DashboardView: React.FC = () => {
               <span className="truncate">Dominios y Hosting ({realProfit.activeRenewalsCount})</span>
             </div>
             <div className="mt-1.5 space-y-1 text-xs font-mono">
-              <div className="flex justify-between gap-2">
+              <div className="flex min-w-0 flex-wrap justify-between gap-x-2 gap-y-1">
                 <span className="text-obsidian-muted">Por vencer (30d):</span>
                 <span className={realProfit.expiringSoonRenewals.length > 0 ? 'text-amber-300 font-bold' : 'text-emerald-400'}>
                   {realProfit.expiringSoonRenewals.length} servicio(s)
                 </span>
               </div>
-              <div className="flex justify-between gap-2">
+              <div className="flex min-w-0 flex-wrap justify-between gap-x-2 gap-y-1">
                 <span className="text-obsidian-muted">Pago yo:</span>
                 <span className="text-rose-300 truncate">${formatMoney(realProfit.myRenewalsYearlyMXN, 0)} MXN/año</span>
               </div>
-              <div className="flex justify-between gap-2">
+              <div className="flex min-w-0 flex-wrap justify-between gap-x-2 gap-y-1">
                 <span className="text-obsidian-muted">Paga cliente:</span>
                 <span className="text-emerald-300 truncate">${formatMoney(realProfit.clientRenewalsYearlyMXN, 0)} MXN/año</span>
               </div>
@@ -422,28 +446,27 @@ export const DashboardView: React.FC = () => {
         {/* Comparative Row: Cotizaciones vs. Gasto Operativo + Límite de Gasto Mensual */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 pt-2 border-t border-obsidian-border/60">
           {/* Cotizaciones vs Gasto Operativo */}
-          <div className="p-3.5 rounded-xl bg-obsidian-surface/60 border border-obsidian-border flex flex-wrap items-center justify-between gap-3 min-w-0">
-            <div className="space-y-1 min-w-0 flex-1">
-              <div className="flex items-center gap-1.5 min-w-0">
+          <div className="flex min-w-0 flex-col items-stretch gap-3 rounded-xl border border-obsidian-border bg-obsidian-surface/60 p-3 sm:flex-row sm:items-center sm:justify-between sm:p-3.5">
+            <div className="min-w-0 flex-1 space-y-1">
+              <div className="flex min-w-0 items-start gap-1.5">
                 <Briefcase size={13} className="text-emerald-400 shrink-0" />
-                <span className="text-xs font-bold text-white truncate">
+                <span className="min-w-0 break-words text-xs font-bold text-white">
                   Cotizaciones de Prospectos vs. Gasto Mensual
                 </span>
                 <InfoTooltip content="Compara el valor de tus cotizaciones activas y proyectos cerrados frente a lo que gastas al mes en herramientas." />
               </div>
-              <div className="flex flex-wrap items-center gap-3 text-xs font-mono">
+              <div className="flex min-w-0 flex-col gap-1 break-words text-xs font-mono sm:flex-row sm:flex-wrap sm:gap-x-3">
                 <span>
                   En negociación: <strong className="text-indigo-300">${formatMoney(pipelineCurrency === 'MXN' ? pipelineSummary.activePipelineMXN : pipelineSummary.activePipelineUSD)} {pipelineCurrency}</strong>
                 </span>
-                <span>•</span>
                 <span>
                   Respondidos: <strong className="text-emerald-400">${formatMoney(pipelineCurrency === 'MXN' ? pipelineSummary.closedWonMXN : pipelineSummary.closedWonUSD)} {pipelineCurrency}</strong>
                 </span>
               </div>
             </div>
 
-            <div className="flex items-center gap-2 shrink-0">
-              <span className="px-2.5 py-1 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-mono text-xs font-bold">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <span className="max-w-full break-words rounded-lg border border-emerald-500/30 bg-emerald-500/15 px-2.5 py-1 font-mono text-xs font-bold text-emerald-300">
                 {pipelineSummary.monthlyCostCoverageRatio.toFixed(1)} meses cubiertos
               </span>
               <div className="flex items-center p-0.5 rounded-lg bg-obsidian-bg border border-obsidian-border text-[10px] font-mono">
@@ -465,14 +488,14 @@ export const DashboardView: React.FC = () => {
 
           {/* Límite de Gasto Mensual Status */}
           <div className="p-3.5 rounded-xl bg-obsidian-surface/60 border border-obsidian-border flex flex-col justify-center space-y-1.5 min-w-0">
-            <div className="flex items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="text-xs font-bold text-white flex items-center gap-1.5 truncate">
                 <Target size={13} className="text-indigo-400 shrink-0" />
                 <span className="truncate">Límite de Gasto Mensual</span>
               </span>
               {budgetCapEval.enabled ? (
                 <span
-                  className={`px-2 py-0.5 rounded text-[10px] font-semibold border shrink-0 ${
+                  className={`max-w-full break-words rounded border px-2 py-0.5 text-[10px] font-semibold ${
                     budgetCapEval.level === 'critical'
                       ? 'bg-rose-500/15 text-rose-300 border-rose-500/35'
                       : budgetCapEval.level === 'warning'
@@ -511,11 +534,11 @@ export const DashboardView: React.FC = () => {
       </div>
 
       {/* CRM Prospectos & Demos Summary Widget */}
-      <div className="p-6 rounded-2xl bg-obsidian-panel border border-obsidian-border space-y-4">
+      <div className="min-w-0 rounded-2xl border border-obsidian-border bg-obsidian-panel p-3 sm:p-6 space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2 min-w-0">
             <Briefcase size={16} className="text-indigo-400 flex-shrink-0" />
-            <h2 className="text-sm font-bold text-white tracking-tight truncate">
+            <h2 className="min-w-0 break-words text-sm font-bold tracking-tight text-white">
               Seguimiento de Prospectos y Páginas Demo
             </h2>
             {recontactProspects.length > 0 && (
@@ -530,7 +553,7 @@ export const DashboardView: React.FC = () => {
             )}
             <InfoTooltip content="Revisa qué clientes potenciales siguen dentro del tiempo límite de respuesta y envíales seguimiento por WhatsApp o correo con un clic." />
           </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={() => openProspectModal()}
@@ -692,7 +715,7 @@ export const DashboardView: React.FC = () => {
         <div className="lg:col-span-2 p-6 rounded-2xl bg-obsidian-panel border border-obsidian-border space-y-4 min-w-0">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 min-w-0">
-              <h2 className="text-sm font-bold text-white tracking-tight truncate">
+              <h2 className="min-w-0 break-words text-sm font-bold tracking-tight text-white">
                 Correos Principales
               </h2>
               <InfoTooltip content="Tus cuentas de correo principales ordenadas según la cantidad de servicios y clientes que dependen de ellas." />
@@ -833,12 +856,12 @@ export const DashboardView: React.FC = () => {
         onClick={() => setActiveSection('graph')}
         className="p-5 rounded-2xl bg-gradient-to-r from-indigo-950/40 via-obsidian-panel to-obsidian-panel border border-indigo-500/20 hover:border-indigo-500/40 transition-all cursor-pointer group flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xl"
       >
-        <div className="flex items-center gap-3.5 min-w-0">
+        <div className="flex w-full min-w-0 items-center gap-3.5 sm:w-auto">
           <div className="p-2.5 rounded-2xl bg-indigo-500/20 text-indigo-300 group-hover:scale-105 transition-transform flex-shrink-0">
             <Network size={22} />
           </div>
-          <div className="flex items-center gap-2 min-w-0">
-            <h3 className="text-sm font-bold text-white group-hover:text-indigo-300 transition-colors truncate">
+          <div className="flex min-w-0 flex-1 items-center gap-2">
+            <h3 className="min-w-0 flex-1 truncate text-sm font-bold text-white transition-colors group-hover:text-indigo-300">
               Abrir Mapa Visual de Conexiones entre Correos, Cuentas y Clientes
             </h3>
             <InfoTooltip content="Mira de forma gráfica qué servicios, tarjetas y páginas web dependen de cada correo principal." />
