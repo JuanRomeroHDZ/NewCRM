@@ -2,11 +2,13 @@ import json
 import secrets
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Header, status
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings as app_settings
 from app.database import get_db
 from app.models import UserSettings, EmailAccount, PlatformAccount, PaymentMethod, PasswordHistory
+from app.models.core import User
 from app.schemas import SettingsResponse, SettingsUpdate
 from app.schemas.runtime_config import RuntimeConfigUpdate
 from app.security.crypto import hash_master_password, verify_master_password, derive_vault_key, active_vault_key
@@ -14,9 +16,21 @@ from app.security.rekey import RekeyError, rekey_vault
 from app.security.tokens import require_vault_unlocked
 from app.security.sessions import session_manager
 from app.services.audit import log_audit_event
+from app.services.core_auth import require_role
 
 # All settings routes strictly require an unlocked Level 2 vault session
 router = APIRouter(prefix="/settings", tags=["settings"], dependencies=[Depends(require_vault_unlocked)])
+
+
+class TrashRetentionUpdate(BaseModel):
+    trash_retention_days: int = Field(..., ge=0, le=90)
+
+    @field_validator("trash_retention_days")
+    @classmethod
+    def validate_retention_option(cls, value: int) -> int:
+        if value not in (0, 30, 60, 90):
+            raise ValueError("Elige sin límite o un plazo de 30, 60 o 90 días.")
+        return value
 
 @router.get("", response_model=SettingsResponse)
 async def get_settings(db: AsyncSession = Depends(get_db)):
@@ -55,6 +69,11 @@ async def get_settings(db: AsyncSession = Depends(get_db)):
 
 @router.put("", response_model=SettingsResponse)
 async def update_settings(payload: SettingsUpdate, db: AsyncSession = Depends(get_db)):
+    if payload.trash_retention_days is not None:
+        raise HTTPException(
+            status_code=403,
+            detail="La conservación de la papelera se cambia desde su ajuste protegido.",
+        )
     stmt = select(UserSettings).limit(1)
     res = await db.execute(stmt)
     s = res.scalar_one_or_none()
@@ -115,8 +134,6 @@ async def update_settings(payload: SettingsUpdate, db: AsyncSession = Depends(ge
         s.password_rotation_days_root = int(payload.password_rotation_days_root)
     if payload.password_rotation_days_secondary is not None:
         s.password_rotation_days_secondary = int(payload.password_rotation_days_secondary)
-    if payload.trash_retention_days is not None and payload.trash_retention_days in (0, 30, 60, 90):
-        s.trash_retention_days = int(payload.trash_retention_days)
     if payload.max_followup_attempts is not None:
         s.max_followup_attempts = max(1, min(10, int(payload.max_followup_attempts)))
 
@@ -143,6 +160,29 @@ async def update_settings(payload: SettingsUpdate, db: AsyncSession = Depends(ge
         trash_retention_days=int(getattr(s, "trash_retention_days", 0) or 0),
         max_followup_attempts=int(getattr(s, "max_followup_attempts", app_settings.DEFAULT_MAX_FOLLOWUP_ATTEMPTS) or app_settings.DEFAULT_MAX_FOLLOWUP_ATTEMPTS)
     )
+
+
+@router.put("/trash-retention", response_model=SettingsResponse)
+async def update_trash_retention(
+    payload: TrashRetentionUpdate,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_role(["owner", "business_admin"])),
+):
+    result = await db.execute(select(UserSettings).limit(1))
+    row = result.scalar_one_or_none()
+    if not row:
+        raise HTTPException(status_code=400, detail="Bóveda no inicializada.")
+
+    row.trash_retention_days = payload.trash_retention_days
+    await log_audit_event(
+        db,
+        action="update",
+        entity_type="trash_retention",
+        details=f"Plazo de visibilidad de papelera actualizado a {payload.trash_retention_days} días",
+    )
+    await db.commit()
+    await db.refresh(row)
+    return await get_settings(db)
 
 
 @router.get("/runtime-config")

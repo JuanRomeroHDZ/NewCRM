@@ -118,7 +118,9 @@ interface VaultContextType {
   exchangeRate: ExchangeRate | null;
   refreshExchangeRate: () => Promise<void>;
   runtimeConfig: RuntimeConfig | null;
-  refreshRuntimeConfig: () => Promise<void>;
+  runtimeConfigLoading: boolean;
+  runtimeConfigError: string | null;
+  refreshRuntimeConfig: () => Promise<boolean>;
   supportedCurrencies: RuntimeCurrencyOption[];
   baseCurrency: string;
   systemLocale: string;
@@ -204,6 +206,9 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   // Exchange rate, runtime config & data reload
   const [exchangeRate, setExchangeRate] = useState<ExchangeRate | null>(null);
   const [runtimeConfig, setRuntimeConfig] = useState<RuntimeConfig | null>(null);
+  const [runtimeConfigLoading, setRuntimeConfigLoading] = useState(false);
+  const [runtimeConfigError, setRuntimeConfigError] = useState<string | null>(null);
+  const runtimeConfigRequest = useRef(0);
   const [dataVersion, setDataVersion] = useState(0);
 
   // Accessible Dialog state (replaces window.confirm / window.prompt)
@@ -295,14 +300,32 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   }, []);
 
-  const refreshRuntimeConfig = useCallback(async () => {
+  const refreshRuntimeConfig = useCallback(async (): Promise<boolean> => {
+    const requestId = ++runtimeConfigRequest.current;
+    if (!isUnlocked) {
+      setRuntimeConfig(null);
+      setRuntimeConfigError(null);
+      setRuntimeConfigLoading(false);
+      return false;
+    }
+    setRuntimeConfigLoading(true);
+    setRuntimeConfigError(null);
     try {
       const cfg = await api.getRuntimeConfig();
+      if (requestId !== runtimeConfigRequest.current) return false;
       setRuntimeConfig(cfg);
-    } catch (err) {
+      return true;
+    } catch (err: any) {
+      if (requestId === runtimeConfigRequest.current) {
+        setRuntimeConfig(null);
+        setRuntimeConfigError(err?.message || 'No se pudo cargar la configuración.');
+      }
       console.error('Error fetching runtime config:', err);
+      return false;
+    } finally {
+      if (requestId === runtimeConfigRequest.current) setRuntimeConfigLoading(false);
     }
-  }, []);
+  }, [isUnlocked]);
 
   useEffect(() => {
     refreshVaultStatus();
@@ -316,8 +339,11 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   useEffect(() => {
     if (!isUnlocked) {
+      runtimeConfigRequest.current += 1;
       setExchangeRate(null);
       setRuntimeConfig(null);
+      setRuntimeConfigLoading(false);
+      setRuntimeConfigError(null);
       return;
     }
     refreshExchangeRate();
@@ -630,6 +656,8 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         exchangeRate,
         refreshExchangeRate,
         runtimeConfig,
+        runtimeConfigLoading,
+        runtimeConfigError,
         refreshRuntimeConfig,
         supportedCurrencies,
         baseCurrency,

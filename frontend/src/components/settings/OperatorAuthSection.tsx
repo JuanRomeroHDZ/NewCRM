@@ -345,6 +345,7 @@ export const OperatorAuthSection: React.FC = () => {
             <input
               id="op-login-identifier"
               type="text"
+              autoComplete="username"
               value={loginIdentifier}
               onChange={(e) => setLoginIdentifier(e.target.value)}
               maxLength={INPUT_LIMITS.EMAIL}
@@ -359,6 +360,7 @@ export const OperatorAuthSection: React.FC = () => {
             <input
               id="op-login-password"
               type="password"
+              autoComplete="current-password"
               value={loginPassword}
               onChange={(e) => setLoginPassword(e.target.value)}
               maxLength={INPUT_LIMITS.PASSWORD}
@@ -374,9 +376,10 @@ export const OperatorAuthSection: React.FC = () => {
               <input
                 id="op-login-totp"
                 type="text"
+              inputMode="numeric"
                 value={loginTotp}
                 onChange={(e) => setLoginTotp(e.target.value)}
-                maxLength={16}
+                maxLength={8}
                 placeholder="123456"
                 className="w-full min-w-0 px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-indigo-500"
               />
@@ -429,8 +432,10 @@ export const OperatorAuthSection: React.FC = () => {
                 <input
                   id="op-pwd-current"
                   type="password"
+                  autoComplete="current-password"
                   value={currentPwd}
                   onChange={(e) => setCurrentPwd(e.target.value)}
+                  maxLength={INPUT_LIMITS.PASSWORD}
                   placeholder="Contraseña actual"
                   className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-cyan-500"
                 />
@@ -442,8 +447,10 @@ export const OperatorAuthSection: React.FC = () => {
                 <input
                   id="op-pwd-new"
                   type="password"
+                  autoComplete="new-password"
                   value={newPwd}
                   onChange={(e) => setNewPwd(e.target.value)}
+                  maxLength={INPUT_LIMITS.PASSWORD}
                   placeholder="Nueva contraseña (mín. 8 caracteres)"
                   className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-cyan-500"
                 />
@@ -457,8 +464,10 @@ export const OperatorAuthSection: React.FC = () => {
                     <input
                       id="op-pwd-totp"
                       type="text"
+                      inputMode="numeric"
                       value={pwdTotp}
                       onChange={(e) => setPwdTotp(e.target.value)}
+                      maxLength={8}
                       placeholder="Código 2FA"
                       className="w-32 px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-cyan-500"
                     />
@@ -488,8 +497,10 @@ export const OperatorAuthSection: React.FC = () => {
                   <input
                     id="op-totp-confirm-pwd"
                     type="password"
+                    autoComplete="current-password"
                     value={totpConfirmPwd}
                     onChange={(e) => setTotpConfirmPwd(e.target.value)}
+                    maxLength={INPUT_LIMITS.PASSWORD}
                     placeholder="Contraseña actual para rotar 2FA"
                     className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-emerald-500"
                   />

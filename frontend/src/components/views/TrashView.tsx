@@ -3,8 +3,8 @@ import {
   Trash2, RotateCcw, AlertOctagon, Lock, Clock, AlertTriangle, Search, X
 } from 'lucide-react';
 import { useVault } from '../../context/VaultContext';
-import { api } from '../../lib/api';
-import { AuditLogItem } from '../../types';
+import { api, getApiUserToken } from '../../lib/api';
+import type { AuditLogItem, CoreUser } from '../../types';
 import { InfoTooltip } from '../common/InfoTooltip';
 import { EmptyState } from '../common/EmptyState';
 import { INPUT_LIMITS } from '../../lib/validation';
@@ -40,10 +40,15 @@ const AUDIT_ACTION_LABELS: Record<string, string> = {
 };
 
 export const TrashView: React.FC = () => {
-  const { isUnlocked, openUnlockModal, showToast, triggerDataReload, dataVersion, confirm, systemLocale } = useVault();
+  const {
+    isUnlocked, openUnlockModal, showToast, triggerDataReload, dataVersion, confirm,
+    systemLocale, setActiveSection,
+  } = useVault();
 
   const [trashItems, setTrashItems] = useState<any[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLogItem[]>([]);
+  const [currentUser, setCurrentUser] = useState<CoreUser | null>(null);
+  const [requiresUserLogin, setRequiresUserLogin] = useState(false);
   const [retentionDays, setRetentionDays] = useState<number>(0);
   const [activeTab, setActiveTab] = useState<'trash' | 'audit'>('trash');
   const [loading, setLoading] = useState(true);
@@ -57,6 +62,8 @@ export const TrashView: React.FC = () => {
     if (!isUnlocked) {
       setTrashItems([]);
       setAuditLogs([]);
+      setCurrentUser(null);
+      setRequiresUserLogin(false);
       setRetentionDays(0);
       setSearchQuery('');
       setTypeFilter('all');
@@ -64,9 +71,29 @@ export const TrashView: React.FC = () => {
       setLoading(false);
       return;
     }
+    if (!getApiUserToken()) {
+      setTrashItems([]);
+      setAuditLogs([]);
+      setCurrentUser(null);
+      setRequiresUserLogin(true);
+      setLoadError(null);
+      setLoading(false);
+      return;
+    }
+    setRequiresUserLogin(false);
     setLoading(true);
     setLoadError(null);
     try {
+      const user = await api.getCurrentUser();
+      if (generation !== loadGeneration.current) return;
+      setCurrentUser(user);
+      if (user.must_change_password) {
+        setTrashItems([]);
+        setAuditLogs([]);
+        setLoadError(null);
+        setLoading(false);
+        return;
+      }
       const [tList, aList, vStatus] = await Promise.all([
         api.getTrash(),
         api.getAuditLogs(60),
@@ -80,6 +107,15 @@ export const TrashView: React.FC = () => {
       }
     } catch (err: any) {
       if (generation !== loadGeneration.current) return;
+      const hasUserSession = Boolean(getApiUserToken());
+      setCurrentUser(null);
+      setTrashItems([]);
+      setAuditLogs([]);
+      setRequiresUserLogin(!hasUserSession);
+      if (!hasUserSession) {
+        setLoadError(null);
+        return;
+      }
       setLoadError(err?.message || 'No se pudo cargar la papelera.');
     } finally {
       if (generation === loadGeneration.current) setLoading(false);
@@ -93,14 +129,28 @@ export const TrashView: React.FC = () => {
     };
   }, [loadData, dataVersion]);
 
+  useEffect(() => {
+    const handleSessionExpired = () => {
+      loadGeneration.current += 1;
+      setTrashItems([]);
+      setAuditLogs([]);
+      setCurrentUser(null);
+      setRequiresUserLogin(true);
+      setLoadError(null);
+      setLoading(false);
+    };
+    window.addEventListener('core_user_session_expired', handleSessionExpired);
+    return () => window.removeEventListener('core_user_session_expired', handleSessionExpired);
+  }, []);
+
   const handleRetentionChange = async (newDays: number) => {
     try {
-      await api.updateSettings({ trash_retention_days: newDays });
+      await api.updateTrashRetention(newDays);
       setRetentionDays(newDays);
       showToast(
         newDays === 0
-          ? 'Los elementos eliminados se conservarán hasta que los borres.'
-          : `Los elementos eliminados se borrarán después de ${newDays} días.`,
+          ? 'Los elementos permanecerán visibles hasta que los borres.'
+          : `Los elementos dejarán de aparecer después de ${newDays} días. No se borrarán automáticamente.`,
         'info'
       );
       triggerDataReload();
@@ -186,7 +236,61 @@ export const TrashView: React.FC = () => {
     );
   }
 
+  if (requiresUserLogin) {
+    return (
+      <div className="mx-auto max-w-xl space-y-4 p-3 pt-6 text-center animate-fadeIn sm:p-8 sm:pt-24">
+        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl border border-indigo-500/20 bg-indigo-500/10 text-indigo-300">
+          <Lock size={28} aria-hidden="true" />
+        </div>
+        <div className="space-y-2">
+          <h2 className="text-xl font-bold tracking-tight text-white">Inicia sesión para abrir la papelera</h2>
+          <p className="text-sm leading-relaxed text-obsidian-muted">
+            La bóveda está desbloqueada. Inicia sesión desde Ajustes y vuelve aquí para consultar los elementos eliminados.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setActiveSection('settings')}
+          className="inline-flex min-h-10 items-center justify-center rounded-xl border border-indigo-500/30 bg-indigo-500/10 px-4 py-2 text-sm font-semibold text-indigo-200 hover:bg-indigo-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300"
+        >
+          Abrir Ajustes
+        </button>
+      </div>
+    );
+  }
+
+  if (currentUser?.must_change_password) {
+    return (
+      <div className="mx-auto max-w-xl space-y-4 p-3 pt-6 text-center animate-fadeIn sm:p-8 sm:pt-24">
+        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl border border-amber-500/20 bg-amber-500/10 text-amber-300">
+          <Lock size={28} aria-hidden="true" />
+        </div>
+        <div className="space-y-2">
+          <h2 className="text-xl font-bold tracking-tight text-white">Actualiza tu contraseña temporal</h2>
+          <p className="text-sm leading-relaxed text-obsidian-muted">
+            Para consultar o modificar la papelera, primero cambia la contraseña temporal desde Ajustes.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setActiveSection('settings')}
+          className="inline-flex min-h-10 items-center justify-center rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-sm font-semibold text-amber-100 hover:bg-amber-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
+        >
+          Abrir Ajustes
+        </button>
+      </div>
+    );
+  }
+
   const locale = systemLocale || 'es-MX';
+  const canRestore = Boolean(
+    currentUser && !currentUser.must_change_password &&
+    ['owner', 'business_admin', 'seller'].includes(currentUser.role)
+  );
+  const canPurge = Boolean(
+    currentUser && !currentUser.must_change_password &&
+    ['owner', 'business_admin'].includes(currentUser.role)
+  );
 
   return (
     <div className="mx-auto max-w-7xl min-w-0 space-y-4 p-3 sm:space-y-6 sm:p-8 animate-fadeIn">
@@ -198,30 +302,31 @@ export const TrashView: React.FC = () => {
             Papelera
           </h2>
           <InfoTooltip
-            title="Conservación Segura"
-            content="Los elementos eliminados se conservan hasta que decidas borrarlos, o puedes programar su eliminación en 30, 60 o 90 días."
+            title="Conservación de elementos"
+            content="Al vencer, dejan de aparecer aquí, pero no se borran. Elige Sin límite para volver a verlos."
           />
         </div>
 
         <div className="flex max-w-full min-w-0 flex-wrap items-center gap-3">
-          {/* Auto-Purge Policy Selector */}
-          <div className="flex max-w-full min-w-0 flex-wrap items-center gap-2 rounded-lg border border-obsidian-border bg-obsidian-panel px-3 py-1.5 text-xs">
-            <Clock size={13} className="text-indigo-400 shrink-0" aria-hidden="true" />
-            <label htmlFor="trash-retention-select" className="text-obsidian-muted font-medium">
-              Vaciar automáticamente:
-            </label>
-            <select
-              id="trash-retention-select"
-              value={retentionDays}
-              onChange={(e) => handleRetentionChange(Number(e.target.value))}
-              className="px-2 py-0.5 rounded-lg bg-obsidian-bg border border-obsidian-border text-white font-semibold focus:outline-none focus:border-indigo-500"
-            >
-              <option value={0}>Nunca (Manual)</option>
-              <option value={30}>A los 30 días</option>
-              <option value={60}>A los 60 días</option>
-              <option value={90}>A los 90 días</option>
-            </select>
-          </div>
+          {canPurge && (
+            <div className="flex max-w-full min-w-0 flex-wrap items-center gap-2 rounded-lg border border-obsidian-border bg-obsidian-panel px-3 py-1.5 text-xs">
+              <Clock size={13} className="shrink-0 text-indigo-400" aria-hidden="true" />
+              <label htmlFor="trash-retention-select" className="font-medium text-obsidian-muted">
+                Mostrar durante:
+              </label>
+              <select
+                id="trash-retention-select"
+                value={retentionDays}
+                onChange={(event) => handleRetentionChange(Number(event.target.value))}
+                className="min-h-9 max-w-full rounded-lg border border-obsidian-border bg-obsidian-bg px-2 text-white focus:border-indigo-500 focus:outline-none"
+              >
+                <option value={0}>Sin límite</option>
+                <option value={30}>30 días</option>
+                <option value={60}>60 días</option>
+                <option value={90}>90 días</option>
+              </select>
+            </div>
+          )}
 
           <div className="flex max-w-full flex-wrap items-center rounded-lg border border-obsidian-border bg-obsidian-panel p-1 text-xs">
             <button
@@ -245,6 +350,12 @@ export const TrashView: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {currentUser && !canRestore && !currentUser.must_change_password && (
+        <div className="rounded-xl border border-obsidian-border bg-obsidian-panel px-4 py-3 text-sm text-obsidian-muted" role="status">
+          Tu acceso permite consultar la papelera, pero no modificar sus elementos.
+        </div>
+      )}
 
       {loading && trashItems.length === 0 && auditLogs.length === 0 ? (
         <div className="space-y-3" role="status" aria-label="Cargando papelera y actividad reciente">
@@ -314,7 +425,7 @@ export const TrashView: React.FC = () => {
               <div className="divide-y divide-obsidian-border">
                 {filteredTrashItems.map((item) => {
                   const elapsedDays = typeof item.elapsed_days === 'number' ? item.elapsed_days : 0;
-                  const daysUntilPurge = item.days_until_purge;
+                  const daysUntilHidden = item.days_until_hidden;
                   const typeLabel = TRASH_TYPE_LABELS[item.type] || item.type;
 
                   return (
@@ -328,9 +439,9 @@ export const TrashView: React.FC = () => {
                           <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-obsidian-bg text-obsidian-muted border border-obsidian-border flex-shrink-0">
                             {elapsedDays === 0 ? 'Eliminado hoy' : `En papelera hace ${elapsedDays} día(s)`}
                           </span>
-                          {daysUntilPurge !== null && daysUntilPurge !== undefined ? (
+                          {daysUntilHidden !== null && daysUntilHidden !== undefined ? (
                             <span className="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/30 flex-shrink-0">
-                              Se borrará en {daysUntilPurge} día(s)
+                              Dejará de aparecer en {daysUntilHidden} día(s)
                             </span>
                           ) : (
                             <span className="px-2 py-0.5 rounded text-[10px] font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 flex-shrink-0">
@@ -343,24 +454,30 @@ export const TrashView: React.FC = () => {
                         </div>
                       </div>
 
-                      <div className="flex max-w-full flex-wrap items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => handleRestore(item.type, item.id)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-medium transition-colors"
-                        >
-                          <RotateCcw size={13} aria-hidden="true" />
-                          <span>Restaurar</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handlePurge(item.type, item.id, item.title)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 text-xs font-medium transition-colors"
-                        >
-                          <AlertOctagon size={13} aria-hidden="true" />
-                          <span>Eliminar definitivamente</span>
-                        </button>
-                      </div>
+                      {(canRestore || canPurge) && (
+                        <div className="flex max-w-full flex-wrap items-center gap-2">
+                          {canRestore && (
+                            <button
+                              type="button"
+                              onClick={() => handleRestore(item.type, item.id)}
+                              className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-300 transition-colors hover:bg-emerald-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300"
+                            >
+                              <RotateCcw size={13} aria-hidden="true" />
+                              <span>Restaurar</span>
+                            </button>
+                          )}
+                          {canPurge && (
+                            <button
+                              type="button"
+                              onClick={() => handlePurge(item.type, item.id, item.title)}
+                              className="inline-flex items-center gap-1.5 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-1.5 text-xs font-medium text-rose-300 transition-colors hover:bg-rose-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300"
+                            >
+                              <AlertOctagon size={13} aria-hidden="true" />
+                              <span>Eliminar definitivamente</span>
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
                   );
                 })}

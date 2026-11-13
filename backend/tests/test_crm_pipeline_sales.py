@@ -1,7 +1,14 @@
+import asyncio
 import pytest
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import async_sessionmaker, AsyncSession, create_async_engine
+from app.database import Base
 from app.models import Prospect
-from app.models.crm_sales import Client, Proposal, Sale, PaymentInstallment, PaymentRecord, Invoice
-from app.services.crm_sales import CrmSalesService
+from app.models.core import User
+from app.models.crm_sales import Client, FolioSequence, Proposal, Sale, PaymentInstallment, PaymentRecord, Invoice
+from app.security.crypto import hash_master_password
+from app.services.core_auth import create_user_session
+from app.services.crm_sales import CrmSalesService, SaleAlreadyClosedError
 
 @pytest.mark.asyncio
 async def test_prospect_cadence_transitions_to_sin_respuesta_preserving_history(db_session):
@@ -57,6 +64,69 @@ async def test_locked_folio_generation_has_no_gaps(db_session):
     assert folio1 == "PROP-0001"
     assert folio2 == "PROP-0002"
     assert folio3 == "PROP-0003"
+
+
+@pytest.mark.asyncio
+async def test_folio_upsert_starts_at_one_and_keeps_count_across_commits(db_session):
+    first = await CrmSalesService.get_next_folio(db_session, "invoice", "FAC-")
+    await db_session.commit()
+    second = await CrmSalesService.get_next_folio(db_session, "invoice", "FAC-")
+    await db_session.commit()
+
+    sequence = await db_session.scalar(
+        select(FolioSequence).where(FolioSequence.sequence_type == "invoice")
+    )
+    assert first == "FAC-0001"
+    assert second == "FAC-0002"
+    assert sequence is not None
+    assert sequence.current_number == 2
+
+
+@pytest.mark.asyncio
+async def test_folio_upsert_leaves_commit_control_to_caller(db_session):
+    prospect = Prospect(company_name="Operación reversible")
+    db_session.add(prospect)
+    await db_session.flush()
+
+    folio = await CrmSalesService.get_next_folio(db_session, "sale", "VENTA-")
+    await db_session.rollback()
+
+    assert folio == "VENTA-0001"
+    assert await db_session.get(Prospect, prospect.id) is None
+    assert await db_session.scalar(
+        select(FolioSequence).where(FolioSequence.sequence_type == "sale")
+    ) is None
+
+
+@pytest.mark.asyncio
+async def test_folio_upsert_allocates_unique_numbers_concurrently(tmp_path):
+    db_path = tmp_path / "folio-concurrency.sqlite3"
+    engine = create_async_engine(f"sqlite+aiosqlite:///{db_path}")
+    async with engine.begin() as connection:
+        await connection.run_sync(Base.metadata.create_all)
+    session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+
+    async def allocate_folio():
+        async with session_factory() as session:
+            folio = await CrmSalesService.get_next_folio(session, "sale", "VENTA-")
+            await session.commit()
+            return folio
+
+    try:
+        folios = await asyncio.gather(*(allocate_folio() for _ in range(6)))
+        values = sorted(int(folio.removeprefix("VENTA-")) for folio in folios)
+        assert values == list(range(1, 7))
+
+        async with session_factory() as session:
+            count = await session.scalar(select(func.count()).select_from(FolioSequence))
+            sequence = await session.scalar(
+                select(FolioSequence).where(FolioSequence.sequence_type == "sale")
+            )
+        assert count == 1
+        assert sequence is not None
+        assert sequence.current_number == 6
+    finally:
+        await engine.dispose()
 
 @pytest.mark.asyncio
 async def test_close_sale_atomic_creates_full_entity_graph(db_session):
@@ -123,6 +193,150 @@ async def test_close_sale_atomic_creates_full_entity_graph(db_session):
     await db_session.refresh(prop)
     assert prospect.status == "cliente"
     assert prop.status == "aceptada"
+
+
+@pytest.mark.asyncio
+async def test_close_sale_rejects_a_second_sale_for_the_same_prospect(db_session):
+    prospect = Prospect(company_name="Clínica Central")
+    db_session.add(prospect)
+    await db_session.commit()
+
+    first_sale, _, _ = await CrmSalesService.close_sale_atomic(
+        session=db_session,
+        user_id="test-user",
+        company_name=prospect.company_name,
+        title="Sitio web",
+        total_amount=12000.0,
+        prospect_id=prospect.id,
+    )
+    first_sale_prospect_id = first_sale.prospect_id
+
+    with pytest.raises(SaleAlreadyClosedError, match="Ya existe una venta para este prospecto"):
+        await CrmSalesService.close_sale_atomic(
+            session=db_session,
+            user_id="test-user",
+            company_name=prospect.company_name,
+            title="Sitio web",
+            total_amount=12000.0,
+            prospect_id=prospect.id,
+        )
+
+    sales_count = await db_session.scalar(
+        select(func.count()).select_from(Sale).where(Sale.prospect_id == prospect.id)
+    )
+    clients_count = await db_session.scalar(
+        select(func.count()).select_from(Client).where(Client.prospect_id == prospect.id)
+    )
+    assert sales_count == 1
+    assert clients_count == 1
+    assert first_sale_prospect_id == prospect.id
+
+
+@pytest.mark.asyncio
+async def test_close_sale_serializes_concurrent_requests_for_the_same_prospect(tmp_path):
+    db_path = tmp_path / "sale-concurrency.sqlite3"
+    engine = create_async_engine(f"sqlite+aiosqlite:///{db_path}")
+    async with engine.begin() as connection:
+        await connection.run_sync(Base.metadata.create_all)
+    session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+
+    try:
+        async with session_factory() as session:
+            prospect = Prospect(company_name="Clínica bajo concurrencia")
+            session.add(prospect)
+            await session.commit()
+            prospect_id = prospect.id
+
+        async def close_sale():
+            async with session_factory() as session:
+                return await CrmSalesService.close_sale_atomic(
+                    session=session,
+                    user_id="test-user",
+                    company_name="Clínica bajo concurrencia",
+                    title="Sitio web",
+                    total_amount=12000.0,
+                    prospect_id=prospect_id,
+                )
+
+        outcomes = await asyncio.gather(close_sale(), close_sale(), return_exceptions=True)
+        successes = [outcome for outcome in outcomes if not isinstance(outcome, BaseException)]
+        conflicts = [outcome for outcome in outcomes if isinstance(outcome, SaleAlreadyClosedError)]
+
+        async with session_factory() as session:
+            sales_count = await session.scalar(
+                select(func.count()).select_from(Sale).where(Sale.prospect_id == prospect_id)
+            )
+        assert len(successes) == 1
+        assert len(conflicts) == 1
+        assert sales_count == 1
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_close_sale_via_proposal_claims_its_prospect(db_session):
+    prospect = Prospect(company_name="Consultorio del Valle")
+    db_session.add(prospect)
+    await db_session.flush()
+    proposal = Proposal(
+        folio="PROP-TEST-1",
+        prospect_id=prospect.id,
+        title="Sitio web",
+        amount=12000.0,
+    )
+    db_session.add(proposal)
+    await db_session.commit()
+
+    sale, _, _ = await CrmSalesService.close_sale_atomic(
+        session=db_session,
+        user_id="test-user",
+        company_name=prospect.company_name,
+        title=proposal.title,
+        total_amount=proposal.amount,
+        proposal_id=proposal.id,
+    )
+
+    assert sale.prospect_id == prospect.id
+    with pytest.raises(SaleAlreadyClosedError, match="Ya existe una venta para este prospecto"):
+        await CrmSalesService.close_sale_atomic(
+            session=db_session,
+            user_id="test-user",
+            company_name=prospect.company_name,
+            title="Servicio adicional",
+            total_amount=1000.0,
+            prospect_id=prospect.id,
+        )
+
+
+@pytest.mark.asyncio
+async def test_close_sale_route_maps_duplicate_reference_to_conflict(client, db_session):
+    prospect = Prospect(company_name="Clínica del Río")
+    owner = User(
+        username="sales_test_owner",
+        email="sales-test-owner@example.test",
+        full_name="Sales Test Owner",
+        role="owner",
+        hashed_password=hash_master_password("SalesTestPassword123!"),
+        is_active=True,
+        must_change_password=False,
+    )
+    db_session.add_all([prospect, owner])
+    await db_session.commit()
+    token, _ = await create_user_session(db_session, owner)
+
+    payload = {
+        "company_name": prospect.company_name,
+        "title": "Sitio web",
+        "total_amount": 12000,
+        "prospect_id": prospect.id,
+    }
+    headers = {"Authorization": f"Bearer {token}"}
+    first_response = await client.post("/api/v1/crm/sales/close", headers=headers, json=payload)
+    second_response = await client.post("/api/v1/crm/sales/close", headers=headers, json=payload)
+
+    assert first_response.status_code == 200
+    assert second_response.status_code == 409
+    assert second_response.json()["detail"] == "Ya existe una venta para este prospecto."
 
 @pytest.mark.asyncio
 async def test_payment_reversal_does_not_delete_record(db_session):

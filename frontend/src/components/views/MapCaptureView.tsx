@@ -9,11 +9,13 @@ import {
   MapPin,
   Search,
   ShieldCheck,
+  X,
 } from 'lucide-react';
 import { useVault } from '../../context/VaultContext';
 import { api, OSMBounds, OSMLead, OSMMapConfig, OSMZone } from '../../lib/api';
 import { RuntimeMapSector } from '../../types';
 import { EmptyState } from '../common/EmptyState';
+import { leadWebsite, parseAttribution, popupContent } from './mapCapture/mapCaptureHelpers';
 
 type LeafletMap = any;
 type LeafletGlobal = Window & { L?: any };
@@ -45,62 +47,6 @@ function loadLeaflet(): Promise<any> {
   return leafletScript;
 }
 
-function safeWebsite(value?: string | null): string | null {
-  if (!value) return null;
-  try {
-    const url = new URL(
-      value.startsWith('http://') || value.startsWith('https://') ? value : `https://${value}`
-    );
-    return url.protocol === 'https:' || url.protocol === 'http:' ? url.toString() : null;
-  } catch {
-    return null;
-  }
-}
-
-function parseAttribution(raw?: string): { text: string; href?: string } {
-  if (!raw) {
-    return {
-      text: '© OpenStreetMap contributors',
-      href: 'https://www.openstreetmap.org/copyright',
-    };
-  }
-  const hrefMatch = raw.match(/href=["']([^"']+)["']/i);
-  const text = raw.replace(/<[^>]+>/g, '').trim() || '© OpenStreetMap contributors';
-  const href = hrefMatch?.[1] && /^https?:\/\//i.test(hrefMatch[1]) ? hrefMatch[1] : undefined;
-  return { text, href };
-}
-
-function popupContent(lead: OSMLead): HTMLElement {
-  const container = document.createElement('div');
-  const title = document.createElement('strong');
-  title.textContent = lead.name;
-  container.appendChild(title);
-
-  if (lead.address) {
-    const address = document.createElement('p');
-    address.textContent = lead.address;
-    container.appendChild(address);
-  }
-
-  if (lead.opening_hours) {
-    const openingHours = document.createElement('p');
-    openingHours.textContent = `Horario publicado: ${lead.opening_hours}`;
-    container.appendChild(openingHours);
-  }
-
-  const source = document.createElement('a');
-  source.href = lead.osm_url;
-  source.target = '_blank';
-  source.rel = 'noopener noreferrer';
-  source.textContent = 'Ver en OpenStreetMap';
-  container.appendChild(source);
-  return container;
-}
-
-function leadWebsite(lead: OSMLead): string | null {
-  return safeWebsite(lead.website);
-}
-
 export const MapCaptureView: React.FC = () => {
   const { isUnlocked, openUnlockModal, showToast, triggerDataReload, runtimeConfig } = useVault();
   const sectorDatalistId = useId();
@@ -109,6 +55,8 @@ export const MapCaptureView: React.FC = () => {
   const markerLayerRef = useRef<LeafletMap | null>(null);
   const markersRef = useRef<Map<string, LeafletMap>>(new Map());
   const searchRequestIdRef = useRef(0);
+  const searchAbortRef = useRef<AbortController | null>(null);
+  const searchTimeoutRef = useRef<number | null>(null);
   const savingOsmIdsRef = useRef(new Set<string>());
 
   const [zones, setZones] = useState<OSMZone[]>([]);
@@ -144,6 +92,10 @@ export const MapCaptureView: React.FC = () => {
   useEffect(() => {
     if (!isUnlocked) {
       searchRequestIdRef.current += 1;
+      searchAbortRef.current?.abort();
+      searchAbortRef.current = null;
+      if (searchTimeoutRef.current !== null) window.clearTimeout(searchTimeoutRef.current);
+      searchTimeoutRef.current = null;
       setMapReady(false);
       setResults(null);
       setResultSource(null);
@@ -223,6 +175,8 @@ export const MapCaptureView: React.FC = () => {
 
   useEffect(() => () => {
     searchRequestIdRef.current += 1;
+    searchAbortRef.current?.abort();
+    if (searchTimeoutRef.current !== null) window.clearTimeout(searchTimeoutRef.current);
   }, []);
 
   useEffect(() => {
@@ -268,6 +222,15 @@ export const MapCaptureView: React.FC = () => {
         return;
       }
       const requestId = ++searchRequestIdRef.current;
+      searchAbortRef.current?.abort();
+      const controller = new AbortController();
+      searchAbortRef.current = controller;
+      let timedOut = false;
+      const timeoutId = window.setTimeout(() => {
+        timedOut = true;
+        controller.abort();
+      }, 25_000);
+      searchTimeoutRef.current = timeoutId;
       setLoading(true);
       setSearchError('');
       setResults(null);
@@ -278,20 +241,44 @@ export const MapCaptureView: React.FC = () => {
           subsector: subsector.trim() || undefined,
           zone: selectedZone,
           bbox,
-        });
+        }, { signal: controller.signal });
         if (requestId !== searchRequestIdRef.current) return;
         setResults(response.results);
         setResultSource(response.source);
       } catch (error) {
         if (requestId === searchRequestIdRef.current) {
-          setSearchError(error instanceof Error ? error.message : 'No se pudo completar la búsqueda.');
+          setSearchError(
+            timedOut
+              ? 'La búsqueda tardó demasiado. Revisa tu conexión e inténtalo de nuevo.'
+              : controller.signal.aborted
+                ? 'La búsqueda se canceló.'
+                : error instanceof Error
+                  ? error.message
+                  : 'No se pudo completar la búsqueda.'
+          );
         }
       } finally {
-        if (requestId === searchRequestIdRef.current) setLoading(false);
+        window.clearTimeout(timeoutId);
+        if (requestId === searchRequestIdRef.current) {
+          searchTimeoutRef.current = null;
+          searchAbortRef.current = null;
+          setLoading(false);
+        }
       }
     },
     [sector, subsector, selectedZone]
   );
+
+  const cancelSearch = () => {
+    if (!loading) return;
+    searchRequestIdRef.current += 1;
+    searchAbortRef.current?.abort();
+    searchAbortRef.current = null;
+    if (searchTimeoutRef.current !== null) window.clearTimeout(searchTimeoutRef.current);
+    searchTimeoutRef.current = null;
+    setLoading(false);
+    setSearchError('La búsqueda se canceló.');
+  };
 
   const handleSearch = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -490,12 +477,13 @@ export const MapCaptureView: React.FC = () => {
               </select>
             </label>
             <button
-              type="submit"
-              disabled={loading || !mapReady}
+              type={loading ? 'button' : 'submit'}
+              onClick={loading ? cancelSearch : undefined}
+              disabled={!loading && !mapReady}
               className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 text-sm font-semibold text-white shadow-md shadow-indigo-950/30 transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-55 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
             >
-              {loading ? <LoaderCircle size={16} className="animate-spin" aria-hidden="true" /> : <Search size={16} aria-hidden="true" />}
-              Buscar zona
+              {loading ? <X size={16} aria-hidden="true" /> : <Search size={16} aria-hidden="true" />}
+              {loading ? 'Cancelar búsqueda' : 'Buscar zona'}
             </button>
             <label className="min-w-0 text-xs font-medium text-obsidian-muted sm:col-span-2">
               Filtro opcional

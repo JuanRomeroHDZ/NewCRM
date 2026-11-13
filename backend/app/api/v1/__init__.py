@@ -1,4 +1,4 @@
-"""Contact | LESSSO API v1 modules."""
+"""LESSSO API v1 modules."""
 
 from app.api.v1 import (
     auth,

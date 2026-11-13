@@ -158,6 +158,18 @@ async def test_runtime_config_rejects_invalid_and_unsafe_values(client: AsyncCli
 
 
 @pytest.mark.asyncio
+async def test_runtime_config_allows_clearing_writeup_defaults(client: AsyncClient, auth_token: str):
+    response = await client.put(
+        "/api/v1/settings/runtime-config",
+        headers={"X-Vault-Token": auth_token},
+        json={"writeup_defaults": {"organization_name": "", "watermark_default": ""}},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["writeup_defaults"] == {"organization_name": "", "watermark_default": ""}
+
+
+@pytest.mark.asyncio
 async def test_runtime_config_get_sanitizes_legacy_attribution(db_session):
     from app.services.config_service import build_default_map_defaults, set_config_parameter
     from app.services.crm_capture import CrmCaptureService

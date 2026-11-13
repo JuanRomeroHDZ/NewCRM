@@ -34,8 +34,8 @@ const navGroups: NavGroup[] = [
     items: [{ id: 'dashboard', label: 'Resumen general', icon: LayoutDashboard }],
   },
   {
-    id: 'crm',
-    label: 'CRM',
+    id: 'prospeccion',
+    label: 'Prospección',
     icon: Briefcase,
     items: [
       { id: 'capture', label: 'Captación en mapa', icon: MapPinned, requiresVault: true },
@@ -43,13 +43,13 @@ const navGroups: NavGroup[] = [
     ],
   },
   {
-    id: 'cuentas',
-    label: 'Cuentas',
+    id: 'correo-servicios',
+    label: 'Correo y servicios',
     icon: Globe,
     items: [
       { id: 'emails', label: 'Correos principales', icon: Mail, requiresVault: true },
-      { id: 'platforms', label: 'Cuentas y servicios', icon: Globe },
-      { id: 'graph', label: 'Mapa de conexiones', icon: Network, requiresVault: true },
+      { id: 'platforms', label: 'Servicios vinculados', icon: Globe },
+      { id: 'graph', label: 'Conexiones', icon: Network, requiresVault: true },
     ],
   },
   {
@@ -60,7 +60,7 @@ const navGroups: NavGroup[] = [
   },
   {
     id: 'seguridad',
-    label: 'Sistema y seguridad',
+    label: 'Seguridad',
     icon: ShieldCheck,
     items: [
       { id: 'passwords', label: 'Contraseñas y notas', icon: Key, requiresVault: true },
@@ -68,8 +68,13 @@ const navGroups: NavGroup[] = [
       { id: 'security_audit', label: 'Auditoría de seguridad', icon: ShieldCheck, requiresVault: true },
       { id: 'audit_logs', label: 'Historial de actividad', icon: FileText, requiresVault: true },
       { id: 'trash', label: 'Papelera', icon: Trash2, requiresVault: true },
-      { id: 'settings', label: 'Ajustes', icon: Settings, requiresVault: true },
     ],
+  },
+  {
+    id: 'ajustes',
+    label: 'Ajustes',
+    icon: Settings,
+    items: [{ id: 'settings', label: 'Preferencias y acceso', icon: Settings, requiresVault: true }],
   },
 ];
 
@@ -83,7 +88,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onCloseMobile })
   } = useVault();
   const [collapsed, setCollapsed] = useState(false);
   const [isDesktop, setIsDesktop] = useState(() => typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches);
-  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({ inicio: true, crm: true });
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({ inicio: true, prospeccion: true });
   const asideRef = useRef<HTMLElement>(null);
   const compact = collapsed && isDesktop;
 
@@ -152,16 +157,16 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onCloseMobile })
         {!compact ? (
           <div className="flex min-w-0 items-center gap-2.5">
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr from-indigo-600 to-indigo-400 text-white shadow-md shadow-indigo-600/30">
-              <Network size={18} />
+              <Network size={18} aria-hidden="true" />
             </div>
             <div className="min-w-0">
-              <span className="block truncate text-sm font-bold tracking-tight text-white">Contact | LESSSO</span>
-              <span className="-mt-0.5 block truncate text-[10px] text-obsidian-muted">Cuentas y clientes</span>
+              <span className="block truncate text-sm font-bold tracking-tight text-white">LESSSO</span>
+              <span className="-mt-0.5 block truncate text-[10px] text-obsidian-muted">Just a leap of faith</span>
             </div>
           </div>
         ) : (
-          <div className="mx-auto flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-white" aria-label="Contact | LESSSO">
-            <Network size={18} />
+          <div className="mx-auto flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-white" role="img" aria-label="LESSSO">
+            <Network size={18} aria-hidden="true" />
           </div>
         )}
 

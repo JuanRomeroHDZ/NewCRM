@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Generador de Autoridad Certificadora Privada y Certificados TLS Locales
-# para Contact | LESSSO (servidor activo: lessso-srv)
+# para LESSSO (servidor activo: lessso-srv)
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CERTS_DIR="$PROJECT_ROOT/nginx/certs/local"

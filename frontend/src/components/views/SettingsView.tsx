@@ -1,27 +1,21 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Settings, Lock, Key, Shield, Download, Upload, Check, Save,
-  Palette, Clock, Target, Globe, MapPin, FileText, Plus, Trash2
+  Palette, Clock, Target
 } from 'lucide-react';
 import { useVault } from '../../context/VaultContext';
 import { api } from '../../lib/api';
 import { InfoTooltip } from '../common/InfoTooltip';
 import { INPUT_LIMITS } from '../../lib/validation';
 import { OperatorAuthSection } from '../settings/OperatorAuthSection';
-import { RuntimeMapZone } from '../../types';
-
-const SYSTEM_CURRENCIES = [
-  { code: 'MXN', name: 'Peso mexicano', symbol: '$', is_base: true },
-  { code: 'USD', name: 'Dólar estadounidense', symbol: 'US$', is_base: false },
-] as const;
+import { RuntimeConfigSection } from '../settings/RuntimeConfigSection';
 
 export const SettingsView: React.FC = () => {
   const {
     isUnlocked, openUnlockModal, timeoutMinutes,
     clipboardClearSeconds, allowRevealPasswords, searchHotkey,
     accentColor, setAccentColor, canvasStyle, setCanvasStyle,
-    openImportModal, refreshVaultStatus, showToast, triggerDataReload,
-    runtimeConfig, refreshRuntimeConfig, systemLocale,
+    openImportModal, refreshVaultStatus, showToast, triggerDataReload, systemLocale,
   } = useVault();
 
   const [localTimeout, setLocalTimeout] = useState(timeoutMinutes);
@@ -34,7 +28,6 @@ export const SettingsView: React.FC = () => {
   // Phase 7 Operational & Security Policies
   const [rotationRootDays, setRotationRootDays] = useState<number>(90);
   const [rotationSecondaryDays, setRotationSecondaryDays] = useState<number>(180);
-  const [trashRetentionDays, setTrashRetentionDays] = useState<number>(0);
   const [maxFollowupAttempts, setMaxFollowupAttempts] = useState<number>(3);
   const [budgetCapAmount, setBudgetCapAmount] = useState<string>('0');
   const [budgetCapCurrency, setBudgetCapCurrency] = useState<string>('MXN');
@@ -44,23 +37,6 @@ export const SettingsView: React.FC = () => {
   const [currentMasterPassword, setCurrentMasterPassword] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
-  // Dynamic Runtime System Config Editor State
-  const [sysLocale, setSysLocale] = useState<string>('es-MX');
-
-  const [mapDefaultCity, setMapDefaultCity] = useState('');
-  const [mapDefaultZone, setMapDefaultZone] = useState('');
-  const [mapDefaultSector, setMapDefaultSector] = useState('');
-  const [mapCenterLat, setMapCenterLat] = useState('0');
-  const [mapCenterLon, setMapCenterLon] = useState('0');
-  const [mapZoom, setMapZoom] = useState('13');
-  const [sysMapZones, setSysMapZones] = useState<RuntimeMapZone[]>([]);
-
-  const [newZoneName, setNewZoneName] = useState('');
-  const [newZoneColonias, setNewZoneColonias] = useState('');
-
-  const [writeupOrgName, setWriteupOrgName] = useState('');
-  const [writeupWatermark, setWriteupWatermark] = useState('');
-  const [savingRuntime, setSavingRuntime] = useState(false);
   const [vaultSettingsLoading, setVaultSettingsLoading] = useState(true);
   const [vaultSettingsError, setVaultSettingsError] = useState<string | null>(null);
   const vaultSettingsGeneration = useRef(0);
@@ -73,22 +49,6 @@ export const SettingsView: React.FC = () => {
     setLocalAccent(accentColor || '#6366f1');
     setLocalCanvas(canvasStyle || 'dot-grid');
   }, [timeoutMinutes, clipboardClearSeconds, allowRevealPasswords, searchHotkey, accentColor, canvasStyle]);
-
-  useEffect(() => {
-    if (!runtimeConfig) return;
-    setSysLocale(runtimeConfig.currency_config?.locale || 'es-MX');
-
-    setMapDefaultCity(runtimeConfig.map_defaults?.default_city || '');
-    setMapDefaultZone(runtimeConfig.map_defaults?.default_zone || '');
-    setMapDefaultSector(runtimeConfig.map_defaults?.default_sector || '');
-    setMapCenterLat(String(runtimeConfig.map_defaults?.center?.[0] ?? 0));
-    setMapCenterLon(String(runtimeConfig.map_defaults?.center?.[1] ?? 0));
-    setMapZoom(String(runtimeConfig.map_defaults?.zoom ?? 13));
-    setSysMapZones(runtimeConfig.map_zones || []);
-
-    setWriteupOrgName(runtimeConfig.writeup_defaults?.organization_name || '');
-    setWriteupWatermark(runtimeConfig.writeup_defaults?.watermark_default || '');
-  }, [runtimeConfig]);
 
   const loadVaultSettings = useCallback(async () => {
     const generation = ++vaultSettingsGeneration.current;
@@ -108,7 +68,6 @@ export const SettingsView: React.FC = () => {
       if (generation !== vaultSettingsGeneration.current) return;
       if (typeof st.password_rotation_days_root === 'number') setRotationRootDays(st.password_rotation_days_root);
       if (typeof st.password_rotation_days_secondary === 'number') setRotationSecondaryDays(st.password_rotation_days_secondary);
-      if (typeof st.trash_retention_days === 'number') setTrashRetentionDays(st.trash_retention_days);
       if (typeof st.max_followup_attempts === 'number') setMaxFollowupAttempts(st.max_followup_attempts);
       if (typeof st.budget_cap_amount === 'number') setBudgetCapAmount(String(st.budget_cap_amount));
       setBudgetCapCurrency(st.budget_cap_currency === 'USD' ? 'USD' : 'MXN');
@@ -178,7 +137,6 @@ export const SettingsView: React.FC = () => {
         canvas_style: localCanvas,
         password_rotation_days_root: rotationRootDays,
         password_rotation_days_secondary: rotationSecondaryDays,
-        trash_retention_days: trashRetentionDays,
         max_followup_attempts: maxFollowupAttempts,
         budget_cap_amount: capNum,
         budget_cap_currency: budgetCapCurrency,
@@ -211,137 +169,9 @@ export const SettingsView: React.FC = () => {
       setCurrentMasterPassword('');
       showToast('Ajustes de seguridad, presupuesto y preferencias guardados.', 'success');
     } catch (err: any) {
-      showToast(err.message || 'Error al guardar ajustes.', 'error');
+      showToast(err?.message || 'Error al guardar ajustes.', 'error');
     } finally {
       setIsSaving(false);
-    }
-  };
-
-  const handleAddZone = () => {
-    const zoneName = newZoneName.trim();
-    if (!zoneName) {
-      showToast('Ingresa el nombre de la zona geográfica.', 'error');
-      return;
-    }
-    const slug = zoneName
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/[^a-z0-9]+/g, '_')
-      .replace(/^_|_$/g, '');
-    if (!slug) {
-      showToast('El nombre de la zona debe incluir letras o números.', 'error');
-      return;
-    }
-    if (sysMapZones.some((z) => z.slug === slug)) {
-      showToast('Ya existe una zona con un identificador similar.', 'error');
-      return;
-    }
-    const lat = Number(mapCenterLat);
-    const lon = Number(mapCenterLon);
-    const zoom = Number(mapZoom);
-    if (!mapCenterLat.trim() || !mapCenterLon.trim() || !Number.isFinite(lat) || lat < -90 || lat > 90) {
-      showToast('Escribe una latitud válida entre -90 y 90.', 'error');
-      return;
-    }
-    if (!Number.isFinite(lon) || lon < -180 || lon > 180) {
-      showToast('Escribe una longitud válida entre -180 y 180.', 'error');
-      return;
-    }
-    if (!Number.isFinite(zoom) || zoom < 1 || zoom > 20) {
-      showToast('El acercamiento del mapa debe estar entre 1 y 20.', 'error');
-      return;
-    }
-    const colonias = newZoneColonias
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean);
-
-    setSysMapZones((prev) => [
-      ...prev,
-      {
-        slug,
-        zone: zoneName,
-        center: [lat, lon],
-        zoom,
-        bbox: {
-          min_lat: Number(Math.max(-90, lat - 0.05).toFixed(4)),
-          max_lat: Number(Math.min(90, lat + 0.05).toFixed(4)),
-          min_lon: Number(Math.max(-180, lon - 0.05).toFixed(4)),
-          max_lon: Number(Math.min(180, lon + 0.05).toFixed(4)),
-        },
-        colonias,
-      },
-    ]);
-    setNewZoneName('');
-    setNewZoneColonias('');
-  };
-
-  const handleUpdateZoneColonias = (slug: string, rawColonias: string) => {
-    const colonias = rawColonias
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean);
-    setSysMapZones((prev) =>
-      prev.map((z) => (z.slug === slug ? { ...z, colonias } : z))
-    );
-  };
-
-  const handleRemoveZone = (slug: string) => {
-    setSysMapZones((prev) => prev.filter((z) => z.slug !== slug));
-  };
-
-  const handleSaveRuntimeConfig = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const parsedLat = Number(mapCenterLat);
-    const parsedLon = Number(mapCenterLon);
-    const parsedZoom = Number(mapZoom);
-    if (
-      !mapCenterLat.trim() || !mapCenterLon.trim() ||
-      !Number.isFinite(parsedLat) || parsedLat < -90 || parsedLat > 90 ||
-      !Number.isFinite(parsedLon) || parsedLon < -180 || parsedLon > 180
-    ) {
-      showToast('Usa una latitud entre -90 y 90 y una longitud entre -180 y 180.', 'error');
-      return;
-    }
-    if (!Number.isFinite(parsedZoom) || parsedZoom < 1 || parsedZoom > 20) {
-      showToast('El acercamiento del mapa debe estar entre 1 y 20.', 'error');
-      return;
-    }
-
-    setSavingRuntime(true);
-    try {
-      await api.updateRuntimeConfig({
-        currencies: SYSTEM_CURRENCIES.map((currency) => ({ ...currency })),
-        currency_config: {
-          base_currency: 'MXN',
-          exchange_pair: { base: 'USD', target: 'MXN' },
-          locale: sysLocale.trim() || 'es-MX',
-        },
-        map_defaults: {
-          default_city: mapDefaultCity.trim(),
-          default_zone: mapDefaultZone.trim(),
-          default_sector: mapDefaultSector.trim(),
-          center: [parsedLat, parsedLon],
-          zoom: Number.isFinite(parsedZoom) ? parsedZoom : 13,
-          max_search_area_deg: runtimeConfig?.map_defaults?.max_search_area_deg ?? 0.5,
-          full_bounds_zone_slug: runtimeConfig?.map_defaults?.full_bounds_zone_slug ?? (sysMapZones[0]?.slug || ''),
-          tile_url_template: runtimeConfig?.map_defaults?.tile_url_template ?? 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-          attribution: runtimeConfig?.map_defaults?.attribution ?? '© OpenStreetMap',
-        },
-        map_zones: sysMapZones,
-        writeup_defaults: {
-          organization_name: writeupOrgName.trim(),
-          watermark_default: writeupWatermark.trim(),
-        },
-      });
-      await refreshRuntimeConfig();
-      triggerDataReload();
-      showToast('Configuración dinámica del sistema guardada.', 'success');
-    } catch (err: any) {
-      showToast(err?.message || 'No se pudo guardar la configuración del sistema.', 'error');
-    } finally {
-      setSavingRuntime(false);
     }
   };
 
@@ -353,12 +183,15 @@ export const SettingsView: React.FC = () => {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `contact-lessso-respaldo-cifrado-${new Date().toISOString().split('T')[0]}.json`;
+      a.download = `lessso-respaldo-cifrado-${new Date().toISOString().split('T')[0]}.json`;
+      a.style.display = 'none';
+      document.body.appendChild(a);
       a.click();
-      URL.revokeObjectURL(url);
+      a.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
       showToast('Respaldo encriptado descargado exitosamente.', 'success');
     } catch (err: any) {
-      showToast(err.message, 'error');
+      showToast(err?.message || 'No se pudo descargar el respaldo.', 'error');
     }
   };
 
@@ -378,11 +211,11 @@ export const SettingsView: React.FC = () => {
       <div className="flex items-center gap-2 min-w-0">
         <Settings className="text-indigo-400 flex-shrink-0" size={18} aria-hidden="true" />
         <h2 className="text-base font-bold text-white tracking-tight">
-          Ajustes y Seguridad
+          Preferencias
         </h2>
         <InfoTooltip
-          title="Ajustes Generales"
-          content="Configura el bloqueo por inactividad, borrado automático del portapapeles, avisos de cambio de contraseña, papelera y presupuesto mensual."
+          title="Preferencias"
+          content="Apariencia, acceso, seguridad, presupuesto y mapa."
         />
       </div>
 
@@ -436,8 +269,8 @@ export const SettingsView: React.FC = () => {
 
             {/* Canvas pattern */}
             <div className="space-y-1.5">
-              <label htmlFor="canvas-style-select" className="text-obsidian-text font-medium block">
-                Fondo del Mapa de Conexiones
+                <label htmlFor="canvas-style-select" className="text-obsidian-text font-medium block">
+                Fondo de la interfaz
               </label>
               <select
                 id="canvas-style-select"
@@ -578,24 +411,6 @@ export const SettingsView: React.FC = () => {
               </select>
             </div>
 
-            {/* Trash Auto-Purge Hybrid Policy */}
-            <div className="space-y-1.5">
-              <label htmlFor="trash-retention-settings-select" className="text-obsidian-text font-medium flex items-center gap-1.5">
-                <span>Vaciar Papelera Automáticamente</span>
-              </label>
-              <select
-                id="trash-retention-settings-select"
-                value={trashRetentionDays}
-                onChange={(e) => setTrashRetentionDays(Number(e.target.value))}
-                className="w-full px-3.5 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white focus:outline-none focus:border-indigo-500"
-              >
-                <option value={0}>Nunca (Conservar hasta borrar manualmente)</option>
-                <option value={30}>Borrar después de 30 días</option>
-                <option value={60}>Borrar después de 60 días</option>
-                <option value={90}>Borrar después de 90 días</option>
-              </select>
-            </div>
-
             {/* Max Follow-up Attempts before Cold Archive */}
             <div className="space-y-1.5">
               <label htmlFor="max-followup-select" className="text-obsidian-text font-medium flex items-center gap-1.5">
@@ -625,7 +440,11 @@ export const SettingsView: React.FC = () => {
                   inputMode="decimal"
                   maxLength={12}
                   value={budgetCapAmount}
-                  onChange={(e) => setBudgetCapAmount(e.target.value.replace(/[^0-9.]/g, ''))}
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/[^0-9.]/g, '');
+                    const decimal = value.indexOf('.');
+                    setBudgetCapAmount(decimal < 0 ? value : `${value.slice(0, decimal + 1)}${value.slice(decimal + 1).replace(/\./g, '')}`);
+                  }}
                   placeholder="Ej. 5000"
                   className="min-w-0 flex-1 px-3.5 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white font-mono text-xs focus:outline-none focus:border-indigo-500"
                 />
@@ -667,7 +486,7 @@ export const SettingsView: React.FC = () => {
                   id="current-access-password"
                   type="password"
                   autoComplete="current-password"
-                  maxLength={4096}
+                  maxLength={INPUT_LIMITS.MASTER_PASSWORD}
                   value={currentMasterPassword}
                   onChange={(e) => setCurrentMasterPassword(e.target.value)}
                   className="w-full px-3.5 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-indigo-500"
@@ -683,7 +502,13 @@ export const SettingsView: React.FC = () => {
                 type="password"
                 maxLength={INPUT_LIMITS.MASTER_PASSWORD}
                 value={newMasterPassword}
-                onChange={(e) => setNewMasterPassword(e.target.value)}
+                onChange={(e) => {
+                  setNewMasterPassword(e.target.value);
+                  if (!e.target.value) {
+                    setCurrentMasterPassword('');
+                    setConfirmMasterPassword('');
+                  }
+                }}
                 placeholder="Dejar en blanco para mantener actual"
                 className="w-full px-3.5 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-indigo-500"
               />
@@ -719,260 +544,7 @@ export const SettingsView: React.FC = () => {
         </div>
       </form>
 
-      {/* Dynamic Runtime System Configuration */}
-      <form
-        onSubmit={handleSaveRuntimeConfig}
-        className="min-w-0 space-y-5 rounded-xl border border-obsidian-border bg-obsidian-panel p-3 sm:p-5"
-      >
-        <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-obsidian-border">
-          <div className="flex items-center gap-2">
-            <Globe size={16} className="text-cyan-400" aria-hidden="true" />
-            <h3 className="text-sm font-bold text-white">Monedas, mapa e informes</h3>
-            <InfoTooltip content="Configura el formato de moneda, la ubicación de búsqueda y los datos que aparecen en los informes." />
-          </div>
-          <button
-            type="submit"
-            disabled={savingRuntime}
-            className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-semibold disabled:opacity-50 transition-colors"
-          >
-            <Save size={13} aria-hidden="true" />
-            <span>{savingRuntime ? 'Guardando...' : 'Guardar ajustes'}</span>
-          </button>
-        </div>
-
-        {/* Currencies & Locale */}
-        <div className="space-y-3 text-xs">
-          <div className="font-semibold text-white">Monedas y formato</div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div className="rounded-xl border border-obsidian-border bg-obsidian-bg px-3 py-2">
-              <p className="mb-1 text-obsidian-muted">Moneda principal</p>
-              <p className="font-semibold text-white">MXN · Peso mexicano</p>
-            </div>
-            <div className="rounded-xl border border-obsidian-border bg-obsidian-bg px-3 py-2">
-              <p className="mb-1 text-obsidian-muted">Conversión disponible</p>
-              <p className="font-semibold text-white">USD a MXN</p>
-            </div>
-            <div>
-              <label htmlFor="rt-locale" className="block text-obsidian-muted mb-1">
-                Formato regional
-              </label>
-              <input
-                id="rt-locale"
-                type="text"
-                maxLength={16}
-                value={sysLocale}
-                onChange={(e) => setSysLocale(e.target.value)}
-                placeholder="es-MX"
-                className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white font-mono focus:outline-none focus:border-cyan-500"
-              />
-            </div>
-          </div>
-
-          <div className="flex flex-wrap gap-2 pt-1" aria-label="Monedas disponibles">
-            {SYSTEM_CURRENCIES.map((c) => (
-              <div
-                key={c.code}
-                className={`inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg border text-xs ${
-                  c.code === 'MXN'
-                    ? 'bg-cyan-500/15 border-cyan-500/40 text-cyan-200'
-                    : 'bg-obsidian-bg border-obsidian-border text-obsidian-text'
-                }`}
-              >
-                <span className="font-mono font-bold">{c.code}</span>
-                <span className="text-obsidian-muted">{c.symbol}</span>
-                <span>{c.name}</span>
-              </div>
-            ))}
-          </div>
-          <p className="max-w-2xl text-obsidian-muted">
-            Los informes usan MXN como moneda principal. Los importes en USD se convierten con el tipo de cambio configurado.
-          </p>
-        </div>
-
-        {/* Map Geography & Zones */}
-        <div className="space-y-3 pt-3 border-t border-obsidian-border text-xs">
-          <div className="flex items-center gap-1.5 font-semibold text-white">
-            <MapPin size={14} className="text-emerald-400" aria-hidden="true" />
-            <span>Mapa y zonas</span>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div>
-              <label htmlFor="rt-map-city" className="block text-obsidian-muted mb-1">Ciudad predeterminada</label>
-              <input
-                id="rt-map-city"
-                type="text"
-                maxLength={100}
-                value={mapDefaultCity}
-                onChange={(e) => setMapDefaultCity(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white focus:outline-none focus:border-emerald-500"
-              />
-            </div>
-            <div>
-              <label htmlFor="rt-map-zone" className="block text-obsidian-muted mb-1">Zona predeterminada</label>
-              <input
-                id="rt-map-zone"
-                type="text"
-                maxLength={100}
-                value={mapDefaultZone}
-                onChange={(e) => setMapDefaultZone(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white focus:outline-none focus:border-emerald-500"
-              />
-            </div>
-            <div>
-              <label htmlFor="rt-map-sector" className="block text-obsidian-muted mb-1">Sector predeterminado</label>
-              <input
-                id="rt-map-sector"
-                type="text"
-                maxLength={100}
-                value={mapDefaultSector}
-                onChange={(e) => setMapDefaultSector(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white focus:outline-none focus:border-emerald-500"
-              />
-            </div>
-            <div>
-              <label htmlFor="rt-map-lat" className="block text-obsidian-muted mb-1">Latitud central</label>
-              <input
-                id="rt-map-lat"
-                type="number"
-                inputMode="decimal"
-                min={-90}
-                max={90}
-                step="any"
-                value={mapCenterLat}
-                onChange={(e) => setMapCenterLat(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white font-mono focus:outline-none focus:border-emerald-500"
-              />
-            </div>
-            <div>
-              <label htmlFor="rt-map-lon" className="block text-obsidian-muted mb-1">Longitud central</label>
-              <input
-                id="rt-map-lon"
-                type="number"
-                inputMode="decimal"
-                min={-180}
-                max={180}
-                step="any"
-                value={mapCenterLon}
-                onChange={(e) => setMapCenterLon(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white font-mono focus:outline-none focus:border-emerald-500"
-              />
-            </div>
-            <div>
-              <label htmlFor="rt-map-zoom" className="block text-obsidian-muted mb-1">Zoom inicial</label>
-              <input
-                id="rt-map-zoom"
-                type="number"
-                min={1}
-                max={20}
-                step="any"
-                value={mapZoom}
-                onChange={(e) => setMapZoom(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white font-mono focus:outline-none focus:border-emerald-500"
-              />
-            </div>
-          </div>
-
-          {sysMapZones.length > 0 && (
-            <div className="space-y-2">
-              {sysMapZones.map((zone) => (
-                <div
-                  key={zone.slug}
-                  className="p-2.5 rounded-lg bg-obsidian-bg border border-obsidian-border space-y-1.5"
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="font-semibold text-white">
-                      {zone.zone}{' '}
-                      <span className="font-mono text-[10px] text-obsidian-muted">({zone.slug})</span>
-                    </div>
-                    <button
-                      type="button"
-                      aria-label={`Eliminar zona ${zone.zone}`}
-                      onClick={() => handleRemoveZone(zone.slug)}
-                      className="text-obsidian-muted hover:text-rose-400"
-                    >
-                      <Trash2 size={13} aria-hidden="true" />
-                    </button>
-                  </div>
-                  <input
-                    type="text"
-                    maxLength={400}
-                    value={zone.colonias.join(', ')}
-                    onChange={(e) => handleUpdateZoneColonias(zone.slug, e.target.value)}
-                    aria-label={`Colonias de ${zone.zone}`}
-                    placeholder="Colonias separadas por coma..."
-                    className="w-full px-2.5 py-1 rounded bg-obsidian-panel border border-obsidian-border text-[11px] text-obsidian-text focus:outline-none focus:border-emerald-500"
-                  />
-                </div>
-              ))}
-            </div>
-          )}
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-            <input
-              type="text"
-              maxLength={80}
-              value={newZoneName}
-              onChange={(e) => setNewZoneName(e.target.value)}
-              aria-label="Nombre de nueva zona geográfica"
-              placeholder="Nueva zona (ej. Zona Norte)"
-              className="px-3 py-1.5 rounded-lg bg-obsidian-bg border border-obsidian-border text-white focus:outline-none focus:border-emerald-500"
-            />
-            <input
-              type="text"
-              maxLength={400}
-              value={newZoneColonias}
-              onChange={(e) => setNewZoneColonias(e.target.value)}
-              aria-label="Colonias de la nueva zona"
-              placeholder="Colonias separadas por coma"
-              className="px-3 py-1.5 rounded-lg bg-obsidian-bg border border-obsidian-border text-white focus:outline-none focus:border-emerald-500"
-            />
-            <button
-              type="button"
-              onClick={handleAddZone}
-              className="inline-flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg bg-obsidian-surface hover:bg-obsidian-border border border-obsidian-border text-white font-semibold"
-            >
-              <Plus size={13} aria-hidden="true" />
-              <span>Agregar zona</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Writeup Defaults */}
-        <div className="space-y-3 pt-3 border-t border-obsidian-border text-xs">
-          <div className="flex items-center gap-1.5 font-semibold text-white">
-            <FileText size={14} className="text-indigo-400" aria-hidden="true" />
-            <span>Informes de seguridad</span>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label htmlFor="rt-writeup-org" className="block text-obsidian-muted mb-1">
-                Organización predeterminada
-              </label>
-              <input
-                id="rt-writeup-org"
-                type="text"
-                maxLength={120}
-                value={writeupOrgName}
-                onChange={(e) => setWriteupOrgName(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white focus:outline-none focus:border-indigo-500"
-              />
-            </div>
-            <div>
-              <label htmlFor="rt-writeup-watermark" className="block text-obsidian-muted mb-1">
-                Marca de agua predeterminada
-              </label>
-              <input
-                id="rt-writeup-watermark"
-                type="text"
-                maxLength={120}
-                value={writeupWatermark}
-                onChange={(e) => setWriteupWatermark(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white focus:outline-none focus:border-indigo-500"
-              />
-            </div>
-          </div>
-        </div>
-      </form>
+      <RuntimeConfigSection />
 
       {/* Backup & Import/Export Section */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

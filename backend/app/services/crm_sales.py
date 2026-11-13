@@ -1,6 +1,8 @@
 from datetime import datetime, timezone, timedelta
-from sqlalchemy import select, and_, or_
+from sqlalchemy import select, and_, or_, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.dialects.postgresql import insert as postgresql_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
 from app.models.crm_sales import FolioSequence, Client, Proposal, Sale, PaymentInstallment, PaymentRecord, Invoice
 from app.models import Prospect
@@ -9,35 +11,38 @@ from app.models.core import ActivityEvent
 def utc_now() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
+
+class SaleAlreadyClosedError(ValueError):
+    """Indicates that a proposal or prospect already has a sale."""
+
+
 class CrmSalesService:
     @staticmethod
     async def get_next_folio(session: AsyncSession, sequence_type: str, prefix: str) -> str:
-        """
-        Retrieves next folio using database row locking (with_for_update)
-        to strictly guarantee zero gaps.
-        """
-        stmt = (
-            select(FolioSequence)
-            .where(FolioSequence.sequence_type == sequence_type)
-            .with_for_update()
+        """Atomically allocates the next folio using the existing unique key."""
+        dialect = session.get_bind().dialect.name
+        insert_for_dialect = {
+            "postgresql": postgresql_insert,
+            "sqlite": sqlite_insert,
+        }.get(dialect)
+        if insert_for_dialect is None:
+            raise RuntimeError(f"Motor de base de datos no compatible con folios: {dialect}")
+
+        insert_stmt = insert_for_dialect(FolioSequence).values(
+            sequence_type=sequence_type,
+            prefix=prefix,
+            current_number=1,
+            updated_at=utc_now(),
         )
-        res = await session.execute(stmt)
-        seq = res.scalar_one_or_none()
-
-        if not seq:
-            seq = FolioSequence(
-                sequence_type=sequence_type,
-                prefix=prefix,
-                current_number=1
-            )
-            session.add(seq)
-            await session.flush()
-            num = 1
-        else:
-            seq.current_number += 1
-            num = seq.current_number
-            await session.flush()
-
+        stmt = insert_stmt.on_conflict_do_update(
+            index_elements=[FolioSequence.sequence_type],
+            set_={
+                "prefix": prefix,
+                "current_number": FolioSequence.current_number + 1,
+                "updated_at": utc_now(),
+            },
+        ).returning(FolioSequence.current_number)
+        num = (await session.execute(stmt)).scalar_one()
         return f"{prefix}{num:04d}"
 
     @staticmethod
@@ -194,6 +199,67 @@ class CrmSalesService:
         Creates Client, Sale, Payment Plan, initial payment if advance given,
         updates Proposal, Prospect, and records audit trail in a single commit.
         """
+        prospect = None
+        proposal = None
+        if proposal_id:
+            proposal = (
+                await session.execute(
+                    select(Proposal).where(Proposal.id == proposal_id).with_for_update()
+                )
+            ).scalar_one_or_none()
+            if not proposal:
+                raise ValueError("Propuesta no encontrada.")
+            if prospect_id and proposal.prospect_id and proposal.prospect_id != prospect_id:
+                raise ValueError("La propuesta no corresponde al prospecto seleccionado.")
+            if not prospect_id:
+                prospect_id = proposal.prospect_id
+
+        if prospect_id:
+            prospect = (
+                await session.execute(
+                    select(Prospect)
+                    .where(Prospect.id == prospect_id, Prospect.is_deleted == False)
+                    .with_for_update()
+                )
+            ).scalar_one_or_none()
+            if not prospect:
+                raise ValueError("Prospecto no encontrado o eliminado.")
+
+        # Claim existing references atomically, so parallel closes cannot duplicate a sale.
+        if prospect_id:
+            existing_prospect_sale = select(Sale.id).where(Sale.prospect_id == prospect_id).exists()
+            claim_prospect = (
+                update(Prospect)
+                .where(
+                    Prospect.id == prospect_id,
+                    Prospect.is_deleted == False,
+                    ~existing_prospect_sale,
+                )
+                .values(status="cliente")
+                .returning(Prospect.id)
+                .execution_options(synchronize_session=False)
+            )
+            claimed_id = (await session.execute(claim_prospect)).scalar_one_or_none()
+            if claimed_id is None:
+                await session.rollback()
+                raise SaleAlreadyClosedError("Ya existe una venta para este prospecto.")
+            prospect.status = "cliente"
+
+        if proposal_id:
+            existing_proposal_sale = select(Sale.id).where(Sale.proposal_id == proposal_id).exists()
+            claim_proposal = (
+                update(Proposal)
+                .where(Proposal.id == proposal_id, ~existing_proposal_sale)
+                .values(status="aceptada")
+                .returning(Proposal.id)
+                .execution_options(synchronize_session=False)
+            )
+            claimed_id = (await session.execute(claim_proposal)).scalar_one_or_none()
+            if claimed_id is None:
+                await session.rollback()
+                raise SaleAlreadyClosedError("Ya existe una venta para esta propuesta.")
+            proposal.status = "aceptada"
+
         # 1. Find or create Client
         client = None
         if prospect_id:
@@ -285,16 +351,6 @@ class CrmSalesService:
             installments.append(inst_bal)
 
         # 5. Link and update Proposal / Prospect
-        if proposal_id:
-            prop = await session.get(Proposal, proposal_id)
-            if prop:
-                prop.status = "aceptada"
-
-        if prospect_id:
-            prospect = await session.get(Prospect, prospect_id)
-            if prospect:
-                prospect.status = "cliente"
-
         # 6. Audit event
         event = ActivityEvent(
             module="crm",

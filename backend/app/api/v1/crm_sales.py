@@ -8,7 +8,7 @@ from app.services.core_auth import get_current_user_from_token, require_role
 from app.models.core import User
 from app.models import Prospect
 from app.models.crm_sales import Client, Proposal, Sale, PaymentInstallment, PaymentRecord, Invoice
-from app.services.crm_sales import CrmSalesService
+from app.services.crm_sales import CrmSalesService, SaleAlreadyClosedError
 
 router = APIRouter(prefix="/crm", tags=["CRM Sales & Operations"])
 
@@ -256,6 +256,10 @@ async def close_sale(
             "balance_amount": sale.balance_amount,
             "installments_count": len(installments)
         }
+    except SaleAlreadyClosedError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 

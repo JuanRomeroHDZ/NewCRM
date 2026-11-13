@@ -12,7 +12,7 @@ The application defines owner, worker, and viewer roles. The primary day-to-day 
 
 ## Product Purpose
 
-Contact | LESSSO brings prospect capture and follow-up together with account security, communications, sales, finances, and day-to-day operations. The requested work is to restore the useful mapping and extraction workflows from OldCRM in NewCRM while retaining NewCRM's existing interface style.
+LESSSO brings prospect capture and follow-up together with account security, communications, sales, finances, and day-to-day operations. The requested work is to restore the useful mapping and extraction workflows from OldCRM in NewCRM while retaining NewCRM's existing interface style.
 
 ## Positioning
 
@@ -33,7 +33,7 @@ The existing application is a browser-based React and FastAPI system backed by P
 
 ## Brand Commitments
 
-The user explicitly requested that NewCRM retain its existing style and that OldCRM's style not be carried over. The current repository uses the Contact | LESSSO name and a dark interface. Do not infer or invent additional brand claims.
+The user explicitly requested that NewCRM retain its existing style and that OldCRM's style not be carried over. The current repository uses the LESSSO name, the “Just a leap of faith” tagline, and a dark interface.
 
 ## Evidence on Hand
 

@@ -8,7 +8,9 @@ from app.models import (
     PasswordHistory, Prospect, UserSettings, ClientIncome, DomainRenewal,
     OneTimeExpense, InternalProject, SecureResource
 )
+from app.models.core import User
 from app.security.tokens import require_vault_unlocked
+from app.services.core_auth import require_role
 from app.services.audit import log_audit_event
 
 router = APIRouter(prefix="/trash", tags=["trash"], dependencies=[Depends(require_vault_unlocked)])
@@ -20,7 +22,10 @@ def _get_deleted_dt(item, now_naive: datetime) -> datetime:
     return dt
 
 @router.get("")
-async def list_trash(db: AsyncSession = Depends(get_db)):
+async def list_trash(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(["owner", "business_admin", "seller", "readonly"])),
+):
     """Lists all soft-deleted items across emails, platforms, prospects, payments, incomes, renewals, expenses, projects, and resources."""
     s_row = (await db.execute(select(UserSettings).limit(1))).scalar_one_or_none()
     retention_days = int(getattr(s_row, "trash_retention_days", 0) or 0) if s_row else 0
@@ -62,15 +67,19 @@ async def list_trash(db: AsyncSession = Depends(get_db)):
     res_stmt = select(SecureResource).where(SecureResource.is_deleted == True).order_by(SecureResource.updated_at.desc())
     resources = list((await db.execute(res_stmt)).scalars().all())
 
-    # Optional Auto-Purge check when retention_days > 0 (filtered from view, actual purge triggered via explicit maintenance)
+    # Keep the visibility window consistent across every item type.
     if retention_days > 0:
-        platforms = [p for p in platforms if (now_naive - _get_deleted_dt(p, now_naive)).days < retention_days]
-        prospects = [pr for pr in prospects if (now_naive - _get_deleted_dt(pr, now_naive)).days < retention_days]
+        collections = (emails, platforms, prospects, payments, incomes, renewals, expenses, projects, resources)
+        for collection in collections:
+            collection[:] = [
+                item for item in collection
+                if (now_naive - _get_deleted_dt(item, now_naive)).days < retention_days
+            ]
 
     def _build_item(item_id: str, item_type: str, title: str, subtitle: str, raw_obj):
         dt = _get_deleted_dt(raw_obj, now_naive)
         elapsed_days = max(0, (now_naive - dt).days)
-        days_until_purge = max(0, retention_days - elapsed_days) if retention_days > 0 else None
+        days_until_hidden = max(0, retention_days - elapsed_days) if retention_days > 0 else None
         return {
             "id": item_id,
             "type": item_type,
@@ -79,7 +88,7 @@ async def list_trash(db: AsyncSession = Depends(get_db)):
             "deleted_at": dt.isoformat() + "Z",
             "elapsed_days": elapsed_days,
             "retention_policy_days": retention_days,
-            "days_until_purge": days_until_purge
+            "days_until_hidden": days_until_hidden
         }
 
     items = []
@@ -105,7 +114,12 @@ async def list_trash(db: AsyncSession = Depends(get_db)):
     return items
 
 @router.post("/restore/{item_type}/{item_id}")
-async def restore_item(item_type: str, item_id: str, db: AsyncSession = Depends(get_db)):
+async def restore_item(
+    item_type: str,
+    item_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(["owner", "business_admin", "seller"])),
+):
     """Atomics restore of a soft-deleted item."""
     name = ""
     if item_type == "email":
@@ -199,7 +213,12 @@ async def restore_item(item_type: str, item_id: str, db: AsyncSession = Depends(
     return {"message": f"{name} restaurado con éxito."}
 
 @router.delete("/purge/{item_type}/{item_id}")
-async def purge_item_permanent(item_type: str, item_id: str, db: AsyncSession = Depends(get_db)):
+async def purge_item_permanent(
+    item_type: str,
+    item_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(["owner", "business_admin"])),
+):
     """Permanently purges an item from the database."""
     models = {
         "email": EmailAccount, "platform": PlatformAccount, "prospect": Prospect,
@@ -299,7 +318,8 @@ async def purge_item_permanent(item_type: str, item_id: str, db: AsyncSession = 
 @router.get("/audit")
 async def list_audit_logs(
     limit: int = Query(50, ge=1, le=200),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(["owner", "business_admin", "seller", "readonly"])),
 ):
     """Retrieves immutable audit logs."""
     stmt = select(AuditLog).order_by(AuditLog.timestamp.desc()).limit(limit)

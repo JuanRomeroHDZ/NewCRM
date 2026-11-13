@@ -1,4 +1,4 @@
-# Multi-stage hardened Dockerfile for Contact | LESSSO FastAPI backend
+# Multi-stage hardened Dockerfile for the LESSSO FastAPI backend
 FROM python:3.12-slim AS builder
 
 WORKDIR /app

@@ -152,8 +152,8 @@ class RuntimeMapSector(RuntimeModel):
 
 
 class RuntimeWriteupDefaults(RuntimeModel):
-    organization_name: str | None = Field(default=None, min_length=1, max_length=120)
-    watermark_default: str | None = Field(default=None, min_length=1, max_length=180)
+    organization_name: str | None = Field(default=None, max_length=120)
+    watermark_default: str | None = Field(default=None, max_length=180)
 
 
 class RuntimeConfigUpdate(RuntimeModel):

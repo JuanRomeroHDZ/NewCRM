@@ -4,7 +4,7 @@ from typing import Literal
 
 
 class Settings(BaseSettings):
-    PROJECT_NAME: str = "Contact | LESSSO"
+    PROJECT_NAME: str = "LESSSO"
     VERSION: str = "2.0.0"
     API_V1_PREFIX: str = "/api/v1"
 
@@ -94,7 +94,7 @@ class Settings(BaseSettings):
     WRITEUP_MAX_GIF_FRAMES: int = Field(default=300, ge=10, le=1500)
     WRITEUP_MAX_VIDEO_SECONDS: int = Field(default=45, ge=1, le=300)
     WRITEUP_WATERMARK_DEFAULT: str = "CONFIDENCIAL — SOLO USO AUTORIZADO"
-    WRITEUP_ORGANIZATION_NAME: str = "Contact | LESSSO"
+    WRITEUP_ORGANIZATION_NAME: str = "LESSSO"
 
     model_config = SettingsConfigDict(case_sensitive=True, env_file="../.env", env_file_encoding="utf-8", extra="ignore")
 

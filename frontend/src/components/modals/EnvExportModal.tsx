@@ -36,7 +36,7 @@ export const EnvExportModal: React.FC = () => {
   let envOutput = '';
   if (includeComments) {
     envOutput += `# ========================================================\n`;
-    envOutput += `# Contact | LESSSO - Variables de entorno (.env)\n`;
+    envOutput += `# LESSSO - Variables de entorno (.env)\n`;
     envOutput += `# Generated on: ${new Date().toISOString()}\n`;
     envOutput += `# Total Services: ${techPlatforms.length}\n`;
     envOutput += `# ========================================================\n\n`;

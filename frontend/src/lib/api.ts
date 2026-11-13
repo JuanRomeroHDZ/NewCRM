@@ -106,6 +106,7 @@ const CORE_USER_ENDPOINT_PREFIXES = [
   '/auth/setup-2fa',
   '/auth/verify-2fa',
   '/users',
+  '/settings/trash-retention',
   '/crm/sales',
   '/crm/capture/audit-url',
   '/crm/capture/duplicates',
@@ -114,6 +115,7 @@ const CORE_USER_ENDPOINT_PREFIXES = [
   '/crm/capture/discards',
   '/crm/capture/discard',
   '/crm/capture/google-places',
+  '/trash',
   '/personal-finances',
   '/agenda',
   '/comms',
@@ -302,6 +304,11 @@ export const api = {
   // Settings
   getSettings: () => request<any>('/settings'),
   updateSettings: (data: any) => request<any>('/settings', { method: 'PUT', body: JSON.stringify(data) }),
+  updateTrashRetention: (trash_retention_days: number) =>
+    request<any>('/settings/trash-retention', {
+      method: 'PUT',
+      body: JSON.stringify({ trash_retention_days }),
+    }),
   exportVault: () => request<any>('/settings/export'),
 
   // Security Audit & Emergency Kit
@@ -411,9 +418,10 @@ export const api = {
     subsector?: string;
     max_cache_age_days?: number;
     bbox?: OSMBounds;
-  }) => request<OSMSearchResponse>('/crm/capture/search', {
+  }, options: Pick<RequestInit, 'signal'> = {}) => request<OSMSearchResponse>('/crm/capture/search', {
     method: 'POST',
     body: JSON.stringify(payload),
+    ...options,
   }),
 
   // Client Incomes / Pagos Recibidos

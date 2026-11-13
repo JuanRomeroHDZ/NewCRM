@@ -1,1 +1,1 @@
-"""Contact | LESSSO API package."""
+"""LESSSO API package."""

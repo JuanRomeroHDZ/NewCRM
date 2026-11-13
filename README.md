@@ -1,4 +1,4 @@
-# Contact | LESSSO
+# LESSSO
 
 Aplicación web autohospedada para administrar prospectos, cuentas, bóveda de credenciales, finanzas y operación desde una interfaz local.
 

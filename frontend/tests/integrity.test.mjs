@@ -58,3 +58,15 @@ test('El mapa limpia marcadores vacíos y evita guardar dos veces la misma entid
   assert.match(map, /savingOsmIdsRef\.current\.add\(lead\.osm_id\)/);
   assert.match(markerSync, /layer\.clearLayers\(\);[\s\S]*if \(!results\) return;/);
 });
+
+test('La Papelera trata los 401 como expiración de sesión de usuario', () => {
+  const api = fs.readFileSync(path.resolve('src/lib/api.ts'), 'utf8');
+  const corePrefixes = api.slice(
+    api.indexOf('const CORE_USER_ENDPOINT_PREFIXES'),
+    api.indexOf('function isCoreUserEndpoint')
+  );
+
+  assert.match(corePrefixes, /'\/trash'/);
+  assert.match(api, /if \(coreEndpoint\)[\s\S]*setApiUserToken\(null\)/);
+  assert.match(api, /else if \([\s\S]*setApiVaultToken\(null\)/);
+});

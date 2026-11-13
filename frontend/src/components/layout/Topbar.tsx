@@ -57,7 +57,7 @@ export const Topbar: React.FC<TopbarProps> = ({ onMenuClick, menuTriggerRef, isM
   const sectionTitles: Record<string, { title: string; compactTitle: string; tooltip?: string }> = {
     dashboard: { title: 'Resumen General', compactTitle: 'Inicio', tooltip: 'Vista rápida de tus correos principales, seguridad, prospectos, gastos e ingresos reales.' },
     emails: { title: 'Correos Principales', compactTitle: 'Correos', tooltip: 'Tus cuentas de correo principales, a qué teléfono o correo se recuperan y si tienen verificación en 2 pasos.' },
-    platforms: { title: 'Cuentas y Servicios', compactTitle: 'Cuentas', tooltip: 'Todas las páginas, aplicaciones y herramientas vinculadas a tus correos principales.' },
+    platforms: { title: 'Servicios vinculados', compactTitle: 'Servicios', tooltip: 'Páginas, aplicaciones y herramientas vinculadas a tus correos principales.' },
     capture: { title: 'Captación en mapa', compactTitle: 'Mapa', tooltip: 'Busca negocios publicados en OpenStreetMap y elige cuáles guardar como prospectos.' },
     prospects: { title: 'Prospectos', compactTitle: 'Prospectos', tooltip: 'Oportunidades comerciales y su seguimiento.' },
     passwords: { title: 'Contraseñas y Notas Seguras', compactTitle: 'Claves', tooltip: 'Consulta y copia rápidamente tus contraseñas, PIN, llaves de acceso y notas seguras.' },
@@ -123,7 +123,7 @@ export const Topbar: React.FC<TopbarProps> = ({ onMenuClick, menuTriggerRef, isM
     }
   };
 
-  const currentInfo = sectionTitles[activeSection] || { title: 'Contact | LESSSO', compactTitle: 'Inicio' };
+  const currentInfo = sectionTitles[activeSection] || { title: 'LESSSO', compactTitle: 'Inicio' };
 
   const formattedUpdatedAt = exchangeRate?.updated_at
     ? new Date(exchangeRate.updated_at.endsWith('Z') ? exchangeRate.updated_at : `${exchangeRate.updated_at}Z`).toLocaleString(locale, {
@@ -207,7 +207,7 @@ export const Topbar: React.FC<TopbarProps> = ({ onMenuClick, menuTriggerRef, isM
       <div className="flex shrink-0 items-center justify-end gap-1.5 sm:gap-2.5">
         {/* Dynamic Exchange pair live pill + Manual override inline popover */}
         {exchangeRate && (
-          <div ref={ratePopoverRef} className="relative hidden shrink-0 items-center xl:flex">
+          <div ref={ratePopoverRef} className="relative hidden shrink-0 items-center 2xl:flex">
             <div className="flex items-center rounded-xl bg-obsidian-surface border border-obsidian-border hover:border-obsidian-borderLight transition-all overflow-hidden">
               <button
                 type="button"
@@ -334,7 +334,7 @@ export const Topbar: React.FC<TopbarProps> = ({ onMenuClick, menuTriggerRef, isM
         <button
           type="button"
           onClick={() => openPlatformModal()}
-          className="hidden min-h-10 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-md shadow-indigo-600/20 transition-colors hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 xl:inline-flex"
+          className="hidden min-h-10 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-md shadow-indigo-600/20 transition-colors hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 2xl:inline-flex"
         >
           <Plus size={14} className="shrink-0" aria-hidden="true" />
           <span>Agregar Cuenta</span>
