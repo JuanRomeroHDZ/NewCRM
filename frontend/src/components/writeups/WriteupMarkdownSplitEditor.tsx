@@ -33,7 +33,9 @@ import {
   Table,
 } from 'lucide-react';
 import { WriteupAsset, WriteupBoard, WriteupSeverity } from '../../types';
+import { useVault } from '../../context/VaultContext';
 import { WRITEUP_TEMPLATES } from './pentestTemplates';
+import { createPortTableMarkdown, MAX_PORT_TABLE_INPUT_LENGTH } from './portTable';
 import {
   autoRedactSensitiveData,
   calculateCvss31,
@@ -69,7 +71,8 @@ interface WriteupMarkdownSplitEditorProps {
     line_start: number;
     line_end: number;
     quoted_text: string;
-  }) => Promise<void>;
+    markdown_content: string;
+  }) => Promise<boolean | void>;
   onApplyCvss?: (score: number, vector: string, severity: WriteupSeverity) => void;
   onSave?: () => void;
   onInspectAsset?: (asset: WriteupAsset) => void;
@@ -81,6 +84,7 @@ type ToolGroupFilter = 'all' | 'text' | 'blocks' | 'media' | 'pentest';
 type InlineTray = 'none' | 'templates' | 'cvss' | 'code' | 'mermaid' | 'outline' | 'pentest_kit';
 
 const CODE_LANGUAGES = ['http', 'bash', 'python', 'sql', 'javascript', 'json', 'yaml', 'powershell', 'c', 'xml', 'plaintext'];
+const MAX_CITATION_LENGTH = 5000;
 
 function findNearestHeading(lines: string[], upToLineZeroBased: number): string | null {
   for (let i = Math.min(upToLineZeroBased, lines.length - 1); i >= 0; i--) {
@@ -104,6 +108,7 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
   jumpTarget,
   compactMode = false,
 }) => {
+  const { showToast } = useVault();
   const [redactPreview, setRedactPreview] = useState(false);
   const [activeTray, setActiveTray] = useState<InlineTray>('none');
   const [toolFilter, setToolFilter] = useState<ToolGroupFilter>('all');
@@ -113,7 +118,7 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
   const [codecInput, setCodecInput] = useState('');
   const [codecOutput, setCodecOutput] = useState('');
   const [codecError, setCodecError] = useState('');
-  const [portSpec, setPortSpec] = useState('443/tcp https nginx-1.24 Abierto, 8080/tcp http-proxy Jetty AuthBypass');
+  const [portSpec, setPortSpec] = useState('');
   const [kitFeedback, setKitFeedback] = useState('');
   const [splitView, setSplitView] = useState<'split' | 'edit' | 'preview'>(() => {
     if (compactMode || (typeof window !== 'undefined' && window.innerWidth < 1024)) return 'edit';
@@ -185,6 +190,8 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
       if (asset) {
         insertAtCursor(`\n![${asset.filename}](asset://${asset.id})\n`);
       }
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'No se pudo subir el archivo. Inténtalo de nuevo.', 'error');
     } finally {
       setUploading(false);
     }
@@ -219,7 +226,11 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
     const end = ta.selectionEnd;
     const selected = markdown.slice(start, end).trim();
     if (!selected) {
-      alert('Selecciona primero un segmento de texto en el editor para citarlo en la pizarra.');
+      showToast('Selecciona un fragmento del informe antes de añadir la cita a la pizarra.', 'info');
+      return;
+    }
+    if (selected.length > MAX_CITATION_LENGTH) {
+      showToast(`Selecciona un fragmento de hasta ${MAX_CITATION_LENGTH} caracteres.`, 'warning');
       return;
     }
     const beforeLines = markdown.slice(0, start).split('\n');
@@ -229,18 +240,21 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
 
     const existingAnchorMatch = selected.match(/\{#([a-zA-Z0-9_-]{2,120})\}/);
     const anchorId = existingAnchorMatch ? existingAnchorMatch[1] : `cit-${Date.now().toString(36)}`;
-    if (!existingAnchorMatch) {
-      const nextMd = `${markdown.slice(0, end)} {#${anchorId}}${markdown.slice(end)}`;
-      onChange(nextMd);
+    const nextMarkdown = existingAnchorMatch
+      ? markdown
+      : `${markdown.slice(0, end)} {#${anchorId}}${markdown.slice(end)}`;
+    try {
+      await onCreateCitation({
+        anchor_id: anchorId,
+        heading_path: headingPath,
+        line_start: lineStart,
+        line_end: lineEnd,
+        quoted_text: selected.replace(/\{#[a-zA-Z0-9_-]+\}/g, '').trim() || selected,
+        markdown_content: nextMarkdown,
+      });
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'No se pudo añadir la cita. Inténtalo de nuevo.', 'error');
     }
-
-    await onCreateCitation({
-      anchor_id: anchorId,
-      heading_path: headingPath,
-      line_start: lineStart,
-      line_end: lineEnd,
-      quoted_text: selected.replace(/\{#[a-zA-Z0-9_-]+\}/g, '').trim() || selected,
-    });
   };
 
   const cvssResult = useMemo(() => calculateCvss31(cvssInputs), [cvssInputs]);
@@ -268,9 +282,9 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
     const { result, count } = autoRedactSensitiveData(markdown);
     if (count > 0) {
       onChange(result);
-      setKitFeedback(`${count} secreto(s) envueltos en {{redact:...}}`);
+      setKitFeedback(`${count} dato(s) sensible(s) oculto(s) en la copia para cliente.`);
     } else {
-      setKitFeedback('No se detectaron tokens/secretos nuevos sin redactar.');
+      setKitFeedback('No se encontraron datos sensibles nuevos para ocultar.');
     }
   };
 
@@ -278,7 +292,7 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
     const ta = textareaRef.current;
     if (!ta) {
       onChange(defangIocs(markdown));
-      setKitFeedback('IOCs neutralizados (hxxp/[.]) en todo el documento.');
+      setKitFeedback('Enlaces e IP del informe cambiados para evitar aperturas accidentales.');
       return;
     }
     const start = ta.selectionStart;
@@ -287,30 +301,24 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
       const selected = markdown.slice(start, end);
       const safe = defangIocs(selected);
       onChange(markdown.slice(0, start) + safe + markdown.slice(end));
-      setKitFeedback('IOCs seleccionados neutralizados (hxxp / [.]).');
+      setKitFeedback('Enlaces e IP seleccionados cambiados para evitar aperturas accidentales.');
     } else {
       onChange(defangIocs(markdown));
-      setKitFeedback('Todos los IOCs del borrador neutralizados (hxxp / [.]).');
+      setKitFeedback('Enlaces e IP del informe cambiados para evitar aperturas accidentales.');
     }
   };
 
   const handleInsertPortsTable = () => {
-    const entries = portSpec
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean);
-    if (entries.length === 0) return;
-    const rows = entries.map((entry) => {
-      const parts = entry.split(/\s+/);
-      const port = parts[0] || '-';
-      const svc = parts[1] || 'tcp';
-      const banner = parts[2] || 'N/D';
-      const status = parts.slice(3).join(' ') || 'Expuesto';
-      return `| \`${port}\` | ${svc} | ${banner} | ${status} |`;
-    });
-    const tableMd = `\n| Puerto / Proto | Servicio | Versión / Banner | Estado |\n|---|---|---|---|\n${rows.join('\n')}\n`;
-    insertAtCursor(tableMd);
-    setKitFeedback(`Tabla generada (${entries.length} puerto(s)).`);
+    try {
+      const tableMd = createPortTableMarkdown(portSpec);
+      const rowCount = tableMd.split('\n').filter((line) => line.startsWith('| `')).length;
+      insertAtCursor(tableMd);
+      setKitFeedback(`Tabla creada con ${rowCount} ${rowCount === 1 ? 'puerto' : 'puertos'}.`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Revisa los datos de los puertos.';
+      setKitFeedback(message);
+      showToast(message, 'warning');
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -332,17 +340,17 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
   };
 
   return (
-    <div className="flex flex-col h-full min-h-[420px] bg-slate-950 border border-slate-800 rounded-xl overflow-hidden">
+    <div className="flex min-w-0 max-w-full flex-col h-full min-h-[300px] bg-slate-950 border border-slate-800 rounded-xl overflow-hidden">
       {/* Row 1: Category Filter Pills + View Mode Switch */}
       <div className="flex flex-wrap items-center justify-between gap-2 px-2.5 py-2 bg-slate-900/95 border-b border-slate-800">
-        <div className="flex items-center gap-1 overflow-x-auto max-w-full">
+        <div className="flex items-center gap-1 overflow-x-auto max-w-full min-w-0">
           {(
             [
               ['all', 'Todo'],
               ['text', 'Texto'],
               ['blocks', 'Bloques'],
-              ['media', 'Animado'],
-              ['pentest', 'Pentest'],
+              ['media', 'Multimedia'],
+              ['pentest', 'Seguridad'],
             ] as const
           ).map(([id, label]) => (
             <button
@@ -383,7 +391,7 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
                   splitView === m ? 'bg-indigo-600 text-white font-medium' : 'text-slate-300 hover:text-white'
                 }`}
               >
-                {m === 'edit' ? 'Editar' : m === 'split' ? 'Dual' : 'Preview'}
+              {m === 'edit' ? 'Editar' : m === 'split' ? 'Dos vistas' : 'Vista previa'}
               </button>
             ))}
           </div>
@@ -393,7 +401,7 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
       {/* Row 2: Compact Icon Toolbar (filtered cleanly) */}
       <div className="flex flex-wrap items-center gap-1 px-2.5 py-1.5 bg-slate-900/60 border-b border-slate-800">
         {showGroup('text') && (
-          <div className="flex items-center gap-0.5 pr-1.5 border-r border-slate-800">
+          <div className="flex flex-wrap items-center gap-0.5 pr-1.5 border-r border-slate-800">
             <button type="button" onClick={() => prefixLineAtCursor('# ')} title="Título H1" aria-label="Título H1" className="p-1.5 rounded hover:bg-slate-800 text-slate-300">
               <Heading1 className="w-4 h-4" />
             </button>
@@ -412,7 +420,7 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
             <button type="button" onClick={() => insertAtCursor('~~', true, '~~', 'tachado')} title="Tachado" aria-label="Tachado" className="p-1.5 rounded hover:bg-slate-800 text-slate-300">
               <Strikethrough className="w-4 h-4" />
             </button>
-            <button type="button" onClick={() => insertAtCursor('[', true, '](https://)', 'texto_enlace')} title="Enlace Markdown" aria-label="Enlace" className="p-1.5 rounded hover:bg-slate-800 text-slate-300">
+            <button type="button" onClick={() => insertAtCursor('[', true, '](https://)', 'texto_enlace')} title="Enlace en el informe" aria-label="Enlace" className="p-1.5 rounded hover:bg-slate-800 text-slate-300">
               <Link className="w-4 h-4" />
             </button>
             <button type="button" onClick={() => prefixLineAtCursor('- ')} title="Lista viñetas" aria-label="Lista viñetas" className="p-1.5 rounded hover:bg-slate-800 text-slate-300">
@@ -428,7 +436,7 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
         )}
 
         {showGroup('blocks') && (
-          <div className="flex items-center gap-0.5 pr-1.5 border-r border-slate-800">
+          <div className="flex flex-wrap items-center gap-0.5 pr-1.5 border-r border-slate-800">
             <button type="button" onClick={() => insertAtCursor('`', true, '`', 'codigo')} title="Código en línea" aria-label="Código en línea" className="p-1.5 rounded hover:bg-slate-800 text-slate-300">
               <Code className="w-4 h-4" />
             </button>
@@ -479,7 +487,7 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
         )}
 
         {showGroup('media') && (
-          <div className="flex items-center gap-1 pr-1.5 border-r border-slate-800">
+          <div className="flex flex-wrap items-center gap-1 pr-1.5 border-r border-slate-800">
             <button
               type="button"
               disabled={uploading}
@@ -521,7 +529,7 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
                 )
               }
               className="px-2 py-1 rounded bg-slate-800/80 hover:bg-slate-700 text-emerald-300 text-xs flex items-center gap-1"
-              title="Insertar widget HTML/CSS animado en sandbox aislado"
+              title="Insertar una animación HTML/CSS independiente"
             >
               <Film className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">HTML Anim</span>
@@ -541,7 +549,7 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
         )}
 
         {showGroup('pentest') && (
-          <div className="flex items-center gap-1">
+          <div className="flex flex-wrap items-center gap-1">
             <button
               type="button"
               onClick={handleCiteSelection}
@@ -586,10 +594,10 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
               className={`px-2 py-1 rounded text-xs flex items-center gap-1 ${
                 activeTray === 'pentest_kit' ? 'bg-indigo-600 text-white' : 'bg-slate-800 hover:bg-slate-700 text-emerald-300'
               }`}
-              title="Toolkit Pentest: Defang IOCs, Auto-redactar, Codecs Base64/Hex/JWT y Puertos"
+              title="Herramientas de seguridad: neutralizar enlaces e IP, ocultar secretos, transformar texto y crear tablas de puertos"
             >
               <Binary className="w-3.5 h-3.5" />
-              <span>Kit</span>
+              <span>Herramientas</span>
             </button>
             <button
               type="button"
@@ -597,7 +605,7 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
               className={`px-2 py-1 rounded text-xs flex items-center gap-1 ${
                 activeTray === 'outline' ? 'bg-indigo-600 text-white' : 'bg-slate-800 hover:bg-slate-700 text-slate-200'
               }`}
-              title="Índice automático (TOC) y métricas del documento"
+              title="Índice del informe y sus medidas"
             >
               <ListTree className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Índice</span>
@@ -608,7 +616,7 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
               className={`px-2 py-1 rounded text-xs flex items-center gap-1 ${
                 activeTray === 'templates' ? 'bg-indigo-600 text-white' : 'bg-slate-800 hover:bg-slate-700 text-slate-200'
               }`}
-              title="Plantillas Markdown y diagramas"
+              title="Plantillas de informe y diagramas"
             >
               <span>Plantillas</span>
               <ChevronDown className="w-3 h-3" />
@@ -710,8 +718,8 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
       {activeTray === 'pentest_kit' && (
         <div className="px-3 py-2.5 bg-slate-900 border-b border-slate-800 space-y-2.5 text-xs max-h-72 overflow-y-auto">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <span className="font-semibold text-slate-100">Kit Pentest & Redacción Segura</span>
-            {kitFeedback && <span className="text-[11px] text-emerald-300">{kitFeedback}</span>}
+              <span className="font-semibold text-slate-100">Herramientas de seguridad</span>
+            {kitFeedback && <span role="status" aria-live="polite" className="text-[11px] text-emerald-300">{kitFeedback}</span>}
           </div>
 
           <div className="flex flex-wrap gap-1.5">
@@ -719,30 +727,32 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
               type="button"
               onClick={handleDefangSelection}
               className="px-2.5 py-1.5 rounded bg-slate-800 hover:bg-indigo-600/30 border border-slate-700 text-slate-100 flex items-center gap-1.5"
-              title="Convierte http:// en hxxp:// e IPs 1.2.3.4 en 1[.]2[.]3[.]4"
+              title="Cambia el formato de enlaces e IP para evitar que se abran por accidente"
             >
               <ShieldCheck className="w-3.5 h-3.5 text-cyan-400" />
-              Defang IOCs (hxxp/[.])
+              Neutralizar enlaces e IP
             </button>
             <button
               type="button"
               onClick={handleAutoRedact}
               className="px-2.5 py-1.5 rounded bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-200 flex items-center gap-1.5"
-              title="Envuelve automáticamente Bearer/JWT/API keys en {{redact:...}}"
+              title="Oculta credenciales y claves detectadas en el informe"
             >
               <ShieldAlert className="w-3.5 h-3.5" />
-              Auto-censurar secretos
+              Ocultar datos sensibles
             </button>
           </div>
 
-          {/* Port Scan -> Markdown Table */}
-          <div className="flex flex-col sm:flex-row gap-1.5">
+          {/* Port list -> report table */}
+          <div className="flex min-w-0 flex-col sm:flex-row gap-1.5">
             <input
               type="text"
               value={portSpec}
               onChange={(e) => setPortSpec(e.target.value)}
-              placeholder="443/tcp https nginx Abierto, 22/tcp ssh OpenSSH Filtrado"
-              className="flex-1 bg-slate-950 border border-slate-700 rounded px-2 py-1 text-slate-100 font-mono text-[11px]"
+              maxLength={MAX_PORT_TABLE_INPUT_LENGTH}
+              aria-label="Puertos y servicios"
+              placeholder="Puerto/protocolo servicio [versión] [estado], separados por coma"
+              className="w-full min-w-0 flex-1 bg-slate-950 border border-slate-700 rounded px-2 py-1 text-slate-100 text-[11px]"
             />
             <button
               type="button"
@@ -750,17 +760,17 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
               className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-100 flex items-center gap-1 shrink-0"
             >
               <Server className="w-3.5 h-3.5 text-indigo-400" />
-              Tabla Puertos .md
+              Crear tabla de puertos
             </button>
           </div>
 
-          {/* Offline Base64 / Hex / JWT Codec */}
+          {/* Text conversion tools */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 pt-1 border-t border-slate-800">
             <div className="space-y-1.5">
               <div className="flex items-center justify-between text-[11px] text-slate-400">
                 <span className="flex items-center gap-1">
                   <KeyRound className="w-3 h-3 text-indigo-400" />
-                  Codec Offline (Base64 / Hex / JWT)
+                  Transformar texto sin conexión
                 </span>
                 <div className="flex flex-wrap gap-1">
                   <button
@@ -771,7 +781,7 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
                     }}
                     className="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200"
                   >
-                    B64 Enc
+                    Codificar Base64
                   </button>
                   <button
                     type="button"
@@ -785,7 +795,7 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
                     }}
                     className="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200"
                   >
-                    B64 Dec
+                    Leer Base64
                   </button>
                   <button
                     type="button"
@@ -795,7 +805,7 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
                     }}
                     className="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200"
                   >
-                    Hex Enc
+                    Codificar hexadecimal
                   </button>
                   <button
                     type="button"
@@ -809,7 +819,7 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
                     }}
                     className="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200"
                   >
-                    Hex Dec
+                    Leer hexadecimal
                   </button>
                   <button
                     type="button"
@@ -819,33 +829,35 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
                         const jwt = decodeJwtOffline(codecInput);
                         setCodecOutput(`// HEADER\n${jwt.header}\n\n// PAYLOAD\n${jwt.payload}\n\n// SIGNATURE\n${jwt.signature}`);
                       } catch (err) {
-                        setCodecError(err instanceof Error ? err.message : 'JWT inválido');
+                        setCodecError(err instanceof Error ? err.message : 'El formato del token no es válido.');
                       }
                     }}
                     className="px-1.5 py-0.5 rounded bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-200"
                   >
-                    JWT Dec
+                    Leer token
                   </button>
                 </div>
               </div>
               <textarea
                 rows={2}
                 value={codecInput}
+                maxLength={10000}
                 onChange={(e) => setCodecInput(e.target.value)}
-                placeholder="Pega payload, string Base64, Hex o JWT eyJ..."
+                aria-label="Texto que quieres transformar"
+                placeholder="Pega aquí el texto o la cadena codificada"
                 className="w-full bg-slate-950 border border-slate-700 rounded p-1.5 text-slate-100 font-mono text-[11px]"
               />
             </div>
             <div className="space-y-1.5">
               <div className="flex items-center justify-between text-[11px] text-slate-400">
-                <span>Resultado ({codecError ? 'Error' : 'Offline'})</span>
+                <span>Resultado ({codecError ? 'Error' : 'Sin conexión'})</span>
                 {codecOutput && (
                   <button
                     type="button"
                     onClick={() => insertAtCursor(`\n\`\`\`json\n${codecOutput}\n\`\`\`\n`)}
                     className="px-2 py-0.5 rounded bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300"
                   >
-                    Insertar en .md
+                    Insertar en el informe
                   </button>
                 )}
               </div>
@@ -915,7 +927,7 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
                 }}
                 className="px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-medium"
               >
-                Aplicar al Writeup
+                Aplicar al informe
               </button>
             )}
             <button
@@ -926,7 +938,7 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
               }}
               className="px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200"
             >
-              Insertar en .md
+              Insertar en el informe
             </button>
           </div>
         </div>
@@ -939,20 +951,23 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
             <textarea
               ref={textareaRef}
               value={markdown}
+              maxLength={200000}
               onChange={(e) => onChange(e.target.value)}
               onKeyDown={handleKeyDown}
               onPaste={handlePaste}
               onDrop={handleDrop}
               spellCheck={false}
-              placeholder="Escribe en Markdown (.md). Pega capturas (Ctrl+V), Ctrl+S guardar, Ctrl+B/I/K formato…"
+              placeholder="Escribe el informe. Pega imágenes con Ctrl+V; Ctrl+S guarda; Ctrl+B/I/K aplica formato."
               className="flex-1 w-full min-h-[240px] bg-slate-950 text-slate-100 font-mono text-sm leading-6 p-3.5 sm:p-4 resize-none focus:outline-none"
             />
-            <div className="px-3 py-1.5 bg-slate-900/60 border-t border-slate-800 text-[11px] text-slate-400 flex items-center justify-between gap-2 tabular-nums">
-              <span className="flex items-center gap-1.5">
+            <div className="px-3 py-1.5 bg-slate-900/60 border-t border-slate-800 text-[11px] text-slate-400 flex flex-wrap items-center justify-between gap-2 tabular-nums">
+              <span className="flex min-w-0 flex-wrap items-center gap-1.5">
                 <FileText className="w-3.5 h-3.5 shrink-0" />
-                {docMetrics.lines} L · {docMetrics.words} pal. · {docMetrics.readingMinutes}m · {docMetrics.codeBlocks} code
+                {docMetrics.lines} líneas · {docMetrics.words} palabras · {docMetrics.readingMinutes} min · {docMetrics.codeBlocks} bloques de código
               </span>
-              <span className="truncate">Ctrl+S guardar · Ctrl+V media · {'{{redact:...}}'}</span>
+              <span className="hidden truncate sm:inline" title="Ctrl+S guardar · Ctrl+V pegar imágenes · {{redact:...}} ocultar texto">
+                Ctrl+S guardar · Ctrl+V pegar imagen · {'{{redact:...}}'}
+              </span>
             </div>
           </div>
         )}

@@ -25,8 +25,20 @@ export const CommandPalette: React.FC = () => {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const restoreFocusRef = useRef<HTMLElement | null>(null);
 
   const loadSearchIndex = useCallback(async () => {
+    if (!isUnlocked) {
+      setPlatforms([]);
+      setEmails([]);
+      setProspects([]);
+      setWriteups([]);
+      setLoadError(null);
+      setLoadingData(false);
+      return;
+    }
+
     setLoadingData(true);
     setLoadError(null);
     const results = await Promise.allSettled([
@@ -57,6 +69,7 @@ export const CommandPalette: React.FC = () => {
 
   useEffect(() => {
     if (!isCommandPaletteOpen) return;
+    restoreFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setQuery('');
     setSelectedIndex(0);
     const focusTimer = window.setTimeout(() => inputRef.current?.focus(), 50);
@@ -72,6 +85,19 @@ export const CommandPalette: React.FC = () => {
     return () => {
       window.clearTimeout(focusTimer);
       window.removeEventListener('keydown', handleEscape);
+      const previousFocus = restoreFocusRef.current;
+      const focusIsUnavailable = previousFocus && (
+        !previousFocus.isConnected ||
+        previousFocus.closest('[aria-hidden="true"], [inert]') !== null
+      );
+      if (!focusIsUnavailable && previousFocus) {
+        previousFocus.focus();
+      } else {
+        const pageTarget = document.querySelector<HTMLElement>(
+          'main button:not([disabled]), main input:not([disabled]), main a[href], main [tabindex]:not([tabindex="-1"])'
+        );
+        pageTarget?.focus();
+      }
     };
   }, [isCommandPaletteOpen, loadSearchIndex, closeCommandPalette]);
 
@@ -131,7 +157,8 @@ export const CommandPalette: React.FC = () => {
       color: 'text-indigo-400',
       action: () => {
         closeCommandPalette();
-        openProspectModal();
+        if (isUnlocked) openProspectModal();
+        else openUnlockModal();
       }
     },
     {
@@ -147,7 +174,7 @@ export const CommandPalette: React.FC = () => {
     },
     {
       id: 'cmd_writeups_view',
-      title: 'Ir a Writeups y Pentesting',
+      title: 'Ir a informes de seguridad',
       subtitle: 'Editor Markdown, pizarras de ataque y reportes cifrados',
       icon: BookOpen,
       color: 'text-emerald-400',
@@ -170,13 +197,14 @@ export const CommandPalette: React.FC = () => {
     },
     {
       id: 'cmd_graph_view',
-      title: 'Ir a Vista de Grafo Relacional',
-      subtitle: 'Visualizar topología Obsidian y puntos de falla',
+      title: 'Ir a Mapa de conexiones',
+      subtitle: 'Ver relaciones entre correos, cuentas, prospectos y pagos',
       icon: Network,
       color: 'text-indigo-400',
       action: () => {
         closeCommandPalette();
         setActiveSection('graph');
+        if (!isUnlocked) openUnlockModal();
       }
     },
     {
@@ -265,17 +293,39 @@ export const CommandPalette: React.FC = () => {
   const writeupsOffset = filteredProspects.length + filteredPlatforms.length + filteredEmails.length;
   const commandsOffset = writeupsOffset + filteredWriteups.length;
 
+  const handleDialogKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== 'Tab' || !dialogRef.current) return;
+    const focusable = Array.from(dialogRef.current.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [href], [tabindex]:not([tabindex="-1"])'
+    )).filter((element) => element.getAttribute('aria-hidden') !== 'true');
+    if (!focusable.length) {
+      event.preventDefault();
+      return;
+    }
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  };
+
   return (
     <div
       className="responsive-overlay fixed inset-0 z-50 flex items-start justify-center pt-14 sm:pt-20 p-3 sm:p-4 bg-black/70 backdrop-blur-sm animate-fadeIn"
       onClick={closeCommandPalette}
     >
       <div 
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label="Paleta de comandos"
         className="w-full max-w-2xl bg-obsidian-panel border border-obsidian-borderLight rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85dvh]"
         onClick={(e) => e.stopPropagation()}
+        onKeyDown={handleDialogKeyDown}
       >
         {/* Search Input */}
         <div className="relative flex items-center gap-2 px-3 sm:px-4 py-3 border-b border-obsidian-border">
@@ -287,7 +337,12 @@ export const CommandPalette: React.FC = () => {
             id="command-palette-search"
             ref={inputRef}
             type="text"
-            aria-label="Buscar prospecto, plataforma, correo, writeup o comando"
+            role="combobox"
+            aria-autocomplete="list"
+            aria-controls="command-palette-results"
+            aria-expanded={totalResultsCount > 0}
+            aria-activedescendant={totalResultsCount > 0 ? `command-option-${selectedIndex}` : undefined}
+            aria-label="Buscar prospecto, cuenta, correo, informe o acción"
             maxLength={INPUT_LIMITS.SEARCH}
             value={query}
             onChange={(e) => {
@@ -295,7 +350,7 @@ export const CommandPalette: React.FC = () => {
               setSelectedIndex(0);
             }}
             onKeyDown={handleKeyDown}
-            placeholder="Buscar prospecto, plataforma, correo, writeup o comando..."
+            placeholder="Buscar prospecto, cuenta, correo, informe o acción..."
             className="w-full bg-transparent text-sm text-white placeholder-obsidian-muted/60 focus:outline-none min-w-0"
           />
           <div className="flex items-center gap-1.5 shrink-0">
@@ -339,10 +394,10 @@ export const CommandPalette: React.FC = () => {
         )}
 
         {/* Results List */}
-        <div role="listbox" aria-label="Resultados de búsqueda" className="max-h-96 overflow-y-auto p-2 space-y-4">
+        <div id="command-palette-results" role="listbox" aria-label="Resultados de búsqueda" className="max-h-96 overflow-y-auto p-2 space-y-4">
           {/* Prospects & Demos */}
           {filteredProspects.length > 0 && (
-            <div>
+            <div role="group" aria-label="Prospectos y demostraciones">
               <div className="px-3 py-1 text-[11px] font-semibold text-obsidian-muted tracking-wider uppercase">
                 Prospectos & Demos (CRM)
               </div>
@@ -353,8 +408,10 @@ export const CommandPalette: React.FC = () => {
                   return (
                     <button
                       key={pr.id}
+                      id={`command-option-${idx}`}
                       type="button"
                       role="option"
+                      tabIndex={-1}
                       aria-selected={isCurrent}
                       onClick={() => {
                         closeCommandPalette();
@@ -388,7 +445,7 @@ export const CommandPalette: React.FC = () => {
 
           {/* Platforms */}
           {filteredPlatforms.length > 0 && (
-            <div>
+            <div role="group" aria-label="Cuentas y servicios">
               <div className="px-3 py-1 text-[11px] font-semibold text-obsidian-muted tracking-wider uppercase">
                 Plataformas & Servicios
               </div>
@@ -399,8 +456,10 @@ export const CommandPalette: React.FC = () => {
                   return (
                     <button
                       key={p.id}
+                      id={`command-option-${filteredProspects.length + idx}`}
                       type="button"
                       role="option"
+                      tabIndex={-1}
                       aria-selected={isCurrent}
                       onClick={() => {
                         closeCommandPalette();
@@ -436,7 +495,7 @@ export const CommandPalette: React.FC = () => {
 
           {/* Emails */}
           {filteredEmails.length > 0 && (
-            <div>
+            <div role="group" aria-label="Correos principales">
               <div className="px-3 py-1 text-[11px] font-semibold text-obsidian-muted tracking-wider uppercase">
                 Correos Raíz
               </div>
@@ -447,8 +506,10 @@ export const CommandPalette: React.FC = () => {
                   return (
                     <button
                       key={e.id}
+                      id={`command-option-${filteredProspects.length + filteredPlatforms.length + idx}`}
                       type="button"
                       role="option"
+                      tabIndex={-1}
                       aria-selected={isCurrent}
                       onClick={() => {
                         closeCommandPalette();
@@ -477,9 +538,9 @@ export const CommandPalette: React.FC = () => {
 
           {/* Writeups */}
           {filteredWriteups.length > 0 && (
-            <div>
+            <div role="group" aria-label="Informes de seguridad">
               <div className="px-3 py-1 text-[11px] font-semibold text-obsidian-muted tracking-wider uppercase">
-                Writeups y Pentesting
+                Informes de seguridad
               </div>
               <div className="space-y-1 mt-1">
                 {filteredWriteups.map((w, idx) => {
@@ -488,8 +549,10 @@ export const CommandPalette: React.FC = () => {
                   return (
                     <button
                       key={w.id}
+                      id={`command-option-${writeupsOffset + idx}`}
                       type="button"
                       role="option"
+                      tabIndex={-1}
                       aria-selected={isCurrent}
                       onClick={() => {
                         closeCommandPalette();
@@ -519,7 +582,7 @@ export const CommandPalette: React.FC = () => {
 
           {/* Commands */}
           {staticCommands.length > 0 && (
-            <div>
+            <div role="group" aria-label="Acciones rápidas">
               <div className="px-3 py-1 text-[11px] font-semibold text-obsidian-muted tracking-wider uppercase">
                 Acciones Rápidas
               </div>
@@ -531,8 +594,10 @@ export const CommandPalette: React.FC = () => {
                   return (
                     <button
                       key={cmd.id}
+                      id={`command-option-${commandsOffset + idx}`}
                       type="button"
                       role="option"
+                      tabIndex={-1}
                       aria-selected={isCurrent}
                       onClick={cmd.action}
                       className={`w-full text-left flex items-center justify-between px-3 py-2 rounded-xl text-xs transition-colors ${

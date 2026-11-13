@@ -1,4 +1,4 @@
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 from datetime import date
 import math
 import re
@@ -14,6 +14,8 @@ from .validators import (
     validate_service_dates_order,
     validate_single_phone,
 )
+
+SupportedCurrency = Literal["MXN", "USD"]
 
 def validate_email_input(value: str | None) -> str | None:
     if value is None:
@@ -246,7 +248,7 @@ class PlatformCreate(PlatformBase):
     icon_type: str = Field(default="catalog", max_length=32)
     access_type: str = Field(default="own_password", max_length=32)
     subscription_status: str = Field(default="active", max_length=32)
-    currency: str = Field(default="MXN", max_length=8)
+    currency: SupportedCurrency = "MXN"
     billing_cycle: str = Field(default="monthly", max_length=32)
     login_url: str | None = Field(default=None, max_length=512)
     username: str | None = Field(default=None, max_length=128)
@@ -297,7 +299,7 @@ class PlatformUpdate(BaseModel):
     env_variables: list[EnvVarInput] | None = Field(default=None, max_length=100)
     subscription_status: str | None = Field(default=None, max_length=32)
     subscription_cost: float | None = Field(default=None, ge=0, le=100000000, allow_inf_nan=False)
-    currency: str | None = Field(default=None, max_length=8)
+    currency: SupportedCurrency | None = None
     billing_cycle: str | None = Field(default=None, max_length=32)
     start_date: str | None = Field(default=None, max_length=32)
     next_billing_date: str | None = Field(default=None, max_length=32)
@@ -484,7 +486,7 @@ class SettingsUpdate(BaseModel):
     accent_color: str | None = Field(default=None, max_length=32)
     canvas_style: str | None = Field(default=None, max_length=32)
     budget_cap_amount: float | None = Field(default=None, ge=0, le=100000000, allow_inf_nan=False)
-    budget_cap_currency: str | None = Field(default=None, max_length=8)
+    budget_cap_currency: SupportedCurrency | None = None
     password_rotation_days_root: int | None = Field(default=None, ge=1, le=3650)
     password_rotation_days_secondary: int | None = Field(default=None, ge=1, le=3650)
     trash_retention_days: int | None = Field(default=None, ge=0, le=3650)
@@ -569,7 +571,7 @@ class ProspectCreate(ProspectBase):
     scope: str = Field(default="business", max_length=32)
     workflow_type: str = Field(default="demo_first", max_length=32)
     status: str = Field(default="demo_creada", max_length=32)
-    currency: str = Field(default="MXN", max_length=8)
+    currency: SupportedCurrency = "MXN"
     billing_type: str = Field(default="one_time", max_length=32)
     started_at: str | None = Field(default=None, max_length=64)
     demo_url: str | None = Field(default=None, max_length=512)
@@ -608,7 +610,7 @@ class ProspectUpdate(BaseModel):
     status: str | None = Field(default=None, max_length=32)
     demo_url: str | None = Field(default=None, max_length=512)
     estimated_value: float | None = Field(default=None, ge=0, le=100000000, allow_inf_nan=False)
-    currency: str | None = Field(default=None, max_length=8)
+    currency: SupportedCurrency | None = None
     billing_type: str | None = Field(default=None, max_length=32)
     whatsapp: str | None = Field(default=None, max_length=64)
     phones: str | None = Field(default=None, max_length=500)
@@ -681,6 +683,13 @@ class FinancialInputValidation(BaseModel):
     def validate_amount(cls, value: float | None) -> float | None:
         if value is not None and (not math.isfinite(value) or value < 0 or value > 100000000):
             raise ValueError('El monto debe estar entre 0 y 100,000,000.')
+        return value
+
+    @field_validator('currency', 'charged_currency', check_fields=False)
+    @classmethod
+    def validate_supported_currency(cls, value: str | None) -> str | None:
+        if value is not None and value not in {"MXN", "USD"}:
+            raise ValueError('Solo se admiten pesos mexicanos (MXN) y dólares estadounidenses (USD).')
         return value
 
     @field_validator(
@@ -904,7 +913,7 @@ class InternalProjectCreate(InternalProjectBase):
     repo_url: str | None = Field(default=None, max_length=512)
     tech_stack: str | None = Field(default=None, max_length=500)
     monthly_maintenance_cost: float = Field(default=0.0, ge=0, le=100000000, allow_inf_nan=False)
-    currency: str = Field(default="MXN", pattern=r"^[A-Z]{3,8}$")
+    currency: SupportedCurrency = "MXN"
     linked_platform_ids: list[str] = Field(default_factory=list, max_length=100)
     linked_domain_ids: list[str] = Field(default_factory=list, max_length=100)
     tags: list[TagInput] = Field(default_factory=list, max_length=100)
@@ -923,7 +932,7 @@ class InternalProjectUpdate(BaseModel):
     repo_url: str | None = Field(default=None, max_length=512)
     tech_stack: str | None = Field(default=None, max_length=500)
     monthly_maintenance_cost: float | None = Field(default=None, ge=0, le=100000000, allow_inf_nan=False)
-    currency: str | None = Field(default=None, pattern=r"^[A-Z]{3,8}$")
+    currency: SupportedCurrency | None = None
     linked_platform_ids: list[str] | None = Field(default=None, max_length=100)
     linked_domain_ids: list[str] | None = Field(default=None, max_length=100)
     tags: list[TagInput] | None = Field(default=None, max_length=100)

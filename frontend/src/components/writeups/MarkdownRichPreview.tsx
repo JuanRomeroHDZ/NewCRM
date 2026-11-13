@@ -185,8 +185,7 @@ const AnimatedHtmlSandboxCard: React.FC<{ code: string }> = ({ code }) => {
   return (
     <div className="my-3 rounded-xl border border-slate-800 bg-[#070b14] overflow-hidden">
       <div className="flex items-center justify-between px-3 py-1.5 bg-slate-900/90 border-b border-slate-800 text-[11px] text-slate-300">
-        <span className="font-medium text-emerald-300">Widget HTML/CSS Animado (Sandbox aislado)</span>
-        <span className="text-[10px] text-slate-400 font-mono">sandbox=""</span>
+        <span className="font-medium text-emerald-200">Animación HTML/CSS protegida</span>
       </div>
       <iframe
         title="Widget HTML animado"

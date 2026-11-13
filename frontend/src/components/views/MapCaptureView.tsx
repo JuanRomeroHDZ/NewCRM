@@ -108,6 +108,8 @@ export const MapCaptureView: React.FC = () => {
   const mapRef = useRef<LeafletMap | null>(null);
   const markerLayerRef = useRef<LeafletMap | null>(null);
   const markersRef = useRef<Map<string, LeafletMap>>(new Map());
+  const searchRequestIdRef = useRef(0);
+  const savingOsmIdsRef = useRef(new Set<string>());
 
   const [zones, setZones] = useState<OSMZone[]>([]);
   const [mapSectors, setMapSectors] = useState<RuntimeMapSector[]>([]);
@@ -123,7 +125,7 @@ export const MapCaptureView: React.FC = () => {
   const [resultSource, setResultSource] = useState<'cache' | 'openstreetmap' | null>(null);
   const [searchError, setSearchError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [savingOsmId, setSavingOsmId] = useState<string | null>(null);
+  const [savingOsmIds, setSavingOsmIds] = useState<string[]>([]);
   const [savedIds, setSavedIds] = useState<string[]>([]);
   const [mobileTab, setMobileTab] = useState<'map' | 'results'>('map');
 
@@ -141,8 +143,12 @@ export const MapCaptureView: React.FC = () => {
 
   useEffect(() => {
     if (!isUnlocked) {
+      searchRequestIdRef.current += 1;
       setMapReady(false);
       setResults(null);
+      setResultSource(null);
+      setSearchError('');
+      setLoading(false);
       return;
     }
 
@@ -215,6 +221,10 @@ export const MapCaptureView: React.FC = () => {
     };
   }, [isUnlocked, mapAttempt]);
 
+  useEffect(() => () => {
+    searchRequestIdRef.current += 1;
+  }, []);
+
   useEffect(() => {
     if (!mapReady || !selectedZoneInfo || !mapRef.current) return;
     mapRef.current.flyTo(selectedZoneInfo.center, selectedZoneInfo.zoom, { duration: 0.35 });
@@ -229,11 +239,13 @@ export const MapCaptureView: React.FC = () => {
   }, [mobileTab, mapReady]);
 
   useEffect(() => {
-    if (!mapReady || !markerLayerRef.current || !results) return;
-    const leaflet = (window as LeafletGlobal).L;
+    if (!mapReady || !markerLayerRef.current) return;
     const layer = markerLayerRef.current;
     layer.clearLayers();
     markersRef.current.clear();
+    if (!results) return;
+
+    const leaflet = (window as LeafletGlobal).L;
 
     results.forEach((lead) => {
       const marker = leaflet.circleMarker([lead.lat, lead.lon], {
@@ -255,6 +267,7 @@ export const MapCaptureView: React.FC = () => {
         setSearchError('Escribe un giro comercial y selecciona una zona.');
         return;
       }
+      const requestId = ++searchRequestIdRef.current;
       setLoading(true);
       setSearchError('');
       setResults(null);
@@ -266,12 +279,15 @@ export const MapCaptureView: React.FC = () => {
           zone: selectedZone,
           bbox,
         });
+        if (requestId !== searchRequestIdRef.current) return;
         setResults(response.results);
         setResultSource(response.source);
       } catch (error) {
-        setSearchError(error instanceof Error ? error.message : 'No se pudo completar la búsqueda.');
+        if (requestId === searchRequestIdRef.current) {
+          setSearchError(error instanceof Error ? error.message : 'No se pudo completar la búsqueda.');
+        }
       } finally {
-        setLoading(false);
+        if (requestId === searchRequestIdRef.current) setLoading(false);
       }
     },
     [sector, subsector, selectedZone]
@@ -309,8 +325,9 @@ export const MapCaptureView: React.FC = () => {
   };
 
   const saveLead = async (lead: OSMLead) => {
-    if (!isUnlocked || savingOsmId === lead.osm_id || savedIds.includes(lead.osm_id)) return;
-    setSavingOsmId(lead.osm_id);
+    if (!isUnlocked || savingOsmIdsRef.current.has(lead.osm_id) || savedIds.includes(lead.osm_id)) return;
+    savingOsmIdsRef.current.add(lead.osm_id);
+    setSavingOsmIds((current) => (current.includes(lead.osm_id) ? current : [...current, lead.osm_id]));
     try {
       const website = leadWebsite(lead);
       const sourceNote = [
@@ -342,7 +359,8 @@ export const MapCaptureView: React.FC = () => {
     } catch (error) {
       showToast(error instanceof Error ? error.message : 'No se pudo guardar el prospecto.', 'error');
     } finally {
-      setSavingOsmId((current) => (current === lead.osm_id ? null : current));
+      savingOsmIdsRef.current.delete(lead.osm_id);
+      setSavingOsmIds((current) => current.filter((osmId) => osmId !== lead.osm_id));
     }
   };
 
@@ -390,13 +408,12 @@ export const MapCaptureView: React.FC = () => {
       {/* Mobile/Tablet (<lg) tab switch to avoid double-scroll traps */}
       <div
         className="flex items-center gap-1 rounded-xl border border-obsidian-border bg-obsidian-card p-1 lg:hidden"
-        role="tablist"
-        aria-label="Vista de captura en mapa"
+        role="group"
+        aria-label="Mostrar"
       >
         <button
           type="button"
-          role="tab"
-          aria-selected={mobileTab === 'map'}
+          aria-pressed={mobileTab === 'map'}
           onClick={() => setMobileTab('map')}
           className={`min-h-[40px] flex-1 rounded-lg px-3 text-xs font-semibold transition-colors ${
             mobileTab === 'map' ? 'bg-indigo-600 text-white' : 'text-obsidian-muted hover:text-white'
@@ -406,8 +423,7 @@ export const MapCaptureView: React.FC = () => {
         </button>
         <button
           type="button"
-          role="tab"
-          aria-selected={mobileTab === 'results'}
+          aria-pressed={mobileTab === 'results'}
           onClick={() => setMobileTab('results')}
           className={`min-h-[40px] flex-1 rounded-lg px-3 text-xs font-semibold transition-colors ${
             mobileTab === 'results' ? 'bg-indigo-600 text-white' : 'text-obsidian-muted hover:text-white'
@@ -433,7 +449,13 @@ export const MapCaptureView: React.FC = () => {
               <input
                 list={sectors.length > 0 ? sectorDatalistId : undefined}
                 value={sector}
-                onChange={(event) => setSector(event.target.value)}
+                onChange={(event) => {
+                  setSector(event.target.value);
+                  setResults(null);
+                  setResultSource(null);
+                  setSearchError('');
+                }}
+                disabled={loading}
                 maxLength={64}
                 required
                 placeholder={sectors[0]?.label ? `Ej. ${sectors[0].label}` : 'Giro comercial'}
@@ -455,8 +477,9 @@ export const MapCaptureView: React.FC = () => {
                   setSelectedZone(event.target.value);
                   setResults(null);
                   setResultSource(null);
+                  setSearchError('');
                 }}
-                disabled={!zones.length}
+                disabled={!zones.length || loading}
                 className="mt-1.5 min-h-11 w-full rounded-xl border border-obsidian-border bg-obsidian-bg px-3 text-sm text-white focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
               >
                 {zones.map((zone) => (
@@ -478,7 +501,13 @@ export const MapCaptureView: React.FC = () => {
               Filtro opcional
               <input
                 value={subsector}
-                onChange={(event) => setSubsector(event.target.value)}
+                onChange={(event) => {
+                  setSubsector(event.target.value);
+                  setResults(null);
+                  setResultSource(null);
+                  setSearchError('');
+                }}
+                disabled={loading}
                 maxLength={64}
                 placeholder="Especialidad o palabra clave opcional"
                 className="mt-1.5 min-h-10 w-full rounded-xl border border-obsidian-border bg-obsidian-bg px-3 text-sm text-white placeholder:text-obsidian-muted focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
@@ -502,9 +531,15 @@ export const MapCaptureView: React.FC = () => {
                     <button
                       key={item.id}
                       type="button"
-                      onClick={() => setSector(item.label)}
+                      onClick={() => {
+                        setSector(item.label);
+                        setResults(null);
+                        setResultSource(null);
+                        setSearchError('');
+                      }}
+                      disabled={loading}
                       aria-pressed={isActive}
-                      className={`min-h-[30px] rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400 ${
+                      className={`min-h-[36px] rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-55 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400 ${
                         isActive
                           ? 'border-indigo-500/60 bg-indigo-500/20 text-indigo-200'
                           : 'border-obsidian-border bg-obsidian-surface text-obsidian-muted hover:border-obsidian-borderLight hover:text-white'
@@ -595,7 +630,20 @@ export const MapCaptureView: React.FC = () => {
           ) : !results ? (
             <div className="flex min-h-48 flex-col items-center justify-center gap-2 p-6 text-center text-sm text-obsidian-muted">
               <Building2 size={22} className="text-obsidian-muted/70" aria-hidden="true" />
-              <p>Los negocios aparecerán aquí después de una búsqueda.</p>
+              {searchError && mobileTab === 'results' ? (
+                <div className="lg:hidden" role="alert">
+                  <p>{searchError}</p>
+                  <button
+                    type="button"
+                    onClick={() => setMobileTab('map')}
+                    className="mt-3 min-h-10 rounded-lg border border-obsidian-border px-3 text-xs font-semibold text-white hover:bg-obsidian-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
+                  >
+                    Volver a la búsqueda
+                  </button>
+                </div>
+              ) : !searchError ? (
+                <p>Los negocios aparecerán aquí después de una búsqueda.</p>
+              ) : null}
             </div>
           ) : results.length === 0 ? (
             <div className="flex min-h-48 flex-col items-center justify-center gap-2 p-6 text-center text-sm text-obsidian-muted">
@@ -607,7 +655,7 @@ export const MapCaptureView: React.FC = () => {
               {results.map((lead) => {
                 const website = leadWebsite(lead);
                 const isSaved = savedIds.includes(lead.osm_id);
-                const isSavingThis = savingOsmId === lead.osm_id;
+                const isSavingThis = savingOsmIds.includes(lead.osm_id);
                 return (
                   <li key={lead.osm_id} className="p-4 transition-colors hover:bg-obsidian-surface/40 sm:p-5">
                     <div className="flex min-w-0 items-start justify-between gap-3">

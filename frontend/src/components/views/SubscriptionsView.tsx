@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   CreditCard, Plus, DollarSign, RefreshCw, Edit2,
   Globe, Receipt, Lock, AlertTriangle
@@ -142,6 +142,8 @@ export const SubscriptionsView: React.FC = () => {
 
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [partialDataWarning, setPartialDataWarning] = useState<string | null>(null);
+  const loadGeneration = useRef(0);
 
   const formatAmount = useCallback(
     (value: number | string | undefined | null, decimals = 2): string => {
@@ -156,24 +158,91 @@ export const SubscriptionsView: React.FC = () => {
   );
 
   const loadData = useCallback(async () => {
+    const generation = ++loadGeneration.current;
     if (!isUnlocked) {
+      setPaymentMethods([]);
+      setPlatforms([]);
+      setProspects([]);
+      setIncomes([]);
+      setRenewals([]);
+      setExpenses([]);
+      setBillingHistory([]);
+      setVaultSettings(null);
+      setPartialDataWarning(null);
       setLoading(false);
       setLoadError(null);
+      setIsEditingCap(false);
+      setCapAmountInput('');
+      setManualRateInput('');
+      setIncProspectId('');
+      setIncCategory('anticipo');
+      setIsIncomeModalOpen(false);
+      setEditingIncome(null);
+      setIncClientName('');
+      setIncConcept('');
+      setIncAmount('');
+      setIncDate('');
+      setIncMethod('');
+      setIncRecurring(false);
+      setIncNotes('');
+      setShowQuickClientInInc(false);
+      setQuickClientNameInInc('');
+      setRenProspectId('');
+      setRenPlatformId('');
+      setIsRenewalModalOpen(false);
+      setEditingRenewal(null);
+      setRenClientName('');
+      setRenDomainOrService('');
+      setRenProvider('');
+      setRenCost('');
+      setRenClientCharge('');
+      setRenDate('');
+      setRenNotes('');
+      setShowQuickClientInRen(false);
+      setQuickClientNameInRen('');
+      setAdvanceRenewalTarget(null);
+      setAdvanceChargedAmount('');
+      setIsExpenseModalOpen(false);
+      setEditingExpense(null);
+      setExpTitle('');
+      setExpAmount('');
+      setExpDate('');
+      setExpPaymentMethodId('');
+      setExpPaymentMethodLabel('');
+      setExpNotes('');
       return;
     }
     setLoading(true);
     setLoadError(null);
+    setPartialDataWarning(null);
     try {
-      const [payList, platList, prospList, incList, renList, expList, billHist, vStatus] = await Promise.all([
-        api.getPaymentMethods(),
-        api.getPlatforms(),
-        api.getProspects(),
-        api.getIncomes().catch(() => [] as ClientIncome[]),
-        api.getRenewals().catch(() => [] as DomainRenewal[]),
-        api.getExpenses().catch(() => [] as OneTimeExpense[]),
-        api.getBillingHistory(12).catch(() => [] as BillingRecord[]),
-        api.getVaultStatus().catch(() => null),
+      const [requiredData, optionalData] = await Promise.all([
+        Promise.all([api.getPaymentMethods(), api.getPlatforms(), api.getProspects()]),
+        Promise.allSettled([
+          api.getIncomes(),
+          api.getRenewals(),
+          api.getExpenses(),
+          api.getBillingHistory(12),
+          api.getVaultStatus(),
+        ]),
       ]);
+      if (generation !== loadGeneration.current) return;
+
+      const [payList, platList, prospList] = requiredData;
+      const [incomeResult, renewalResult, expenseResult, billingResult, settingsResult] = optionalData;
+      const incList = incomeResult.status === 'fulfilled' ? incomeResult.value : [];
+      const renList = renewalResult.status === 'fulfilled' ? renewalResult.value : [];
+      const expList = expenseResult.status === 'fulfilled' ? expenseResult.value : [];
+      const billHist = billingResult.status === 'fulfilled' ? billingResult.value : [];
+      const vStatus = settingsResult.status === 'fulfilled' ? settingsResult.value : null;
+      const unavailableSections = [
+        incomeResult.status === 'rejected' ? 'ingresos' : null,
+        renewalResult.status === 'rejected' ? 'vencimientos' : null,
+        expenseResult.status === 'rejected' ? 'gastos' : null,
+        billingResult.status === 'rejected' ? 'historial de cobros' : null,
+        settingsResult.status === 'rejected' ? 'ajustes del presupuesto' : null,
+      ].filter(Boolean);
+
       setPaymentMethods(payList);
       setPlatforms(platList);
       setProspects(prospList);
@@ -181,22 +250,31 @@ export const SubscriptionsView: React.FC = () => {
       setRenewals(renList);
       setExpenses(expList);
       setBillingHistory(billHist);
+      setVaultSettings(vStatus);
       if (vStatus) {
-        setVaultSettings(vStatus);
         setCapAmountInput(String(vStatus.budget_cap_amount || 0));
         setCapCurrencyInput(vStatus.budget_cap_currency || baseCurrency);
       }
+      setPartialDataWarning(
+        unavailableSections.length > 0
+          ? `No se pudieron cargar ${unavailableSections.join(', ')}. Algunos totales pueden estar incompletos.`
+          : null
+      );
     } catch (err: any) {
+      if (generation !== loadGeneration.current) return;
       const msg = err?.message || 'Error al cargar los datos financieros.';
       setLoadError(msg);
       showToast(msg, 'error');
     } finally {
-      setLoading(false);
+      if (generation === loadGeneration.current) setLoading(false);
     }
   }, [isUnlocked, baseCurrency, showToast]);
 
   useEffect(() => {
-    loadData();
+    void loadData();
+    return () => {
+      loadGeneration.current += 1;
+    };
   }, [loadData, dataVersion]);
 
   useEffect(() => {
@@ -215,9 +293,10 @@ export const SubscriptionsView: React.FC = () => {
   }, [baseCurrency, currencyOptions, pipelineCurrencyView, profitCurrencyView]);
 
   const handleSaveManualRate = async () => {
-    const rateNum = parseFloat(manualRateInput);
-    if (isNaN(rateNum) || rateNum <= 0) {
-      showToast('Introduce un tipo de cambio mayor a 0.', 'error');
+    const rateText = manualRateInput.trim();
+    const rateNum = Number(rateText);
+    if (!/^\d+(?:\.\d{0,6})?$/.test(rateText) || !Number.isFinite(rateNum) || rateNum <= 0 || rateNum > INPUT_LIMITS.EXCHANGE_RATE) {
+      showToast(`Introduce un tipo de cambio entre 0 y ${INPUT_LIMITS.EXCHANGE_RATE}.`, 'error');
       return;
     }
 
@@ -240,8 +319,12 @@ export const SubscriptionsView: React.FC = () => {
       openUnlockModal();
       return;
     }
-    const val = parseFloat(capAmountInput);
-    const cleanVal = isNaN(val) || val < 0 ? 0 : val;
+    const capText = capAmountInput.trim();
+    const cleanVal = Number(capText);
+    if (!/^\d+(?:\.\d{0,2})?$/.test(capText) || !Number.isFinite(cleanVal) || cleanVal < 0 || cleanVal > INPUT_LIMITS.BUDGET_CAP) {
+      showToast(`Ingresa un límite entre 0 y ${INPUT_LIMITS.BUDGET_CAP.toLocaleString(systemLocale || 'es-MX')}.`, 'error');
+      return;
+    }
     try {
       await api.updateSettings({
         budget_cap_amount: cleanVal,
@@ -812,10 +895,24 @@ export const SubscriptionsView: React.FC = () => {
 
   return (
     <div className="mx-auto max-w-7xl min-w-0 space-y-5 p-3 sm:space-y-7 sm:p-8 animate-fadeIn">
+      {partialDataWarning && (
+        <div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-200">
+          <span>{partialDataWarning}</span>
+          <button type="button" onClick={() => void loadData()} className="shrink-0 font-semibold underline underline-offset-2 hover:text-white">
+            Reintentar
+          </button>
+        </div>
+      )}
       {(!exchangeRate || !exchangeRate.is_manual) && (
-        <p role="status" className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-200">
-          Verifica el tipo de cambio antes de usar los totales convertidos: el valor disponible puede ser una referencia o estar desactualizado.
-        </p>
+        <div role="status" className="flex min-w-0 flex-wrap items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+          <AlertTriangle size={14} aria-hidden="true" />
+          <span>Tipo de cambio por verificar</span>
+          <InfoTooltip
+            title="Tipo de cambio"
+            content="El valor disponible puede ser de referencia o estar desactualizado. Revísalo antes de usar los totales convertidos."
+            position="bottom"
+          />
+        </div>
       )}
 
       {/* Header and Exchange Rate Controls */}
@@ -838,12 +935,14 @@ export const SubscriptionsView: React.FC = () => {
             {isEditingRate ? (
               <div className="flex items-center gap-1.5">
                 <input
-                  type="text"
+                  type="number"
                   inputMode="decimal"
-                  maxLength={10}
+                  min="0.000001"
+                  max={INPUT_LIMITS.EXCHANGE_RATE}
+                  step="any"
                   aria-label="Tipo de cambio manual"
                   value={manualRateInput}
-                  onChange={(e) => setManualRateInput(e.target.value.replace(/[^0-9.]/g, ''))}
+                  onChange={(e) => setManualRateInput(e.target.value.slice(0, 10))}
                   className="w-20 px-2 py-0.5 rounded-lg bg-obsidian-bg border border-indigo-500 text-xs font-mono text-white focus:outline-none"
                 />
                 <button

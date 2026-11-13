@@ -8,6 +8,7 @@ from app.config import settings as app_settings
 from app.database import get_db
 from app.models import UserSettings, EmailAccount, PlatformAccount, PaymentMethod, PasswordHistory
 from app.schemas import SettingsResponse, SettingsUpdate
+from app.schemas.runtime_config import RuntimeConfigUpdate
 from app.security.crypto import hash_master_password, verify_master_password, derive_vault_key, active_vault_key
 from app.security.rekey import RekeyError, rekey_vault
 from app.security.tokens import require_vault_unlocked
@@ -151,15 +152,22 @@ async def get_settings_runtime_config(db: AsyncSession = Depends(get_db)):
 
 
 @router.put("/runtime-config")
-async def update_settings_runtime_config(payload: dict, db: AsyncSession = Depends(get_db)):
+async def update_settings_runtime_config(payload: RuntimeConfigUpdate, db: AsyncSession = Depends(get_db)):
     from app.services.config_service import update_runtime_config
-    updated = await update_runtime_config(db, payload)
-    await log_audit_event(
-        db, action="update", entity_type="runtime_config",
-        details="Configuración dinámica de monedas, geografía y reportes actualizada"
-    )
-    await db.commit()
-    return updated
+    try:
+        updated = await update_runtime_config(db, payload.model_dump(exclude_unset=True, exclude_none=True, mode="json"))
+        await log_audit_event(
+            db, action="update", entity_type="runtime_config",
+            details="Configuración dinámica de monedas, geografía y reportes actualizada"
+        )
+        await db.commit()
+        return updated
+    except ValueError as exc:
+        await db.rollback()
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception:
+        await db.rollback()
+        raise
 
 @router.get("/export")
 async def export_vault(db: AsyncSession = Depends(get_db)):

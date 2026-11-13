@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   Shield, AlertTriangle,
   Mail, Key, Network, ArrowRight, DollarSign,
@@ -43,6 +43,8 @@ export const DashboardView: React.FC = () => {
   const [nowMs, setNowMs] = useState<number>(() => Date.now());
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [partialDataWarning, setPartialDataWarning] = useState<string | null>(null);
+  const loadGeneration = useRef(0);
 
   const secondaryCurrency = useMemo(() => {
     const other = supportedCurrencies.find((c) => c.code !== baseCurrency)?.code;
@@ -78,6 +80,7 @@ export const DashboardView: React.FC = () => {
   );
 
   const loadDashboardData = useCallback(async () => {
+    const generation = ++loadGeneration.current;
     if (!isUnlocked) {
       setEmails([]);
       setPlatforms([]);
@@ -88,23 +91,39 @@ export const DashboardView: React.FC = () => {
       setExpenses([]);
       setVaultSettings(null);
       setLoadError(null);
+      setPartialDataWarning(null);
       setLoading(false);
       return;
     }
 
     setLoading(true);
     setLoadError(null);
+    setPartialDataWarning(null);
     try {
-      const [emList, plList, payList, prList, incList, renList, expList, vStatus] = await Promise.all([
-        api.getEmails(),
-        api.getPlatforms(),
-        api.getPaymentMethods(),
-        api.getProspects(),
-        api.getIncomes().catch(() => [] as ClientIncome[]),
-        api.getRenewals().catch(() => [] as DomainRenewal[]),
-        api.getExpenses().catch(() => [] as OneTimeExpense[]),
-        api.getVaultStatus().catch(() => null),
+      const [requiredData, optionalData] = await Promise.all([
+        Promise.all([api.getEmails(), api.getPlatforms(), api.getPaymentMethods(), api.getProspects()]),
+        Promise.allSettled([
+          api.getIncomes(),
+          api.getRenewals(),
+          api.getExpenses(),
+          api.getVaultStatus(),
+        ]),
       ]);
+      if (generation !== loadGeneration.current) return;
+
+      const [emList, plList, payList, prList] = requiredData;
+      const [incomeResult, renewalResult, expenseResult, settingsResult] = optionalData;
+      const incList = incomeResult.status === 'fulfilled' ? incomeResult.value : [];
+      const renList = renewalResult.status === 'fulfilled' ? renewalResult.value : [];
+      const expList = expenseResult.status === 'fulfilled' ? expenseResult.value : [];
+      const vStatus = settingsResult.status === 'fulfilled' ? settingsResult.value : null;
+      const unavailableSections = [
+        incomeResult.status === 'rejected' ? 'ingresos' : null,
+        renewalResult.status === 'rejected' ? 'vencimientos' : null,
+        expenseResult.status === 'rejected' ? 'gastos' : null,
+        settingsResult.status === 'rejected' ? 'ajustes del presupuesto' : null,
+      ].filter(Boolean);
+
       setEmails(emList);
       setPlatforms(plList);
       setPayments(payList);
@@ -112,18 +131,27 @@ export const DashboardView: React.FC = () => {
       setIncomes(incList);
       setRenewals(renList);
       setExpenses(expList);
-      if (vStatus) setVaultSettings(vStatus);
+      setVaultSettings(vStatus);
+      setPartialDataWarning(
+        unavailableSections.length > 0
+          ? `No se pudieron cargar ${unavailableSections.join(', ')}. Algunos totales pueden estar incompletos.`
+          : null
+      );
     } catch (error: any) {
+      if (generation !== loadGeneration.current) return;
       const message = error?.message || 'No se pudo cargar el resumen del panel.';
       setLoadError(message);
       showToast(message, 'error');
     } finally {
-      setLoading(false);
+      if (generation === loadGeneration.current) setLoading(false);
     }
   }, [isUnlocked, showToast]);
 
   useEffect(() => {
-    loadDashboardData();
+    void loadDashboardData();
+    return () => {
+      loadGeneration.current += 1;
+    };
   }, [loadDashboardData, dataVersion]);
 
   useEffect(() => {
@@ -312,9 +340,23 @@ export const DashboardView: React.FC = () => {
   return (
     <div className="mx-auto max-w-7xl min-w-0 space-y-5 p-3 sm:space-y-7 sm:p-8 animate-fadeIn">
       {(!exchangeRate || !exchangeRate.is_manual) && (
-        <p role="status" className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-200">
-          Verifica el tipo de cambio antes de usar los totales convertidos: el valor disponible puede ser una referencia o estar desactualizado.
-        </p>
+        <div role="status" className="flex min-w-0 flex-wrap items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+          <AlertTriangle size={14} aria-hidden="true" />
+          <span>Tipo de cambio por verificar</span>
+          <InfoTooltip
+            title="Tipo de cambio"
+            content="El valor disponible puede ser de referencia o estar desactualizado. Revísalo antes de usar los totales convertidos."
+            position="bottom"
+          />
+        </div>
+      )}
+      {partialDataWarning && (
+        <div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-200">
+          <span>{partialDataWarning}</span>
+          <button type="button" onClick={() => void loadDashboardData()} className="shrink-0 font-semibold underline underline-offset-2 hover:text-white">
+            Reintentar
+          </button>
+        </div>
       )}
 
       {/* Free Trials Alert Banner if present */}

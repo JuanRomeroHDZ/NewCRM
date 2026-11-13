@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.core import ConfigParameter
+from pydantic import ValidationError
 
 def utc_now() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
@@ -128,7 +129,9 @@ async def set_config_parameter(
     value,
     scope: str = "system",
     category: str = "general",
-    description: str | None = None
+    description: str | None = None,
+    *,
+    commit: bool = True,
 ) -> ConfigParameter:
     stmt = select(ConfigParameter).where(ConfigParameter.key == key)
     res = await session.execute(stmt)
@@ -152,33 +155,85 @@ async def set_config_parameter(
             description=description
         )
         session.add(param)
-    await session.commit()
+    if commit:
+        await session.commit()
+    else:
+        await session.flush()
     await session.refresh(param)
     return param
 
 async def get_runtime_config(session: AsyncSession) -> dict:
     """Reads merged runtime configuration from ConfigParameter with env/default fallbacks."""
-    currencies = await get_config_parameter(session, "currencies", DEFAULT_CATALOGS["currencies"])
-    currency_config = {
-        **build_default_currency_config(),
-        **(await get_config_parameter(session, "currency_config", {}) or {}),
-    }
-    map_defaults = {
-        **build_default_map_defaults(),
-        **(await get_config_parameter(session, "map_defaults", {}) or {}),
-    }
-    map_zones = await get_config_parameter(session, "map_zones", None)
-    if not isinstance(map_zones, list) or not map_zones:
+    from app.schemas.runtime_config import (
+        RuntimeConfigUpdate,
+        RuntimeCurrencyConfig,
+        RuntimeMapDefaults,
+        RuntimeWriteupDefaults,
+    )
+
+    def as_dict(value) -> dict:
+        return value if isinstance(value, dict) else {}
+
+    defaults = build_default_currency_config()
+    currency_config = {**defaults, **as_dict(await get_config_parameter(session, "currency_config", {}))}
+    try:
+        currency_config = RuntimeCurrencyConfig.model_validate(currency_config).model_dump(exclude_none=True)
+        currencies = RuntimeConfigUpdate.model_validate({
+            "currencies": await get_config_parameter(session, "currencies", DEFAULT_CATALOGS["currencies"])
+        }).currencies
+        currencies = [item.model_dump() for item in currencies or []]
+        if currency_config.get("base_currency") not in {item["code"] for item in currencies}:
+            raise ValueError("La moneda base no está en el catálogo activo.")
+        if currency_config.get("base_currency") != "MXN" or currency_config.get("exchange_pair") != {
+            "base": "USD", "target": "MXN"
+        }:
+            raise ValueError("La conversión admitida debe ser de USD a MXN.")
+        if len([item for item in currencies if item["is_base"]]) != 1 or next(
+            item["code"] for item in currencies if item["is_base"]
+        ) != currency_config.get("base_currency"):
+            raise ValueError("El catálogo no identifica correctamente su moneda base.")
+    except (ValidationError, ValueError, TypeError, StopIteration):
+        currencies = DEFAULT_CATALOGS["currencies"]
+        currency_config = defaults
+
+    map_defaults = {**build_default_map_defaults(), **as_dict(await get_config_parameter(session, "map_defaults", {}))}
+    try:
+        map_defaults = RuntimeMapDefaults.model_validate(map_defaults).model_dump(exclude_none=True)
+    except (ValidationError, ValueError, TypeError):
+        map_defaults = build_default_map_defaults()
+
+    try:
+        map_zones = [item.model_dump() for item in RuntimeConfigUpdate.model_validate({
+            "map_zones": await get_config_parameter(session, "map_zones", None) or build_default_map_zones()
+        }).map_zones or []]
+    except (ValidationError, ValueError, TypeError):
         map_zones = build_default_map_zones()
 
-    map_sectors = await get_config_parameter(session, "map_sectors", None)
-    if not isinstance(map_sectors, list) or not map_sectors:
+    try:
+        map_sectors = [item.model_dump() for item in RuntimeConfigUpdate.model_validate({
+            "map_sectors": await get_config_parameter(session, "map_sectors", None) or build_default_map_sectors()
+        }).map_sectors or []]
+    except (ValidationError, ValueError, TypeError):
         map_sectors = build_default_map_sectors()
+
+    zone_slugs = {zone["slug"] for zone in map_zones}
+    if map_defaults.get("default_zone") not in zone_slugs:
+        map_defaults["default_zone"] = map_zones[0]["slug"]
+    if map_defaults.get("full_bounds_zone_slug") not in zone_slugs:
+        fallback_full_zone = next(
+            (zone for zone in map_zones if zone["slug"] == build_default_map_defaults().get("full_bounds_zone_slug")),
+            None,
+        )
+        map_defaults["full_bounds_zone_slug"] = fallback_full_zone["slug"] if fallback_full_zone else map_zones[0]["slug"]
 
     writeup_defaults = {
         **build_default_writeup_defaults(),
-        **(await get_config_parameter(session, "writeup_defaults", {}) or {}),
+        **as_dict(await get_config_parameter(session, "writeup_defaults", {})),
     }
+    try:
+        writeup_defaults = RuntimeWriteupDefaults.model_validate(writeup_defaults).model_dump(exclude_none=True)
+    except (ValidationError, ValueError, TypeError):
+        writeup_defaults = build_default_writeup_defaults()
     service_types = await get_config_parameter(session, "service_types", DEFAULT_CATALOGS["service_types"])
     payment_methods = await get_config_parameter(session, "payment_methods", DEFAULT_CATALOGS["payment_methods"])
     pipeline_stages = await get_config_parameter(session, "pipeline_stages", DEFAULT_CATALOGS["pipeline_stages"])
@@ -196,23 +251,61 @@ async def get_runtime_config(session: AsyncSession) -> dict:
     }
 
 async def update_runtime_config(session: AsyncSession, payload: dict) -> dict:
-    """Persists partial updates to runtime configuration parameters."""
+    """Validates and stages a complete partial update in the caller's transaction."""
+    from app.schemas.runtime_config import RuntimeConfigUpdate
+
+    validated = RuntimeConfigUpdate.model_validate(payload)
+    payload = validated.model_dump(exclude_unset=True, exclude_none=True, mode="json")
     current = await get_runtime_config(session)
-    if "currencies" in payload and isinstance(payload["currencies"], list) and payload["currencies"]:
-        await set_config_parameter(session, "currencies", payload["currencies"], scope="system", category="catalogs", description="Monedas activas del sistema")
-    if "currency_config" in payload and isinstance(payload["currency_config"], dict):
-        merged = {**current["currency_config"], **payload["currency_config"]}
-        await set_config_parameter(session, "currency_config", merged, scope="system", category="runtime_config", description="Moneda base, par de tipo de cambio y formato")
-    if "map_defaults" in payload and isinstance(payload["map_defaults"], dict):
-        merged = {**current["map_defaults"], **payload["map_defaults"]}
-        await set_config_parameter(session, "map_defaults", merged, scope="system", category="runtime_config", description="Configuración geográfica por defecto del mapa")
-    if "map_zones" in payload and isinstance(payload["map_zones"], list) and payload["map_zones"]:
-        await set_config_parameter(session, "map_zones", payload["map_zones"], scope="system", category="catalogs", description="Zonas configurables para captura geográfica")
-    if "map_sectors" in payload and isinstance(payload["map_sectors"], list) and payload["map_sectors"]:
-        await set_config_parameter(session, "map_sectors", payload["map_sectors"], scope="system", category="catalogs", description="Sectores y mapeos OSM para captura")
-    if "writeup_defaults" in payload and isinstance(payload["writeup_defaults"], dict):
-        merged = {**current["writeup_defaults"], **payload["writeup_defaults"]}
-        await set_config_parameter(session, "writeup_defaults", merged, scope="system", category="runtime_config", description="Organización y marca de agua para reportes")
+    next_currencies = payload.get("currencies", current["currencies"])
+    currency_config = {**current["currency_config"], **payload.get("currency_config", {})}
+    base_currency = currency_config.get("base_currency")
+    if base_currency != "MXN" or currency_config.get("exchange_pair") != {"base": "USD", "target": "MXN"}:
+        raise ValueError("La moneda base debe ser MXN y la conversión debe usar el par USD a MXN.")
+    if base_currency not in {item["code"] for item in next_currencies}:
+        raise ValueError("La moneda base debe existir en el catálogo de monedas activas.")
+    base_options = [item["code"] for item in next_currencies if item.get("is_base")]
+    if base_options != [base_currency]:
+        raise ValueError("La única moneda marcada como base debe coincidir con la moneda base configurada.")
+
+    next_zones = payload.get("map_zones", current["map_zones"])
+    map_defaults = {**current["map_defaults"], **payload.get("map_defaults", {})}
+    zone_slugs = {zone["slug"] for zone in next_zones}
+    if map_defaults.get("default_zone") not in zone_slugs:
+        raise ValueError("La zona predeterminada debe existir en la lista de zonas.")
+    full_bounds_slug = map_defaults.get("full_bounds_zone_slug")
+    if full_bounds_slug and full_bounds_slug not in zone_slugs:
+        raise ValueError("La zona que limita las búsquedas debe existir en la lista de zonas.")
+
+    writes = []
+    if "currencies" in payload:
+        writes.append(("currencies", payload["currencies"], "catalogs", "Monedas activas del sistema"))
+    if "currency_config" in payload:
+        writes.append(("currency_config", currency_config, "runtime_config", "Moneda base, par de tipo de cambio y formato"))
+    if "map_defaults" in payload:
+        writes.append(("map_defaults", map_defaults, "runtime_config", "Configuración geográfica por defecto del mapa"))
+    if "map_zones" in payload:
+        writes.append(("map_zones", next_zones, "catalogs", "Zonas configurables para captura geográfica"))
+    if "map_sectors" in payload:
+        writes.append(("map_sectors", payload["map_sectors"], "catalogs", "Sectores y mapeos OSM para captura"))
+    if "writeup_defaults" in payload:
+        writes.append((
+            "writeup_defaults",
+            {**current["writeup_defaults"], **payload["writeup_defaults"]},
+            "runtime_config",
+            "Organización y marca de agua para reportes",
+        ))
+
+    for key, value, category, description in writes:
+        await set_config_parameter(
+            session,
+            key,
+            value,
+            scope="system",
+            category=category,
+            description=description,
+            commit=False,
+        )
     return await get_runtime_config(session)
 
 async def export_sanitized_config(session: AsyncSession) -> dict:

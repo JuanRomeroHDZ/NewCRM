@@ -35,3 +35,26 @@ test('AuditLogsView ya no usa el texto fijo Localhost / Docker', () => {
   const content = fs.readFileSync(auditPath, 'utf8');
   assert.equal(content.includes('Localhost / Docker'), false);
 });
+
+test('Las relaciones del mapa y el índice de búsqueda respetan el bloqueo de la bóveda', () => {
+  const sidebar = fs.readFileSync(path.resolve('src/components/layout/Sidebar.tsx'), 'utf8');
+  const graph = fs.readFileSync(path.resolve('src/components/views/GraphView.tsx'), 'utf8');
+  const palette = fs.readFileSync(path.resolve('src/components/common/CommandPalette.tsx'), 'utf8');
+  const graphLoad = graph.slice(graph.indexOf('useEffect(() => {'), graph.indexOf('// Main Render Loop'));
+  const searchLoad = palette.slice(palette.indexOf('const loadSearchIndex'), palette.indexOf('useEffect(() => {'));
+
+  assert.match(sidebar, /id: 'graph',[^\n]*requiresVault: true/);
+  assert.ok(graphLoad.indexOf('if (!isUnlocked)') >= 0);
+  assert.ok(graphLoad.indexOf('if (!isUnlocked)') < graphLoad.indexOf('.getGraph()'));
+  assert.ok(searchLoad.indexOf('if (!isUnlocked)') >= 0);
+  assert.ok(searchLoad.indexOf('if (!isUnlocked)') < searchLoad.indexOf('Promise.allSettled'));
+});
+
+test('El mapa limpia marcadores vacíos y evita guardar dos veces la misma entidad OSM', () => {
+  const map = fs.readFileSync(path.resolve('src/components/views/MapCaptureView.tsx'), 'utf8');
+  const markerSync = map.slice(map.indexOf('if (!mapReady || !markerLayerRef.current)'), map.indexOf('const runSearch'));
+
+  assert.match(map, /savingOsmIdsRef\.current\.has\(lead\.osm_id\)/);
+  assert.match(map, /savingOsmIdsRef\.current\.add\(lead\.osm_id\)/);
+  assert.match(markerSync, /layer\.clearLayers\(\);[\s\S]*if \(!results\) return;/);
+});

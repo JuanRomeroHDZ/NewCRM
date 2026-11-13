@@ -1,6 +1,19 @@
+import json
+from datetime import timedelta
+
 import pytest
+from sqlalchemy import select
+
+from app.models.crm_capture import LeadCacheCell
 from app.models import Prospect
-from app.services.crm_capture import CrmCaptureService, validate_url_against_ssrf
+from app.services.crm_capture import (
+    CrmCaptureService,
+    TIJUANA_ZONES,
+    build_overpass_query,
+    compute_query_hash,
+    utc_now,
+    validate_url_against_ssrf,
+)
 
 def test_ssrf_protection_blocks_private_and_loopback_ips():
     # Loopback
@@ -121,3 +134,74 @@ def test_google_places_inactive_and_caps_zero():
     estimate = CrmCaptureService.estimate_google_places_cost(query_count=10, field_mask=["places.id", "places.displayName"])
     assert estimate["allowed_execution"] is False
     assert estimate["estimated_cost_usd"] > 0
+
+
+def test_overpass_query_ignores_malformed_imported_tags():
+    query = build_overpass_query(
+        "clínicas",
+        None,
+        {"min_lat": 32.5, "min_lon": -117.1, "max_lat": 32.6, "max_lon": -117.0},
+        sector_catalog=[{
+            "id": "clinicas",
+            "label": "Clínicas",
+            "stems": ["clinica"],
+            "osm_tags": [["amenity", 'clinic"](node(0);out;"']],
+        }],
+    )
+    assert '"amenity"="clinic"](node(0);out;"' not in query
+    assert query.count('"amenity"="clinic"') == 0
+
+
+@pytest.mark.asyncio
+async def test_search_replaces_legacy_sample_without_deleting_other_cache_rows(db_session, monkeypatch):
+    zone = next(item for item in TIJUANA_ZONES if item["slug"] == "zona-rio")
+    bounds = zone["bbox"]
+    now = utc_now()
+    q_hash = compute_query_hash("dentistas", None, zone["slug"], bounds)
+    legacy = LeadCacheCell(
+        sector="dentistas",
+        zone=zone["slug"],
+        query_hash=q_hash,
+        results_json=json.dumps([{"phone": "+526641234567"}]),
+        result_count=1,
+        source="openstreetmap",
+        status="complete",
+        attribution="© Colaboradores de OpenStreetMap (ODbL)",
+        fetched_at=now,
+        expires_at=now + timedelta(days=10),
+    )
+    unrelated = LeadCacheCell(
+        sector="otro",
+        zone=zone["slug"],
+        query_hash="f" * 64,
+        results_json=json.dumps([{"phone": "+526641234567"}]),
+        result_count=1,
+        source="openstreetmap",
+        status="complete",
+        attribution="© Colaboradores de OpenStreetMap (ODbL)",
+        fetched_at=now,
+        expires_at=now + timedelta(days=10),
+    )
+    db_session.add_all([legacy, unrelated])
+    await db_session.commit()
+    await db_session.refresh(legacy)
+    legacy_id = legacy.id
+    unrelated_id = unrelated.id
+
+    async def fetch_real_data(query):
+        return [{
+            "type": "node", "id": 123456, "lat": 32.526, "lon": -117.018,
+            "tags": {"name": "Clínica Real", "amenity": "dentist", "phone": "+526641234999"},
+        }]
+
+    monkeypatch.setattr(CrmCaptureService, "fetch_osm_elements", staticmethod(fetch_real_data))
+    result = await CrmCaptureService.search_osm_leads(db_session, "dentistas", zone["slug"])
+
+    assert result["source"] == "openstreetmap"
+    assert result["results"][0]["name"] == "Clínica Real"
+    cached_rows = (await db_session.execute(select(LeadCacheCell))).scalars().all()
+    assert {row.id for row in cached_rows} == {legacy_id, unrelated_id}
+    updated = next(row for row in cached_rows if row.id == legacy_id)
+    untouched = next(row for row in cached_rows if row.id == unrelated_id)
+    assert "+526641234999" in updated.results_json
+    assert "+526641234567" in untouched.results_json

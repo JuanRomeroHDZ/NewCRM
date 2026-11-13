@@ -1,5 +1,6 @@
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from typing import Literal
 
 
 class Settings(BaseSettings):
@@ -45,7 +46,7 @@ class Settings(BaseSettings):
     EXCHANGE_RATE_SECONDARY_URL: str = "https://api.exchangerate-api.com/v4/latest/USD"
     EXCHANGE_RATE_TERTIARY_URL: str = "https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json"
     FALLBACK_USD_MXN_RATE: float = Field(gt=0, le=1000)
-    DEFAULT_CURRENCY: str = "MXN"
+    DEFAULT_CURRENCY: Literal["MXN"] = "MXN"
 
     # Mapas, Captura OSM y Teselas Locales
     LOCAL_TILES_DIR: str = "/app/data/tiles/baja_california"

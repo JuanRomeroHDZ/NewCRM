@@ -51,9 +51,6 @@ async def create_user(
         must_change_password=True
     )
     db.add(new_user)
-    await db.commit()
-    await db.refresh(new_user)
-
     await record_event(
         db,
         module="system",
@@ -65,6 +62,7 @@ async def create_user(
         user_name=current_user.username
     )
     await db.commit()
+    await db.refresh(new_user)
 
     return UserCreateResponse(
         id=new_user.id,
@@ -119,9 +117,6 @@ async def update_user(
         user.failed_login_attempts = 0
         user.locked_until = None
 
-    await db.commit()
-    await db.refresh(user)
-
     await record_event(
         db,
         module="system",
@@ -133,5 +128,6 @@ async def update_user(
         user_name=current_user.username
     )
     await db.commit()
+    await db.refresh(user)
 
     return user

@@ -54,20 +54,20 @@ export const Topbar: React.FC<TopbarProps> = ({ onMenuClick, menuTriggerRef, isM
     };
   }, [isEditingManualRate]);
 
-  const sectionTitles: Record<string, { title: string; tooltip?: string }> = {
-    dashboard: { title: 'Resumen General', tooltip: 'Vista rápida de tus correos principales, seguridad, prospectos, gastos e ingresos reales.' },
-    emails: { title: 'Correos Principales', tooltip: 'Tus cuentas de correo principales, a qué teléfono o correo se recuperan y si tienen verificación en 2 pasos.' },
-    platforms: { title: 'Cuentas y Servicios', tooltip: 'Todas las páginas, aplicaciones y herramientas vinculadas a tus correos principales.' },
-    capture: { title: 'Captación en mapa', tooltip: 'Busca negocios publicados en OpenStreetMap y elige cuáles guardar como prospectos.' },
-    prospects: { title: 'Prospectos', tooltip: 'Oportunidades comerciales y su seguimiento.' },
-    passwords: { title: 'Contraseñas y Notas Seguras', tooltip: 'Consulta y copia rápidamente tus contraseñas, PINs, llaves API y recursos o notas cifradas.' },
-    graph: { title: 'Mapa de Conexiones', tooltip: 'Diagrama visual que muestra qué servicios y clientes dependen de cada correo y tarjeta.' },
-    writeups: { title: 'Writeups y Pentesting', tooltip: 'Documenta hallazgos técnicos en Markdown, dibuja topologías en pizarra y exporta reportes cifrados.' },
-    subscriptions: { title: 'Finanzas, Ingresos y Vencimientos', tooltip: 'Control de suscripciones, gastos únicos, pagos recibidos de clientes (ganancia neta real) y vencimientos de dominios o hosting.' },
-    trash: { title: 'Papelera', tooltip: 'Elementos eliminados recientemente que puedes restaurar o borrar de forma definitiva.' },
-    settings: { title: 'Ajustes y Seguridad', tooltip: 'Configura tu contraseña de acceso, tiempos de bloqueo automático, presupuesto y respaldos.' },
-    security_audit: { title: 'Nivel de Seguridad', tooltip: 'Revisión automática para detectar cuentas con la misma contraseña, contraseñas fáciles de adivinar o correos sin protección.' },
-    audit_logs: { title: 'Historial de Actividad', tooltip: 'Registro cronológico de todos los movimientos y cambios realizados en tu sistema.' },
+  const sectionTitles: Record<string, { title: string; compactTitle: string; tooltip?: string }> = {
+    dashboard: { title: 'Resumen General', compactTitle: 'Inicio', tooltip: 'Vista rápida de tus correos principales, seguridad, prospectos, gastos e ingresos reales.' },
+    emails: { title: 'Correos Principales', compactTitle: 'Correos', tooltip: 'Tus cuentas de correo principales, a qué teléfono o correo se recuperan y si tienen verificación en 2 pasos.' },
+    platforms: { title: 'Cuentas y Servicios', compactTitle: 'Cuentas', tooltip: 'Todas las páginas, aplicaciones y herramientas vinculadas a tus correos principales.' },
+    capture: { title: 'Captación en mapa', compactTitle: 'Mapa', tooltip: 'Busca negocios publicados en OpenStreetMap y elige cuáles guardar como prospectos.' },
+    prospects: { title: 'Prospectos', compactTitle: 'Prospectos', tooltip: 'Oportunidades comerciales y su seguimiento.' },
+    passwords: { title: 'Contraseñas y Notas Seguras', compactTitle: 'Claves', tooltip: 'Consulta y copia rápidamente tus contraseñas, PIN, llaves de acceso y notas seguras.' },
+    graph: { title: 'Mapa de Conexiones', compactTitle: 'Conexiones', tooltip: 'Diagrama visual que muestra qué servicios y clientes dependen de cada correo y tarjeta.' },
+    writeups: { title: 'Informes de seguridad', compactTitle: 'Informes', tooltip: 'Documenta revisiones de seguridad, dibuja esquemas y exporta informes.' },
+    subscriptions: { title: 'Finanzas, Ingresos y Vencimientos', compactTitle: 'Finanzas', tooltip: 'Control de suscripciones, gastos únicos, pagos recibidos de clientes y vencimientos de dominios o hosting.' },
+    trash: { title: 'Papelera', compactTitle: 'Papelera', tooltip: 'Elementos eliminados recientemente que puedes restaurar o borrar de forma definitiva.' },
+    settings: { title: 'Ajustes y Seguridad', compactTitle: 'Ajustes', tooltip: 'Configura tu contraseña de acceso, tiempos de bloqueo automático, presupuesto y respaldos.' },
+    security_audit: { title: 'Nivel de Seguridad', compactTitle: 'Seguridad', tooltip: 'Revisión automática para detectar cuentas con la misma contraseña, contraseñas fáciles de adivinar o correos sin protección.' },
+    audit_logs: { title: 'Historial de Actividad', compactTitle: 'Historial', tooltip: 'Registro cronológico de todos los movimientos y cambios realizados en tu sistema.' },
   };
 
   const handleSyncRate = async () => {
@@ -123,7 +123,7 @@ export const Topbar: React.FC<TopbarProps> = ({ onMenuClick, menuTriggerRef, isM
     }
   };
 
-  const currentInfo = sectionTitles[activeSection] || { title: 'Contact | LESSSO' };
+  const currentInfo = sectionTitles[activeSection] || { title: 'Contact | LESSSO', compactTitle: 'Inicio' };
 
   const formattedUpdatedAt = exchangeRate?.updated_at
     ? new Date(exchangeRate.updated_at.endsWith('Z') ? exchangeRate.updated_at : `${exchangeRate.updated_at}Z`).toLocaleString(locale, {
@@ -147,14 +147,15 @@ export const Topbar: React.FC<TopbarProps> = ({ onMenuClick, menuTriggerRef, isM
           type="button"
           onClick={onMenuClick}
           aria-expanded={Boolean(isMenuOpen)}
+          aria-controls="primary-navigation"
           className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-obsidian-border bg-obsidian-surface text-obsidian-text hover:bg-obsidian-border hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 lg:hidden"
           aria-label="Abrir menú de navegación"
-          aria-haspopup="true"
         >
           <Menu size={18} />
         </button>
         <h1 className="text-sm sm:text-base font-semibold text-white tracking-tight truncate" title={currentInfo.title}>
-          {currentInfo.title}
+          <span className="topbar-title-full">{currentInfo.title}</span>
+          <span className="topbar-title-compact">{currentInfo.compactTitle}</span>
         </h1>
         {currentInfo.tooltip && (
           <span className="hidden sm:inline-flex">
@@ -166,9 +167,9 @@ export const Topbar: React.FC<TopbarProps> = ({ onMenuClick, menuTriggerRef, isM
       {/* Global Scope Selector (Todos | Negocio | Personal) - visible on mobile, tablet & desktop */}
       <div
         role="group"
-        aria-label="Filtrar toda la aplicación por ámbito"
-        className="order-3 grid w-full grid-cols-3 items-center rounded-xl border border-obsidian-border bg-obsidian-surface p-0.5 sm:order-none sm:flex sm:w-auto sm:shrink-0"
-        title="Filtrar toda la aplicación por ámbito: Todos, Negocio o Personal"
+        aria-label="Mostrar información de todos, negocio o personal"
+        className="topbar-scope-full order-3 grid w-full grid-cols-3 items-center rounded-xl border border-obsidian-border bg-obsidian-surface p-0.5 sm:order-none sm:flex sm:w-auto sm:shrink-0"
+        title="Mostrar información: todos, negocio o personal"
       >
         {scopeOptions.map((opt) => {
           const Icon = opt.icon;
@@ -191,6 +192,16 @@ export const Topbar: React.FC<TopbarProps> = ({ onMenuClick, menuTriggerRef, isM
           );
         })}
       </div>
+      <label className="topbar-scope-compact order-3 w-full">
+        <span className="sr-only">Mostrar información de todos, negocio o personal</span>
+        <select
+          value={activeScope}
+          onChange={(event) => setActiveScope(event.target.value as typeof activeScope)}
+          className="min-h-11 w-full rounded-xl border border-obsidian-border bg-obsidian-surface px-3 text-sm font-medium text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
+        >
+          {scopeOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+        </select>
+      </label>
 
       {/* Right Controls: Exchange ticker + Actions */}
       <div className="flex shrink-0 items-center justify-end gap-1.5 sm:gap-2.5">

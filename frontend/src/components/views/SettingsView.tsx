@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Settings, Lock, Key, Shield, Download, Upload, Check, Save,
   Palette, Clock, Target, Globe, MapPin, FileText, Plus, Trash2
@@ -8,7 +8,12 @@ import { api } from '../../lib/api';
 import { InfoTooltip } from '../common/InfoTooltip';
 import { INPUT_LIMITS } from '../../lib/validation';
 import { OperatorAuthSection } from '../settings/OperatorAuthSection';
-import { RuntimeCurrencyOption, RuntimeMapZone } from '../../types';
+import { RuntimeMapZone } from '../../types';
+
+const SYSTEM_CURRENCIES = [
+  { code: 'MXN', name: 'Peso mexicano', symbol: '$', is_base: true },
+  { code: 'USD', name: 'Dólar estadounidense', symbol: 'US$', is_base: false },
+] as const;
 
 export const SettingsView: React.FC = () => {
   const {
@@ -16,8 +21,7 @@ export const SettingsView: React.FC = () => {
     clipboardClearSeconds, allowRevealPasswords, searchHotkey,
     accentColor, setAccentColor, canvasStyle, setCanvasStyle,
     openImportModal, refreshVaultStatus, showToast, triggerDataReload,
-    supportedCurrencies, baseCurrency, systemLocale,
-    runtimeConfig, refreshRuntimeConfig,
+    runtimeConfig, refreshRuntimeConfig, systemLocale,
   } = useVault();
 
   const [localTimeout, setLocalTimeout] = useState(timeoutMinutes);
@@ -33,7 +37,7 @@ export const SettingsView: React.FC = () => {
   const [trashRetentionDays, setTrashRetentionDays] = useState<number>(0);
   const [maxFollowupAttempts, setMaxFollowupAttempts] = useState<number>(3);
   const [budgetCapAmount, setBudgetCapAmount] = useState<string>('0');
-  const [budgetCapCurrency, setBudgetCapCurrency] = useState<string>(baseCurrency || 'MXN');
+  const [budgetCapCurrency, setBudgetCapCurrency] = useState<string>('MXN');
 
   const [newMasterPassword, setNewMasterPassword] = useState('');
   const [confirmMasterPassword, setConfirmMasterPassword] = useState('');
@@ -41,15 +45,7 @@ export const SettingsView: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
 
   // Dynamic Runtime System Config Editor State
-  const [sysCurrencies, setSysCurrencies] = useState<RuntimeCurrencyOption[]>([]);
-  const [sysBaseCurrency, setSysBaseCurrency] = useState<string>('MXN');
-  const [sysPairBase, setSysPairBase] = useState<string>('USD');
-  const [sysPairTarget, setSysPairTarget] = useState<string>('MXN');
   const [sysLocale, setSysLocale] = useState<string>('es-MX');
-
-  const [newCurrCode, setNewCurrCode] = useState('');
-  const [newCurrName, setNewCurrName] = useState('');
-  const [newCurrSymbol, setNewCurrSymbol] = useState('$');
 
   const [mapDefaultCity, setMapDefaultCity] = useState('');
   const [mapDefaultZone, setMapDefaultZone] = useState('');
@@ -65,6 +61,9 @@ export const SettingsView: React.FC = () => {
   const [writeupOrgName, setWriteupOrgName] = useState('');
   const [writeupWatermark, setWriteupWatermark] = useState('');
   const [savingRuntime, setSavingRuntime] = useState(false);
+  const [vaultSettingsLoading, setVaultSettingsLoading] = useState(true);
+  const [vaultSettingsError, setVaultSettingsError] = useState<string | null>(null);
+  const vaultSettingsGeneration = useRef(0);
 
   useEffect(() => {
     setLocalTimeout(timeoutMinutes);
@@ -76,15 +75,7 @@ export const SettingsView: React.FC = () => {
   }, [timeoutMinutes, clipboardClearSeconds, allowRevealPasswords, searchHotkey, accentColor, canvasStyle]);
 
   useEffect(() => {
-    setBudgetCapCurrency((prev) => prev || baseCurrency || 'MXN');
-  }, [baseCurrency]);
-
-  useEffect(() => {
     if (!runtimeConfig) return;
-    setSysCurrencies(runtimeConfig.currencies || []);
-    setSysBaseCurrency(runtimeConfig.currency_config?.base_currency || baseCurrency || 'MXN');
-    setSysPairBase(runtimeConfig.currency_config?.exchange_pair?.base || 'USD');
-    setSysPairTarget(runtimeConfig.currency_config?.exchange_pair?.target || 'MXN');
     setSysLocale(runtimeConfig.currency_config?.locale || 'es-MX');
 
     setMapDefaultCity(runtimeConfig.map_defaults?.default_city || '');
@@ -97,25 +88,45 @@ export const SettingsView: React.FC = () => {
 
     setWriteupOrgName(runtimeConfig.writeup_defaults?.organization_name || '');
     setWriteupWatermark(runtimeConfig.writeup_defaults?.watermark_default || '');
-  }, [runtimeConfig, baseCurrency]);
+  }, [runtimeConfig]);
+
+  const loadVaultSettings = useCallback(async () => {
+    const generation = ++vaultSettingsGeneration.current;
+    if (!isUnlocked) {
+      setVaultSettingsLoading(false);
+      setVaultSettingsError(null);
+      setCurrentMasterPassword('');
+      setNewMasterPassword('');
+      setConfirmMasterPassword('');
+      return;
+    }
+
+    setVaultSettingsLoading(true);
+    setVaultSettingsError(null);
+    try {
+      const st = await api.getVaultStatus();
+      if (generation !== vaultSettingsGeneration.current) return;
+      if (typeof st.password_rotation_days_root === 'number') setRotationRootDays(st.password_rotation_days_root);
+      if (typeof st.password_rotation_days_secondary === 'number') setRotationSecondaryDays(st.password_rotation_days_secondary);
+      if (typeof st.trash_retention_days === 'number') setTrashRetentionDays(st.trash_retention_days);
+      if (typeof st.max_followup_attempts === 'number') setMaxFollowupAttempts(st.max_followup_attempts);
+      if (typeof st.budget_cap_amount === 'number') setBudgetCapAmount(String(st.budget_cap_amount));
+      setBudgetCapCurrency(st.budget_cap_currency === 'USD' ? 'USD' : 'MXN');
+    } catch (err: any) {
+      if (generation === vaultSettingsGeneration.current) {
+        setVaultSettingsError(err?.message || 'No se pudieron cargar los ajustes actuales.');
+      }
+    } finally {
+      if (generation === vaultSettingsGeneration.current) setVaultSettingsLoading(false);
+    }
+  }, [isUnlocked]);
 
   useEffect(() => {
-    if (!isUnlocked) return;
-    api.getVaultStatus()
-      .then((st) => {
-        if (typeof st.password_rotation_days_root === 'number') setRotationRootDays(st.password_rotation_days_root);
-        if (typeof st.password_rotation_days_secondary === 'number') setRotationSecondaryDays(st.password_rotation_days_secondary);
-        if (typeof st.trash_retention_days === 'number') setTrashRetentionDays(st.trash_retention_days);
-        if (typeof st.max_followup_attempts === 'number') setMaxFollowupAttempts(st.max_followup_attempts);
-        if (typeof st.budget_cap_amount === 'number') setBudgetCapAmount(String(st.budget_cap_amount));
-        if (typeof st.budget_cap_currency === 'string' && st.budget_cap_currency.trim()) {
-          setBudgetCapCurrency(st.budget_cap_currency);
-        }
-      })
-      .catch((err: any) => {
-        showToast(err?.message || 'No se pudieron cargar los ajustes actuales de la bóveda.', 'error');
-      });
-  }, [isUnlocked, showToast]);
+    void loadVaultSettings();
+    return () => {
+      vaultSettingsGeneration.current += 1;
+    };
+  }, [loadVaultSettings]);
 
   if (!isUnlocked) {
     return (
@@ -147,6 +158,10 @@ export const SettingsView: React.FC = () => {
 
   const handleSavePreferences = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (vaultSettingsLoading || vaultSettingsError) {
+      showToast('Espera a que se carguen tus ajustes antes de guardar.', 'warning');
+      return;
+    }
     setIsSaving(true);
     try {
       const capNum = budgetCapAmount.trim() === '' ? 0 : Number(budgetCapAmount);
@@ -202,40 +217,6 @@ export const SettingsView: React.FC = () => {
     }
   };
 
-  const handleSetBaseCurrency = (code: string) => {
-    setSysBaseCurrency(code);
-    setSysCurrencies((prev) => prev.map((c) => ({ ...c, is_base: c.code === code })));
-  };
-
-  const handleAddCurrency = () => {
-    const code = newCurrCode.trim().toUpperCase();
-    const name = newCurrName.trim();
-    const symbol = newCurrSymbol.trim() || '$';
-    if (!/^[A-Z]{3,5}$/.test(code)) {
-      showToast('El código de moneda debe tener entre 3 y 5 letras (ej. EUR, COP).', 'error');
-      return;
-    }
-    if (!name) {
-      showToast('Ingresa el nombre descriptivo de la moneda.', 'error');
-      return;
-    }
-    if (sysCurrencies.some((c) => c.code === code)) {
-      showToast(`La moneda ${code} ya está registrada.`, 'error');
-      return;
-    }
-    setSysCurrencies((prev) => [...prev, { code, name, symbol, is_base: false }]);
-    setNewCurrCode('');
-    setNewCurrName('');
-  };
-
-  const handleRemoveCurrency = (code: string) => {
-    if (sysCurrencies.length <= 1 || code === sysBaseCurrency) {
-      showToast('No puedes eliminar la moneda base activa.', 'error');
-      return;
-    }
-    setSysCurrencies((prev) => prev.filter((c) => c.code !== code));
-  };
-
   const handleAddZone = () => {
     const zoneName = newZoneName.trim();
     if (!zoneName) {
@@ -247,14 +228,30 @@ export const SettingsView: React.FC = () => {
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '')
       .replace(/[^a-z0-9]+/g, '_')
-      .replace(/^_|_$/g, '') || `zona_${Date.now()}`;
+      .replace(/^_|_$/g, '');
+    if (!slug) {
+      showToast('El nombre de la zona debe incluir letras o números.', 'error');
+      return;
+    }
     if (sysMapZones.some((z) => z.slug === slug)) {
       showToast('Ya existe una zona con un identificador similar.', 'error');
       return;
     }
-    const lat = Number(mapCenterLat) || 0;
-    const lon = Number(mapCenterLon) || 0;
-    const zoom = Number(mapZoom) || 13;
+    const lat = Number(mapCenterLat);
+    const lon = Number(mapCenterLon);
+    const zoom = Number(mapZoom);
+    if (!mapCenterLat.trim() || !mapCenterLon.trim() || !Number.isFinite(lat) || lat < -90 || lat > 90) {
+      showToast('Escribe una latitud válida entre -90 y 90.', 'error');
+      return;
+    }
+    if (!Number.isFinite(lon) || lon < -180 || lon > 180) {
+      showToast('Escribe una longitud válida entre -180 y 180.', 'error');
+      return;
+    }
+    if (!Number.isFinite(zoom) || zoom < 1 || zoom > 20) {
+      showToast('El acercamiento del mapa debe estar entre 1 y 20.', 'error');
+      return;
+    }
     const colonias = newZoneColonias
       .split(',')
       .map((s) => s.trim())
@@ -268,10 +265,10 @@ export const SettingsView: React.FC = () => {
         center: [lat, lon],
         zoom,
         bbox: {
-          min_lat: Number((lat - 0.05).toFixed(4)),
-          max_lat: Number((lat + 0.05).toFixed(4)),
-          min_lon: Number((lon - 0.05).toFixed(4)),
-          max_lon: Number((lon + 0.05).toFixed(4)),
+          min_lat: Number(Math.max(-90, lat - 0.05).toFixed(4)),
+          max_lat: Number(Math.min(90, lat + 0.05).toFixed(4)),
+          min_lon: Number(Math.max(-180, lon - 0.05).toFixed(4)),
+          max_lon: Number(Math.min(180, lon + 0.05).toFixed(4)),
         },
         colonias,
       },
@@ -296,31 +293,29 @@ export const SettingsView: React.FC = () => {
 
   const handleSaveRuntimeConfig = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (sysCurrencies.length === 0) {
-      showToast('Debe existir al menos una moneda configurada.', 'error');
-      return;
-    }
     const parsedLat = Number(mapCenterLat);
     const parsedLon = Number(mapCenterLon);
     const parsedZoom = Number(mapZoom);
-    if (!Number.isFinite(parsedLat) || !Number.isFinite(parsedLon)) {
-      showToast('Las coordenadas centrales del mapa deben ser numéricas.', 'error');
+    if (
+      !mapCenterLat.trim() || !mapCenterLon.trim() ||
+      !Number.isFinite(parsedLat) || parsedLat < -90 || parsedLat > 90 ||
+      !Number.isFinite(parsedLon) || parsedLon < -180 || parsedLon > 180
+    ) {
+      showToast('Usa una latitud entre -90 y 90 y una longitud entre -180 y 180.', 'error');
+      return;
+    }
+    if (!Number.isFinite(parsedZoom) || parsedZoom < 1 || parsedZoom > 20) {
+      showToast('El acercamiento del mapa debe estar entre 1 y 20.', 'error');
       return;
     }
 
     setSavingRuntime(true);
     try {
       await api.updateRuntimeConfig({
-        currencies: sysCurrencies.map((c) => ({
-          ...c,
-          is_base: c.code === sysBaseCurrency,
-        })),
+        currencies: SYSTEM_CURRENCIES.map((currency) => ({ ...currency })),
         currency_config: {
-          base_currency: sysBaseCurrency,
-          exchange_pair: {
-            base: sysPairBase.trim().toUpperCase() || 'USD',
-            target: sysPairTarget.trim().toUpperCase() || sysBaseCurrency,
-          },
+          base_currency: 'MXN',
+          exchange_pair: { base: 'USD', target: 'MXN' },
           locale: sysLocale.trim() || 'es-MX',
         },
         map_defaults: {
@@ -358,7 +353,7 @@ export const SettingsView: React.FC = () => {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `emailsaver-encrypted-vault-${new Date().toISOString().split('T')[0]}.json`;
+      a.download = `contact-lessso-respaldo-cifrado-${new Date().toISOString().split('T')[0]}.json`;
       a.click();
       URL.revokeObjectURL(url);
       showToast('Respaldo encriptado descargado exitosamente.', 'success');
@@ -376,12 +371,7 @@ export const SettingsView: React.FC = () => {
     { name: 'Ámbar', color: '#f59e0b' },
   ];
 
-  const currencySelectOptions = Array.from(
-    new Set([
-      ...(supportedCurrencies.length > 0 ? supportedCurrencies.map((c) => c.code) : ['MXN', 'USD']),
-      budgetCapCurrency,
-    ].filter(Boolean))
-  );
+  const currencySelectOptions = ['MXN', 'USD'];
 
   return (
     <div className="mx-auto max-w-4xl min-w-0 space-y-5 p-3 sm:space-y-7 sm:p-8 animate-fadeIn">
@@ -395,6 +385,20 @@ export const SettingsView: React.FC = () => {
           content="Configura el bloqueo por inactividad, borrado automático del portapapeles, avisos de cambio de contraseña, papelera y presupuesto mensual."
         />
       </div>
+
+      {vaultSettingsLoading && (
+        <p role="status" className="rounded-lg border border-obsidian-border bg-obsidian-panel px-3 py-2 text-xs text-obsidian-muted">
+          Cargando tus ajustes…
+        </p>
+      )}
+      {vaultSettingsError && (
+        <div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-200">
+          <span>No se cargaron tus ajustes. Para evitar reemplazarlos con valores iniciales, vuelve a intentarlo antes de guardar.</span>
+          <button type="button" onClick={() => void loadVaultSettings()} className="shrink-0 font-semibold underline underline-offset-2 hover:text-white">
+            Reintentar
+          </button>
+        </div>
+      )}
 
       <form onSubmit={handleSavePreferences} className="space-y-6">
         {/* Visual Customization (Notion & Obsidian aesthetics) */}
@@ -706,7 +710,7 @@ export const SettingsView: React.FC = () => {
         <div className="flex justify-end">
           <button
             type="submit"
-            disabled={isSaving}
+            disabled={isSaving || vaultSettingsLoading || Boolean(vaultSettingsError)}
             className="inline-flex items-center gap-2 px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white text-xs font-semibold shadow-lg shadow-indigo-600/20 transition-all disabled:opacity-50"
           >
             <Save size={14} aria-hidden="true" />
@@ -723,8 +727,8 @@ export const SettingsView: React.FC = () => {
         <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-obsidian-border">
           <div className="flex items-center gap-2">
             <Globe size={16} className="text-cyan-400" aria-hidden="true" />
-            <h3 className="text-sm font-bold text-white">Configuración Dinámica del Sistema</h3>
-            <InfoTooltip content="Administra monedas soportadas, moneda base, configuración geográfica predeterminada del mapa y valores por defecto para reportes pentest." />
+            <h3 className="text-sm font-bold text-white">Monedas, mapa e informes</h3>
+            <InfoTooltip content="Configura el formato de moneda, la ubicación de búsqueda y los datos que aparecen en los informes." />
           </div>
           <button
             type="submit"
@@ -732,60 +736,25 @@ export const SettingsView: React.FC = () => {
             className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-semibold disabled:opacity-50 transition-colors"
           >
             <Save size={13} aria-hidden="true" />
-            <span>{savingRuntime ? 'Guardando...' : 'Guardar configuración global'}</span>
+            <span>{savingRuntime ? 'Guardando...' : 'Guardar ajustes'}</span>
           </button>
         </div>
 
         {/* Currencies & Locale */}
         <div className="space-y-3 text-xs">
-          <div className="font-semibold text-white">Monedas Activas y Localización</div>
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-            <div>
-              <label htmlFor="rt-base-currency" className="block text-obsidian-muted mb-1">
-                Moneda Base
-              </label>
-              <select
-                id="rt-base-currency"
-                value={sysBaseCurrency}
-                onChange={(e) => handleSetBaseCurrency(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white font-semibold focus:outline-none focus:border-cyan-500"
-              >
-                {sysCurrencies.map((c) => (
-                  <option key={c.code} value={c.code}>
-                    {c.code} ({c.symbol})
-                  </option>
-                ))}
-              </select>
+          <div className="font-semibold text-white">Monedas y formato</div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="rounded-xl border border-obsidian-border bg-obsidian-bg px-3 py-2">
+              <p className="mb-1 text-obsidian-muted">Moneda principal</p>
+              <p className="font-semibold text-white">MXN · Peso mexicano</p>
             </div>
-            <div>
-              <label htmlFor="rt-pair-base" className="block text-obsidian-muted mb-1">
-                Par Divisa Base
-              </label>
-              <input
-                id="rt-pair-base"
-                type="text"
-                maxLength={5}
-                value={sysPairBase}
-                onChange={(e) => setSysPairBase(e.target.value.toUpperCase())}
-                className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white font-mono focus:outline-none focus:border-cyan-500"
-              />
-            </div>
-            <div>
-              <label htmlFor="rt-pair-target" className="block text-obsidian-muted mb-1">
-                Par Divisa Destino
-              </label>
-              <input
-                id="rt-pair-target"
-                type="text"
-                maxLength={5}
-                value={sysPairTarget}
-                onChange={(e) => setSysPairTarget(e.target.value.toUpperCase())}
-                className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white font-mono focus:outline-none focus:border-cyan-500"
-              />
+            <div className="rounded-xl border border-obsidian-border bg-obsidian-bg px-3 py-2">
+              <p className="mb-1 text-obsidian-muted">Conversión disponible</p>
+              <p className="font-semibold text-white">USD a MXN</p>
             </div>
             <div>
               <label htmlFor="rt-locale" className="block text-obsidian-muted mb-1">
-                Formato Regional (Locale)
+                Formato regional
               </label>
               <input
                 id="rt-locale"
@@ -799,12 +768,12 @@ export const SettingsView: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex flex-wrap gap-2 pt-1">
-            {sysCurrencies.map((c) => (
+          <div className="flex flex-wrap gap-2 pt-1" aria-label="Monedas disponibles">
+            {SYSTEM_CURRENCIES.map((c) => (
               <div
                 key={c.code}
                 className={`inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg border text-xs ${
-                  c.code === sysBaseCurrency
+                  c.code === 'MXN'
                     ? 'bg-cyan-500/15 border-cyan-500/40 text-cyan-200'
                     : 'bg-obsidian-bg border-obsidian-border text-obsidian-text'
                 }`}
@@ -812,64 +781,19 @@ export const SettingsView: React.FC = () => {
                 <span className="font-mono font-bold">{c.code}</span>
                 <span className="text-obsidian-muted">{c.symbol}</span>
                 <span>{c.name}</span>
-                {c.code !== sysBaseCurrency && sysCurrencies.length > 1 && (
-                  <button
-                    type="button"
-                    aria-label={`Eliminar moneda ${c.code}`}
-                    onClick={() => handleRemoveCurrency(c.code)}
-                    className="text-obsidian-muted hover:text-rose-400"
-                  >
-                    <Trash2 size={12} aria-hidden="true" />
-                  </button>
-                )}
               </div>
             ))}
           </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 pt-1">
-            <input
-              type="text"
-              maxLength={5}
-              value={newCurrCode}
-              onChange={(e) => setNewCurrCode(e.target.value.toUpperCase())}
-              aria-label="Código de nueva moneda"
-              placeholder="Código (ej. EUR)"
-              className="px-3 py-1.5 rounded-lg bg-obsidian-bg border border-obsidian-border text-white font-mono focus:outline-none focus:border-cyan-500"
-            />
-            <input
-              type="text"
-              maxLength={60}
-              value={newCurrName}
-              onChange={(e) => setNewCurrName(e.target.value)}
-              aria-label="Nombre de nueva moneda"
-              placeholder="Nombre (ej. Euro)"
-              className="px-3 py-1.5 rounded-lg bg-obsidian-bg border border-obsidian-border text-white focus:outline-none focus:border-cyan-500"
-            />
-            <input
-              type="text"
-              maxLength={4}
-              value={newCurrSymbol}
-              onChange={(e) => setNewCurrSymbol(e.target.value)}
-              aria-label="Símbolo de nueva moneda"
-              placeholder="Símbolo ($)"
-              className="px-3 py-1.5 rounded-lg bg-obsidian-bg border border-obsidian-border text-white font-mono focus:outline-none focus:border-cyan-500"
-            />
-            <button
-              type="button"
-              onClick={handleAddCurrency}
-              className="inline-flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg bg-obsidian-surface hover:bg-obsidian-border border border-obsidian-border text-white font-semibold"
-            >
-              <Plus size={13} aria-hidden="true" />
-              <span>Agregar moneda</span>
-            </button>
-          </div>
+          <p className="max-w-2xl text-obsidian-muted">
+            Los informes usan MXN como moneda principal. Los importes en USD se convierten con el tipo de cambio configurado.
+          </p>
         </div>
 
         {/* Map Geography & Zones */}
         <div className="space-y-3 pt-3 border-t border-obsidian-border text-xs">
           <div className="flex items-center gap-1.5 font-semibold text-white">
             <MapPin size={14} className="text-emerald-400" aria-hidden="true" />
-            <span>Geografía y Sectores de Captura (Mapa)</span>
+            <span>Mapa y zonas</span>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
@@ -909,7 +833,11 @@ export const SettingsView: React.FC = () => {
               <label htmlFor="rt-map-lat" className="block text-obsidian-muted mb-1">Latitud central</label>
               <input
                 id="rt-map-lat"
-                type="text"
+                type="number"
+                inputMode="decimal"
+                min={-90}
+                max={90}
+                step="any"
                 value={mapCenterLat}
                 onChange={(e) => setMapCenterLat(e.target.value)}
                 className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white font-mono focus:outline-none focus:border-emerald-500"
@@ -919,7 +847,11 @@ export const SettingsView: React.FC = () => {
               <label htmlFor="rt-map-lon" className="block text-obsidian-muted mb-1">Longitud central</label>
               <input
                 id="rt-map-lon"
-                type="text"
+                type="number"
+                inputMode="decimal"
+                min={-180}
+                max={180}
+                step="any"
                 value={mapCenterLon}
                 onChange={(e) => setMapCenterLon(e.target.value)}
                 className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white font-mono focus:outline-none focus:border-emerald-500"
@@ -932,6 +864,7 @@ export const SettingsView: React.FC = () => {
                 type="number"
                 min={1}
                 max={20}
+                step="any"
                 value={mapZoom}
                 onChange={(e) => setMapZoom(e.target.value)}
                 className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white font-mono focus:outline-none focus:border-emerald-500"
@@ -962,6 +895,7 @@ export const SettingsView: React.FC = () => {
                   </div>
                   <input
                     type="text"
+                    maxLength={400}
                     value={zone.colonias.join(', ')}
                     onChange={(e) => handleUpdateZoneColonias(zone.slug, e.target.value)}
                     aria-label={`Colonias de ${zone.zone}`}
@@ -1007,7 +941,7 @@ export const SettingsView: React.FC = () => {
         <div className="space-y-3 pt-3 border-t border-obsidian-border text-xs">
           <div className="flex items-center gap-1.5 font-semibold text-white">
             <FileText size={14} className="text-indigo-400" aria-hidden="true" />
-            <span>Reportes Pentest / Writeups</span>
+            <span>Informes de seguridad</span>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>

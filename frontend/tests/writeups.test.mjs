@@ -19,6 +19,41 @@ async function loadModule(entryPoint) {
 
 const pentestUtils = await loadModule('src/components/writeups/pentestUtils.ts');
 const pentestIcons = await loadModule('src/components/writeups/pentestSvgIcons.tsx');
+const portTable = await loadModule('src/components/writeups/portTable.ts');
+
+test('createPortTableMarkdown valida límites y escapa contenido de las celdas', () => {
+  const table = portTable.createPortTableMarkdown('443/tcp https servidor|principal estado|revisado, 53/UDP dns');
+  assert.ok(table.includes('| `443/tcp` | https | servidor\\|principal | estado\\|revisado |'));
+  assert.ok(table.includes('| `53/udp` | dns | Sin especificar | Sin especificar |'));
+  assert.equal(table.split('\n').filter((line) => line.startsWith('| `')).length, 2);
+
+  assert.throws(() => portTable.createPortTableMarkdown('65536/tcp http'));
+  assert.throws(() => portTable.createPortTableMarkdown('80/tcp'));
+  assert.throws(() => portTable.createPortTableMarkdown('x'.repeat(portTable.MAX_PORT_TABLE_INPUT_LENGTH + 1)));
+  assert.throws(() => portTable.createPortTableMarkdown(Array.from({ length: 101 }, (_, i) => `${i + 1}/tcp http`).join(', ')));
+});
+
+test('Writeups no usa diálogos nativos ni precarga ejemplos que parecen datos reales', () => {
+  const editor = fs.readFileSync('src/components/writeups/WriteupMarkdownSplitEditor.tsx', 'utf8');
+  const view = fs.readFileSync('src/components/writeups/WriteupsView.tsx', 'utf8');
+  assert.doesNotMatch(`${editor}\n${view}`, /\balert\s*\(|\bwindow\.(?:alert|confirm|prompt)\s*\(|\b(?:confirm|prompt)\s*\(\s*['"`]/);
+  assert.doesNotMatch(`${editor}\n${view}`, /nginx-1\.24|AuthBypass|Auditoría API REST — Cliente|CVE-2026-XXXX/);
+});
+
+test('Los diálogos compartidos y de Writeups exponen descripción, cierre por Escape y límites', () => {
+  const tooltip = fs.readFileSync('src/components/common/InfoTooltip.tsx', 'utf8');
+  const promptDialog = fs.readFileSync('src/components/common/PromptDialog.tsx', 'utf8');
+  const confirmDialog = fs.readFileSync('src/components/common/ConfirmDialog.tsx', 'utf8');
+  const exportDialog = fs.readFileSync('src/components/writeups/WriteupExportModal.tsx', 'utf8');
+  for (const [name, source] of [['InfoTooltip', tooltip], ['PromptDialog', promptDialog], ['ConfirmDialog', confirmDialog], ['ExportDialog', exportDialog]]) {
+    assert.match(source, /aria-modal|aria-describedby/ , `${name} debe exponer información accesible`);
+    assert.match(source, /Escape|e\.key === 'Escape'/, `${name} debe permitir cerrar con Escape`);
+  }
+  assert.match(tooltip, /aria-describedby=\{open \? tooltipId/);
+  assert.match(promptDialog, /maxLength=\{safeMaxLength\}/);
+  assert.match(promptDialog, /aria-invalid=\{Boolean\(error\)\}/);
+  assert.match(exportDialog, /maxLength=\{120\}/);
+});
 
 test('calculateCvss31 y parseCvss31Vector calculan score, severidad y vector consistente', () => {
   const crit = pentestUtils.calculateCvss31({

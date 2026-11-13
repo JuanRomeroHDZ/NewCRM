@@ -83,7 +83,7 @@ async def require_vault_unlocked(x_vault_token: str | None = Header(None)) -> bo
     if not x_vault_token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Bóveda cifrada bloqueada. Ingrese su contraseña maestra para acceder a este recurso."
+            detail="La bóveda está bloqueada. Desbloquéala para continuar."
         )
 
     try:
@@ -91,13 +91,13 @@ async def require_vault_unlocked(x_vault_token: str | None = Header(None)) -> bo
         if payload.get("scope") != "level2_vault":
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Token de acceso inválido para el ámbito de la bóveda de nivel 2."
+                detail="No tienes acceso a este recurso. Desbloquea la bóveda e inténtalo de nuevo."
             )
         jti = payload.get("jti")
         if not jti or not session_manager.is_session_active(jti):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Sesión de bóveda expirada o bloqueada. Ingrese nuevamente su contraseña maestra."
+                detail="La sesión venció. Desbloquea la bóveda para continuar."
             )
 
         # Retrieve session-derived AES key and bind to request ContextVar
@@ -109,5 +109,5 @@ async def require_vault_unlocked(x_vault_token: str | None = Header(None)) -> bo
     except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Sesión de bóveda expirada o inválida. Ingrese nuevamente su contraseña maestra."
+            detail="La sesión venció. Desbloquea la bóveda para continuar."
         )

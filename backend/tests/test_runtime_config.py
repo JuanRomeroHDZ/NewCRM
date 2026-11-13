@@ -25,14 +25,13 @@ async def test_runtime_config_overrides_currencies_map_and_writeup_defaults(
 
     custom_payload = {
         "currencies": [
-            {"code": "MXN", "name": "Peso Mexicano", "symbol": "$", "is_base": False},
+            {"code": "MXN", "name": "Peso Mexicano", "symbol": "$", "is_base": True},
             {"code": "USD", "name": "Dolar", "symbol": "US$", "is_base": False},
-            {"code": "EUR", "name": "Euro", "symbol": "EUR ", "is_base": True},
         ],
         "currency_config": {
-            "base_currency": "EUR",
-            "exchange_pair": {"base": "USD", "target": "EUR"},
-            "locale": "es-ES",
+            "base_currency": "MXN",
+            "exchange_pair": {"base": "USD", "target": "MXN"},
+            "locale": "es-MX",
         },
         "map_defaults": {
             "default_city": "Ciudad de Mexico",
@@ -70,18 +69,24 @@ async def test_runtime_config_overrides_currencies_map_and_writeup_defaults(
     res_update = await client.put("/api/v1/settings/runtime-config", headers=headers, json=custom_payload)
     assert res_update.status_code == 200
     updated = res_update.json()
-    assert updated["currency_config"]["base_currency"] == "EUR"
+    assert updated["currency_config"]["base_currency"] == "MXN"
     assert updated["map_defaults"]["default_city"] == "Ciudad de Mexico"
     assert updated["writeup_defaults"]["organization_name"] == "RedTeam Custom Labs"
 
-    # Settings accepts custom ISO currency configured in runtime catalog
+    # Both configured currencies remain supported by the settings endpoint.
     res_settings = await client.put(
         "/api/v1/settings",
         headers=headers,
-        json={"budget_cap_currency": "EUR", "budget_cap_amount": 500.0},
+        json={"budget_cap_currency": "USD", "budget_cap_amount": 500.0},
     )
     assert res_settings.status_code == 200
-    assert res_settings.json()["budget_cap_currency"] == "EUR"
+    assert res_settings.json()["budget_cap_currency"] == "USD"
+    unsupported_settings_currency = await client.put(
+        "/api/v1/settings",
+        headers=headers,
+        json={"budget_cap_currency": "EUR"},
+    )
+    assert unsupported_settings_currency.status_code == 422
 
     # CRM Capture endpoints serve custom zones and map defaults without hardcoding Tijuana
     res_zones = await client.get("/api/v1/crm/capture/zones", headers=headers)
@@ -120,3 +125,71 @@ async def test_runtime_config_overrides_currencies_map_and_writeup_defaults(
     )
     assert res_sarif.status_code == 200
     assert "RedTeam Custom Labs" in res_sarif.text
+
+
+@pytest.mark.asyncio
+async def test_runtime_config_rejects_invalid_and_unsafe_values(client: AsyncClient, auth_token: str):
+    headers = {"X-Vault-Token": auth_token}
+    invalid_payloads = [
+        {"currencies": [{"code": "bad\";", "name": "Moneda", "symbol": "$", "is_base": True}]},
+        {"currencies": [
+            {"code": "MXN", "name": "Peso", "symbol": "$", "is_base": False},
+            {"code": "USD", "name": "Dólar", "symbol": "US$", "is_base": True},
+        ]},
+        {"currencies": [
+            {"code": "MXN", "name": "Peso", "symbol": "$", "is_base": True},
+            {"code": "USD", "name": "Dólar", "symbol": "US$", "is_base": False},
+            {"code": "EUR", "name": "Euro", "symbol": "€", "is_base": False},
+        ]},
+        {"currency_config": {"base_currency": "USD"}},
+        {"currency_config": {"exchange_pair": {"base": "EUR", "target": "MXN"}}},
+        {"map_defaults": {"tile_url_template": "javascript:alert(1)"}},
+        {"map_defaults": {"attribution": "<img src=x onerror=alert(1)>"}},
+        {"map_zones": [{
+            "slug": "mala-zona", "zone": "Zona inválida", "center": [91, 0], "zoom": 14,
+            "bbox": {"min_lat": 0, "min_lon": 0, "max_lat": 1, "max_lon": 1}, "colonias": [],
+        }]},
+        {"writeup_defaults": {"organization_name": "x" * 121}},
+    ]
+
+    for payload in invalid_payloads:
+        response = await client.put("/api/v1/settings/runtime-config", headers=headers, json=payload)
+        assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_runtime_config_get_sanitizes_legacy_attribution(db_session):
+    from app.services.config_service import build_default_map_defaults, set_config_parameter
+    from app.services.crm_capture import CrmCaptureService
+
+    legacy = {**build_default_map_defaults(), "attribution": "<img src=x onerror=alert(1)>"}
+    await set_config_parameter(db_session, "map_defaults", legacy)
+    config = await CrmCaptureService.get_map_config(db_session)
+
+    assert "<img" not in config["attribution"]
+    assert "onerror" not in config["attribution"]
+
+
+@pytest.mark.asyncio
+async def test_runtime_config_writes_roll_back_together(db_session, monkeypatch):
+    import app.services.config_service as config_service
+
+    original = config_service.set_config_parameter
+    initial = await config_service.get_runtime_config(db_session)
+    updated_currencies = [dict(item, name="Nombre temporal") for item in initial["currencies"]]
+
+    async def fail_on_second_write(session, key, value, *args, **kwargs):
+        if key == "map_zones":
+            raise RuntimeError("simulated storage failure")
+        return await original(session, key, value, *args, **kwargs)
+
+    monkeypatch.setattr(config_service, "set_config_parameter", fail_on_second_write)
+    with pytest.raises(RuntimeError, match="simulated storage failure"):
+        await config_service.update_runtime_config(
+            db_session,
+            {"currencies": updated_currencies, "map_zones": initial["map_zones"]},
+        )
+
+    await db_session.rollback()
+    after = await config_service.get_runtime_config(db_session)
+    assert after["currencies"] == initial["currencies"]

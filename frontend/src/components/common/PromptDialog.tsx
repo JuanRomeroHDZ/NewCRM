@@ -32,13 +32,16 @@ export const PromptDialog: React.FC<PromptDialogProps> = ({
   onCancel,
 }) => {
   const headingId = useId();
+  const messageId = useId();
   const inputId = useId();
+  const errorId = useId();
   const [value, setValue] = useState(defaultValue);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const cancelBtnRef = useRef<HTMLButtonElement>(null);
   const submitBtnRef = useRef<HTMLButtonElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
+  const safeMaxLength = Number.isFinite(maxLength) ? Math.max(1, Math.min(10000, Math.floor(maxLength))) : 240;
 
   useEffect(() => {
     if (!open) return;
@@ -74,7 +77,8 @@ export const PromptDialog: React.FC<PromptDialogProps> = ({
     return () => {
       window.clearTimeout(focusTimer);
       window.removeEventListener('keydown', handleKeyDown, true);
-      previousFocusRef.current?.focus?.();
+      const previousFocus = previousFocusRef.current;
+      if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true });
     };
   }, [open, defaultValue, onCancel]);
 
@@ -88,12 +92,17 @@ export const PromptDialog: React.FC<PromptDialogProps> = ({
       inputRef.current?.focus();
       return;
     }
+    if (trimmed.length > safeMaxLength) {
+      setError(`Usa ${safeMaxLength} caracteres o menos.`);
+      inputRef.current?.focus();
+      return;
+    }
     onSubmit(trimmed);
   };
 
   return (
     <div
-      className="responsive-overlay fixed inset-0 z-[100] flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm animate-fadeIn"
+      className="responsive-overlay fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto overscroll-contain bg-black/75 p-3 sm:p-4 backdrop-blur-sm animate-fadeIn"
       onClick={onCancel}
       role="presentation"
     >
@@ -102,8 +111,9 @@ export const PromptDialog: React.FC<PromptDialogProps> = ({
         role="dialog"
         aria-modal="true"
         aria-labelledby={headingId}
+        aria-describedby={message ? messageId : undefined}
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-md rounded-2xl border border-obsidian-borderLight bg-obsidian-panel p-5 shadow-2xl"
+        className="w-full max-w-md max-h-[calc(100dvh-1.5rem)] overflow-y-auto rounded-2xl border border-obsidian-borderLight bg-obsidian-panel p-4 sm:p-5 shadow-2xl"
       >
         <div className="flex items-start gap-3">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-brand-500/30 bg-brand-500/10 text-brand-400" aria-hidden="true">
@@ -114,7 +124,7 @@ export const PromptDialog: React.FC<PromptDialogProps> = ({
               {title}
             </h2>
             {message && (
-              <p className="mt-1 text-xs leading-relaxed text-obsidian-muted">{message}</p>
+              <p id={messageId} className="mt-1 text-xs leading-relaxed text-obsidian-muted">{message}</p>
             )}
           </div>
         </div>
@@ -128,7 +138,9 @@ export const PromptDialog: React.FC<PromptDialogProps> = ({
             id={inputId}
             type="text"
             value={value}
-            maxLength={maxLength}
+            maxLength={safeMaxLength}
+            aria-invalid={Boolean(error)}
+            aria-describedby={error ? errorId : message ? messageId : undefined}
             placeholder={placeholder}
             onChange={(e) => {
               setValue(e.target.value);
@@ -137,7 +149,7 @@ export const PromptDialog: React.FC<PromptDialogProps> = ({
             className="min-h-[44px] w-full rounded-xl border border-obsidian-borderLight bg-obsidian-surface px-3.5 py-2.5 text-sm text-white placeholder:text-obsidian-muted focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
           />
           {error && (
-            <p role="alert" className="mt-1.5 text-xs text-rose-400">
+            <p id={errorId} role="alert" className="mt-1.5 text-xs text-rose-300">
               {error}
             </p>
           )}

@@ -12,6 +12,7 @@ import {
 import { computeCommercialPipelineSummary } from '../../../lib/prospectUtils';
 import { RuntimeCurrencyOption } from '../../../types';
 import { SectionType } from '../../../context/VaultContext';
+import { INPUT_LIMITS } from '../../../lib/validation';
 
 interface FinancialExecutiveSummaryProps {
   fin: FinancialSummaryData;
@@ -518,11 +519,14 @@ export const FinancialExecutiveSummary: React.FC<FinancialExecutiveSummaryProps>
               </label>
               <input
                 id={capAmountId}
-                type="text"
+                type="number"
                 inputMode="decimal"
-                maxLength={12}
+                min={0}
+                max={INPUT_LIMITS.BUDGET_CAP}
+                step="0.01"
+                required
                 value={capAmountInput}
-                onChange={(e) => setCapAmountInput(e.target.value.replace(/[^0-9.]/g, ''))}
+                onChange={(e) => setCapAmountInput(e.target.value)}
                 placeholder="Ej. 5000 (0 = desactivar)"
                 className="w-32 px-2.5 py-1 rounded-lg bg-obsidian-bg border border-obsidian-border text-white font-mono text-xs focus:outline-none focus:border-indigo-500"
               />

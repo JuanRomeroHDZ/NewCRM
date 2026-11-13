@@ -41,6 +41,8 @@ export const PasswordsView: React.FC = () => {
   const [loadingResources, setLoadingResources] = useState(true);
   const [resError, setResError] = useState<string | null>(null);
   const [revealedResourceIds, setRevealedResourceIds] = useState<Set<string>>(new Set());
+  const credentialLoadGeneration = useRef(0);
+  const resourceLoadGeneration = useRef(0);
 
   // Resource Modal State
   const [isResourceModalOpen, setIsResourceModalOpen] = useState(false);
@@ -59,7 +61,12 @@ export const PasswordsView: React.FC = () => {
   const previousFocusRef = useRef<HTMLElement | null>(null);
 
   const loadCredentials = useCallback(async () => {
+    const generation = ++credentialLoadGeneration.current;
     if (!isUnlocked) {
+      setCredentials([]);
+      setSearch('');
+      setCategoryFilter('all');
+      setCredsError(null);
       setLoadingCreds(false);
       return;
     }
@@ -67,16 +74,30 @@ export const PasswordsView: React.FC = () => {
     setCredsError(null);
     try {
       const data = await api.getVaultCredentials();
+      if (generation !== credentialLoadGeneration.current) return;
       setCredentials(data);
     } catch (err: any) {
+      if (generation !== credentialLoadGeneration.current) return;
       setCredsError(err?.message || 'No se pudieron cargar las credenciales.');
     } finally {
-      setLoadingCreds(false);
+      if (generation === credentialLoadGeneration.current) setLoadingCreds(false);
     }
   }, [isUnlocked]);
 
   const loadResources = useCallback(async () => {
+    const generation = ++resourceLoadGeneration.current;
     if (!isUnlocked) {
+      setResources([]);
+      setResSearch('');
+      setResTypeFilter('all');
+      setResError(null);
+      setRevealedResourceIds(new Set());
+      setIsResourceModalOpen(false);
+      setEditingResource(null);
+      setResTitle('');
+      setResContent('');
+      setResTags('');
+      setResNotes('');
       setLoadingResources(false);
       return;
     }
@@ -84,20 +105,28 @@ export const PasswordsView: React.FC = () => {
     setResError(null);
     try {
       const data = await api.getResources();
+      if (generation !== resourceLoadGeneration.current) return;
       setResources(data);
     } catch (err: any) {
+      if (generation !== resourceLoadGeneration.current) return;
       setResError(err?.message || 'No se pudieron cargar los recursos seguros.');
     } finally {
-      setLoadingResources(false);
+      if (generation === resourceLoadGeneration.current) setLoadingResources(false);
     }
   }, [isUnlocked]);
 
   useEffect(() => {
-    loadCredentials();
+    void loadCredentials();
+    return () => {
+      credentialLoadGeneration.current += 1;
+    };
   }, [loadCredentials, dataVersion]);
 
   useEffect(() => {
-    loadResources();
+    void loadResources();
+    return () => {
+      resourceLoadGeneration.current += 1;
+    };
   }, [loadResources, dataVersion]);
 
   // Modal Escape, Focus Trap & Focus Restoration
@@ -745,7 +774,7 @@ export const PasswordsView: React.FC = () => {
               {credentials.length === 0 ? (
                 <>
                   <div className="text-sm font-bold text-white">
-                    No hay contraseñas ni llaves registradas en este ámbito
+                    No hay contraseñas ni llaves para esta selección
                   </div>
                   <div className="pt-2 flex flex-wrap items-center justify-center gap-2.5">
                     <button
@@ -998,7 +1027,7 @@ export const PasswordsView: React.FC = () => {
               {resources.length === 0 ? (
                 <>
                   <div className="text-sm font-bold text-white">
-                    No hay recursos seguros ni notas en este ámbito
+                    No hay datos seguros para esta selección
                   </div>
                   <div className="text-xs text-obsidian-muted max-w-md mx-auto">
                     Guarda códigos de recuperación, licencias y notas privadas.

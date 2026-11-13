@@ -67,7 +67,8 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
     return () => {
       window.clearTimeout(focusTimer);
       window.removeEventListener('keydown', handleKeyDown, true);
-      previousFocusRef.current?.focus?.();
+      const previousFocus = previousFocusRef.current;
+      if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true });
     };
   }, [open, tone, onCancel]);
 
@@ -91,7 +92,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
 
   return (
     <div
-      className="responsive-overlay fixed inset-0 z-[100] flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm animate-fadeIn"
+      className="responsive-overlay fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto overscroll-contain bg-black/75 p-3 sm:p-4 backdrop-blur-sm animate-fadeIn"
       onClick={onCancel}
       role="presentation"
     >
@@ -101,7 +102,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
         aria-labelledby={headingId}
         aria-describedby={descriptionId}
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-md rounded-2xl border border-obsidian-borderLight bg-obsidian-panel p-5 shadow-2xl"
+        className="w-full max-w-md max-h-[calc(100dvh-1.5rem)] overflow-y-auto rounded-2xl border border-obsidian-borderLight bg-obsidian-panel p-4 sm:p-5 shadow-2xl"
       >
         <div className="flex items-start gap-3.5">
           <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border ${toneBadgeClass}`} aria-hidden="true">

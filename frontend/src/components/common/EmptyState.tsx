@@ -24,7 +24,7 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
   return (
     <div
       role={isError ? 'alert' : 'status'}
-      className={`flex flex-col items-center justify-center rounded-2xl border p-8 text-center ${
+      className={`flex min-w-0 flex-col items-center justify-center rounded-2xl border p-5 text-center sm:p-8 ${
         isError
           ? 'border-rose-500/30 bg-rose-950/20 text-rose-100'
           : 'border-obsidian-border bg-obsidian-panel/70 text-obsidian-text'
@@ -42,7 +42,7 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
       </div>
       <h3 className="mt-3 text-sm font-semibold text-white">{title}</h3>
       {description && (
-        <p className="mt-1 max-w-md text-xs leading-relaxed text-obsidian-muted">{description}</p>
+        <p className="mt-1 max-w-md break-words text-xs leading-relaxed text-obsidian-muted">{description}</p>
       )}
       {actionLabel && onAction && (
         <button

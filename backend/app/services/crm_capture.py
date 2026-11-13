@@ -175,6 +175,14 @@ def build_overpass_query(
         return next((tags for stem, tags in COMMON_OSM_MAPPINGS.items() if stem in search_text), [])
 
     mappings = list(dict.fromkeys(tags_for(sector) or tags_for(subsector or "")))
+    # Catalogs can be edited/imported in the database. Accept only ordinary
+    # OSM key/value tokens before interpolating them into Overpass QL.
+    mappings = [
+        (key, value)
+        for key, value in mappings
+        if re.fullmatch(r"[a-zA-Z][a-zA-Z0-9:_-]{0,63}", str(key))
+        and re.fullmatch(r"[a-zA-Z0-9 _:-]{1,96}", str(value))
+    ]
     statements: list[str] = []
     if mappings:
         for key, value in mappings:
@@ -207,6 +215,17 @@ class CrmCaptureService:
         cfg = await get_runtime_config(session)
         defaults = cfg.get("map_defaults") or {}
         sectors = cfg.get("map_sectors") or DEFAULT_SECTOR_CATALOG
+        attribution = defaults.get("attribution") or settings.MAP_ATTRIBUTION_HTML
+        # Older imported settings may contain arbitrary markup. Leaflet renders
+        # attribution as HTML, so only retain plain text or the OSM copyright
+        # link from the validated configuration contract.
+        safe_osm_link = re.fullmatch(
+            r'<a href="https://www\.openstreetmap\.org/copyright" target="_blank" '
+            r'rel="noopener noreferrer">[^<>]{1,160}</a>',
+            str(attribution),
+        )
+        if "<" in str(attribution) or ">" in str(attribution):
+            attribution = attribution if safe_osm_link else "© OpenStreetMap contributors"
         return {
             "tile_url_template": defaults.get("tile_url_template") or settings.OSM_TILE_URL_TEMPLATE,
             "center": defaults.get("center") or [settings.MAP_DEFAULT_CENTER_LAT, settings.MAP_DEFAULT_CENTER_LON],
@@ -214,7 +233,7 @@ class CrmCaptureService:
             "default_city": defaults.get("default_city") or settings.MAP_DEFAULT_CITY,
             "default_zone": defaults.get("default_zone") or settings.MAP_DEFAULT_ZONE_SLUG,
             "default_sector": defaults.get("default_sector") or settings.MAP_DEFAULT_SECTOR,
-            "attribution": defaults.get("attribution") or settings.MAP_ATTRIBUTION_HTML,
+            "attribution": attribution,
             "sectors": sectors,
         }
 
@@ -259,7 +278,9 @@ class CrmCaptureService:
         last_error = OSMProviderError("No se pudo consultar OpenStreetMap.", 503)
         try:
             async with asyncio.timeout(total_timeout):
-                async with httpx.AsyncClient(timeout=total_timeout, follow_redirects=True) as client:
+                # Do not follow a public provider's redirect into a private
+                # service or metadata endpoint.
+                async with httpx.AsyncClient(timeout=total_timeout, follow_redirects=False) as client:
                     for index, url in enumerate(urls):
                         remaining = max(0.001, deadline - asyncio.get_running_loop().time())
                         attempt_timeout = remaining if index == len(urls) - 1 else max(1.0, remaining * 0.75)
@@ -331,23 +352,16 @@ class CrmCaptureService:
         q_hash = compute_query_hash(sector, subsector, zone_key, bounds)
         now = utc_now()
 
-        # The previous NewCRM endpoint cached a fabricated example with this
-        # fixed phone. Remove only those cache rows; prospect records are kept.
-        legacy_fake_rows = await session.execute(
-            select(LeadCacheCell).where(LeadCacheCell.results_json.like("%+526641234567%"))
-        )
-        fake_rows = legacy_fake_rows.scalars().all()
-        for legacy_row in fake_rows:
-            await session.delete(legacy_row)
-        if fake_rows:
-            await session.commit()
-
         # Check existing cache
         stmt = select(LeadCacheCell).where(LeadCacheCell.query_hash == q_hash)
         res = await session.execute(stmt)
         cached = res.scalars().first()
         max_age = timedelta(days=max(1, min(90, max_cache_age_days)))
-        if cached and cached.expires_at > now and cached.fetched_at >= now - max_age:
+        # A previous version cached a made-up sample. Never show it as real
+        # search data, but leave the cache row untouched until a fresh query
+        # succeeds so a normal search cannot delete unrelated user data.
+        contains_legacy_sample = cached is not None and "+526641234567" in cached.results_json
+        if cached and not contains_legacy_sample and cached.expires_at > now and cached.fetched_at >= now - max_age:
             return {
                 "source": "cache",
                 "attribution": cached.attribution,

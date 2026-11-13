@@ -123,7 +123,11 @@ const MainLayout: React.FC = () => {
 
       {/* Zone 2: Main Workspace */}
       <div className="flex min-w-0 min-h-0 flex-1 flex-col overflow-hidden">
-        <Topbar onMenuClick={() => setMobileNavOpen(true)} menuTriggerRef={menuTriggerRef} />
+        <Topbar
+          onMenuClick={() => setMobileNavOpen(true)}
+          menuTriggerRef={menuTriggerRef}
+          isMenuOpen={mobileNavOpen}
+        />
         <main className="min-w-0 min-h-0 flex-1 overflow-y-auto overscroll-contain">
           <Suspense fallback={<div className="p-6 text-sm text-obsidian-muted" role="status">Cargando vista…</div>}>
             {renderSection()}

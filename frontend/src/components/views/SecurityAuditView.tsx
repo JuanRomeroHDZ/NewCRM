@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   ShieldCheck, AlertTriangle, ShieldAlert, Key,
   Lock, Sparkles, ArrowRight, CheckCircle2, Clock, RefreshCw, Code, Search, X
@@ -18,9 +18,14 @@ export const SecurityAuditView: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const loadGeneration = useRef(0);
 
   const loadAudit = useCallback(async () => {
+    const generation = ++loadGeneration.current;
     if (!isUnlocked) {
+      setAudit(null);
+      setSearchQuery('');
+      setLoadError(null);
       setLoading(false);
       return;
     }
@@ -28,16 +33,21 @@ export const SecurityAuditView: React.FC = () => {
     setLoadError(null);
     try {
       const data = await api.getSecurityHealth();
+      if (generation !== loadGeneration.current) return;
       setAudit(data);
     } catch (err: any) {
+      if (generation !== loadGeneration.current) return;
       setLoadError(err?.message || 'No se pudo cargar el diagnóstico de seguridad.');
     } finally {
-      setLoading(false);
+      if (generation === loadGeneration.current) setLoading(false);
     }
   }, [isUnlocked]);
 
   useEffect(() => {
-    loadAudit();
+    void loadAudit();
+    return () => {
+      loadGeneration.current += 1;
+    };
   }, [loadAudit, dataVersion]);
 
   const normalizedQuery = searchQuery.trim().toLowerCase();
@@ -143,6 +153,14 @@ export const SecurityAuditView: React.FC = () => {
 
   return (
     <div className="mx-auto max-w-7xl min-w-0 space-y-4 p-3 sm:space-y-6 sm:p-6 lg:p-8 animate-fadeIn">
+      {loadError && audit && (
+        <div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-200">
+          <span>No se pudo actualizar el diagnóstico. Los datos visibles son de la última revisión correcta.</span>
+          <button type="button" onClick={() => void loadAudit()} className="shrink-0 font-semibold underline underline-offset-2 hover:text-white">
+            Reintentar
+          </button>
+        </div>
+      )}
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2 min-w-0">

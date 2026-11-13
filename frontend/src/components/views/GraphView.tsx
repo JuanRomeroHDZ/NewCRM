@@ -36,15 +36,16 @@ const isNodeVisible = (node: GraphNode, filter: GraphFilterType): boolean => {
 };
 
 export const GraphView: React.FC = () => {
-  const { openInspector, openEmailModal, openProspectModal, dataVersion, isUnlocked } = useVault();
+  const { openInspector, openEmailModal, openProspectModal, openUnlockModal, dataVersion, isUnlocked } = useVault();
 
   const [graphData, setGraphData] = useState<GraphData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(isUnlocked);
   const [error, setError] = useState('');
   const [attempt, setAttempt] = useState(0);
   const [filterType, setFilterType] = useState<GraphFilterType>('all');
   const [highlightSPOF, setHighlightSPOF] = useState(true);
   const [hoveredNode, setHoveredNode] = useState<GraphNode | null>(null);
+  const [isLegendOpen, setIsLegendOpen] = useState(false);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -65,6 +66,16 @@ export const GraphView: React.FC = () => {
   const simLinksRef = useRef<GraphLink[]>([]);
 
   useEffect(() => {
+    if (!isUnlocked) {
+      setGraphData(null);
+      setLoading(false);
+      setError('');
+      setHoveredNode(null);
+      simNodesRef.current = [];
+      simLinksRef.current = [];
+      return;
+    }
+
     let active = true;
     setLoading(true);
     setError('');
@@ -96,10 +107,19 @@ export const GraphView: React.FC = () => {
         // Place platforms radially around their parent email
         const emailPosMap = new Map(emailNodes.map((e) => [e.id, { x: e.x || 0, y: e.y || 0 }]));
         const platformsPerEmail = new Map<string, number>();
+        const platformParents = new Map<string, string>();
+        const prospectParents = new Map<string, string>();
+        data.links.forEach((link) => {
+          if (link.type === 'child' && !platformParents.has(link.target)) {
+            platformParents.set(link.target, link.source);
+          }
+          if (link.type === 'prospect' && !prospectParents.has(link.target)) {
+            prospectParents.set(link.target, link.source);
+          }
+        });
 
         platformNodes.forEach((pNode) => {
-          const parentLink = data.links.find((l) => l.target === pNode.id && l.type === 'child');
-          const parentId = parentLink?.source || emailNodes[0]?.id;
+          const parentId = platformParents.get(pNode.id) || emailNodes[0]?.id;
           const parentPos = (parentId ? emailPosMap.get(parentId) : undefined) || {
             x: width / 2,
             y: height / 2,
@@ -108,8 +128,8 @@ export const GraphView: React.FC = () => {
           const currentCount = (parentId ? platformsPerEmail.get(parentId) : 0) || 0;
           if (parentId) platformsPerEmail.set(parentId, currentCount + 1);
 
-          const subAngle = currentCount * 1.1 + Math.random() * 0.5;
-          const subDist = 120 + Math.random() * 40;
+          const subAngle = currentCount * 2.39996323;
+          const subDist = 126 + (currentCount % 4) * 12;
           pNode.x = parentPos.x + Math.cos(subAngle) * subDist;
           pNode.y = parentPos.y + Math.sin(subAngle) * subDist;
           pNode.vx = 0;
@@ -119,8 +139,7 @@ export const GraphView: React.FC = () => {
         // Place prospects radially around their parent email (or on right side if unlinked)
         const prospectsPerEmail = new Map<string, number>();
         prospectNodes.forEach((prNode, idx) => {
-          const parentLink = data.links.find((l) => l.target === prNode.id && l.type === 'prospect');
-          const parentId = parentLink?.source;
+          const parentId = prospectParents.get(prNode.id);
           const parentPos = parentId ? emailPosMap.get(parentId) : undefined;
 
           if (parentPos && parentId) {
@@ -362,7 +381,7 @@ export const GraphView: React.FC = () => {
 
   useEffect(() => {
     draw();
-  }, [draw]);
+  }, [draw, graphData]);
 
   // Find visible node under pointer coords
   const getNodeAtCoords = useCallback(
@@ -536,6 +555,27 @@ export const GraphView: React.FC = () => {
     draw();
   };
 
+  if (!isUnlocked) {
+    return (
+      <div className="mx-auto flex min-h-[calc(100dvh-4rem)] w-full max-w-3xl items-start p-4 sm:items-center sm:p-8">
+        <section className="w-full rounded-2xl border border-obsidian-border bg-obsidian-card p-5 sm:p-7" aria-labelledby="graph-locked-title">
+          <Network size={24} className="mb-3 text-indigo-300" aria-hidden="true" />
+          <h2 id="graph-locked-title" className="text-xl font-bold text-white">Mapa de conexiones</h2>
+          <p className="mt-2 max-w-prose text-sm leading-relaxed text-obsidian-muted">
+            Desbloquea la bóveda para consultar las relaciones entre tus correos, cuentas, prospectos y pagos.
+          </p>
+          <button
+            type="button"
+            onClick={openUnlockModal}
+            className="mt-5 min-h-11 rounded-xl bg-indigo-600 px-4 text-sm font-semibold text-white hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
+          >
+            Desbloquear bóveda
+          </button>
+        </section>
+      </div>
+    );
+  }
+
   return (
     <div className="relative h-[calc(100dvh-4rem)] min-h-0 w-full select-none overflow-hidden bg-obsidian-bg dot-grid-canvas">
       {/* Top Floating Controls */}
@@ -630,8 +670,11 @@ export const GraphView: React.FC = () => {
       </div>
 
       {/* Legend Card positioned away from zoom controls on 375px */}
-      <details className="absolute bottom-3 left-3 z-10 max-h-[calc(100%-6rem)] max-w-[calc(100%-5.25rem)] overflow-y-auto rounded-xl border border-obsidian-border bg-obsidian-panel/95 p-3 text-[11px] text-obsidian-muted shadow-xl backdrop-blur-md sm:bottom-6 sm:left-6 sm:max-w-xs">
-        <summary className="cursor-pointer text-xs font-semibold text-white">Guía del mapa</summary>
+      <details
+        onToggle={(event) => setIsLegendOpen(event.currentTarget.open)}
+        className="absolute bottom-3 left-3 z-10 max-h-[calc(100%-6rem)] max-w-[calc(100%-5.25rem)] overflow-y-auto rounded-xl border border-obsidian-border bg-obsidian-panel/95 p-3 text-[11px] text-obsidian-muted shadow-xl backdrop-blur-md sm:bottom-6 sm:left-6 sm:max-w-xs"
+      >
+        <summary className="cursor-pointer text-xs font-semibold text-white">Guía y elementos</summary>
         <div className="mt-2 space-y-1.5">
           <div className="flex items-center gap-2">
             <span className="h-3 w-3 shrink-0 rounded-full border-2 border-indigo-500 bg-obsidian-card" aria-hidden="true" />
@@ -657,6 +700,40 @@ export const GraphView: React.FC = () => {
             <span className="h-3 w-3 shrink-0 rounded-full border-2 border-rose-500 bg-rose-500/20" aria-hidden="true" />
             <span>Correo Indispensable (muchas cuentas dependen de él)</span>
           </div>
+          {isLegendOpen && graphData?.nodes.length ? (
+            <div className="mt-3 border-t border-obsidian-border pt-3">
+              <h2 className="text-xs font-semibold text-white">Elementos del mapa</h2>
+              <ul className="mt-1.5 max-h-40 space-y-1 overflow-y-auto" aria-label="Elementos disponibles en el mapa">
+                {graphData.nodes.filter((node) => isNodeVisible(node, filterType)).map((node) => {
+                  const typeLabel = node.type === 'email'
+                    ? 'Correo'
+                    : node.type === 'platform'
+                    ? 'Cuenta'
+                    : node.type === 'prospect'
+                    ? 'Prospecto'
+                    : 'Método de pago';
+                  const entityId = node.entity_id;
+                  return (
+                    <li key={node.id}>
+                      {entityId ? (
+                        <button
+                          type="button"
+                          onClick={() => openInspector(node.type, entityId)}
+                          className="min-h-10 w-full break-words rounded-md px-2 py-1 text-left text-xs text-obsidian-text hover:bg-obsidian-surface hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
+                        >
+                          {typeLabel}: {node.label}
+                        </button>
+                      ) : (
+                        <span className="block break-words px-2 py-1 text-xs text-obsidian-muted">
+                          {typeLabel}: {node.label}
+                        </span>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ) : null}
         </div>
       </details>
 

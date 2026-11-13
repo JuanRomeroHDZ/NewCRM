@@ -637,7 +637,7 @@ export const PlatformsView: React.FC = () => {
           <h3 className="text-sm font-semibold text-white">
             {hasActiveFilters
               ? 'No se encontraron plataformas con los filtros seleccionados'
-              : 'No hay plataformas ni servicios vinculados en este ámbito'}
+              : 'No hay cuentas ni servicios para esta selección'}
           </h3>
           <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
             {hasActiveFilters && (

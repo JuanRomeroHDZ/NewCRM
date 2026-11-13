@@ -36,6 +36,24 @@ async def test_overpass_uses_backup_after_primary_failure(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_overpass_does_not_follow_redirects(monkeypatch):
+    calls = []
+
+    def handler(request):
+        calls.append(str(request.url))
+        if request.url.host == 'primary.example':
+            return httpx.Response(302, headers={'Location': 'http://169.254.169.254/latest/meta-data'})
+        return httpx.Response(200, json={'elements': []})
+
+    mock_overpass(monkeypatch, handler)
+    assert await CrmCaptureService.fetch_osm_elements('query') == []
+    assert calls == [
+        'https://primary.example/interpreter',
+        'https://backup.example/interpreter',
+    ]
+
+
+@pytest.mark.asyncio
 async def test_overpass_does_not_return_partial_results(monkeypatch):
     def handler(request):
         return httpx.Response(200, json={'elements': [{'id': 42}], 'remark': 'runtime error: timeout'})

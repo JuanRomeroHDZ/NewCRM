@@ -382,7 +382,7 @@ export const EmailsView: React.FC = () => {
           title={
             search
               ? 'No se encontraron correos con esa búsqueda'
-              : 'No hay correos principales registrados en este ámbito'
+              : 'No hay correos principales para esta selección'
           }
           actionLabel="Nuevo correo"
           onAction={() => {

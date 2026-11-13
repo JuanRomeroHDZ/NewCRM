@@ -18,7 +18,7 @@ from app.schemas.validators import (
     validate_rfc_input,
     validate_single_phone,
 )
-from app.schemas import validate_email_input, validate_nonblank_input
+from app.schemas import SupportedCurrency, validate_email_input, validate_nonblank_input
 
 
 class CadenceRequest(BaseModel):
@@ -36,7 +36,7 @@ class ProposalCreate(BaseModel):
     title: str = Field(..., min_length=2, max_length=180)
     service_type: str = Field("proyecto_unico", pattern="^(proyecto_unico|mensualidad|mantenimiento|pentesting)$")
     amount: float = Field(..., ge=0, le=100000000, allow_inf_nan=False)
-    currency: str = Field("MXN", pattern=r"^[A-Z]{3,8}$")
+    currency: SupportedCurrency = "MXN"
     content_text: str | None = Field(default=None, max_length=20000)
     expires_days: int = Field(15, ge=1, le=90)
 
@@ -58,7 +58,7 @@ class SaleCloseRequest(BaseModel):
     tax_amount: float = Field(0.0, ge=0, le=100000000, allow_inf_nan=False)
     discount_amount: float = Field(0.0, ge=0, le=100000000, allow_inf_nan=False)
     advance_payment: float = Field(0.0, ge=0, le=100000000, allow_inf_nan=False)
-    currency: str = Field("MXN", pattern=r"^[A-Z]{3,8}$")
+    currency: SupportedCurrency = "MXN"
 
     _valid_names = field_validator("company_name", "title")(validate_nonblank_input)
     _valid_email = field_validator("contact_email")(validate_email_input)
@@ -88,7 +88,7 @@ class InvoiceRecordRequest(BaseModel):
     issue_date: str = Field(..., pattern=r"^\d{4}-\d{2}-\d{2}$")
     sale_id: str | None = Field(default=None, max_length=36)
     cfdi_usage: str = Field("G03", min_length=2, max_length=32)
-    currency: str = Field("MXN", pattern=r"^[A-Z]{3,8}$")
+    currency: SupportedCurrency = "MXN"
     service_ref: str | None = Field(default=None, max_length=180)
 
     _valid_folio = field_validator("folio")(validate_nonblank_input)

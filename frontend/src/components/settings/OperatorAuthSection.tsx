@@ -9,9 +9,9 @@ import { useVault } from '../../context/VaultContext';
 import { INPUT_LIMITS, isValidEmail } from '../../lib/validation';
 
 const ROLE_LABELS: Record<CoreUserRole, string> = {
-  owner: 'Owner',
-  business_admin: 'Business Admin',
-  seller: 'Seller',
+  owner: 'Propietario',
+  business_admin: 'Administrador',
+  seller: 'Ventas',
   readonly: 'Solo Lectura',
 };
 
@@ -108,7 +108,7 @@ export const OperatorAuthSection: React.FC = () => {
   const handleOperatorLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!loginIdentifier.trim() || !loginPassword) {
-      showToast('Ingresa tu usuario o correo y contraseña de operador.', 'error');
+      showToast('Ingresa tu usuario o correo y tu contraseña.', 'error');
       return;
     }
     setLoginLoading(true);
@@ -123,7 +123,7 @@ export const OperatorAuthSection: React.FC = () => {
       setSessionError(null);
       setLoginPassword('');
       setLoginTotp('');
-      showToast(`Sesión operativa iniciada como ${res.user.full_name}.`, 'success');
+      showToast(`Sesión iniciada como ${res.user.full_name}.`, 'success');
       await loadUsersIfOwner(res.user);
     } catch (err: any) {
       showToast(err.message || 'No se pudo iniciar sesión operativa.', 'error');
@@ -165,7 +165,7 @@ export const OperatorAuthSection: React.FC = () => {
       setCurrentPwd('');
       setNewPwd('');
       setPwdTotp('');
-      showToast('Contraseña operativa actualizada correctamente.', 'success');
+      showToast('Contraseña actualizada correctamente.', 'success');
       await refreshOperatorSession();
     } catch (err: any) {
       showToast(err.message || 'No se pudo cambiar la contraseña.', 'error');
@@ -292,7 +292,7 @@ export const OperatorAuthSection: React.FC = () => {
       <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-obsidian-border">
         <div className="flex items-center gap-2">
           <UserCheck size={16} className="text-indigo-400" aria-hidden="true" />
-          <h3 className="text-sm font-bold text-white">Acceso de Operador y Roles (Núcleo)</h3>
+          <h3 className="text-sm font-bold text-white">Cuentas del equipo</h3>
         </div>
         {currentUser && (
           <button
@@ -307,7 +307,7 @@ export const OperatorAuthSection: React.FC = () => {
       </div>
 
       <p className="text-xs text-obsidian-muted leading-relaxed">
-        Credenciales internas para operar flujos con roles (auditoría de URLs, ventas y usuarios), independientes de la clave maestra de tu bóveda.
+        Usa tu cuenta para registrar quién realiza acciones en ventas y otras áreas. La contraseña de acceso a la bóveda es independiente.
       </p>
 
       {sessionError && !loadingSession && (
@@ -329,7 +329,7 @@ export const OperatorAuthSection: React.FC = () => {
 
       {loadingSession ? (
         <div className="text-xs text-obsidian-muted" role="status">
-          Verificando sesión de operador...
+          Verificando tu sesión...
         </div>
       ) : !currentUser ? (
         <form onSubmit={handleOperatorLogin} className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -349,7 +349,7 @@ export const OperatorAuthSection: React.FC = () => {
           </div>
           <div>
             <label htmlFor="op-login-password" className="text-xs text-obsidian-muted block mb-1">
-              Contraseña de operador
+              Contraseña
             </label>
             <input
               id="op-login-password"
@@ -363,7 +363,7 @@ export const OperatorAuthSection: React.FC = () => {
           </div>
           <div>
             <label htmlFor="op-login-totp" className="text-xs text-obsidian-muted block mb-1">
-              Código 2FA (opcional)
+              Código de verificación (opcional)
             </label>
             <div className="flex gap-2">
               <input
@@ -399,14 +399,14 @@ export const OperatorAuthSection: React.FC = () => {
                 {ROLE_LABELS[currentUser.role] || currentUser.role}
               </span>
               <span className={`px-2 py-0.5 rounded font-semibold ${currentUser.is_totp_enabled ? 'bg-emerald-500/15 text-emerald-300' : 'bg-amber-500/15 text-amber-300'}`}>
-                {currentUser.is_totp_enabled ? '2FA Activo' : '2FA Inactivo'}
+                {currentUser.is_totp_enabled ? 'Verificación en dos pasos activa' : 'Verificación en dos pasos inactiva'}
               </span>
             </div>
           </div>
 
           {currentUser.must_change_password && (
             <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
-              Por seguridad debes cambiar tu contraseña temporal de operador antes de continuar con acciones administrativas.
+              Por seguridad, cambia tu contraseña temporal antes de continuar.
             </div>
           )}
 
@@ -415,11 +415,11 @@ export const OperatorAuthSection: React.FC = () => {
             <form onSubmit={handleChangePassword} className="space-y-2.5">
               <div className="flex items-center gap-1.5 text-xs font-semibold text-white">
                 <KeyRound size={14} className="text-cyan-400" aria-hidden="true" />
-                <span>Cambiar contraseña de operador</span>
+                <span>Cambiar contraseña</span>
               </div>
               <div>
                 <label htmlFor="op-pwd-current" className="sr-only">
-                  Contraseña actual de operador
+                  Contraseña actual
                 </label>
                 <input
                   id="op-pwd-current"
@@ -432,7 +432,7 @@ export const OperatorAuthSection: React.FC = () => {
               </div>
               <div>
                 <label htmlFor="op-pwd-new" className="sr-only">
-                  Nueva contraseña de operador
+                  Nueva contraseña
                 </label>
                 <input
                   id="op-pwd-new"
@@ -539,7 +539,7 @@ export const OperatorAuthSection: React.FC = () => {
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-1.5 text-xs font-semibold text-white">
                   <Users size={14} className="text-indigo-400" aria-hidden="true" />
-                  <span>Administración de Usuarios ({usersList.length})</span>
+                  <span>Cuentas del equipo ({usersList.length})</span>
                 </div>
                 {usersList.length > 0 && (
                   <div className="relative w-full sm:w-56">
@@ -550,15 +550,15 @@ export const OperatorAuthSection: React.FC = () => {
                       value={userSearch}
                       onChange={(e) => setUserSearch(e.target.value)}
                       maxLength={INPUT_LIMITS.SEARCH}
-                      aria-label="Buscar operador por nombre, usuario o correo"
-                      placeholder="Filtrar operadores..."
+                      aria-label="Buscar cuenta por nombre, usuario o correo"
+                      placeholder="Buscar cuentas..."
                       className="w-full pl-8 pr-7 py-1 rounded-lg bg-obsidian-bg border border-obsidian-border text-white text-xs focus:outline-none focus:border-indigo-500"
                     />
                     {userSearch && (
                       <button
                         type="button"
                         onClick={() => setUserSearch('')}
-                        aria-label="Limpiar búsqueda de operadores"
+                        aria-label="Limpiar búsqueda de cuentas"
                         className="absolute right-2 top-1.5 text-obsidian-muted hover:text-white"
                       >
                         <X size={13} aria-hidden="true" />
@@ -582,7 +582,7 @@ export const OperatorAuthSection: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label htmlFor="op-new-email" className="sr-only">Correo electrónico del operador</label>
+                  <label htmlFor="op-new-email" className="sr-only">Correo electrónico</label>
                   <input
                     id="op-new-email"
                     type="email"
@@ -606,17 +606,17 @@ export const OperatorAuthSection: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label htmlFor="op-new-role" className="sr-only">Rol del operador</label>
+                  <label htmlFor="op-new-role" className="sr-only">Permisos de la cuenta</label>
                   <select
                     id="op-new-role"
                     value={newRole}
                     onChange={(e) => setNewRole(e.target.value as CoreUserRole)}
                     className="w-full px-2.5 py-1.5 rounded-lg bg-obsidian-bg border border-obsidian-border text-white text-xs focus:outline-none focus:border-indigo-500"
                   >
-                    <option value="seller">Seller</option>
-                    <option value="business_admin">Business Admin</option>
+                    <option value="seller">Ventas</option>
+                    <option value="business_admin">Administrador</option>
                     <option value="readonly">Solo Lectura</option>
-                    <option value="owner">Owner</option>
+                    <option value="owner">Propietario</option>
                   </select>
                 </div>
                 <button
@@ -625,7 +625,7 @@ export const OperatorAuthSection: React.FC = () => {
                   className="sm:col-span-2 lg:col-span-1 inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold disabled:opacity-50"
                 >
                   <UserPlus size={13} aria-hidden="true" />
-                  <span>Crear usuario</span>
+                  <span>Crear cuenta</span>
                 </button>
               </form>
 
@@ -696,9 +696,9 @@ export const OperatorAuthSection: React.FC = () => {
                             onChange={(e) => handleUpdateUser(u.id, { role: e.target.value as CoreUserRole })}
                             className="px-2 py-1 rounded bg-obsidian-bg border border-obsidian-border text-white text-[11px] disabled:opacity-50"
                           >
-                            <option value="owner">Owner</option>
-                            <option value="business_admin">Business Admin</option>
-                            <option value="seller">Seller</option>
+                            <option value="owner">Propietario</option>
+                            <option value="business_admin">Administrador</option>
+                            <option value="seller">Ventas</option>
                             <option value="readonly">Solo Lectura</option>
                           </select>
                           <button

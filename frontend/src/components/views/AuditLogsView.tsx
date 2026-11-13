@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Shield, Download, RefreshCw,
   Search, Lock, AlertTriangle, ChevronLeft, ChevronRight
@@ -13,7 +13,7 @@ import { INPUT_LIMITS } from '../../lib/validation';
 const PAGE_SIZE = 100;
 
 export const AuditLogsView: React.FC = () => {
-  const { isUnlocked, openUnlockModal, showToast, systemLocale } = useVault();
+  const { isUnlocked, openUnlockModal, showToast, systemLocale, dataVersion } = useVault();
   const [logs, setLogs] = useState<AuditLogItem[]>([]);
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
@@ -21,9 +21,17 @@ export const AuditLogsView: React.FC = () => {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [selectedAction, setSelectedAction] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const loadGeneration = useRef(0);
 
   const fetchLogs = useCallback(async () => {
+    const generation = ++loadGeneration.current;
     if (!isUnlocked) {
+      setLogs([]);
+      setTotal(0);
+      setSearchTerm('');
+      setSelectedAction('all');
+      setOffset(0);
+      setLoadError(null);
       setLoading(false);
       return;
     }
@@ -32,20 +40,25 @@ export const AuditLogsView: React.FC = () => {
     try {
       const act = selectedAction === 'all' ? undefined : selectedAction;
       const res = await api.getAuditTrail(PAGE_SIZE, offset, act);
+      if (generation !== loadGeneration.current) return;
       setLogs(res.items || []);
       setTotal(res.total || 0);
     } catch (err: any) {
+      if (generation !== loadGeneration.current) return;
       const msg = err?.message || 'Error cargando auditoría';
       setLoadError(msg);
       showToast(msg, 'error');
     } finally {
-      setLoading(false);
+      if (generation === loadGeneration.current) setLoading(false);
     }
   }, [isUnlocked, selectedAction, offset, showToast]);
 
   useEffect(() => {
-    fetchLogs();
-  }, [fetchLogs]);
+    void fetchLogs();
+    return () => {
+      loadGeneration.current += 1;
+    };
+  }, [fetchLogs, dataVersion]);
 
   const handleActionChange = (nextAction: string) => {
     setOffset(0);
@@ -67,7 +80,7 @@ export const AuditLogsView: React.FC = () => {
     const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(filteredLogs, null, 2));
     const downloadAnchor = document.createElement('a');
     downloadAnchor.setAttribute('href', dataStr);
-    downloadAnchor.setAttribute('download', `emailsaver-audit-logs-${new Date().toISOString().split('T')[0]}.json`);
+    downloadAnchor.setAttribute('download', `contact-lessso-historial-${new Date().toISOString().split('T')[0]}.json`);
     document.body.appendChild(downloadAnchor);
     downloadAnchor.click();
     downloadAnchor.remove();

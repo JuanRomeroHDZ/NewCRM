@@ -335,7 +335,7 @@ async def reveal_secret_with_reauth(
     """
     settings_row = (await db.execute(select(UserSettings).limit(1))).scalar_one_or_none()
     if not settings_row or not verify_master_password(settings_row.master_password_hash, payload.master_password):
-        raise HTTPException(status_code=401, detail="Contraseña de reautenticación incorrecta.")
+        raise HTTPException(status_code=401, detail="La contraseña de acceso no es correcta.")
 
     encrypted_val = None
     target_name = payload.target_id

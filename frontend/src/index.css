@@ -46,6 +46,23 @@
   background-size: 32px 32px;
 }
 
+.topbar-title-compact,
+.topbar-scope-compact {
+  display: none;
+}
+
+@media (max-width: 320px) {
+  .topbar-title-full,
+  .topbar-scope-full {
+    display: none;
+  }
+
+  .topbar-title-compact,
+  .topbar-scope-compact {
+    display: block;
+  }
+}
+
 /* Glassmorphism effects */
 .glass-panel {
   background: rgba(8, 20, 22, 0.85);
@@ -242,13 +259,13 @@
   padding: 0.65rem 1rem;
   background: rgba(15, 23, 42, 0.72);
   border: 1px solid #1e293b;
-  border-left: 3px solid #6366f1;
+  border-left: 1px solid #6366f1;
   border-radius: 0.5rem;
   color: #cbd5e1;
 }
 
 .writeup-prose blockquote.md-callout {
-  border-left-width: 3px;
+  border-left-width: 1px;
   padding: 0.75rem 1rem;
 }
 

@@ -65,6 +65,10 @@ const SEVERITY_BADGE: Record<WriteupSeverity, string> = {
   informativa: 'bg-slate-700/40 text-slate-300 border-slate-600/40',
 };
 
+const MAX_REPORT_TITLE_LENGTH = 240;
+const MAX_REPORT_TEXT_LENGTH = 200000;
+const MAX_FINDINGS_COUNT = 100;
+
 const SEVERITY_BAR_COLOR: Record<WriteupSeverity, string> = {
   critica: '#f43f5e',
   alta: '#f97316',
@@ -110,6 +114,9 @@ export const WriteupsView: React.FC = () => {
   const assetUrlsRef = useRef<Record<string, string>>({});
   const selectedIdRef = useRef<string | null>(selectedId);
   const mediaTabUploadRef = useRef<HTMLInputElement>(null);
+  const modalDialogRef = useRef<HTMLDivElement>(null);
+  const modalCloseRef = useRef<HTMLButtonElement>(null);
+  const previousModalFocusRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     selectedIdRef.current = selectedId;
@@ -210,7 +217,7 @@ export const WriteupsView: React.FC = () => {
         setSelectedId(rows[0].id);
       }
     } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Error cargando writeups', 'error');
+      showToast(err instanceof Error ? err.message : 'Error al cargar los informes', 'error');
     } finally {
       setLoadingList(false);
     }
@@ -227,7 +234,7 @@ export const WriteupsView: React.FC = () => {
       setRevisions(revs);
       void preloadAssetUrls(data);
     } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Error cargando detalle del writeup', 'error');
+      showToast(err instanceof Error ? err.message : 'Error al cargar el informe', 'error');
     }
   }, [isUnlocked, preloadAssetUrls, showToast]);
 
@@ -250,11 +257,11 @@ export const WriteupsView: React.FC = () => {
 
   const handleCreateWriteup = async () => {
     const newTitle = await prompt({
-      title: 'Nuevo writeup de pentesting',
-      message: 'Título del nuevo writeup de pentesting:',
-      defaultValue: 'Auditoría API REST — Cliente',
+      title: 'Nuevo informe de seguridad',
+      message: 'Escribe el título del informe.',
       confirmLabel: 'Crear',
       required: true,
+      maxLength: MAX_REPORT_TITLE_LENGTH,
     });
     if (!newTitle || !newTitle.trim()) return;
     try {
@@ -270,19 +277,54 @@ export const WriteupsView: React.FC = () => {
       if (typeof window !== 'undefined' && window.innerWidth < 1280) {
         setShowList(false);
       }
-      showToast('Writeup creado con pizarra vinculada', 'success');
+      showToast('Informe creado con una pizarra', 'success');
     } catch (err) {
-      showToast(err instanceof Error ? err.message : 'No se pudo crear el writeup', 'error');
+      showToast(err instanceof Error ? err.message : 'No se pudo crear el informe', 'error');
     }
   };
 
-  const handleSaveWriteup = async (saveRevision = false) => {
-    if (!detail) return;
+  const handleSaveWriteup = async (saveRevision = false, markdownOverride?: string) => {
+    if (!detail) return false;
+    const cleanTitle = title.trim();
+    if (!cleanTitle) {
+      showToast('Escribe un título antes de guardar el informe.', 'warning');
+      return false;
+    }
+    if (cleanTitle.length > MAX_REPORT_TITLE_LENGTH) {
+      showToast(`El título no puede superar ${MAX_REPORT_TITLE_LENGTH} caracteres.`, 'warning');
+      return false;
+    }
+
+    const parsedCvss = cvssScore.trim() ? Number(cvssScore) : null;
+    if (parsedCvss !== null && (!Number.isFinite(parsedCvss) || parsedCvss < 0 || parsedCvss > 10)) {
+      showToast('El puntaje CVSS debe estar entre 0 y 10.', 'warning');
+      return false;
+    }
+    if (findings.length > MAX_FINDINGS_COUNT) {
+      showToast(`Un informe puede tener hasta ${MAX_FINDINGS_COUNT} hallazgos.`, 'warning');
+      return false;
+    }
+    if (
+      (markdownOverride ?? markdown).length > MAX_REPORT_TEXT_LENGTH ||
+      execSummary.length > 12000 || cweId.length > 120 || cveId.length > 32 || targetScope.length > 500 ||
+      findings.some((finding) => finding.summary.length > 12000 || finding.remediation.length > 12000 || (finding.cwe_id || '').length > 160 || (finding.affected_target || '').length > 500)
+    ) {
+      showToast('Uno o más campos superan el límite permitido. Acorta el texto antes de guardar.', 'warning');
+      return false;
+    }
+    const invalidFinding = findings.find((finding) =>
+      !finding.id.trim() || !finding.title.trim() ||
+      finding.id.length > 80 || finding.title.length > 240 ||
+      (finding.cvss_score != null && (!Number.isFinite(finding.cvss_score) || finding.cvss_score < 0 || finding.cvss_score > 10))
+    );
+    if (invalidFinding) {
+      showToast('Revisa el identificador, el título y el puntaje de cada hallazgo.', 'warning');
+      return false;
+    }
     setSaving(true);
     try {
-      const parsedCvss = cvssScore.trim() ? Number(cvssScore) : null;
       const updated = await api.updateWriteup(detail.id, {
-        title: title.trim(),
+        title: cleanTitle,
         status: statusVal,
         severity,
         cvss_score: parsedCvss !== null && Number.isFinite(parsedCvss) ? parsedCvss : null,
@@ -291,7 +333,7 @@ export const WriteupsView: React.FC = () => {
         cve_id: cveId.trim() || null,
         target_scope: targetScope.trim() || null,
         executive_summary: execSummary,
-        markdown_content: markdown,
+        markdown_content: markdownOverride ?? markdown,
         findings,
         prospect_id: prospectId || null,
         project_id: projectId || null,
@@ -300,12 +342,18 @@ export const WriteupsView: React.FC = () => {
       });
       hydrateDraft(updated);
       if (saveRevision) {
-        setRevisions(await api.listWriteupRevisions(detail.id));
+        try {
+          setRevisions(await api.listWriteupRevisions(detail.id));
+        } catch {
+          showToast('El informe se guardó, pero no se pudo actualizar la lista de revisiones.', 'warning');
+        }
       }
       await loadList();
-      showToast(saveRevision ? 'Guardado con revisión histórica' : 'Cambios guardados y cifrados', 'success');
+      showToast(saveRevision ? 'Informe guardado con una revisión' : 'Cambios del informe guardados', 'success');
+      return true;
     } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Error guardando writeup', 'error');
+      showToast(err instanceof Error ? err.message : 'Error al guardar el informe', 'error');
+      return false;
     } finally {
       setSaving(false);
     }
@@ -314,8 +362,8 @@ export const WriteupsView: React.FC = () => {
   const handleDeleteWriteup = async () => {
     if (!detail) return;
     const confirmed = await confirm({
-      title: 'Eliminar writeup',
-      message: `¿Eliminar el writeup "${detail.title}"?`,
+      title: 'Eliminar informe',
+      message: `¿Eliminar el informe "${detail.title}"?`,
       confirmLabel: 'Eliminar',
       tone: 'danger',
     });
@@ -325,7 +373,7 @@ export const WriteupsView: React.FC = () => {
       setDetail(null);
       setSelectedId(null);
       await loadList();
-      showToast('Writeup eliminado', 'info');
+      showToast('Informe eliminado', 'info');
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Error al eliminar', 'error');
     }
@@ -347,10 +395,10 @@ export const WriteupsView: React.FC = () => {
         ? Math.max(0, Math.round((1 - uploaded.optimized_size_bytes / uploaded.original_size_bytes) * 100))
         : 0;
       const msg = uploaded.mime_type === 'image/gif'
-        ? `GIF animado optimizado (${pct}% ahorro) y cifrado`
+        ? `GIF animado optimizado (${pct}% menos espacio) y protegido`
         : uploaded.mime_type.startsWith('video/')
-        ? 'Video cifrado sin metadatos listo en Medios'
-        : `Imagen optimizada sin EXIF (${pct}% menor) y cifrada`;
+        ? 'Video listo en Medios; se quitaron sus datos de origen'
+        : `Imagen optimizada y protegida (${pct}% menos espacio)`;
       showToast(msg, 'success');
       return { id: uploaded.id, filename: uploaded.filename };
     } catch (err) {
@@ -390,7 +438,7 @@ export const WriteupsView: React.FC = () => {
           ? { ...prev, boards: prev.boards.map((b) => (b.id === boardId ? updatedBoard : b)) }
           : prev,
       );
-      showToast('Pizarra guardada y sanitizada', 'success');
+      showToast('Pizarra guardada', 'success');
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Error guardando pizarra', 'error');
     }
@@ -404,6 +452,7 @@ export const WriteupsView: React.FC = () => {
       defaultValue: `Diagrama #${detail.boards.length + 1}`,
       confirmLabel: 'Crear',
       required: true,
+      maxLength: 120,
     });
     if (!name || !name.trim()) return;
     try {
@@ -420,7 +469,7 @@ export const WriteupsView: React.FC = () => {
     if (!detail) return;
     const confirmed = await confirm({
       title: 'Eliminar evidencia multimedia',
-      message: `¿Eliminar "${asset.filename}" de este writeup?`,
+      message: `¿Eliminar "${asset.filename}" de este informe?`,
       confirmLabel: 'Eliminar',
       tone: 'danger',
     });
@@ -464,14 +513,41 @@ export const WriteupsView: React.FC = () => {
 
   useEffect(() => {
     if (!lightboxAsset && !diffRevision) return;
+    previousModalFocusRef.current = document.activeElement as HTMLElement | null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const focusTimer = window.setTimeout(() => modalCloseRef.current?.focus(), 0);
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
         if (diffRevision) setDiffRevision(null);
         else if (lightboxAsset) setLightboxAsset(null);
+        return;
+      }
+      if (e.key === 'Tab' && modalDialogRef.current) {
+        const focusable = Array.from(
+          modalDialogRef.current.querySelectorAll<HTMLElement>('button:not(:disabled), video[controls], a[href], [tabindex]:not([tabindex="-1"])')
+        ).filter((element) => element.getAttribute('aria-hidden') !== 'true');
+        if (focusable.length === 0) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
       }
     };
     window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
+    return () => {
+      window.clearTimeout(focusTimer);
+      window.removeEventListener('keydown', onKeyDown);
+      document.body.style.overflow = previousOverflow;
+      previousModalFocusRef.current?.focus?.({ preventScroll: true });
+    };
   }, [lightboxAsset, diffRevision]);
 
   const handleCreateCitation = async (payload: {
@@ -480,26 +556,39 @@ export const WriteupsView: React.FC = () => {
     line_start: number;
     line_end: number;
     quoted_text: string;
-  }) => {
-    if (!detail) return;
+    markdown_content: string;
+  }): Promise<boolean> => {
+    if (!detail) return false;
     const targetBoardId = activeBoardId || detail.boards[0]?.id;
     if (!targetBoardId) {
       showToast('Crea una pizarra primero para enlazar citaciones', 'warning');
-      return;
+      return false;
     }
     try {
+      const { markdown_content: markdownWithCitation, ...citationPayload } = payload;
       const created = await api.createWriteupCitation(detail.id, {
         board_id: targetBoardId,
-        ...payload,
+        ...citationPayload,
       });
       setDetail((prev) => (prev ? { ...prev, citations: [...prev.citations, created] } : prev));
-      await handleSaveWriteup(false);
+      const saved = await handleSaveWriteup(false, markdownWithCitation);
+      if (!saved) {
+        try {
+          await api.deleteWriteupCitation(detail.id, created.id);
+          setDetail((prev) => prev ? { ...prev, citations: prev.citations.filter((citation) => citation.id !== created.id) } : prev);
+        } catch {
+          showToast('La cita quedó creada, pero no se guardó el informe. Revisa la pizarra antes de volver a intentarlo.', 'warning');
+        }
+        return false;
+      }
       if (mode === 'markdown' && typeof window !== 'undefined' && window.innerWidth >= 1280) {
         setMode('dual');
       }
       showToast(`Cita #${created.anchor_id} añadida a la pizarra`, 'success');
+      return true;
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'No se pudo crear la citación', 'error');
+      return false;
     }
   };
 
@@ -549,15 +638,15 @@ export const WriteupsView: React.FC = () => {
 
   const handleCloneWriteup = async () => {
     if (!detail) return;
-    if (dirty) await handleSaveWriteup(false);
+    if (dirty && !(await handleSaveWriteup(false))) return;
     try {
       const cloned = await api.cloneWriteup(detail.id);
       setSelectedId(cloned.id);
       await loadList();
       await loadDetail(cloned.id);
-      showToast(`Writeup clonado: ${cloned.title}`, 'success');
+      showToast(`Informe duplicado: ${cloned.title}`, 'success');
     } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Error clonando writeup', 'error');
+      showToast(err instanceof Error ? err.message : 'Error al duplicar el informe', 'error');
     }
   };
 
@@ -570,7 +659,7 @@ export const WriteupsView: React.FC = () => {
     rendered_diagrams?: Record<string, string>;
   }) => {
     if (!detail) return undefined;
-    if (dirty) await handleSaveWriteup(false);
+    if (dirty && !(await handleSaveWriteup(false))) return undefined;
     const { blob, filename, sha256 } = await api.exportWriteup(detail.id, opts);
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -589,7 +678,7 @@ export const WriteupsView: React.FC = () => {
         <Shield className="w-12 h-12 text-indigo-400 mb-3" />
         <h2 className="text-xl font-bold text-white mb-2">Bóveda bloqueada</h2>
         <p className="text-sm text-slate-400 max-w-md mb-5">
-          Los writeups, diagramas y evidencias multimedia se cifran con tu llave maestra AES-256-GCM. Desbloquea la bóveda para continuar.
+          Tus informes, diagramas y evidencias se guardan protegidos. Desbloquea la bóveda para continuar.
         </p>
         <button
           type="button"
@@ -617,7 +706,7 @@ export const WriteupsView: React.FC = () => {
       {showList && (
         <button
           type="button"
-          aria-label="Cerrar lista de writeups"
+          aria-label="Cerrar lista de informes"
           onClick={() => setShowList(false)}
           className="fixed inset-0 z-30 bg-black/60 backdrop-blur-[1px] lg:hidden"
         />
@@ -630,7 +719,7 @@ export const WriteupsView: React.FC = () => {
             <div className="flex items-center justify-between gap-2">
               <h2 className="text-sm font-bold text-white flex items-center gap-2">
                 <BookOpen className="w-4 h-4 text-indigo-400" />
-                Writeups ({items.length})
+                Informes ({items.length})
               </h2>
               <div className="flex items-center gap-1">
                 <button
@@ -657,6 +746,7 @@ export const WriteupsView: React.FC = () => {
               <input
                 type="text"
                 value={searchQuery}
+                maxLength={120}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Buscar…"
                 className="w-full pl-8 pr-2.5 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-xs text-slate-100"
@@ -682,7 +772,7 @@ export const WriteupsView: React.FC = () => {
               <p className="text-xs text-slate-400 p-3">Cargando…</p>
             ) : items.length === 0 ? (
               <div className="text-center p-4 text-xs text-slate-400 space-y-2">
-                <p>Sin writeups registrados.</p>
+                <p>Aún no hay informes.</p>
                 <button
                   type="button"
                   onClick={handleCreateWriteup}
@@ -730,7 +820,7 @@ export const WriteupsView: React.FC = () => {
         {!detail ? (
           <div className="flex-1 flex flex-col items-center justify-center text-slate-400 p-6 text-center gap-3">
             <BookOpen className="w-10 h-10 text-slate-600" />
-            <p className="text-sm">Selecciona un writeup o crea uno nuevo.</p>
+            <p className="text-sm">Selecciona un informe o crea uno nuevo.</p>
             <div className="flex flex-wrap items-center justify-center gap-2">
               <button
                 type="button"
@@ -746,7 +836,7 @@ export const WriteupsView: React.FC = () => {
                 className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-1.5"
               >
                 <Plus className="w-4 h-4" />
-                Nuevo writeup
+                Nuevo informe
               </button>
             </div>
           </div>
@@ -772,8 +862,9 @@ export const WriteupsView: React.FC = () => {
                     setTitle(e.target.value);
                     setDirty(true);
                   }}
-                  aria-label="Título del writeup"
-                  className="flex-1 min-w-[150px] bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-sm font-bold text-white"
+                  aria-label="Título del informe"
+                  maxLength={MAX_REPORT_TITLE_LENGTH}
+                  className="flex-1 min-w-[120px] max-w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-sm font-bold text-white"
                 />
 
                 <select
@@ -813,13 +904,13 @@ export const WriteupsView: React.FC = () => {
                   className={`px-2 py-1.5 rounded-lg text-xs flex items-center gap-1 border ${
                     showMetadata ? 'bg-indigo-600/20 border-indigo-500/40 text-indigo-200' : 'bg-slate-800 border-slate-700 text-slate-300'
                   }`}
-                  title="Mostrar/ocultar metadatos técnicos y CRM"
+                  title="Mostrar u ocultar detalles del informe y sus relaciones"
                 >
                   <SlidersHorizontal className="w-3.5 h-3.5" />
-                  <span className="hidden md:inline">Metadatos</span>
+                    <span className="hidden md:inline">Detalles</span>
                 </button>
 
-                <div className="flex items-center gap-1 ml-auto">
+                <div className="flex max-w-full flex-wrap items-center justify-end gap-1 ml-auto">
                   {staleCount > 0 && (
                     <span className="px-1.5 py-1 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[11px] flex items-center gap-1" title="Cita(s) desactualizada(s)">
                       <AlertTriangle className="w-3.5 h-3.5" />
@@ -834,7 +925,7 @@ export const WriteupsView: React.FC = () => {
                     className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 ${
                       dirty ? 'bg-indigo-600 hover:bg-indigo-500 text-white' : 'bg-slate-800 hover:bg-slate-700 text-slate-200'
                     }`}
-                    title="Guardar cambios cifrados"
+                    title="Guardar cambios protegidos"
                   >
                     <Save className="w-3.5 h-3.5" />
                     <span>{saving ? '…' : dirty ? 'Guardar*' : 'Guardado'}</span>
@@ -844,29 +935,29 @@ export const WriteupsView: React.FC = () => {
                     type="button"
                     onClick={() => void handleSaveWriteup(true)}
                     className="p-1.5 sm:px-2 sm:py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs flex items-center gap-1"
-                    title="Guardar punto de restauración histórico"
-                    aria-label="Snapshot"
+                    title="Guardar una revisión para poder restaurarla"
+                    aria-label="Guardar revisión"
                   >
                     <History className="w-3.5 h-3.5" />
-                    <span className="hidden xl:inline">Snapshot</span>
+                    <span className="hidden xl:inline">Revisión</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => void handleCloneWriteup()}
                     className="p-1.5 sm:px-2 sm:py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs flex items-center gap-1"
-                    title="Clonar writeup (hallazgos, markdown y pizarras)"
-                    aria-label="Clonar writeup"
+                    title="Duplicar informe con sus hallazgos, texto y pizarras"
+                    aria-label="Duplicar informe"
                   >
                     <CopyPlus className="w-3.5 h-3.5 text-cyan-300" />
-                    <span className="hidden xl:inline">Clonar</span>
+                    <span className="hidden xl:inline">Duplicar</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => setShowExportModal(true)}
                     className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1"
-                    title="Exportar reporte multiformato"
+                    title="Exportar el informe"
                   >
                     <Download className="w-3.5 h-3.5" />
                     <span className="hidden sm:inline">Exportar</span>
@@ -876,8 +967,8 @@ export const WriteupsView: React.FC = () => {
                     type="button"
                     onClick={handleDeleteWriteup}
                     className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-950/40"
-                    title="Eliminar writeup"
-                    aria-label="Eliminar writeup"
+                    title="Eliminar informe"
+                    aria-label="Eliminar informe"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
@@ -909,36 +1000,43 @@ export const WriteupsView: React.FC = () => {
                       setDirty(true);
                     }}
                     placeholder="CVSS (0-10)"
+                    aria-label="Puntaje de riesgo CVSS, de 0 a 10"
                     className="bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-slate-200"
                   />
                   <input
                     type="text"
                     value={cweId}
+                    maxLength={120}
                     onChange={(e) => {
                       setCweId(e.target.value);
                       setDirty(true);
                     }}
-                    placeholder="CWE-89"
+                    placeholder="Identificador CWE"
+                    aria-label="Identificador CWE"
                     className="bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-slate-200"
                   />
                   <input
                     type="text"
                     value={cveId}
+                    maxLength={32}
                     onChange={(e) => {
                       setCveId(e.target.value);
                       setDirty(true);
                     }}
-                    placeholder="CVE-2026-XXXX"
+                    placeholder="Identificador CVE"
+                    aria-label="Identificador CVE"
                     className="bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-slate-200"
                   />
                   <input
                     type="text"
                     value={targetScope}
+                    maxLength={500}
                     onChange={(e) => {
                       setTargetScope(e.target.value);
                       setDirty(true);
                     }}
-                    placeholder="Alcance / Target URL"
+                    placeholder="Alcance o dirección del sitio"
+                    aria-label="Alcance o dirección del sitio"
                     className="bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-slate-200"
                   />
                   <select
@@ -976,7 +1074,7 @@ export const WriteupsView: React.FC = () => {
                   {[
                     { id: 'markdown', label: 'Editor', icon: FileCode2 },
                     { id: 'whiteboard', label: 'Pizarra', icon: Layers },
-                    { id: 'dual', label: 'Dual', icon: Columns2 },
+                    { id: 'dual', label: 'Dos vistas', icon: Columns2 },
                     { id: 'findings', label: `Hallazgos (${findings.length})`, icon: Shield },
                     { id: 'assets', label: `Medios (${detail.assets.length})`, icon: ImageIcon },
                   ].map((tab) => {
@@ -1065,7 +1163,7 @@ export const WriteupsView: React.FC = () => {
                   onInsertBoardIntoMarkdown={(bId, bTitle) => {
                     setMarkdown((prev) => `${prev}\n![${bTitle}](board://${bId})\n`);
                     setDirty(true);
-                    showToast('Diagrama insertado en Markdown', 'success');
+                      showToast('Diagrama añadido al informe', 'success');
                   }}
                 />
               )}
@@ -1109,7 +1207,7 @@ export const WriteupsView: React.FC = () => {
                       onInsertBoardIntoMarkdown={(bId, bTitle) => {
                         setMarkdown((prev) => `${prev}\n![${bTitle}](board://${bId})\n`);
                         setDirty(true);
-                        showToast('Diagrama insertado en Markdown', 'success');
+                        showToast('Diagrama añadido al informe', 'success');
                       }}
                     />
                   )}
@@ -1159,11 +1257,12 @@ export const WriteupsView: React.FC = () => {
                     <textarea
                       rows={3}
                       value={execSummary}
+                      maxLength={12000}
                       onChange={(e) => {
                         setExecSummary(e.target.value);
                         setDirty(true);
                       }}
-                      placeholder="Resumen de negocio y conclusiones principales del engagement…"
+                      placeholder="Resumen del proyecto y sus conclusiones principales…"
                       className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-xs text-slate-100"
                     />
                   </div>
@@ -1172,6 +1271,7 @@ export const WriteupsView: React.FC = () => {
                     <h3 className="text-sm font-semibold text-white">Hallazgos estructurados</h3>
                     <button
                       type="button"
+                      disabled={findings.length >= MAX_FINDINGS_COUNT}
                       onClick={() => {
                         setFindings((prev) => [
                           ...prev,
@@ -1190,7 +1290,8 @@ export const WriteupsView: React.FC = () => {
                         ]);
                         setDirty(true);
                       }}
-                      className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium flex items-center gap-1"
+                      className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                      title={`Máximo ${MAX_FINDINGS_COUNT} hallazgos por informe`}
                     >
                       <Plus className="w-3.5 h-3.5" />
                       Agregar
@@ -1204,6 +1305,7 @@ export const WriteupsView: React.FC = () => {
                           <input
                             type="text"
                             value={f.id}
+                            maxLength={80}
                             onChange={(e) => {
                               const next = [...findings];
                               next[idx] = { ...f, id: e.target.value };
@@ -1216,6 +1318,7 @@ export const WriteupsView: React.FC = () => {
                           <input
                             type="text"
                             value={f.title}
+                            maxLength={240}
                             onChange={(e) => {
                               const next = [...findings];
                               next[idx] = { ...f, title: e.target.value };
@@ -1336,6 +1439,7 @@ export const WriteupsView: React.FC = () => {
                           <input
                             type="text"
                             value={f.cwe_id || ''}
+                            maxLength={160}
                             onChange={(e) => {
                               const next = [...findings];
                               next[idx] = { ...f, cwe_id: e.target.value };
@@ -1348,6 +1452,7 @@ export const WriteupsView: React.FC = () => {
                           <input
                             type="text"
                             value={f.affected_target || ''}
+                            maxLength={500}
                             onChange={(e) => {
                               const next = [...findings];
                               next[idx] = { ...f, affected_target: e.target.value };
@@ -1426,6 +1531,7 @@ export const WriteupsView: React.FC = () => {
                           <textarea
                             rows={2}
                             value={f.summary}
+                            maxLength={12000}
                             onChange={(e) => {
                               const next = [...findings];
                               next[idx] = { ...f, summary: e.target.value };
@@ -1438,6 +1544,7 @@ export const WriteupsView: React.FC = () => {
                           <textarea
                             rows={2}
                             value={f.remediation}
+                            maxLength={12000}
                             onChange={(e) => {
                               const next = [...findings];
                               next[idx] = { ...f, remediation: e.target.value };
@@ -1511,7 +1618,7 @@ export const WriteupsView: React.FC = () => {
                                 type="button"
                                 onClick={() => setLightboxAsset(asset)}
                                 className="shrink-0 rounded overflow-hidden border border-slate-700 hover:border-indigo-400 transition-colors"
-                                title="Inspeccionar evidencia y metadatos SHA-256 / EXIF"
+                        title="Ampliar evidencia"
                               >
                                 {isVideo ? (
                                   <video src={assetUrls[asset.id]} muted loop playsInline className="w-20 h-14 object-cover bg-black" />
@@ -1530,7 +1637,7 @@ export const WriteupsView: React.FC = () => {
                               type="button"
                               onClick={() => setLightboxAsset(asset)}
                               className="p-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200"
-                              title="Ver en Lightbox (SHA-256 / EXIF)"
+                              title="Ampliar evidencia"
                               aria-label="Inspeccionar evidencia"
                             >
                               <Maximize2 className="w-3.5 h-3.5" />
@@ -1552,10 +1659,10 @@ export const WriteupsView: React.FC = () => {
                               onClick={() => {
                                 setMarkdown((prev) => `${prev}\n![${asset.filename}](asset://${asset.id})\n`);
                                 setDirty(true);
-                                showToast('Referencia insertada en Markdown', 'success');
+                                showToast('Referencia añadida al informe', 'success');
                               }}
                               className="p-1.5 rounded bg-slate-800 hover:bg-slate-700 text-indigo-300"
-                              title="Insertar en Markdown"
+                              title="Añadir al informe"
                             >
                               <Copy className="w-3.5 h-3.5" />
                             </button>
@@ -1578,7 +1685,7 @@ export const WriteupsView: React.FC = () => {
                     {/* Citations & Stale Diff Panel */}
                     <div className="space-y-2">
                       <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-                        Citaciones texto ↔ pizarra ({detail.citations.length})
+                        Citas del informe en la pizarra ({detail.citations.length})
                       </h3>
                       {detail.citations.length === 0 ? (
                         <p className="text-xs text-slate-500">Selecciona texto en el editor y pulsa Citar para enlazarlo.</p>
@@ -1610,7 +1717,7 @@ export const WriteupsView: React.FC = () => {
                                     className="px-2 py-0.5 rounded bg-amber-500/20 hover:bg-amber-500/35 border border-amber-500/30 text-amber-200 text-[11px] flex items-center gap-1"
                                   >
                                     <RefreshCw className="w-3 h-3" />
-                                    Re-vincular
+                                    Vincular de nuevo
                                   </button>
                                 )}
                               </div>
@@ -1624,7 +1731,7 @@ export const WriteupsView: React.FC = () => {
                     <div className="space-y-2">
                       <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">Historial de revisiones</h3>
                       {revisions.length === 0 ? (
-                        <p className="text-xs text-slate-500">Pulsa Snapshot para guardar un punto de restauración.</p>
+                        <p className="text-xs text-slate-400">Guarda una revisión desde la parte superior para poder restaurarla después.</p>
                       ) : (
                         revisions.map((rev) => (
                           <div key={rev.id} className="flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-xl bg-slate-950/70 border border-slate-800 text-xs">
@@ -1666,7 +1773,7 @@ export const WriteupsView: React.FC = () => {
                         <EmptyState
                           icon={Download}
                           title="Sin exportaciones registradas"
-                          description="Exporta el reporte para registrar su auditoría SHA-256."
+                          description="Exporta el informe y muestra un código de verificación."
                           className="p-4"
                         />
                       ) : (
@@ -1691,7 +1798,7 @@ export const WriteupsView: React.FC = () => {
       </section>
 
       {showExportModal && detail && (
-        <WriteupExportModal
+                  <WriteupExportModal
           writeup={detail}
           onClose={() => setShowExportModal(false)}
           onExport={handleExport}
@@ -1701,33 +1808,35 @@ export const WriteupsView: React.FC = () => {
       {/* Evidence Image / Video Lightbox Modal */}
       {lightboxAsset && (
         <div
-          className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4"
+          className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-sm flex items-start sm:items-center justify-center overflow-y-auto overscroll-contain p-2 sm:p-4"
           onClick={() => setLightboxAsset(null)}
         >
           <div
+            ref={modalDialogRef}
             role="dialog"
             aria-modal="true"
             aria-labelledby="lightbox-modal-title"
-            className="w-full max-w-3xl max-h-[90vh] flex flex-col bg-slate-900 border border-slate-700 rounded-2xl overflow-hidden shadow-2xl"
+            className="my-auto w-full max-w-3xl max-h-[calc(100dvh-1rem)] flex flex-col bg-slate-900 border border-slate-700 rounded-2xl overflow-hidden shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800 bg-slate-900/95">
               <div className="min-w-0">
                 <h3 id="lightbox-modal-title" className="text-sm font-semibold text-white truncate">{lightboxAsset.filename}</h3>
                 <p className="text-[11px] text-slate-400 font-mono truncate">
-                  {lightboxAsset.mime_type} · {lightboxAsset.width}x{lightboxAsset.height}px · SHA-256: {lightboxAsset.sha256.slice(0, 16)}…
+                  {lightboxAsset.mime_type} · {lightboxAsset.width}×{lightboxAsset.height}px · Código de verificación: {lightboxAsset.sha256.slice(0, 16)}…
                 </p>
               </div>
               <button
+                ref={modalCloseRef}
                 type="button"
                 onClick={() => setLightboxAsset(null)}
-                className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300"
+                className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
                 aria-label="Cerrar visor"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
-            <div className="flex-1 overflow-auto p-4 bg-slate-950 flex items-center justify-center min-h-[220px]">
+            <div className="flex-1 overflow-auto p-3 sm:p-4 bg-slate-950 flex items-center justify-center min-h-[120px] sm:min-h-[220px]">
               {assetUrls[lightboxAsset.id] ? (
                 lightboxAsset.mime_type.toLowerCase().startsWith('video/') ? (
                   <video src={assetUrls[lightboxAsset.id]} controls autoPlay loop muted className="max-h-[60vh] rounded-lg border border-slate-800" />
@@ -1735,31 +1844,31 @@ export const WriteupsView: React.FC = () => {
                   <img src={assetUrls[lightboxAsset.id]} alt={lightboxAsset.filename} className="max-h-[60vh] object-contain rounded-lg border border-slate-800" />
                 )
               ) : failedAssetIds[lightboxAsset.id] ? (
-                <p className="text-xs text-rose-400">No se pudo descifrar o cargar esta evidencia multimedia.</p>
+                <p className="text-xs text-rose-300">No se pudo abrir esta evidencia.</p>
               ) : (
-                <p className="text-xs text-slate-400">Descifrando evidencia…</p>
+                <p className="text-xs text-slate-400">Abriendo evidencia…</p>
               )}
             </div>
             <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-t border-slate-800 bg-slate-900 text-xs">
               <div className="flex flex-wrap items-center gap-2 text-[11px]">
                 <span className={`px-2 py-0.5 rounded border ${lightboxAsset.exif_stripped ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300' : 'bg-slate-800 border-slate-700 text-slate-300'}`}>
-                  {lightboxAsset.exif_stripped ? 'EXIF / Metadatos eliminados' : 'Sin metadatos EXIF'}
+                  {lightboxAsset.exif_stripped ? 'Datos de imagen eliminados' : 'Sin datos adicionales de imagen'}
                 </span>
                 <span className="text-slate-400 tabular-nums">
                   {(lightboxAsset.original_size_bytes / 1024).toFixed(1)} KB → {(lightboxAsset.optimized_size_bytes / 1024).toFixed(1)} KB
                 </span>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => {
                     void navigator.clipboard?.writeText(lightboxAsset.sha256);
-                    showToast('Hash SHA-256 copiado', 'info');
+                  showToast('Código de verificación copiado', 'info');
                   }}
-                  className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center gap-1"
+                  className="min-h-11 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-100 flex items-center gap-1"
                 >
                   <Copy className="w-3.5 h-3.5" />
-                  Copiar SHA-256
+                  Copiar código de verificación
                 </button>
                 <button
                   type="button"
@@ -1767,11 +1876,11 @@ export const WriteupsView: React.FC = () => {
                     setMarkdown((prev) => `${prev}\n![${lightboxAsset.filename}](asset://${lightboxAsset.id})\n`);
                     setDirty(true);
                     setLightboxAsset(null);
-                    showToast('Evidencia insertada en Markdown', 'success');
+                    showToast('Evidencia añadida al informe', 'success');
                   }}
-                  className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium"
+                  className="min-h-11 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium"
                 >
-                  Insertar en .md
+                  Añadir al informe
                 </button>
               </div>
             </div>
@@ -1782,27 +1891,29 @@ export const WriteupsView: React.FC = () => {
       {/* Line-by-Line Revision Diff Modal */}
       {diffRevision && detail && (
         <div
-          className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4"
+          className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-sm flex items-start sm:items-center justify-center overflow-y-auto overscroll-contain p-2 sm:p-4"
           onClick={() => setDiffRevision(null)}
         >
           <div
+            ref={modalDialogRef}
             role="dialog"
             aria-modal="true"
             aria-labelledby="diff-modal-title"
-            className="w-full max-w-3xl max-h-[88vh] flex flex-col bg-slate-900 border border-slate-700 rounded-2xl overflow-hidden shadow-2xl"
+            className="my-auto w-full max-w-3xl max-h-[calc(100dvh-1rem)] flex flex-col bg-slate-900 border border-slate-700 rounded-2xl overflow-hidden shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800">
               <div>
                 <h3 id="diff-modal-title" className="text-sm font-semibold text-white">
-                  Comparación v{diffRevision.revision_number} vs borrador actual
+                  Revisión v{diffRevision.revision_number} frente al borrador actual
                 </h3>
                 <p className="text-[11px] text-slate-400">
-                  Snapshot del {new Date(diffRevision.created_at).toLocaleString(systemLocale || 'es-MX')}
+                  Guardada el {new Date(diffRevision.created_at).toLocaleString(systemLocale || 'es-MX')}
                 </p>
               </div>
               <div className="flex items-center gap-2">
                 <button
+                  ref={modalCloseRef}
                   type="button"
                   onClick={() => void handleRestoreRevision(diffRevision, true)}
                   className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium flex items-center gap-1"
@@ -1813,7 +1924,7 @@ export const WriteupsView: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setDiffRevision(null)}
-                  className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300"
+                  className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
                   aria-label="Cerrar comparación"
                 >
                   <X className="w-4 h-4" />

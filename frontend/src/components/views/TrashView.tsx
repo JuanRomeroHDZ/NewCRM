@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   Trash2, RotateCcw, AlertOctagon, Lock, Clock, AlertTriangle, Search, X
 } from 'lucide-react';
@@ -50,9 +50,17 @@ export const TrashView: React.FC = () => {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
+  const loadGeneration = useRef(0);
 
   const loadData = useCallback(async () => {
+    const generation = ++loadGeneration.current;
     if (!isUnlocked) {
+      setTrashItems([]);
+      setAuditLogs([]);
+      setRetentionDays(0);
+      setSearchQuery('');
+      setTypeFilter('all');
+      setLoadError(null);
       setLoading(false);
       return;
     }
@@ -64,20 +72,25 @@ export const TrashView: React.FC = () => {
         api.getAuditLogs(60),
         api.getVaultStatus().catch(() => null),
       ]);
+      if (generation !== loadGeneration.current) return;
       setTrashItems(tList);
       setAuditLogs(aList);
       if (vStatus && typeof vStatus.trash_retention_days === 'number') {
         setRetentionDays(vStatus.trash_retention_days);
       }
     } catch (err: any) {
+      if (generation !== loadGeneration.current) return;
       setLoadError(err?.message || 'No se pudo cargar la papelera.');
     } finally {
-      setLoading(false);
+      if (generation === loadGeneration.current) setLoading(false);
     }
   }, [isUnlocked]);
 
   useEffect(() => {
-    loadData();
+    void loadData();
+    return () => {
+      loadGeneration.current += 1;
+    };
   }, [loadData, dataVersion]);
 
   const handleRetentionChange = async (newDays: number) => {
@@ -86,8 +99,8 @@ export const TrashView: React.FC = () => {
       setRetentionDays(newDays);
       showToast(
         newDays === 0
-          ? 'Política de Papelera fijada en Conservación Indefinida (Manual).'
-          : `Auto-Purga de Papelera configurada a ${newDays} días.`,
+          ? 'Los elementos eliminados se conservarán hasta que los borres.'
+          : `Los elementos eliminados se borrarán después de ${newDays} días.`,
         'info'
       );
       triggerDataReload();
@@ -99,7 +112,7 @@ export const TrashView: React.FC = () => {
   const handleRestore = async (type: string, id: string) => {
     try {
       await api.restoreItem(type, id);
-      showToast('Elemento restaurado atómicamente con sus relaciones intactas.', 'success');
+      showToast('Elemento restaurado junto con sus relaciones.', 'success');
       triggerDataReload();
     } catch (err: any) {
       showToast(err.message, 'error');
@@ -186,7 +199,7 @@ export const TrashView: React.FC = () => {
           </h2>
           <InfoTooltip
             title="Conservación Segura"
-            content="Por defecto conserva los elementos eliminados hasta que los borres manualmente, o puedes programar que se vacíen automáticamente a los 30, 60 o 90 días."
+            content="Los elementos eliminados se conservan hasta que decidas borrarlos, o puedes programar su eliminación en 30, 60 o 90 días."
           />
         </div>
 

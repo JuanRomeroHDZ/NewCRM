@@ -49,7 +49,7 @@ const navGroups: NavGroup[] = [
     items: [
       { id: 'emails', label: 'Correos principales', icon: Mail, requiresVault: true },
       { id: 'platforms', label: 'Cuentas y servicios', icon: Globe },
-      { id: 'graph', label: 'Mapa de conexiones', icon: Network },
+      { id: 'graph', label: 'Mapa de conexiones', icon: Network, requiresVault: true },
     ],
   },
   {
@@ -64,7 +64,7 @@ const navGroups: NavGroup[] = [
     icon: ShieldCheck,
     items: [
       { id: 'passwords', label: 'Contraseñas y notas', icon: Key, requiresVault: true },
-      { id: 'writeups', label: 'Writeups y pizarra', icon: BookOpen, requiresVault: true },
+      { id: 'writeups', label: 'Informes de seguridad', icon: BookOpen, requiresVault: true },
       { id: 'security_audit', label: 'Auditoría de seguridad', icon: ShieldCheck, requiresVault: true },
       { id: 'audit_logs', label: 'Historial de actividad', icon: FileText, requiresVault: true },
       { id: 'trash', label: 'Papelera', icon: Trash2, requiresVault: true },
@@ -142,6 +142,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onCloseMobile })
   return (
     <aside
       ref={asideRef}
+      id="primary-navigation"
       aria-label="Navegación principal"
       aria-hidden={!isDesktop && !isMobileOpen ? true : undefined}
       onKeyDown={handleMobileTab}
