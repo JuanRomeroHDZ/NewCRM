@@ -488,7 +488,7 @@ export const api = {
   updateUser: (
     userId: string,
     payload: { full_name?: string; role?: CoreUserRole; is_active?: boolean; unlock?: boolean }
-  ) => request<CoreUser>(`/users/${userId}`, { method: 'PUT', body: JSON.stringify(payload) }),
+  ) => request<CoreUser>(`/users/${userId}`, { method: 'PATCH', body: JSON.stringify(payload) }),
 
   // Pentest Writeups & Whiteboards
   listWriteups: (filters?: { status?: string; severity?: string; prospect_id?: string; project_id?: string; q?: string }) => {

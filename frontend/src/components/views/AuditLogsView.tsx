@@ -293,12 +293,12 @@ export const AuditLogsView: React.FC = () => {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-obsidian-border bg-black/20 text-[11px] font-mono uppercase tracking-wider text-white/40">
-                  <th className="py-3 px-4">Fecha & Hora (Local)</th>
-                  <th className="py-3 px-4">Acción</th>
-                  <th className="py-3 px-4">Tipo Entidad</th>
-                  <th className="py-3 px-4">Elemento Afectado</th>
-                  <th className="py-3 px-4">Detalles</th>
-                  <th className="py-3 px-4">IP / Origen</th>
+                  <th className="py-3 px-2 xl:px-3 2xl:px-4">Fecha & Hora (Local)</th>
+                  <th className="py-3 px-2 xl:px-3 2xl:px-4">Acción</th>
+                  <th className="py-3 px-2 xl:px-3 2xl:px-4">Tipo Entidad</th>
+                  <th className="py-3 px-2 xl:px-3 2xl:px-4">Elemento Afectado</th>
+                  <th className="py-3 px-2 xl:px-3 2xl:px-4">Detalles</th>
+                  <th className="py-3 px-2 xl:px-3 2xl:px-4">IP / Origen</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-obsidian-border text-xs font-mono">
@@ -330,26 +330,26 @@ export const AuditLogsView: React.FC = () => {
                 ) : (
                   filteredLogs.map((log) => (
                     <tr key={log.id} className="hover:bg-white/[0.02] transition-colors">
-                      <td className="py-3 px-4 text-white/50 whitespace-nowrap">
+                      <td className="py-3 px-2 text-white/50 whitespace-nowrap xl:px-3 2xl:px-4">
                         {new Date(log.timestamp).toLocaleString(locale)}
                       </td>
-                      <td className="py-3 px-4 whitespace-nowrap">
+                      <td className="py-3 px-2 whitespace-nowrap xl:px-3 2xl:px-4">
                         {getActionBadge(log.action)}
                       </td>
-                      <td className="py-3 px-4 text-white/70 capitalize whitespace-nowrap">
+                      <td className="py-3 px-2 text-white/70 capitalize whitespace-nowrap xl:px-3 2xl:px-4">
                         {log.entity_type || '—'}
                       </td>
-                      <td className="py-3 px-4 text-white font-medium max-w-[200px] truncate" title={log.entity_name || log.entity_id || ''}>
+                      <td className="py-3 px-2 text-white font-medium max-w-[200px] truncate xl:px-3 2xl:px-4" title={log.entity_name || log.entity_id || ''}>
                         {log.entity_name || log.entity_id ? (
                           <span className="text-indigo-300">{log.entity_name || log.entity_id}</span>
                         ) : (
                           <span className="text-white/30">—</span>
                         )}
                       </td>
-                      <td className="py-3 px-4 text-white/70 max-w-xs truncate" title={log.details || ''}>
+                      <td className="py-3 px-2 text-white/70 max-w-xs truncate xl:px-3 2xl:px-4" title={log.details || ''}>
                         {log.details || '—'}
                       </td>
-                      <td className="py-3 px-4 text-white/40 text-[11px] whitespace-nowrap">
+                      <td className="py-3 px-2 text-white/40 text-[11px] whitespace-nowrap xl:px-3 2xl:px-4">
                         {log.ip_address || 'Registro local'}
                       </td>
                     </tr>

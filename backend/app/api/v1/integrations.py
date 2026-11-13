@@ -1,5 +1,6 @@
+from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -12,14 +13,16 @@ router = APIRouter(prefix="/integrations", tags=["Integrations & Real World Test
 
 
 class LeaseAcquireRequest(BaseModel):
-    resource_name: str = Field("cloud_backup_google_drive", min_length=2, max_length=64, pattern=r"^[a-zA-Z0-9._-]+$")
-    server_name: str = Field(..., min_length=2, max_length=64, pattern=r"^[a-zA-Z0-9._-]+$")
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    resource_name: Literal["cloud_backup_google_drive"] = "cloud_backup_google_drive"
     duration_seconds: int = Field(300, ge=30, le=86400)
 
 
 class LeaseReleaseRequest(BaseModel):
-    resource_name: str = Field("cloud_backup_google_drive", min_length=2, max_length=64, pattern=r"^[a-zA-Z0-9._-]+$")
-    server_name: str = Field(..., min_length=2, max_length=64, pattern=r"^[a-zA-Z0-9._-]+$")
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    resource_name: Literal["cloud_backup_google_drive"] = "cloud_backup_google_drive"
 
 
 @router.get("/status")
@@ -40,7 +43,7 @@ async def acquire_cloud_lease(
         lease = await CloudLeaseService.acquire_lease(
             session=db,
             resource_name=req.resource_name,
-            server_name=req.server_name,
+            server_name=settings.SERVER_NAME,
             duration_seconds=req.duration_seconds
         )
         return {
@@ -63,9 +66,9 @@ async def release_cloud_lease(
     released = await CloudLeaseService.release_lease(
         session=db,
         resource_name=req.resource_name,
-        server_name=req.server_name
+        server_name=settings.SERVER_NAME
     )
-    return {"released": released, "resource_name": req.resource_name, "server_name": req.server_name}
+    return {"released": released, "resource_name": req.resource_name, "server_name": settings.SERVER_NAME}
 
 
 @router.get("/map-tiles")

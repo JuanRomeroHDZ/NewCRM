@@ -1,5 +1,6 @@
 import email
 from email import policy
+import math
 import re
 from urllib.parse import quote
 from datetime import datetime, timezone
@@ -13,6 +14,11 @@ from app.models.communications import (
 )
 from app.models.core import ActivityEvent
 from app.services.workshop_sanitizer import sanitize_svg_content
+
+MAX_TEMPLATE_RENDERED_CHARS = 200_000
+MAX_TEMPLATE_VARIABLES = 100
+MAX_TEMPLATE_SOURCE_CHARS = 50_000
+MAX_TEMPLATE_VARIABLE_CHARS = 5_000
 
 def utc_now() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
@@ -57,12 +63,48 @@ class CommunicationsService:
 
     @staticmethod
     def render_template(template_str: str, variables: dict) -> str:
-        """Renders double-bracket variables in template (e.g. {{nombre}})."""
-        rendered = template_str
+        """Renders bounded scalar variables without interpreting replacement text."""
+        if len(template_str) > MAX_TEMPLATE_SOURCE_CHARS:
+            raise ValueError("La plantilla supera el límite permitido.")
+        if not isinstance(variables, dict) or len(variables) > MAX_TEMPLATE_VARIABLES:
+            raise ValueError("La plantilla supera el límite de variables permitidas.")
+
+        normalized_variables: dict[str, str] = {}
         for key, value in variables.items():
-            pattern = re.compile(r"\{\{\s*" + re.escape(key) + r"\s*\}\}", re.IGNORECASE)
-            rendered = pattern.sub(str(value), rendered)
-        return rendered
+            if not isinstance(key, str) or not key.strip() or len(key) > 64:
+                raise ValueError("Cada nombre de variable debe tener entre 1 y 64 caracteres.")
+            normalized_key = key.strip().casefold()
+            if normalized_key in normalized_variables:
+                raise ValueError("No se pueden repetir nombres de variables ignorando mayúsculas.")
+            if not (value is None or isinstance(value, (str, int, float, bool))):
+                raise ValueError("Las variables solo pueden ser texto, números o valores booleanos.")
+            if isinstance(value, float) and not math.isfinite(value):
+                raise ValueError("Las variables numéricas deben ser finitas.")
+            if isinstance(value, int) and not isinstance(value, bool) and value.bit_length() > 3322:
+                raise ValueError("El tamaño de una variable excede el límite permitido.")
+            replacement = str(value if value is not None else "")
+            if len(replacement) > MAX_TEMPLATE_VARIABLE_CHARS:
+                raise ValueError("El tamaño de las variables de plantilla excede el límite.")
+            normalized_variables[normalized_key] = replacement
+
+        placeholder = re.compile(r"\{\{\s*([^{}]+?)\s*\}\}", re.IGNORECASE)
+        parts: list[str] = []
+        source_cursor = 0
+        output_size = 0
+        for match in placeholder.finditer(template_str):
+            prefix = template_str[source_cursor:match.start()]
+            replacement = normalized_variables.get(match.group(1).strip().casefold(), match.group(0))
+            output_size += len(prefix) + len(replacement)
+            if output_size > MAX_TEMPLATE_RENDERED_CHARS:
+                raise ValueError("El resultado de la plantilla supera el límite de 200,000 caracteres.")
+            parts.extend((prefix, replacement))
+            source_cursor = match.end()
+
+        tail = template_str[source_cursor:]
+        if output_size + len(tail) > MAX_TEMPLATE_RENDERED_CHARS:
+            raise ValueError("El resultado de la plantilla supera el límite de 200,000 caracteres.")
+        parts.append(tail)
+        return "".join(parts)
 
     @staticmethod
     def generate_manual_links(recipient: str, body: str, subject: str | None = None) -> dict:

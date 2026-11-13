@@ -1,6 +1,7 @@
 from typing import Any
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query, status
-from pydantic import BaseModel, Field, field_validator
+import math
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Path, Query, status
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc
 
@@ -17,6 +18,7 @@ from app.services.communications_service import CommunicationsService
 router = APIRouter(prefix="/comms", tags=["Communications"])
 
 COMMS_WRITE_ROLES = ["owner", "business_admin", "operator", "seller"]
+MAX_EML_FILE_BYTES = 10 * 1024 * 1024
 
 
 class ManualMessageRequest(BaseModel):
@@ -46,8 +48,10 @@ class ManualLinksRequest(BaseModel):
 
 
 class TemplateRenderRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     template_str: str = Field(..., min_length=1, max_length=50000)
-    variables: dict[str, Any] = Field(default_factory=dict)
+    variables: dict[str, Any] = Field(default_factory=dict, max_length=100)
 
     @field_validator("variables")
     @classmethod
@@ -55,7 +59,23 @@ class TemplateRenderRequest(BaseModel):
         if len(value) > 100:
             raise ValueError("Máximo 100 variables por plantilla.")
         for key, item in value.items():
-            if len(str(key)) > 64 or len(str(item)) > 5000:
+            if not key.strip() or len(key) > 64:
+                raise ValueError("Cada nombre de variable debe tener entre 1 y 64 caracteres.")
+            if isinstance(item, str):
+                item_length = len(item)
+            elif isinstance(item, bool) or item is None:
+                item_length = 1
+            elif isinstance(item, int):
+                if item.bit_length() > 3322:
+                    raise ValueError("El tamaño de una variable excede el límite permitido.")
+                item_length = len(str(item))
+            elif isinstance(item, float):
+                if not math.isfinite(item):
+                    raise ValueError("Las variables numéricas deben ser finitas.")
+                item_length = len(str(item))
+            else:
+                raise ValueError("Las variables solo pueden ser texto, números o valores booleanos.")
+            if item_length > 5000:
                 raise ValueError("El tamaño de las variables de plantilla excede el límite.")
         return value
 
@@ -83,7 +103,7 @@ async def list_threads(
 
 @router.get("/threads/{thread_id}/messages")
 async def list_thread_messages(
-    thread_id: str,
+    thread_id: str = Path(..., max_length=36),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user_from_token)
 ):
@@ -135,7 +155,10 @@ async def render_template(
     req: TemplateRenderRequest,
     current_user: User = Depends(get_current_user_from_token)
 ):
-    rendered = CommunicationsService.render_template(req.template_str, req.variables)
+    try:
+        rendered = CommunicationsService.render_template(req.template_str, req.variables)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {"rendered": rendered}
 
 
@@ -144,9 +167,9 @@ async def sanitize_eml_file(
     file: UploadFile = File(...),
     current_user: User = Depends(require_role(COMMS_WRITE_ROLES))
 ):
-    raw_content = await file.read()
-    if len(raw_content) > 10 * 1024 * 1024:
-        raise HTTPException(status_code=400, detail="El archivo excede el tamaño máximo permitido (10MB).")
+    raw_content = await file.read(MAX_EML_FILE_BYTES + 1)
+    if len(raw_content) > MAX_EML_FILE_BYTES:
+        raise HTTPException(status_code=413, detail="El archivo supera el límite permitido de 10 MB.")
     return CommunicationsService.sanitize_eml(raw_content)
 
 
@@ -178,7 +201,7 @@ async def add_do_not_contact(
 
 @router.post("/queue/{message_id}/retry")
 async def retry_queued_message(
-    message_id: str,
+    message_id: str = Path(..., max_length=36),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role(COMMS_WRITE_ROLES))
 ):

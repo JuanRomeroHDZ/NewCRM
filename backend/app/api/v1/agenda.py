@@ -1,6 +1,6 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Literal
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response, status
 from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc
@@ -11,12 +11,16 @@ from app.schemas.validators import validate_calendar_date
 from app.services.core_auth import get_current_user_from_token, require_role
 from app.models.core import User
 from app.models.agenda import AgendaEvent, OperationTask, ClientAsset, PentestEngagement, PentestFinding
+from app.models.crm_sales import Client, Sale
+from app.models import Prospect
 from app.services.agenda_service import AgendaService
 
 router = APIRouter(prefix="/agenda", tags=["Agenda & Operations"])
 
 AGENDA_WRITE_ROLES = ["owner", "business_admin", "operator", "seller"]
 PENTEST_ROLES = ["owner", "business_admin", "operator"]
+MAX_EVENT_DURATION = timedelta(days=31)
+MAX_PENTEST_WINDOW = timedelta(days=365)
 
 
 class EventCreateRequest(BaseModel):
@@ -38,8 +42,14 @@ class EventCreateRequest(BaseModel):
 
     @model_validator(mode="after")
     def check_time_order(self) -> "EventCreateRequest":
-        if self.end_time <= self.start_time:
+        try:
+            duration = self.end_time - self.start_time
+        except TypeError as exc:
+            raise ValueError("Las fechas deben usar formatos de zona horaria compatibles.") from exc
+        if duration <= timedelta(0):
             raise ValueError("La hora de término debe ser posterior a la de inicio.")
+        if duration > MAX_EVENT_DURATION:
+            raise ValueError("Un evento no puede durar más de 31 días.")
         return self
 
 
@@ -58,8 +68,14 @@ class PentestEngagementCreate(BaseModel):
 
     @model_validator(mode="after")
     def check_window_order(self) -> "PentestEngagementCreate":
-        if self.window_end <= self.window_start:
+        try:
+            duration = self.window_end - self.window_start
+        except TypeError as exc:
+            raise ValueError("Las fechas deben usar formatos de zona horaria compatibles.") from exc
+        if duration <= timedelta(0):
             raise ValueError("La fecha de término de la ventana debe ser posterior al inicio.")
+        if duration > MAX_PENTEST_WINDOW:
+            raise ValueError("La ventana autorizada no puede superar 365 días.")
         return self
 
 
@@ -105,6 +121,15 @@ async def create_event(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role(AGENDA_WRITE_ROLES))
 ):
+    related_records = (
+        (Client, req.client_id, "El cliente asociado no existe."),
+        (Prospect, req.prospect_id, "El prospecto asociado no existe."),
+        (Sale, req.sale_id, "La venta asociada no existe."),
+    )
+    for model, record_id, message in related_records:
+        if record_id and await db.get(model, record_id) is None:
+            raise HTTPException(status_code=404, detail=message)
+
     try:
         event, overlaps = await AgendaService.create_event(
             session=db,
@@ -131,7 +156,7 @@ async def create_event(
 
 @router.post("/events/{event_id}/complete")
 async def complete_event(
-    event_id: str,
+    event_id: str = Path(..., max_length=36),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role(AGENDA_WRITE_ROLES))
 ):
@@ -197,8 +222,8 @@ async def create_pentest_engagement(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role(PENTEST_ROLES))
 ):
-    if req.window_end <= req.window_start:
-        raise HTTPException(status_code=400, detail="La fecha de término de la ventana debe ser posterior al inicio.")
+    if await db.get(Client, req.client_id) is None:
+        raise HTTPException(status_code=404, detail="El cliente asociado no existe.")
 
     eng = PentestEngagement(
         client_id=req.client_id,

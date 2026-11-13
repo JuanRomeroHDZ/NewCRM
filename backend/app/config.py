@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     API_V1_PREFIX: str = "/api/v1"
 
     # Host-specific values are supplied by the operator through the environment.
-    SERVER_NAME: str = "lessso-srv"
+    SERVER_NAME: str = Field(default="lessso-srv", min_length=2, max_length=64, pattern=r"^[a-zA-Z0-9._-]+$")
     DATABASE_URL: str = "sqlite+aiosqlite:///./lessso.db"
     BACKUP_LOCAL_PATH: str = "/app/backups"
     CORS_ORIGINS: list[str] = Field(default_factory=list)

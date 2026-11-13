@@ -73,3 +73,27 @@ async def test_user_create_and_update_roll_back_when_audit_recording_fails(
     assert updated.scalar_one().full_name == "Original Name"
     assert event_count == 0
     assert legacy_count == 0
+
+
+@pytest.mark.asyncio
+async def test_temporary_owner_password_cannot_manage_users(client, db_session):
+    owner = User(
+        username="temporary_owner",
+        email="temporary_owner@example.test",
+        full_name="Temporary Owner",
+        role="owner",
+        hashed_password=hash_master_password("OwnerPassForAtomicity123!"),
+        is_active=True,
+        must_change_password=True,
+    )
+    db_session.add(owner)
+    await db_session.commit()
+    token, _ = await create_user_session(db_session, owner)
+
+    response = await client.get(
+        "/api/v1/users",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Cambia tu contraseña temporal antes de continuar."

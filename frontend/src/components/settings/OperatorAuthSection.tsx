@@ -54,9 +54,10 @@ export const OperatorAuthSection: React.FC = () => {
   const [userMgmtLoading, setUserMgmtLoading] = useState(false);
 
   const loadUsersIfOwner = useCallback(async (user: CoreUser | null) => {
-    if (!user || user.role !== 'owner') {
+    if (!user || user.role !== 'owner' || user.must_change_password) {
       setUsersList([]);
       setUsersError(null);
+      setUsersLoading(false);
       return;
     }
     setUsersLoading(true);
@@ -214,6 +215,10 @@ export const OperatorAuthSection: React.FC = () => {
 
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!currentUser || currentUser.must_change_password || currentUser.role !== 'owner') {
+      showToast('Cambia tu contraseña temporal antes de administrar cuentas.', 'error');
+      return;
+    }
     if (!/^[a-zA-Z0-9._-]{3,64}$/.test(newUsername.trim())) {
       showToast('Usuario inválido: usa 3-64 caracteres alfanuméricos, ".", "_" o "-".', 'error');
       return;
@@ -568,7 +573,14 @@ export const OperatorAuthSection: React.FC = () => {
                 )}
               </div>
 
-              <form onSubmit={handleCreateUser} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2">
+              {currentUser.must_change_password && (
+                <p role="status" className="text-xs text-amber-200">
+                  Cambia primero la contraseña temporal para administrar cuentas del equipo.
+                </p>
+              )}
+
+              <fieldset disabled={currentUser.must_change_password} className="min-w-0 border-0 p-0 m-0 disabled:opacity-50">
+                <form onSubmit={handleCreateUser} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2">
                 <div>
                   <label htmlFor="op-new-username" className="sr-only">Nombre de usuario</label>
                   <input
@@ -627,7 +639,8 @@ export const OperatorAuthSection: React.FC = () => {
                   <UserPlus size={13} aria-hidden="true" />
                   <span>Crear cuenta</span>
                 </button>
-              </form>
+                </form>
+              </fieldset>
 
               {createdTempPassword && (
                 <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs">

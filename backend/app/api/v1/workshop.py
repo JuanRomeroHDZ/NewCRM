@@ -19,6 +19,7 @@ from app.services.workshop_sanitizer import sanitize_svg_content
 from app.services.activity_service import record_event
 
 router = APIRouter(prefix="/workshop", tags=["workshop"])
+MAX_DIAGRAM_SVG_BYTES = 5 * 1024 * 1024
 
 
 # Schemas
@@ -49,13 +50,20 @@ class PasswordGenResponse(BaseModel):
 
 class DiagramSaveRequest(BaseModel):
     title: str = Field(..., min_length=1, max_length=128)
-    svg_content: str = Field(..., min_length=1, max_length=5 * 1024 * 1024)  # 5MB max
+    svg_content: str = Field(..., min_length=1, max_length=MAX_DIAGRAM_SVG_BYTES)
     area: str = Field("creatividad", min_length=1, max_length=64, pattern="^(creatividad|codigo|utilidades)$")
 
     @field_validator("title")
     @classmethod
     def check_title(cls, value: str) -> str:
         return validate_nonblank_input(value, "Ingresa el título del diagrama.")
+
+    @field_validator("svg_content")
+    @classmethod
+    def check_svg_byte_limit(cls, value: str) -> str:
+        if len(value.encode("utf-8")) > MAX_DIAGRAM_SVG_BYTES:
+            raise ValueError("El diagrama supera el límite permitido de 5 MB.")
+        return value
 
 
 class DiagramResponse(BaseModel):

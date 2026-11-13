@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Path, status
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
@@ -79,7 +79,7 @@ async def create_user(
 
 @router.get("/{user_id}", response_model=UserResponse)
 async def get_user_detail(
-    user_id: str,
+    user_id: str = Path(..., max_length=36),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role(["owner", "business_admin"]))
 ):
@@ -91,8 +91,8 @@ async def get_user_detail(
 
 @router.patch("/{user_id}", response_model=UserResponse)
 async def update_user(
-    user_id: str,
     payload: UserUpdateRequest,
+    user_id: str = Path(..., max_length=36),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role(["owner"]))
 ):

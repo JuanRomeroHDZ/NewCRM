@@ -174,6 +174,11 @@ async def get_current_user_from_token(
 def require_role(allowed_roles: list[str]):
     """Role-based authorization dependency factory."""
     async def role_checker(user: User = Depends(get_current_user_from_token)) -> User:
+        if user.must_change_password:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Cambia tu contraseña temporal antes de continuar.",
+            )
         if user.role not in allowed_roles:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
