@@ -1026,8 +1026,8 @@ export const SubscriptionsView: React.FC = () => {
               <InfoTooltip content="Muestra en qué mes del año tendrás más cobros acumulados (incluyendo pagos anuales) y en cuál pagarás menos." />
             </div>
 
-            <div className="space-y-1.5 text-xs">
-              <div className="p-2 rounded-lg bg-rose-500/5 border border-rose-500/20 flex items-center justify-between gap-2 min-w-0">
+            <div className="divide-y divide-obsidian-border/50 text-xs">
+              <div className="py-2 flex items-center justify-between gap-2 min-w-0">
                 <div className="min-w-0">
                   <div className="text-[10px] text-rose-300 font-semibold uppercase">Mes Más Alto</div>
                   <div className="font-bold text-white truncate">{fin.peakMonth.monthName}</div>
@@ -1038,7 +1038,7 @@ export const SubscriptionsView: React.FC = () => {
                 </div>
               </div>
 
-              <div className="p-2 rounded-lg bg-emerald-500/5 border border-emerald-500/20 flex items-center justify-between gap-2 min-w-0">
+              <div className="py-2 flex items-center justify-between gap-2 min-w-0">
                 <div className="min-w-0">
                   <div className="text-[10px] text-emerald-300 font-semibold uppercase">Mes Más Bajo</div>
                   <div className="font-bold text-white truncate">{fin.lowestMonth.monthName}</div>
@@ -1061,8 +1061,8 @@ export const SubscriptionsView: React.FC = () => {
               <InfoTooltip content="Agrupa tus cobros según el día del mes en que se pagan (Semanas 1 a 4) para saber cuándo necesitas más saldo disponible." />
             </div>
 
-            <div className="space-y-1.5 text-xs">
-              <div className="p-2 rounded-lg bg-amber-500/5 border border-amber-500/20 flex items-center justify-between gap-2 min-w-0">
+            <div className="divide-y divide-obsidian-border/50 text-xs">
+              <div className="py-2 flex items-center justify-between gap-2 min-w-0">
                 <div className="min-w-0">
                   <div className="text-[10px] text-amber-300 font-semibold uppercase">Semana Más Pesada ({fin.peakWeek.rangeLabel})</div>
                   <div className="font-bold text-white truncate">{fin.peakWeek.label}</div>
@@ -1073,7 +1073,7 @@ export const SubscriptionsView: React.FC = () => {
                 </div>
               </div>
 
-              <div className="p-2 rounded-lg bg-cyan-500/5 border border-cyan-500/20 flex items-center justify-between gap-2 min-w-0">
+              <div className="py-2 flex items-center justify-between gap-2 min-w-0">
                 <div className="min-w-0">
                   <div className="text-[10px] text-cyan-300 font-semibold uppercase">Semana Más Ligera ({fin.lowestWeek.rangeLabel})</div>
                   <div className="font-bold text-white truncate">{fin.lowestWeek.label}</div>
@@ -1097,10 +1097,10 @@ export const SubscriptionsView: React.FC = () => {
             </div>
 
             {fin.topService ? (
-              <div className="space-y-1.5 text-xs">
+              <div className="divide-y divide-obsidian-border/50 text-xs">
                 <div
                   onClick={() => openInspector('platform', fin.topService!.platform.id)}
-                  className="p-2 rounded-lg bg-indigo-500/10 border border-indigo-500/25 flex items-center justify-between gap-2 cursor-pointer hover:bg-indigo-500/15 transition-colors min-w-0"
+                  className="py-2 flex items-center justify-between gap-2 cursor-pointer hover:bg-indigo-500/10 rounded px-1.5 -mx-1.5 transition-colors min-w-0"
                 >
                   <div className="min-w-0">
                     <div className="text-[10px] text-indigo-300 font-semibold uppercase">
@@ -1117,7 +1117,7 @@ export const SubscriptionsView: React.FC = () => {
                 </div>
 
                 {fin.topCategory && (
-                  <div className="p-2 rounded-lg bg-obsidian-surface/80 border border-obsidian-border flex items-center justify-between gap-2 min-w-0">
+                  <div className="py-2 flex items-center justify-between gap-2 min-w-0">
                     <div className="min-w-0">
                       <div className="text-[10px] text-obsidian-muted font-semibold uppercase">
                         Categoría Principal ({fin.topCategory.sharePercent}%)

@@ -1,52 +1,94 @@
 from datetime import datetime
+from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc
 
 from app.database import get_db
-from app.services.core_auth import get_current_user_from_token
+from app.schemas import validate_nonblank_input
+from app.schemas.validators import validate_calendar_date
+from app.services.core_auth import get_current_user_from_token, require_role
 from app.models.core import User
 from app.models.agenda import AgendaEvent, OperationTask, ClientAsset, PentestEngagement, PentestFinding
 from app.services.agenda_service import AgendaService
 
 router = APIRouter(prefix="/agenda", tags=["Agenda & Operations"])
 
+AGENDA_WRITE_ROLES = ["owner", "business_admin", "operator", "seller"]
+PENTEST_ROLES = ["owner", "business_admin", "operator"]
+
+
 class EventCreateRequest(BaseModel):
-    event_type: str = Field(..., min_length=2, max_length=64)
+    event_type: Literal["reunion", "llamada", "mantenimiento", "pentest", "finanzas", "tarea", "otro"]
     title: str = Field(..., min_length=2, max_length=180)
     start_time: datetime
     end_time: datetime
-    description: str | None = None
-    location: str | None = None
-    client_id: str | None = None
-    prospect_id: str | None = None
-    sale_id: str | None = None
+    description: str | None = Field(default=None, max_length=5000)
+    location: str | None = Field(default=None, max_length=255)
+    client_id: str | None = Field(default=None, max_length=36)
+    prospect_id: str | None = Field(default=None, max_length=36)
+    sale_id: str | None = Field(default=None, max_length=36)
     recurrence_interval_days: int | None = Field(None, ge=1, le=365)
 
+    @field_validator("title")
+    @classmethod
+    def check_title(cls, value: str) -> str:
+        return validate_nonblank_input(value, "Ingresa el título del evento.")
+
+    @model_validator(mode="after")
+    def check_time_order(self) -> "EventCreateRequest":
+        if self.end_time <= self.start_time:
+            raise ValueError("La hora de término debe ser posterior a la de inicio.")
+        return self
+
+
 class PentestEngagementCreate(BaseModel):
-    client_id: str
+    client_id: str = Field(..., min_length=1, max_length=36)
     title: str = Field(..., min_length=2, max_length=180)
-    scope_written_summary: str = Field(..., min_length=10)
-    authorized_targets: str = Field(..., min_length=3)
+    scope_written_summary: str = Field(..., min_length=10, max_length=10000)
+    authorized_targets: str = Field(..., min_length=3, max_length=5000)
     window_start: datetime
     window_end: datetime
 
+    @field_validator("title", "scope_written_summary", "authorized_targets")
+    @classmethod
+    def check_nonblank(cls, value: str) -> str:
+        return validate_nonblank_input(value)
+
+    @model_validator(mode="after")
+    def check_window_order(self) -> "PentestEngagementCreate":
+        if self.window_end <= self.window_start:
+            raise ValueError("La fecha de término de la ventana debe ser posterior al inicio.")
+        return self
+
+
 class PentestFindingCreate(BaseModel):
-    engagement_id: str
+    engagement_id: str = Field(..., min_length=1, max_length=36)
     title: str = Field(..., min_length=2, max_length=180)
     severity: str = Field("media", pattern="^(informativa|baja|media|alta|critica)$")
-    description: str = Field(..., min_length=5)
-    remediation: str = Field(..., min_length=5)
+    description: str = Field(..., min_length=5, max_length=20000)
+    remediation: str = Field(..., min_length=5, max_length=20000)
     cvss_score: float | None = Field(None, ge=0.0, le=10.0)
+
+    @field_validator("title", "description", "remediation")
+    @classmethod
+    def check_nonblank(cls, value: str) -> str:
+        return validate_nonblank_input(value)
+
 
 @router.get("/events")
 async def list_events(
-    event_type: str | None = None,
+    event_type: str | None = Query(default=None, max_length=32, pattern="^(reunion|llamada|mantenimiento|pentest|finanzas|tarea|otro)$"),
     include_financial: bool = False,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user_from_token)
 ):
+    if include_financial and current_user.role not in ("owner", "business_admin"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No cuentas con permisos para consultar eventos financieros."
+        )
     stmt = select(AgendaEvent).order_by(AgendaEvent.start_time.asc())
     if event_type:
         stmt = stmt.where(AgendaEvent.event_type == event_type)
@@ -56,11 +98,12 @@ async def list_events(
     res = await db.execute(stmt)
     return res.scalars().all()
 
+
 @router.post("/events")
 async def create_event(
     req: EventCreateRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user_from_token)
+    current_user: User = Depends(require_role(AGENDA_WRITE_ROLES))
 ):
     try:
         event, overlaps = await AgendaService.create_event(
@@ -85,11 +128,12 @@ async def create_event(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+
 @router.post("/events/{event_id}/complete")
 async def complete_event(
     event_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user_from_token)
+    current_user: User = Depends(require_role(AGENDA_WRITE_ROLES))
 ):
     try:
         event, next_event = await AgendaService.complete_event(
@@ -105,20 +149,26 @@ async def complete_event(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+
 @router.get("/availability")
 async def get_availability(
     target_date: str = Query(..., pattern=r"^\d{4}-\d{2}-\d{2}$"),
-    duration_minutes: int = 60,
-    buffer_minutes: int = 15,
+    duration_minutes: int = Query(default=60, ge=15, le=480),
+    buffer_minutes: int = Query(default=15, ge=0, le=120),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user_from_token)
 ):
-    return await AgendaService.calculate_availability(
-        session=db,
-        target_date=target_date,
-        duration_minutes=duration_minutes,
-        buffer_minutes=buffer_minutes
-    )
+    try:
+        validate_calendar_date(target_date)
+        return await AgendaService.calculate_availability(
+            session=db,
+            target_date=target_date,
+            duration_minutes=duration_minutes,
+            buffer_minutes=buffer_minutes
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
 
 @router.get("/export/ics")
 async def export_ics(
@@ -126,19 +176,26 @@ async def export_ics(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user_from_token)
 ):
+    if include_financial and current_user.role not in ("owner", "business_admin"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No cuentas con permisos para exportar eventos financieros."
+        )
     ics_text = await AgendaService.export_events_to_ics(session=db, include_financial=include_financial)
     return Response(content=ics_text, media_type="text/calendar", headers={"Content-Disposition": "attachment; filename=agenda_contact_lessso.ics"})
+
 
 @router.get("/google-calendar/status")
 async def google_calendar_status(current_user: User = Depends(get_current_user_from_token)):
     return AgendaService.get_google_calendar_status()
+
 
 # Pentesting
 @router.post("/pentest/engagements")
 async def create_pentest_engagement(
     req: PentestEngagementCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user_from_token)
+    current_user: User = Depends(require_role(PENTEST_ROLES))
 ):
     if req.window_end <= req.window_start:
         raise HTTPException(status_code=400, detail="La fecha de término de la ventana debe ser posterior al inicio.")
@@ -157,11 +214,12 @@ async def create_pentest_engagement(
     await db.refresh(eng)
     return eng
 
+
 @router.post("/pentest/findings")
 async def record_pentest_finding(
     req: PentestFindingCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user_from_token)
+    current_user: User = Depends(require_role(PENTEST_ROLES))
 ):
     try:
         finding = await AgendaService.record_pentest_finding(

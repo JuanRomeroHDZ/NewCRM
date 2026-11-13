@@ -431,6 +431,12 @@ async def update_platform(
         platform.next_billing_date = payload.next_billing_date
     if payload.trial_end_date is not None:
         platform.trial_end_date = payload.trial_end_date
+
+    from app.schemas.validators import validate_service_dates_order
+    try:
+        validate_service_dates_order(platform.start_date, platform.next_billing_date, platform.trial_end_date)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     if payload.payment_method_id is not None:
         platform.payment_method_id = payload.payment_method_id if payload.payment_method_id != "" else None
     if payload.tags is not None:

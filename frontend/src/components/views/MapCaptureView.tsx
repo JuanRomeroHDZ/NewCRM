@@ -78,8 +78,9 @@ export const MapCaptureView: React.FC = () => {
   const markersRef = useRef<Map<string, LeafletMap>>(new Map());
 
   const [zones, setZones] = useState<OSMZone[]>([]);
-  const [selectedZone, setSelectedZone] = useState('zona-rio');
-  const [sector, setSector] = useState('dentistas');
+  const [selectedZone, setSelectedZone] = useState('');
+  const [defaultCity, setDefaultCity] = useState('');
+  const [sector, setSector] = useState('');
   const [subsector, setSubsector] = useState('');
   const [mapReady, setMapReady] = useState(false);
   const [mapError, setMapError] = useState('');
@@ -123,8 +124,12 @@ export const MapCaptureView: React.FC = () => {
         if (!active || !mapElementRef.current) return;
 
         setZones(zoneResponse.zones);
-        const initialZone = zoneResponse.zones.find((zone) => zone.slug === 'zona-rio') || zoneResponse.zones[0];
+        setDefaultCity(config.default_city || '');
+        const initialZone = zoneResponse.zones.find((zone) => zone.slug === config.default_zone) || zoneResponse.zones[0];
         if (initialZone) setSelectedZone(initialZone.slug);
+        if (config.default_sector) {
+          setSector((prev) => prev || config.default_sector || '');
+        }
 
         const map = leaflet.map(mapElementRef.current, {
           zoomControl: true,
@@ -290,7 +295,9 @@ export const MapCaptureView: React.FC = () => {
           </span>
           <div className="min-w-0">
             <h1 className="text-xl font-bold tracking-tight text-white sm:text-2xl">Captación en mapa</h1>
-            <p className="mt-1 max-w-2xl text-sm leading-relaxed text-obsidian-muted">Busca negocios publicados en OpenStreetMap dentro de una zona de Tijuana y guarda únicamente los que quieras seguir.</p>
+            <p className="mt-1 max-w-2xl text-sm leading-relaxed text-obsidian-muted">
+              Busca negocios publicados en OpenStreetMap dentro de una zona{defaultCity ? ` de ${defaultCity}` : ''} y guarda únicamente los que quieras seguir.
+            </p>
           </div>
         </div>
         <span className="inline-flex w-fit shrink-0 items-center gap-2 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-200">
@@ -327,7 +334,7 @@ export const MapCaptureView: React.FC = () => {
           {searchError && <p role="alert" className="flex items-start gap-2 border-b border-rose-500/20 bg-rose-950/30 px-4 py-3 text-sm text-rose-200"><AlertCircle size={16} className="mt-0.5 shrink-0" />{searchError}</p>}
           {mapError && <div role="alert" className="flex items-center justify-between gap-3 border-b border-rose-500/20 bg-rose-950/30 px-4 py-3 text-sm text-rose-200"><span>{mapError}</span><button type="button" onClick={() => { setMapError(''); setMapAttempt((value) => value + 1); }} className="min-h-9 shrink-0 underline underline-offset-4">Reintentar</button></div>}
 
-          <div ref={mapElementRef} role="region" aria-label="Mapa interactivo de Tijuana" className="relative z-0 h-[clamp(10rem,55dvh,20rem)] w-full bg-[#101827] sm:h-[clamp(10rem,55dvh,26.25rem)] xl:h-[clamp(10rem,60dvh,35rem)]" />
+          <div ref={mapElementRef} role="region" aria-label={defaultCity ? `Mapa interactivo de ${defaultCity}` : 'Mapa interactivo'} className="relative z-0 h-[clamp(10rem,55dvh,20rem)] w-full bg-[#101827] sm:h-[clamp(10rem,55dvh,26.25rem)] xl:h-[clamp(10rem,60dvh,35rem)]" />
           <div className="flex flex-col gap-1.5 border-t border-obsidian-border px-4 py-3 text-[11px] leading-relaxed text-obsidian-muted sm:flex-row sm:items-center sm:justify-between">
             <span>Los datos de negocios dependen de lo publicado en OpenStreetMap.</span>
             <a href="https://www.openstreetmap.org/fixthemap" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-indigo-300 underline-offset-4 hover:underline">Reportar un problema del mapa <ExternalLink size={11} /></a>

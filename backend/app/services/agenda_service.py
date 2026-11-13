@@ -2,22 +2,13 @@ from datetime import datetime, timezone, timedelta, time
 from sqlalchemy import select, and_, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.models.agenda import AgendaEvent, OperationTask, ClientAsset, PentestEngagement, PentestFinding
 from app.models.core import ActivityEvent
+from app.services.config_service import DEFAULT_CATALOGS, get_config_parameter
 
 def utc_now() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
-
-# Mexican Official Holidays (Statutory / Ley Federal del Trabajo)
-MEXICO_HOLIDAYS_FIXED = {
-    "01-01": "Año Nuevo",
-    "02-05": "Día de la Constitución",
-    "03-21": "Natalicio de Benito Juárez",
-    "05-01": "Día del Trabajo",
-    "09-16": "Día de la Independencia",
-    "11-20": "Día de la Revolución",
-    "12-25": "Navidad"
-}
 
 class AgendaService:
     @staticmethod
@@ -148,19 +139,38 @@ class AgendaService:
         target_date: str,  # YYYY-MM-DD
         duration_minutes: int = 60,
         buffer_minutes: int = 15,
-        work_start_hour: int = 9,
-        work_end_hour: int = 18
+        work_start_hour: int | None = None,
+        work_end_hour: int | None = None
     ) -> dict:
         """
-        Calculates open slots factoring in work hours, buffer times, Mexico holidays,
+        Calculates open slots factoring in work hours, buffer times, holidays catalog,
         and existing events. Generates copiable formatted proposal text.
         """
-        day_date = datetime.strptime(target_date, "%Y-%m-%d").date()
-        month_day = day_date.strftime("%m-%d")
-        holiday_name = MEXICO_HOLIDAYS_FIXED.get(month_day)
+        if duration_minutes < 15 or duration_minutes > 480:
+            raise ValueError("La duración de la cita debe estar entre 15 y 480 minutos.")
+        if buffer_minutes < 0 or buffer_minutes > 120:
+            raise ValueError("El tiempo de holgura debe estar entre 0 y 120 minutos.")
 
-        day_start = datetime.combine(day_date, time(work_start_hour, 0))
-        day_end = datetime.combine(day_date, time(work_end_hour, 0))
+        start_hour = settings.AGENDA_WORK_START_HOUR if work_start_hour is None else work_start_hour
+        end_hour = settings.AGENDA_WORK_END_HOUR if work_end_hour is None else work_end_hour
+        if not (0 <= start_hour < end_hour <= 24):
+            raise ValueError("El horario laboral configurado es inválido.")
+
+        day_date = datetime.strptime(target_date, "%Y-%m-%d").date()
+        holidays_catalog = await get_config_parameter(session, "mexico_holidays", DEFAULT_CATALOGS.get("mexico_holidays", []))
+        holiday_name = None
+        if isinstance(holidays_catalog, list):
+            mm_dd = day_date.strftime("%m-%d")
+            for item in holidays_catalog:
+                if not isinstance(item, dict):
+                    continue
+                h_date = str(item.get("date") or "")
+                if h_date == target_date or (len(h_date) == 10 and h_date[5:] == mm_dd) or h_date == mm_dd:
+                    holiday_name = item.get("name")
+                    break
+
+        day_start = datetime.combine(day_date, time(start_hour, 0))
+        day_end = datetime.combine(day_date, time(end_hour, 0))
 
         # Query existing events for the day
         stmt = select(AgendaEvent).where(
@@ -289,7 +299,7 @@ class AgendaService:
             dt_end = ev.end_time.strftime("%Y%m%dT%H%M%SZ")
             lines.extend([
                 "BEGIN:VEVENT",
-                f"UID:{ev.id}@lessso-srv",
+                f"UID:{ev.id}@{settings.SERVER_NAME}",
                 f"DTSTAMP:{utc_now().strftime('%Y%m%dT%H%M%SZ')}",
                 f"DTSTART:{dt_start}",
                 f"DTEND:{dt_end}",

@@ -141,6 +141,18 @@
 }
 
 @media print {
+  @page {
+    margin: 12mm;
+    size: auto;
+  }
+
+  body {
+    background: #ffffff !important;
+    color: #0f172a !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
   body:has(.recovery-print) #root > div > :not(.recovery-overlay) {
     display: none !important;
   }
@@ -149,7 +161,7 @@
     position: static !important;
     display: block !important;
     padding: 0 !important;
-    background: white !important;
+    background: #ffffff !important;
   }
 
   .recovery-print {
@@ -157,7 +169,25 @@
     max-width: none !important;
     overflow: visible !important;
     border: 0 !important;
-    background: white !important;
+    background: #ffffff !important;
+    color: #0f172a !important;
     box-shadow: none !important;
+  }
+
+  .recovery-print * {
+    color: #0f172a !important;
+    border-color: #cbd5e1 !important;
+    background-color: transparent !important;
+  }
+
+  .recovery-print pre,
+  .recovery-print code {
+    background-color: #f8fafc !important;
+    border: 1px solid #cbd5e1 !important;
+    color: #0f172a !important;
+  }
+
+  .print\:hidden {
+    display: none !important;
   }
 }

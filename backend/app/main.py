@@ -7,7 +7,8 @@ from app.config import settings
 from app.database import engine, Base, AsyncSessionLocal
 from app.models import (
     EmailAccount, PlatformAccount, PaymentMethod, Prospect,
-    ClientIncome, DomainRenewal, OneTimeExpense, InternalProject, SecureResource
+    ClientIncome, DomainRenewal, OneTimeExpense, InternalProject, SecureResource,
+    Debt, DebtPayment,
 )
 from app.security.crypto import encrypt_note, NOTE_ENC_PREFIX
 from app.seed_data import seed_initial_demo_data
@@ -37,6 +38,7 @@ async def run_additive_schema_migrations():
         "ALTER TABLE platform_accounts ADD COLUMN IF NOT EXISTS ownership_type VARCHAR(32) DEFAULT 'own'",
         "ALTER TABLE platform_accounts ADD COLUMN IF NOT EXISTS scope VARCHAR(32) DEFAULT 'business'",
         "ALTER TABLE platform_accounts ADD COLUMN IF NOT EXISTS business_share_percent FLOAT DEFAULT 100.0",
+        "ALTER TABLE platform_accounts ADD COLUMN IF NOT EXISTS start_date VARCHAR(32)",
         "ALTER TABLE payment_methods ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP WITHOUT TIME ZONE",
         "ALTER TABLE payment_methods ADD COLUMN IF NOT EXISTS scope VARCHAR(32) DEFAULT 'business'",
         "ALTER TABLE prospects ADD COLUMN IF NOT EXISTS last_contacted_at TIMESTAMP WITHOUT TIME ZONE",
@@ -93,6 +95,8 @@ async def migrate_plaintext_notes_to_encrypted():
                 (InternalProject, "notes"),
                 (SecureResource, "notes"),
                 (SecureResource, "encrypted_content"),
+                (Debt, "notes"),
+                (DebtPayment, "notes"),
             ]:
                 rows = (await session.execute(select(model))).scalars().all()
                 for row in rows:

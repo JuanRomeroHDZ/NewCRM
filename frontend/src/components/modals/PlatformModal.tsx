@@ -3,7 +3,7 @@ import { X, Globe, Trash2, Sparkles, AlertCircle, Mail, UserPlus } from 'lucide-
 import { useVault } from '../../context/VaultContext';
 import { api } from '../../lib/api';
 import { EmailAccount, PaymentMethod, ApiKeyItem, EnvVarItem, TagItem, Prospect, EntityScope, OwnershipType } from '../../types';
-import { validateAndNormalizeUrl, INPUT_LIMITS, isValidEmail } from '../../lib/validation';
+import { validateAndNormalizeUrl, validateServiceDatesOrder, INPUT_LIMITS, isValidEmail } from '../../lib/validation';
 
 export const PlatformModal: React.FC = () => {
   const { 
@@ -47,6 +47,7 @@ export const PlatformModal: React.FC = () => {
   const [subscriptionCost, setSubscriptionCost] = useState<string>('0');
   const [currency, setCurrency] = useState<'MXN' | 'USD'>('MXN');
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly' | 'weekly' | 'daily' | 'one_time'>('monthly');
+  const [startDate, setStartDate] = useState('');
   const [nextBillingDate, setNextBillingDate] = useState('');
   const [trialEndDate, setTrialEndDate] = useState('');
   const [paymentMethodId, setPaymentMethodId] = useState('');
@@ -104,6 +105,7 @@ export const PlatformModal: React.FC = () => {
           setSubscriptionCost(String(p.subscription_cost ?? 0));
           setCurrency(p.currency);
           setBillingCycle(p.billing_cycle as any);
+          setStartDate(p.start_date || '');
           setNextBillingDate(p.next_billing_date || '');
           setTrialEndDate(p.trial_end_date || '');
           setPaymentMethodId(p.payment_method_id || '');
@@ -129,6 +131,7 @@ export const PlatformModal: React.FC = () => {
         setSubscriptionCost('0');
         setCurrency('MXN');
         setBillingCycle('monthly');
+        setStartDate('');
         setNextBillingDate('');
         setTrialEndDate('');
         setPaymentMethodId('');
@@ -225,6 +228,13 @@ export const PlatformModal: React.FC = () => {
       return;
     }
 
+    const datesError = validateServiceDatesOrder(startDate, nextBillingDate, trialEndDate);
+    if (datesError) {
+      setFormError(datesError);
+      showToast(datesError, 'error');
+      return;
+    }
+
     setLoading(true);
     try {
       const payload: any = {
@@ -242,6 +252,7 @@ export const PlatformModal: React.FC = () => {
         subscription_cost: numericCost,
         currency,
         billing_cycle: billingCycle,
+        start_date: startDate || null,
         next_billing_date: nextBillingDate || null,
         trial_end_date: trialEndDate || null,
         payment_method_id: paymentMethodId || null,
@@ -690,6 +701,16 @@ export const PlatformModal: React.FC = () => {
                   <option value="weekly">Semanal</option>
                   <option value="one_time">Pago Único</option>
                 </select>
+              </div>
+
+              <div>
+                <label className="text-obsidian-muted block mb-1">Fecha de Inicio / Alta</label>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-indigo-500"
+                />
               </div>
 
               <div>

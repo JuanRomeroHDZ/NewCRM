@@ -103,6 +103,12 @@ async def update_user(
     if not user:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
 
+    if user.id == current_user.id:
+        if payload.is_active is False:
+            raise HTTPException(status_code=400, detail="No puedes desactivar tu propia cuenta de propietario.")
+        if payload.role is not None and payload.role != "owner":
+            raise HTTPException(status_code=400, detail="No puedes degradar tu propio rol de propietario.")
+
     if payload.full_name is not None:
         user.full_name = payload.full_name
     if payload.role is not None:

@@ -358,7 +358,8 @@ export function buildWhatsAppUrl(
   whatsapp?: string,
   companyName?: string,
   demoUrl?: string,
-  customMessage?: string
+  customMessage?: string,
+  whatsappBaseUrl?: string
 ): string | null {
   if (!whatsapp) return null;
   const digits = whatsapp.replace(/[^\d]/g, '');
@@ -372,7 +373,9 @@ export function buildWhatsAppUrl(
     }
   }
   const qs = msg ? `?text=${encodeURIComponent(msg)}` : '';
-  return `https://wa.me/${digits}${qs}`;
+  const envBase = typeof import.meta !== 'undefined' ? (import.meta as any).env?.VITE_WHATSAPP_SHARE_BASE_URL : undefined;
+  const baseUrl = (whatsappBaseUrl || envBase || 'https://wa.me').replace(/\/+$/, '');
+  return `${baseUrl}/${digits}${qs}`;
 }
 
 export function buildMailtoUrl(prospect: Prospect): string | null {

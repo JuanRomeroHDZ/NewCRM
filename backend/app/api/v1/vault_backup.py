@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 import argon2.low_level
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from fastapi import APIRouter, Depends, HTTPException, Header
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
@@ -21,10 +21,10 @@ from app.config import settings
 router = APIRouter(prefix="/vault", tags=["vault"], dependencies=[Depends(require_vault_unlocked)])
 
 class ExportEncryptedRequest(BaseModel):
-    export_password: str
+    export_password: str = Field(..., min_length=8, max_length=256)
 
 class RestoreEncryptedRequest(BaseModel):
-    export_password: str
+    export_password: str = Field(..., min_length=1, max_length=256)
     backup_data: dict
 
 def derive_export_key(password: str, salt: bytes) -> bytes:
@@ -55,7 +55,7 @@ async def export_encrypted_vault(
     expenses = (await db.execute(select(OneTimeExpense))).scalars().all()
     projects = (await db.execute(select(InternalProject))).scalars().all()
     resources = (await db.execute(select(SecureResource))).scalars().all()
-    settings = (await db.execute(select(UserSettings).limit(1))).scalar_one_or_none()
+    user_settings = (await db.execute(select(UserSettings).limit(1))).scalar_one_or_none()
     rate = (await db.execute(select(ExchangeRate).limit(1))).scalar_one_or_none()
 
     vault_dump = {
@@ -163,13 +163,13 @@ async def export_encrypted_vault(
             for res in resources
         ],
         "settings": {
-            "vault_timeout_minutes": settings.vault_timeout_minutes if settings else 10,
-            "clipboard_clear_seconds": settings.clipboard_clear_seconds if settings else 30,
-            "allow_reveal_passwords": settings.allow_reveal_passwords if settings else False,
-            "accent_color": settings.accent_color if settings else "#6366f1",
-            "canvas_style": settings.canvas_style if settings else "dot-grid",
-            "budget_cap_amount": float(getattr(settings, "budget_cap_amount", 0.0) or 0.0) if settings else 0.0,
-            "budget_cap_currency": getattr(settings, "budget_cap_currency", "MXN") if settings else "MXN",
+            "vault_timeout_minutes": user_settings.vault_timeout_minutes if user_settings else settings.VAULT_SESSION_TIMEOUT_MINUTES,
+            "clipboard_clear_seconds": user_settings.clipboard_clear_seconds if user_settings else settings.CLIPBOARD_CLEAR_SECONDS,
+            "allow_reveal_passwords": user_settings.allow_reveal_passwords if user_settings else False,
+            "accent_color": user_settings.accent_color if user_settings else settings.DEFAULT_ACCENT_COLOR,
+            "canvas_style": user_settings.canvas_style if user_settings else settings.DEFAULT_CANVAS_STYLE,
+            "budget_cap_amount": float(getattr(user_settings, "budget_cap_amount", 0.0) or 0.0) if user_settings else 0.0,
+            "budget_cap_currency": getattr(user_settings, "budget_cap_currency", settings.DEFAULT_CURRENCY) if user_settings else settings.DEFAULT_CURRENCY,
         },
         "exchange_rate": {
             "rate": float(rate.rate) if rate else settings.FALLBACK_USD_MXN_RATE,
@@ -218,7 +218,12 @@ async def restore_encrypted_vault(
         key = derive_export_key(payload.export_password, salt)
         aesgcm = AESGCM(key)
         decrypted = aesgcm.decrypt(nonce, ciphertext, None)
+        expected_checksum = backup.get("checksum")
+        if expected_checksum and hashlib.sha256(decrypted).hexdigest() != expected_checksum:
+            raise ValueError("Checksum mismatch")
         vault_dump = json.loads(decrypted.decode("utf-8"))
+        if not isinstance(vault_dump, dict):
+            raise ValueError("Invalid vault structure")
     except Exception:
         raise HTTPException(
             status_code=400,
@@ -298,6 +303,7 @@ async def restore_encrypted_vault(
             db.add(new_plat)
 
     # 4. Restore Incomes
+    today_iso = datetime.now(timezone.utc).date().isoformat()
     for inc_data in vault_dump.get("incomes", []):
         target_id = inc_data.get("id")
         existing = await db.get(ClientIncome, target_id) if target_id else None
@@ -307,9 +313,9 @@ async def restore_encrypted_vault(
                 "concept": inc_data.get("concept"),
                 "category": inc_data.get("category", "anticipo"),
                 "amount": float(inc_data.get("amount", 0.0)),
-                "currency": inc_data.get("currency", "MXN"),
+                "currency": inc_data.get("currency", settings.DEFAULT_CURRENCY),
                 "status": inc_data.get("status", "cobrado"),
-                "received_date": inc_data.get("received_date", "2026-01-01"),
+                "received_date": inc_data.get("received_date") or today_iso,
                 "payment_method_label": inc_data.get("payment_method_label"),
                 "is_recurring": bool(inc_data.get("is_recurring", False)),
                 "notes": inc_data.get("notes"),
@@ -328,10 +334,10 @@ async def restore_encrypted_vault(
                 "service_type": r_data.get("service_type", "dominio"),
                 "client_name": r_data.get("client_name", "Cliente"),
                 "provider": r_data.get("provider"),
-                "renewal_date": r_data.get("renewal_date", "2026-01-01"),
+                "renewal_date": r_data.get("renewal_date") or today_iso,
                 "renewal_cost": float(r_data.get("renewal_cost", 0.0)),
                 "client_charge_amount": float(r_data.get("client_charge_amount", 0.0)),
-                "currency": r_data.get("currency", "MXN"),
+                "currency": r_data.get("currency", settings.DEFAULT_CURRENCY),
                 "billing_cycle": r_data.get("billing_cycle", "yearly"),
                 "paid_by": r_data.get("paid_by", "client"),
                 "status": r_data.get("status", "activo"),

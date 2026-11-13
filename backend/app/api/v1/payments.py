@@ -114,13 +114,32 @@ async def update_payment_method(
     if payload.scope is not None:
         method.scope = payload.scope
     if payload.expiry_month is not None:
-        method.expiry_month = payload.expiry_month
+        method.expiry_month = payload.expiry_month or None
     if payload.expiry_year is not None:
-        method.expiry_year = payload.expiry_year
+        method.expiry_year = payload.expiry_year or None
     if payload.billing_notes is not None:
         method.billing_notes = encrypt_note(payload.billing_notes)
     if payload.card_number is not None and payload.card_number != "":
         method.encrypted_card_number = encrypt_secret(payload.card_number)
+
+    from app.schemas.validators import validate_card_consistency
+    effective_card_number = payload.card_number if payload.card_number else None
+    if not effective_card_number and method.encrypted_card_number:
+        from app.security.crypto import decrypt_secret
+        try:
+            effective_card_number = decrypt_secret(method.encrypted_card_number)
+        except Exception:
+            effective_card_number = None
+    try:
+        validate_card_consistency(
+            effective_card_number,
+            method.last_four,
+            method.expiry_month,
+            method.expiry_year,
+            require_complete_expiry=True,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     await log_audit_event(
         db, action="update", entity_type="payment_method", entity_id=method.id, entity_name=method.alias,

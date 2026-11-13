@@ -27,6 +27,10 @@ jobs:
           pip install -r backend/requirements.txt
 
       - name: Run Pytest test suite
+        env:
+          SERVER_SECRET_KEY: ci-test-ephemeral-secret-key-minimum-32-chars
+          INITIAL_OWNER_PASSWORD: CiTestOwnerPassword123!
+          FALLBACK_USD_MXN_RATE: "20.5"
         run: |
           pytest
 

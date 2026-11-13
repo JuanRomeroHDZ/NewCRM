@@ -64,7 +64,7 @@ async def authenticate_user(
     if not user:
         # Dummy verification to mitigate timing attacks
         verify_master_password(
-            "$argon2id$v=19$m=65536,t=3,p=4$dummy_salt$dummy_hash",
+            "$argon2id$v=19$m=65536,t=3,p=1$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
             password
         )
         return None, GENERIC_AUTH_ERROR

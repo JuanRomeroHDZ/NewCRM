@@ -507,6 +507,31 @@ export interface SecureResource {
   updated_at?: string;
 }
 
+export type CoreUserRole = 'owner' | 'business_admin' | 'seller' | 'readonly';
 
+export interface CoreUser {
+  id: string;
+  username: string;
+  email: string;
+  full_name: string;
+  role: CoreUserRole;
+  is_active: boolean;
+  is_totp_enabled: boolean;
+  must_change_password: boolean;
+  created_at?: string;
+}
 
+export interface CoreLoginResponse {
+  token: string;
+  user: CoreUser;
+  expires_in_minutes: number;
+}
 
+export interface CoreUserCreateResponse extends CoreUser {
+  temporary_password: string;
+}
+
+export interface TotpSetupResponse {
+  secret: string;
+  recovery_codes: string[];
+}

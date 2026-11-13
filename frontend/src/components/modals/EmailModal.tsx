@@ -6,6 +6,12 @@ import { EmailAccount, BackupCodeItem, SecurityQuestionItem, EntityScope } from 
 import { isValidEmail, validateAndNormalizeUrl, isValidPhone, INPUT_LIMITS } from '../../lib/validation';
 
 const STANDARD_PROVIDERS = ['Google', 'Proton', 'Outlook', 'Zoho', 'iCloud', 'Custom'];
+const PROVIDER_DEFAULT_URLS: Record<string, string> = {
+  Google: 'https://mail.google.com',
+  Proton: 'https://mail.proton.me',
+  Outlook: 'https://outlook.live.com',
+  Zoho: 'https://mail.zoho.com',
+};
 
 export const EmailModal: React.FC = () => {
   const { 
@@ -65,7 +71,7 @@ export const EmailModal: React.FC = () => {
         setProvider('Google');
         setCustomProvider('');
         setScope(defaultEntityScope);
-        setInboxUrl('https://mail.google.com');
+        setInboxUrl(PROVIDER_DEFAULT_URLS.Google || '');
         setPassword('');
         setRecoveryEmailId('');
         setRecoveryPhone('');
@@ -262,11 +268,12 @@ export const EmailModal: React.FC = () => {
               <select
                 value={provider}
                 onChange={(e) => {
-                  setProvider(e.target.value);
-                  if (e.target.value === 'Google') setInboxUrl('https://mail.google.com');
-                  else if (e.target.value === 'Proton') setInboxUrl('https://mail.proton.me');
-                  else if (e.target.value === 'Outlook') setInboxUrl('https://outlook.live.com');
-                  else if (e.target.value === 'Zoho') setInboxUrl('https://mail.zoho.com');
+                  const nextProvider = e.target.value;
+                  setProvider(nextProvider);
+                  const defaultUrl = PROVIDER_DEFAULT_URLS[nextProvider];
+                  if (defaultUrl) {
+                    setInboxUrl(defaultUrl);
+                  }
                 }}
                 className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs focus:outline-none focus:border-indigo-500"
               >

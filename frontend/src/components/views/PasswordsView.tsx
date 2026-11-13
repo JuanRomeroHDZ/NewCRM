@@ -712,7 +712,7 @@ export const PasswordsView: React.FC = () => {
                       </div>
 
                       {/* Content Container (Encrypted AES-256-GCM) */}
-                      <div className="p-3 rounded-xl bg-obsidian-bg border border-obsidian-border relative group">
+                      <div className="p-3 rounded-xl bg-obsidian-bg/80 relative group">
                         <div className="flex items-center justify-between pb-1.5 mb-1.5 border-b border-obsidian-border/50 text-[10px] text-obsidian-muted font-mono">
                           <span>Contenido Encriptado</span>
                           <div className="flex items-center gap-1">

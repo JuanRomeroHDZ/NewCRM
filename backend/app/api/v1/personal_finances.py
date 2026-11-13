@@ -1,23 +1,30 @@
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select, func, desc
 from sqlalchemy.ext.asyncio import AsyncSession
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, model_validator
 from app.database import get_db
 from app.models.core import User
 from app.models.finances import Budget, Debt, DebtPayment
 from app.models import OneTimeExpense, PaymentMethod
 from app.services.core_auth import require_role
 from app.services.activity_service import record_event
+from app.security.crypto import decrypt_note, encrypt_note
+from app.schemas.validators import validate_calendar_date, validate_year_month
+from app.schemas import validate_nonblank_input
+from app.config import settings as app_settings
 
 router = APIRouter(prefix="/personal-finances", tags=["personal-finances"])
 
 # Schemas
 class BudgetCreate(BaseModel):
-    month: str = Field(..., pattern=r"^\d{4}-\d{2}$")  # YYYY-MM
+    month: str = Field(..., pattern=r"^\d{4}-(0[1-9]|1[0-2])$")  # YYYY-MM
     category: str = Field(..., min_length=2, max_length=64)
-    cap_amount: float = Field(..., gt=0)
-    currency: str = Field("MXN", pattern="^(MXN|USD)$")
+    cap_amount: float = Field(..., gt=0, le=100000000, allow_inf_nan=False)
+    currency: str = Field(default_factory=lambda: app_settings.DEFAULT_CURRENCY, pattern="^(MXN|USD)$")
+
+    _valid_month = field_validator("month")(validate_year_month)
+    _valid_category = field_validator("category")(validate_nonblank_input)
 
 class BudgetResponse(BaseModel):
     id: str
@@ -29,14 +36,23 @@ class BudgetResponse(BaseModel):
 
 class DebtCreate(BaseModel):
     creditor: str = Field(..., min_length=2, max_length=128)
-    original_amount: float = Field(..., gt=0)
-    current_balance: float = Field(..., ge=0)
-    currency: str = Field("MXN", pattern="^(MXN|USD)$")
-    interest_rate: float = Field(0.0, ge=0)
-    due_date: str | None = None
+    original_amount: float = Field(..., gt=0, le=100000000, allow_inf_nan=False)
+    current_balance: float = Field(..., ge=0, le=100000000, allow_inf_nan=False)
+    currency: str = Field(default_factory=lambda: app_settings.DEFAULT_CURRENCY, pattern="^(MXN|USD)$")
+    interest_rate: float = Field(0.0, ge=0, le=1000, allow_inf_nan=False)
+    due_date: str | None = Field(default=None, max_length=32)
     payment_day_of_month: int | None = Field(None, ge=1, le=31)
-    minimum_payment: float = Field(0.0, ge=0)
-    notes: str | None = None
+    minimum_payment: float = Field(0.0, ge=0, le=100000000, allow_inf_nan=False)
+    notes: str | None = Field(default=None, max_length=5000)
+
+    _valid_creditor = field_validator("creditor")(validate_nonblank_input)
+    _valid_due_date = field_validator("due_date")(validate_calendar_date)
+
+    @model_validator(mode="after")
+    def check_balance_not_exceeding_original(self):
+        if self.current_balance > self.original_amount + 1e-6:
+            raise ValueError("El saldo actual no puede exceder el monto original de la deuda.")
+        return self
 
 class DebtResponse(BaseModel):
     id: str
@@ -52,16 +68,18 @@ class DebtResponse(BaseModel):
     notes: str | None = None
 
 class DebtPaymentCreate(BaseModel):
-    amount: float = Field(..., gt=0)
-    currency: str = Field("MXN", pattern="^(MXN|USD)$")
+    amount: float = Field(..., gt=0, le=100000000, allow_inf_nan=False)
+    currency: str = Field(default_factory=lambda: app_settings.DEFAULT_CURRENCY, pattern="^(MXN|USD)$")
     payment_date: str = Field(..., pattern=r"^\d{4}-\d{2}-\d{2}$")
-    payment_method_id: str | None = None
-    notes: str | None = None
+    payment_method_id: str | None = Field(default=None, max_length=36)
+    notes: str | None = Field(default=None, max_length=2000)
+
+    _valid_payment_date = field_validator("payment_date")(validate_calendar_date)
 
 # Routes (Protected exclusively for Owner)
 @router.get("/budgets", response_model=list[BudgetResponse])
 async def list_budgets(
-    month: str | None = None,
+    month: str | None = Query(None, pattern=r"^\d{4}-(0[1-9]|1[0-2])$"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role(["owner"]))
 ):
@@ -141,9 +159,34 @@ async def create_or_update_budget(
         spent_amount=0.0
     )
 
+def _safe_decrypt_debt_notes(raw: str | None) -> str | None:
+    if not raw:
+        return None
+    try:
+        return decrypt_note(raw)
+    except Exception:
+        return raw
+
+
+def _serialize_debt(debt: Debt) -> DebtResponse:
+    return DebtResponse(
+        id=debt.id,
+        creditor=debt.creditor,
+        original_amount=debt.original_amount,
+        current_balance=debt.current_balance,
+        currency=debt.currency,
+        interest_rate=debt.interest_rate,
+        due_date=debt.due_date,
+        payment_day_of_month=debt.payment_day_of_month,
+        minimum_payment=debt.minimum_payment,
+        status=debt.status,
+        notes=_safe_decrypt_debt_notes(debt.notes),
+    )
+
+
 @router.get("/debts", response_model=list[DebtResponse])
 async def list_debts(
-    status_filter: str | None = None,
+    status_filter: str | None = Query(None, pattern="^(active|paid_off|renegotiated)$"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role(["owner"]))
 ):
@@ -152,7 +195,7 @@ async def list_debts(
         query = query.where(Debt.status == status_filter)
     res = await db.execute(query)
     debts = res.scalars().all()
-    return debts
+    return [_serialize_debt(d) for d in debts]
 
 @router.post("/debts", response_model=DebtResponse, status_code=status.HTTP_201_CREATED)
 async def create_debt(
@@ -169,7 +212,7 @@ async def create_debt(
         due_date=payload.due_date,
         payment_day_of_month=payload.payment_day_of_month,
         minimum_payment=payload.minimum_payment,
-        notes=payload.notes,
+        notes=encrypt_note(payload.notes) if payload.notes else None,
         status="active" if payload.current_balance > 0 else "paid_off"
     )
     db.add(debt)
@@ -187,7 +230,7 @@ async def create_debt(
         user_name=current_user.username
     )
     await db.commit()
-    return debt
+    return _serialize_debt(debt)
 
 @router.post("/debts/{debt_id}/payments", status_code=status.HTTP_201_CREATED)
 async def record_debt_payment(
@@ -200,6 +243,15 @@ async def record_debt_payment(
     debt = (await db.execute(stmt)).scalar_one_or_none()
     if not debt:
         raise HTTPException(status_code=404, detail="Deuda no encontrada")
+    if payload.currency != debt.currency:
+        raise HTTPException(
+            status_code=400,
+            detail=f"La moneda del abono ({payload.currency}) debe coincidir con la de la deuda ({debt.currency})."
+        )
+    if payload.payment_method_id:
+        pm = await db.get(PaymentMethod, payload.payment_method_id)
+        if not pm:
+            raise HTTPException(status_code=404, detail="Método de pago no encontrado")
 
     payment = DebtPayment(
         debt_id=debt.id,
@@ -207,7 +259,7 @@ async def record_debt_payment(
         currency=payload.currency,
         payment_date=payload.payment_date,
         payment_method_id=payload.payment_method_id,
-        notes=payload.notes
+        notes=encrypt_note(payload.notes) if payload.notes else None
     )
     db.add(payment)
 
@@ -239,7 +291,7 @@ async def record_debt_payment(
 
 @router.get("/summary")
 async def get_financial_summary(
-    month: str | None = None,
+    month: str | None = Query(None, pattern=r"^\d{4}-(0[1-9]|1[0-2])$"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role(["owner"]))
 ):

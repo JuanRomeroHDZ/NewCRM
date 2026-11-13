@@ -7,7 +7,7 @@ import { useVault } from '../../context/VaultContext';
 import { api } from '../../lib/api';
 import { EmailAccount, TagItem, ProspectStatus, ProspectWorkflowType, EntityScope } from '../../types';
 import { PROSPECT_STATUS_OPTIONS } from '../../lib/prospectUtils';
-import { isValidEmail, validateAndNormalizeUrl, isValidPhone, validateSlaHours, INPUT_LIMITS } from '../../lib/validation';
+import { isValidEmail, validateAndNormalizeUrl, isValidPhone, isValidPhoneList, validateSlaHours, INPUT_LIMITS } from '../../lib/validation';
 import { InfoTooltip } from '../common/InfoTooltip';
 
 function toLocalDatetimeInputValue(isoStr?: string): string {
@@ -214,8 +214,8 @@ export const ProspectModal: React.FC = () => {
       return;
     }
 
-    if (phones.trim() && !isValidPhone(phones)) {
-      const msg = 'El campo de teléfono(s) contiene caracteres inválidos o menos de 7 dígitos.';
+    if (phones.trim() && !isValidPhoneList(phones)) {
+      const msg = 'Cada teléfono en la lista debe tener entre 7 y 15 dígitos (máx. 15 teléfonos).';
       setFormError(msg);
       showToast(msg, 'error');
       return;

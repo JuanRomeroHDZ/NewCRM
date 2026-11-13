@@ -81,7 +81,7 @@ class CloudLeaseService:
         Verifies local offline map tiles for Baja California.
         If tiles do not exist locally, transparently signals fallback to list view.
         """
-        tiles_dir = os.environ.get("LOCAL_TILES_DIR", "/app/data/tiles/baja_california")
+        tiles_dir = settings.LOCAL_TILES_DIR
         has_tiles = os.path.exists(tiles_dir) and len(os.listdir(tiles_dir)) > 0 if os.path.exists(tiles_dir) else False
 
         return {

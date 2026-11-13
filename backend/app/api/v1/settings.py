@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Header, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from app.config import settings as app_settings
 from app.database import get_db
 from app.models import UserSettings, EmailAccount, PlatformAccount, PaymentMethod, PasswordHistory
 from app.schemas import SettingsResponse, SettingsUpdate
@@ -23,32 +24,32 @@ async def get_settings(db: AsyncSession = Depends(get_db)):
     s = res.scalar_one_or_none()
     if not s:
         return SettingsResponse(
-            vault_timeout_minutes=10,
-            clipboard_clear_seconds=30,
+            vault_timeout_minutes=app_settings.VAULT_SESSION_TIMEOUT_MINUTES,
+            clipboard_clear_seconds=app_settings.CLIPBOARD_CLEAR_SECONDS,
             allow_reveal_passwords=False,
-            search_hotkey="ctrl+k",
-            accent_color="#6366f1",
-            canvas_style="dot-grid",
+            search_hotkey=app_settings.DEFAULT_SEARCH_HOTKEY,
+            accent_color=app_settings.DEFAULT_ACCENT_COLOR,
+            canvas_style=app_settings.DEFAULT_CANVAS_STYLE,
             budget_cap_amount=0.0,
-            budget_cap_currency="MXN",
-            password_rotation_days_root=90,
-            password_rotation_days_secondary=180,
+            budget_cap_currency=app_settings.DEFAULT_CURRENCY,
+            password_rotation_days_root=app_settings.DEFAULT_PASSWORD_ROTATION_DAYS_ROOT,
+            password_rotation_days_secondary=app_settings.DEFAULT_PASSWORD_ROTATION_DAYS_SECONDARY,
             trash_retention_days=0,
-            max_followup_attempts=3
+            max_followup_attempts=app_settings.DEFAULT_MAX_FOLLOWUP_ATTEMPTS
         )
     return SettingsResponse(
         vault_timeout_minutes=s.vault_timeout_minutes,
         clipboard_clear_seconds=s.clipboard_clear_seconds,
         allow_reveal_passwords=s.allow_reveal_passwords,
         search_hotkey=s.search_hotkey,
-        accent_color=s.accent_color or "#6366f1",
-        canvas_style=s.canvas_style or "dot-grid",
+        accent_color=s.accent_color or app_settings.DEFAULT_ACCENT_COLOR,
+        canvas_style=s.canvas_style or app_settings.DEFAULT_CANVAS_STYLE,
         budget_cap_amount=float(getattr(s, "budget_cap_amount", 0.0) or 0.0),
-        budget_cap_currency=getattr(s, "budget_cap_currency", "MXN") or "MXN",
-        password_rotation_days_root=int(getattr(s, "password_rotation_days_root", 90) or 90),
-        password_rotation_days_secondary=int(getattr(s, "password_rotation_days_secondary", 180) or 180),
+        budget_cap_currency=getattr(s, "budget_cap_currency", app_settings.DEFAULT_CURRENCY) or app_settings.DEFAULT_CURRENCY,
+        password_rotation_days_root=int(getattr(s, "password_rotation_days_root", app_settings.DEFAULT_PASSWORD_ROTATION_DAYS_ROOT) or app_settings.DEFAULT_PASSWORD_ROTATION_DAYS_ROOT),
+        password_rotation_days_secondary=int(getattr(s, "password_rotation_days_secondary", app_settings.DEFAULT_PASSWORD_ROTATION_DAYS_SECONDARY) or app_settings.DEFAULT_PASSWORD_ROTATION_DAYS_SECONDARY),
         trash_retention_days=int(getattr(s, "trash_retention_days", 0) or 0),
-        max_followup_attempts=int(getattr(s, "max_followup_attempts", 3) or 3)
+        max_followup_attempts=int(getattr(s, "max_followup_attempts", app_settings.DEFAULT_MAX_FOLLOWUP_ATTEMPTS) or app_settings.DEFAULT_MAX_FOLLOWUP_ATTEMPTS)
     )
 
 @router.put("", response_model=SettingsResponse)

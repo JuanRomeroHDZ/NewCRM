@@ -44,7 +44,7 @@ async def extract_favicon_url(domain_or_url: str) -> str:
     if not domain:
         return generate_initials_svg(domain_or_url)
 
-    google_favicon = f"https://www.google.com/s2/favicons?domain={domain}&sz=128"
+    google_favicon = settings.FAVICON_FALLBACK_URL_TEMPLATE.format(domain=urllib.parse.quote(domain))
     try:
         async with httpx.AsyncClient(timeout=2.0, follow_redirects=True) as client:
             resp = await client.head(google_favicon)

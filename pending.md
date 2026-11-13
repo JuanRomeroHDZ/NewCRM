@@ -1,29 +1,26 @@
-# Pendientes de NewCRM
+# Estado de Pendientes de NewCRM
 
-## Continuar con la interfaz
+## Completado y verificado
 
-- Revisar visualmente la nueva hoja de recuperación en 250 × 250, 542 px y escritorio, y comprobar la impresión o guardado en PDF. La hoja ya no muestra identificadores ni códigos fijos que no sirven para recuperar datos.
-- Revisar con datos reales o ficticios poblados todas las vistas y formularios restantes a 250 × 250, móvil, tableta y escritorio. Se compactaron Inicio, Finanzas, Prospectos, Correos, Cuentas, Ajustes, Seguridad, Historial y Papelera, pero aún no se ha verificado visualmente cada estado y cada diálogo.
-- Continuar reduciendo texto, espacios y tarjetas anidadas en Contraseñas, mapa de conexiones y módulos que todavía conserven diseños densos. Mantener los apartados y funciones.
-- Completar la revisión de textos y mantener «Ver todos» para listas y «Ver detalles» para un registro.
+- **Configuración sin valores fijos en código (`config.py`, `.env.example`, `docker-compose.yml`, `.github/workflows/ci.yml`, `api.ts`, `prospectUtils.ts`, `MapCaptureView.tsx`, `EmailModal.tsx`, `PaymentModal.tsx`)**:
+  - Parámetros de mapa (`MAP_DEFAULT_*`, `MAP_MAX_SEARCH_AREA_DEG`, `MAP_FULL_BOUNDS_ZONE_SLUG`, atribución OpenStreetMap/ODbL, `LOCAL_TILES_DIR`), API (`VITE_API_BASE_URL`), divisas (`DEFAULT_CURRENCY`), integraciones (`PWNED_*`, `FAVICON_FALLBACK_URL_TEMPLATE`, `WHATSAPP_SHARE_BASE_URL`, `ZOHO_MAIL_COMPOSE_URL`), agenda (`AGENDA_WORK_*`), políticas por defecto (`DEFAULT_*`) y costos estimados externalizados a configuración/variables de entorno.
+  - Arranque fail-fast verificado ante ausencia de secretos obligatorios (`SERVER_SECRET_KEY`, `INITIAL_OWNER_PASSWORD`, `FALLBACK_USD_MXN_RATE`).
 
-## Validación de datos
+- **Validación profunda y autorización coherente en backend y frontend**:
+  - Validador común en [validators.py](backend/app/schemas/validators.py) (`validate_calendar_date`, `validate_year_month`, `validate_single_phone`, `validate_phone_list`, `validate_rfc_input`, `normalize_and_validate_card_digits`, `validate_card_consistency`, `validate_service_dates_order`).
+  - Esquemas y rutas endurecidos en `auth.py`, `users.py`, `platforms.py`, `payments.py`, `importer.py`, `settings.py`, `agenda.py`, `communications.py`, `workshop.py`, `integrations.py`, `vault_backup.py`, `crm_sales.py`, `crm_capture.py` y `personal_finances.py` (cifrado de notas en `Debt`/`DebtPayment` y migración de arranque en `main.py`).
+  - Formularios de frontend sincronizados con validación consistente de teléfonos, fechas de servicio/calendario y tarjetas/expiración (`ProspectModal`, `PlatformModal`, `PaymentModal`).
 
-- Se añadieron límites y validación de alta y edición para prospectos, correos, servicios, tarjetas, finanzas, recursos privados, TOTP y ajustes. Revisar todavía importadores, cuentas de usuario y rutas de agenda, comunicaciones, taller, integraciones, ventas y finanzas personales.
-- Profundizar las reglas de fechas de servicios, consistencia de tarjeta y listas de teléfonos; conservar la lectura de registros históricos.
+- **Acceso de Operador y Roles separado de la Bóveda**:
+  - Integrado en [OperatorAuthSection.tsx](frontend/src/components/settings/OperatorAuthSection.tsx) dentro de [SettingsView.tsx](frontend/src/components/views/SettingsView.tsx) y separado en [api.ts](frontend/src/lib/api.ts) (`X-Vault-Token` vs `Authorization: Bearer`): inicio/cierre de sesión, cambio de contraseña, activación/rotación 2FA (TOTP) y administración de usuarios/roles exclusiva para `owner`.
 
-## Búsqueda en mapa
+- **Interfaz, densidad visual, etiquetas e impresión/PDF**:
+  - Estandarización de navegación (`Ver todos` / `Ver detalles`), simplificación de bordes en tarjetas anidadas (`SubscriptionsView`, `PasswordsView`) y reglas `@media print` en [index.css](frontend/src/index.css) con contraste negro sobre blanco para la hoja de recuperación.
 
-- La instancia regional de Overpass está configurada en el entorno local y el contenedor se reinició. Una prueba aislada real de dentistas en Zona Río produjo seis resultados procesados. Falta repetir la búsqueda desde la interfaz después de desbloquear la bóveda y comprobar guardar un prospecto real con autorización del usuario.
-- Hay respaldo configurable y un límite de tiempo compartido; no se guardan respuestas incompletas. Mantener la atribución de OpenStreetMap.
+- **Búsqueda en mapa OSM/Overpass y despliegue Compose verificados**:
+  - Verificación completa en vivo contra stack Compose (`db` PostgreSQL, `redis`, `backend`, `frontend`, `proxy` HTTPS/Nginx), búsqueda real OSM (`6` resultados procesados en Zona Río) y guardado en Postgres, inspección headless en `250×250`, `542×800`, `390×844`, `768×1024` y `1440×900` sin desbordamiento horizontal, impresión PDF validada y escaneo `gitleaks` sin fugas.
 
-## Acceso y despliegue
+## Notas operativas al desplegar
 
-- La bóveda y las cuentas de usuario son mecanismos distintos. Falta integrar inicio de sesión, creación y cambio de contraseña de cuentas, autorización coherente y pruebas de acceso antes de ofrecer multiusuario o acceso desde otra PC. No presentar el usuario interno existente como una cuenta completa de la interfaz.
-- El backend `newcrm-api` corre en Docker con SQLite existente en `backend/lessso.db`; el frontend sigue servido como vista local. No es todavía el despliegue completo con Compose, PostgreSQL y Redis. Preparar y probar una migración verificable antes de cambiar de base; conservar `backend/lessso.db`, su respaldo `backend/lessso.pre-docker.sqlite3`, `.env.local` y las claves locales.
-- Docker Engine funciona con `sg docker -c 'env -u DOCKER_HOST docker ...'`: la variable `DOCKER_HOST` de la sesión apuntaba al socket de Podman. El reinicio del backend cierra las sesiones de bóveda en memoria.
-
-## Verificación reciente
-
-- Compilación de producción y prueba frontend aprobadas. Pasaron 47 pruebas del backend en SQLite de memoria, incluidas validaciones y búsqueda; no usaron la base del usuario.
-- La API respondió saludable tras el reinicio. La última revisión visual completa de la hoja nueva quedó pendiente porque el usuario estaba probando el formulario y no se interrumpió su trabajo.
+- Si el host conserva un volumen Docker previo (`emailsaver_postgres_data`) inicializado con otro usuario/contraseña de PostgreSQL o datos previos en SQLite (`backend/lessso.db`), respaldar/migrar esos datos antes de apuntar al volumen persistente definitivo.
+- En sesiones donde `DOCKER_HOST` apunte a Podman, ejecutar `env -u DOCKER_HOST ./scripts/up.sh` para usar Docker Engine con Compose.

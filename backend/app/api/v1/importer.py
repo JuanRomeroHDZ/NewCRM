@@ -1,11 +1,13 @@
 import json
-from typing import Any
+from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from app.config import settings
 from app.database import get_db
 from app.models import EmailAccount, PlatformAccount, PasswordHistory
+from app.schemas import validate_email_input, validate_nonblank_input, validate_web_url_input
 from app.security.crypto import encrypt_secret, encrypt_note, calculate_entropy
 from app.security.tokens import require_vault_unlocked
 from app.services.audit import log_audit_event
@@ -14,16 +16,31 @@ from app.services.favicon import extract_favicon_url
 router = APIRouter(prefix="/importer", tags=["importer"], dependencies=[Depends(require_vault_unlocked)])
 
 class ImportItem(BaseModel):
-    name: str
-    username: str | None = None
-    password: str | None = None
-    url: str | None = None
-    notes: str | None = None
-    parent_email: str | None = None
+    name: str = Field(..., min_length=1, max_length=128)
+    username: str | None = Field(default=None, max_length=128)
+    password: str | None = Field(default=None, max_length=512)
+    url: str | None = Field(default=None, max_length=512)
+    notes: str | None = Field(default=None, max_length=10000)
+    parent_email: str | None = Field(default=None, max_length=255)
+
+    @field_validator("name")
+    @classmethod
+    def check_name(cls, v: str) -> str:
+        return validate_nonblank_input(v)
+
+    @field_validator("url")
+    @classmethod
+    def check_url(cls, v: str | None) -> str | None:
+        return validate_web_url_input(v)
+
+    @field_validator("parent_email")
+    @classmethod
+    def check_parent_email(cls, v: str | None) -> str | None:
+        return validate_email_input(v)
 
 class BatchImportRequest(BaseModel):
-    source: str = "generic"  # bitwarden, 1password, chrome, generic
-    items: list[ImportItem]
+    source: Literal["generic", "bitwarden", "1password", "chrome"] = "generic"
+    items: list[ImportItem] = Field(..., min_length=1, max_length=1000)
 
 @router.post("/batch")
 async def batch_import_vault(payload: BatchImportRequest, db: AsyncSession = Depends(get_db)):
@@ -40,8 +57,10 @@ async def batch_import_vault(payload: BatchImportRequest, db: AsyncSession = Dep
     # If no email exists, create a default fallback root email
     default_email = existing_emails[0] if existing_emails else None
     if not default_email:
+        from app.config import settings
+        fallback_address = settings.DEFAULT_IMPORT_EMAIL.strip() or settings.INITIAL_OWNER_EMAIL
         default_email = EmailAccount(
-            address="principal.import@emailsaver.local",
+            address=fallback_address,
             provider="Custom",
             notes=encrypt_note("Correo creado automáticamente como contenedor de importación")
         )
@@ -93,9 +112,9 @@ async def batch_import_vault(payload: BatchImportRequest, db: AsyncSession = Dep
             encrypted_password=enc_pw,
             subscription_status="active",
             subscription_cost=0.0,
-            currency="MXN",
+            currency=settings.DEFAULT_CURRENCY,
             billing_cycle="monthly",
-            tags=json.dumps([{"name": f"Importado ({payload.source})", "color": "#6366f1"}])
+            tags=json.dumps([{"name": f"Importado ({payload.source})", "color": settings.DEFAULT_TAG_COLOR}])
         )
         db.add(platform)
         await db.flush()

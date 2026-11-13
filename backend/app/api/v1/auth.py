@@ -1,20 +1,66 @@
+import json
 import secrets
-from fastapi import APIRouter, Depends, HTTPException, Header, status
-from sqlalchemy import select
+from datetime import datetime, timedelta, timezone
+from fastapi import APIRouter, Body, Depends, HTTPException, Header, Request, status
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from app.config import settings as app_settings
 from app.database import get_db
 from app.models import UserSettings
-from app.schemas import MasterPasswordSetup, VaultUnlockRequest, VaultStatusResponse
+from app.models.core import DbSession, User
+from app.schemas import (
+    MasterPasswordSetup,
+    TotpSetupConfirmRequest,
+    TotpSetupResponse,
+    TotpVerifyRequest,
+    UserChangePasswordRequest,
+    UserLoginRequest,
+    UserLoginResponse,
+    UserResponse,
+    VaultStatusResponse,
+    VaultUnlockRequest,
+)
 from app.security.crypto import hash_master_password, verify_master_password, derive_vault_key
 from app.security.tokens import (
     create_vault_token,
     verify_vault_token,
     revoke_vault_token,
-    get_vault_remaining_seconds
+    get_vault_remaining_seconds,
 )
+from app.security.totp import generate_random_totp_secret, verify_totp_code
 from app.services.audit import log_audit_event
+from app.services.core_auth import (
+    authenticate_user,
+    create_user_session,
+    get_current_user_from_token,
+    get_or_create_initial_owner,
+    hash_token,
+)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+_VAULT_FAILED_ATTEMPTS: dict[str, list[datetime]] = {}
+
+
+def reset_vault_lockout() -> None:
+    """Clears in-memory failed vault unlock tracking (used on success or tests)."""
+    _VAULT_FAILED_ATTEMPTS.clear()
+
+
+def _client_key(request: Request) -> str:
+    return request.client.host if request.client and request.client.host else "local"
+
+
+def _is_vault_locked_out(client_key: str) -> bool:
+    now = datetime.now(timezone.utc)
+    cutoff = now - timedelta(minutes=app_settings.LOCKOUT_MINUTES)
+    attempts = [ts for ts in _VAULT_FAILED_ATTEMPTS.get(client_key, []) if ts >= cutoff]
+    if attempts:
+        _VAULT_FAILED_ATTEMPTS[client_key] = attempts
+    else:
+        _VAULT_FAILED_ATTEMPTS.pop(client_key, None)
+    return len(attempts) >= app_settings.MAX_FAILED_LOGIN_ATTEMPTS
+
 
 @router.get("/status", response_model=VaultStatusResponse)
 async def get_vault_status(
@@ -33,18 +79,18 @@ async def get_vault_status(
         is_setup=is_setup,
         is_unlocked=is_unlocked,
         remaining_seconds=remaining,
-        timeout_minutes=user_settings.vault_timeout_minutes if user_settings else 10,
-        clipboard_clear_seconds=user_settings.clipboard_clear_seconds if user_settings else 30,
+        timeout_minutes=user_settings.vault_timeout_minutes if user_settings else app_settings.VAULT_SESSION_TIMEOUT_MINUTES,
+        clipboard_clear_seconds=user_settings.clipboard_clear_seconds if user_settings else app_settings.CLIPBOARD_CLEAR_SECONDS,
         allow_reveal_passwords=user_settings.allow_reveal_passwords if user_settings else False,
-        search_hotkey=user_settings.search_hotkey if user_settings else "ctrl+k",
-        accent_color=user_settings.accent_color if user_settings else "#6366f1",
-        canvas_style=user_settings.canvas_style if user_settings else "dot-grid",
+        search_hotkey=user_settings.search_hotkey if user_settings else app_settings.DEFAULT_SEARCH_HOTKEY,
+        accent_color=user_settings.accent_color if user_settings else app_settings.DEFAULT_ACCENT_COLOR,
+        canvas_style=user_settings.canvas_style if user_settings else app_settings.DEFAULT_CANVAS_STYLE,
         budget_cap_amount=float(getattr(user_settings, "budget_cap_amount", 0.0) or 0.0) if user_settings else 0.0,
-        budget_cap_currency=(getattr(user_settings, "budget_cap_currency", "MXN") or "MXN") if user_settings else "MXN",
-        password_rotation_days_root=int(getattr(user_settings, "password_rotation_days_root", 90) or 90) if user_settings else 90,
-        password_rotation_days_secondary=int(getattr(user_settings, "password_rotation_days_secondary", 180) or 180) if user_settings else 180,
+        budget_cap_currency=(getattr(user_settings, "budget_cap_currency", app_settings.DEFAULT_CURRENCY) or app_settings.DEFAULT_CURRENCY) if user_settings else app_settings.DEFAULT_CURRENCY,
+        password_rotation_days_root=int(getattr(user_settings, "password_rotation_days_root", app_settings.DEFAULT_PASSWORD_ROTATION_DAYS_ROOT) or app_settings.DEFAULT_PASSWORD_ROTATION_DAYS_ROOT) if user_settings else app_settings.DEFAULT_PASSWORD_ROTATION_DAYS_ROOT,
+        password_rotation_days_secondary=int(getattr(user_settings, "password_rotation_days_secondary", app_settings.DEFAULT_PASSWORD_ROTATION_DAYS_SECONDARY) or app_settings.DEFAULT_PASSWORD_ROTATION_DAYS_SECONDARY) if user_settings else app_settings.DEFAULT_PASSWORD_ROTATION_DAYS_SECONDARY,
         trash_retention_days=int(getattr(user_settings, "trash_retention_days", 0) or 0) if user_settings else 0,
-        max_followup_attempts=int(getattr(user_settings, "max_followup_attempts", 3) or 3) if user_settings else 3
+        max_followup_attempts=int(getattr(user_settings, "max_followup_attempts", app_settings.DEFAULT_MAX_FOLLOWUP_ATTEMPTS) or app_settings.DEFAULT_MAX_FOLLOWUP_ATTEMPTS) if user_settings else app_settings.DEFAULT_MAX_FOLLOWUP_ATTEMPTS
     )
 
 @router.post("/setup")
@@ -65,15 +111,16 @@ async def setup_master_password(payload: MasterPasswordSetup, db: AsyncSession =
     settings = UserSettings(
         master_password_hash=hashed,
         vault_salt=vault_salt,
-        vault_timeout_minutes=10,
-        clipboard_clear_seconds=30,
+        vault_timeout_minutes=app_settings.VAULT_SESSION_TIMEOUT_MINUTES,
+        clipboard_clear_seconds=app_settings.CLIPBOARD_CLEAR_SECONDS,
         allow_reveal_passwords=False,
-        search_hotkey="ctrl+k"
+        search_hotkey=app_settings.DEFAULT_SEARCH_HOTKEY
     )
     db.add(settings)
     await log_audit_event(db, action="create", entity_type="vault", details="Configuración inicial de contraseña de acceso")
     await db.commit()
 
+    reset_vault_lockout()
     token = create_vault_token(settings.vault_timeout_minutes, encryption_key=derived_aes_key)
     return {
         "message": "Bóveda configurada exitosamente.",
@@ -82,7 +129,18 @@ async def setup_master_password(payload: MasterPasswordSetup, db: AsyncSession =
     }
 
 @router.post("/unlock")
-async def unlock_vault(payload: VaultUnlockRequest, db: AsyncSession = Depends(get_db)):
+async def unlock_vault(
+    payload: VaultUnlockRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    client_key = _client_key(request)
+    if _is_vault_locked_out(client_key):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Demasiados intentos fallidos. Espera unos minutos antes de intentar de nuevo."
+        )
+
     stmt = select(UserSettings).limit(1)
     res = await db.execute(stmt)
     settings = res.scalar_one_or_none()
@@ -90,10 +148,13 @@ async def unlock_vault(payload: VaultUnlockRequest, db: AsyncSession = Depends(g
         raise HTTPException(status_code=400, detail="El espacio seguro aún no está configurado. Configure una contraseña de acceso primero.")
 
     if not verify_master_password(settings.master_password_hash, payload.master_password):
+        _VAULT_FAILED_ATTEMPTS.setdefault(client_key, []).append(datetime.now(timezone.utc))
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Contraseña de acceso incorrecta."
         )
+
+    reset_vault_lockout()
 
     # If vault_salt was missing from a legacy DB migration, generate and save it
     vault_salt = getattr(settings, "vault_salt", None)
@@ -123,18 +184,6 @@ async def lock_vault(x_vault_token: str | None = Header(None)):
     return {"message": "Bóveda bloqueada exitosamente y sesión revocada."}
 
 # Endpoints de Autenticación de Usuarios del Núcleo
-from fastapi import Request
-from app.models.core import User, DbSession
-from app.schemas import (
-    UserLoginRequest, UserLoginResponse, UserResponse,
-    TotpSetupResponse, TotpVerifyRequest
-)
-from app.services.core_auth import (
-    authenticate_user, create_user_session, get_current_user_from_token,
-    get_or_create_initial_owner, hash_token, utc_now
-)
-from app.security.totp import generate_random_totp_secret, verify_totp_code
-import json
 
 @router.post("/login", response_model=UserLoginResponse)
 async def user_login(
@@ -210,7 +259,7 @@ async def user_login(
     return UserLoginResponse(
         token=token_str,
         user=user_resp,
-        expires_in_minutes=120
+        expires_in_minutes=app_settings.VAULT_SESSION_TIMEOUT_MINUTES
     )
 
 @router.post("/logout")
@@ -227,7 +276,6 @@ async def user_logout(
 
     if token:
         thash = hash_token(token)
-        from sqlalchemy import update
         await db.execute(
             update(DbSession)
             .where(DbSession.token_hash == thash)
@@ -253,11 +301,57 @@ async def get_current_user_profile(
         created_at=current_user.created_at
     )
 
-@router.post("/setup-2fa", response_model=TotpSetupResponse)
-async def setup_two_factor(
+@router.post("/change-password")
+async def change_user_password(
+    payload: UserChangePasswordRequest,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user_from_token)
 ):
+    if not verify_master_password(current_user.hashed_password, payload.current_password):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="La contraseña actual es incorrecta.")
+    if payload.current_password == payload.new_password:
+        raise HTTPException(status_code=400, detail="La nueva contraseña debe ser diferente a la actual.")
+    if current_user.is_totp_enabled:
+        if not payload.totp_code or not current_user.totp_secret or not verify_totp_code(current_user.totp_secret, payload.totp_code):
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Se requiere un código 2FA válido.")
+
+    current_user.hashed_password = hash_master_password(payload.new_password)
+    current_user.must_change_password = False
+
+    # Revoke other sessions so only the active caller session remains valid
+    auth_header = request.headers.get("Authorization")
+    current_token = auth_header[7:].strip() if auth_header and auth_header.startswith("Bearer ") else request.cookies.get("lessso_session")
+    current_hash = hash_token(current_token) if current_token else None
+    revoke_stmt = update(DbSession).where(DbSession.user_id == current_user.id, DbSession.is_revoked == False)
+    if current_hash:
+        revoke_stmt = revoke_stmt.where(DbSession.token_hash != current_hash)
+    await db.execute(revoke_stmt.values(is_revoked=True))
+
+    await log_audit_event(
+        db,
+        action="change_password",
+        entity_type="user",
+        entity_id=current_user.id,
+        entity_name=current_user.username,
+        details=f"Contraseña actualizada para el usuario {current_user.username}",
+    )
+    await db.commit()
+    return {"message": "Contraseña actualizada correctamente."}
+
+@router.post("/setup-2fa", response_model=TotpSetupResponse)
+async def setup_two_factor(
+    payload: TotpSetupConfirmRequest | None = Body(default=None),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user_from_token)
+):
+    if current_user.is_totp_enabled:
+        if not payload or not payload.current_password or not verify_master_password(current_user.hashed_password, payload.current_password):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Confirma tu contraseña actual para regenerar la verificación en dos pasos."
+            )
+
     secret = generate_random_totp_secret()
     raw_recovery_codes = [secrets.token_hex(4).upper() for _ in range(8)]
     hashed_codes = [hash_token(c) for c in raw_recovery_codes]

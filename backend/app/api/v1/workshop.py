@@ -8,25 +8,30 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from app.database import get_db
 from app.models.core import User
 from app.models import InternalProject
+from app.schemas import validate_finite_number_input, validate_nonblank_input, validate_web_url_input
+from app.security.crypto import decrypt_note, encrypt_note
 from app.services.core_auth import require_role
 from app.services.workshop_sanitizer import sanitize_svg_content
 from app.services.activity_service import record_event
 
 router = APIRouter(prefix="/workshop", tags=["workshop"])
 
+
 # Schemas
 class HashRequest(BaseModel):
-    text: str
+    text: str = Field(..., max_length=100000)
     algorithm: str = Field("sha256", pattern="^(sha256|sha512|md5|hmac_sha256)$")
-    secret_key: str | None = None
+    secret_key: str | None = Field(default=None, max_length=1024)
+
 
 class HashResponse(BaseModel):
     algorithm: str
     hash_result: str
+
 
 class PasswordGenRequest(BaseModel):
     length: int = Field(20, ge=8, le=128)
@@ -35,31 +40,56 @@ class PasswordGenRequest(BaseModel):
     include_digits: bool = True
     include_symbols: bool = True
 
+
 class PasswordGenResponse(BaseModel):
     password: str
     entropy_bits: float
     strength: str
 
+
 class DiagramSaveRequest(BaseModel):
     title: str = Field(..., min_length=1, max_length=128)
-    svg_content: str = Field(..., max_length=5 * 1024 * 1024)  # 5MB max
-    area: str = "creatividad"
+    svg_content: str = Field(..., min_length=1, max_length=5 * 1024 * 1024)  # 5MB max
+    area: str = Field("creatividad", min_length=1, max_length=64, pattern="^(creatividad|codigo|utilidades)$")
+
+    @field_validator("title")
+    @classmethod
+    def check_title(cls, value: str) -> str:
+        return validate_nonblank_input(value, "Ingresa el título del diagrama.")
+
 
 class DiagramResponse(BaseModel):
     title: str
     sanitized_svg: str
     size_bytes: int
 
+
 class InternalProjectCreate(BaseModel):
-    name: str = Field(..., min_length=2, max_length=180)
-    category: str = "Sistema / SaaS"
-    status: str = "en_desarrollo"
-    scope: str = "business"
-    repo_url: str | None = None
-    production_url: str | None = None
-    tech_stack: str | None = None
-    monthly_maintenance_cost: float = 0.0
-    notes: str | None = None
+    name: str = Field(..., min_length=2, max_length=128)
+    category: str = Field("Sistema / SaaS", min_length=1, max_length=64)
+    status: str = Field("en_desarrollo", pattern="^(en_desarrollo|produccion|mantenimiento|archivado)$")
+    scope: str = Field("business", pattern="^(business|personal|shared)$")
+    repo_url: str | None = Field(default=None, max_length=512)
+    production_url: str | None = Field(default=None, max_length=512)
+    tech_stack: str | None = Field(default=None, max_length=255)
+    monthly_maintenance_cost: float = Field(default=0.0, ge=0.0, le=100000000.0)
+    notes: str | None = Field(default=None, max_length=10000)
+
+    @field_validator("name", "category")
+    @classmethod
+    def check_nonblank(cls, value: str) -> str:
+        return validate_nonblank_input(value)
+
+    @field_validator("repo_url", "production_url")
+    @classmethod
+    def check_urls(cls, value: str | None) -> str | None:
+        return validate_web_url_input(value)
+
+    @field_validator("monthly_maintenance_cost")
+    @classmethod
+    def check_cost(cls, value: float) -> float:
+        return float(validate_finite_number_input(value))
+
 
 # Routes
 @router.post("/hash", response_model=HashResponse)
@@ -83,6 +113,7 @@ async def compute_hash(
         raise HTTPException(status_code=400, detail="Algoritmo no soportado")
 
     return HashResponse(algorithm=algo, hash_result=res)
+
 
 @router.post("/generate-password", response_model=PasswordGenResponse)
 async def generate_secure_password(
@@ -126,6 +157,7 @@ async def generate_secure_password(
         strength=strength
     )
 
+
 @router.post("/diagrams/sanitize", response_model=DiagramResponse)
 async def sanitize_diagram_svg(
     payload: DiagramSaveRequest,
@@ -137,6 +169,7 @@ async def sanitize_diagram_svg(
         sanitized_svg=cleaned_svg,
         size_bytes=len(cleaned_svg.encode("utf-8"))
     )
+
 
 @router.get("/projects", response_model=list[dict])
 async def list_internal_projects(
@@ -156,10 +189,12 @@ async def list_internal_projects(
             "tech_stack": p.tech_stack,
             "repo_url": p.repo_url,
             "production_url": p.production_url,
-            "monthly_maintenance_cost": p.monthly_maintenance_cost
+            "monthly_maintenance_cost": p.monthly_maintenance_cost,
+            "notes": decrypt_note(p.notes) if p.notes else None,
         }
         for p in projects
     ]
+
 
 @router.post("/projects", status_code=status.HTTP_201_CREATED)
 async def create_internal_project(
@@ -175,7 +210,8 @@ async def create_internal_project(
         repo_url=payload.repo_url,
         production_url=payload.production_url,
         tech_stack=payload.tech_stack,
-        monthly_maintenance_cost=payload.monthly_maintenance_cost
+        monthly_maintenance_cost=payload.monthly_maintenance_cost,
+        notes=encrypt_note(payload.notes) if payload.notes else None,
     )
     db.add(project)
     await db.commit()

@@ -32,9 +32,9 @@ async def check_pwned_password(password: str) -> tuple[bool | None, int, str]:
     if settings.LOCAL_MODE:
         return None, 0, "unknown"
 
-    url = f"https://api.pwnedpasswords.com/range/{prefix}"
+    url = f"{settings.PWNED_PASSWORDS_API_URL.rstrip('/')}/{prefix}"
     headers = {
-        "User-Agent": "ContactLESSSO/2.0",
+        "User-Agent": settings.PWNED_USER_AGENT,
         "Add-Padding": "true"
     }
 

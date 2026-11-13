@@ -96,3 +96,76 @@ export function isValidExpiryYear(val: string | number): boolean {
   const year = Number(text);
   return /^\d{4}$/.test(text) && year >= 1900 && year <= 2199;
 }
+
+export function isValidPhoneList(value: string): boolean {
+  if (!value || typeof value !== 'string') return false;
+  const items = value
+    .split(/[,;\n]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+  if (items.length === 0 || items.length > 15) return false;
+  if (!items.every((item) => isValidPhone(item))) return false;
+  return items.join(', ').length <= 512;
+}
+
+export function isValidCalendarDate(value: string): boolean {
+  const trimmed = value.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return false;
+  const [y, m, d] = trimmed.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  return (
+    dt.getUTCFullYear() === y &&
+    dt.getUTCMonth() + 1 === m &&
+    dt.getUTCDate() === d
+  );
+}
+
+export function validateServiceDatesOrder(
+  startDate?: string | null,
+  nextBillingDate?: string | null,
+  trialEndDate?: string | null
+): string | null {
+  const s = startDate?.trim() || '';
+  const n = nextBillingDate?.trim() || '';
+  const t = trialEndDate?.trim() || '';
+
+  if (s && !isValidCalendarDate(s)) return 'La fecha de inicio no es válida.';
+  if (n && !isValidCalendarDate(n)) return 'La próxima fecha de cobro no es válida.';
+  if (t && !isValidCalendarDate(t)) return 'La fecha de fin de prueba no es válida.';
+
+  if (s && n && n < s) {
+    return 'La próxima fecha de cobro no puede ser anterior a la fecha de inicio.';
+  }
+  if (s && t && t < s) {
+    return 'La fecha de fin de prueba no puede ser anterior a la fecha de inicio.';
+  }
+  return null;
+}
+
+export function validateCardFields(
+  cardNumber: string,
+  lastFour: string,
+  expiryMonth: string,
+  expiryYear: string
+): string | null {
+  const rawCard = cardNumber.trim();
+  if (rawCard) {
+    if (/[^\d\s-]/.test(rawCard)) {
+      return 'El número completo de tarjeta solo debe contener dígitos.';
+    }
+    const digits = rawCard.replace(/[\s-]/g, '');
+    if (digits.length < 12 || digits.length > 19) {
+      return 'El número de tarjeta debe tener entre 12 y 19 dígitos.';
+    }
+    if (lastFour.trim() && digits.slice(-4) !== lastFour.trim()) {
+      return 'Los últimos 4 dígitos no coinciden con el número completo de tarjeta.';
+    }
+  }
+  const hasMonth = Boolean(expiryMonth.trim());
+  const hasYear = Boolean(expiryYear.trim());
+  if (hasMonth !== hasYear) {
+    return 'Indica tanto el mes como el año de vencimiento.';
+  }
+  return null;
+}
+

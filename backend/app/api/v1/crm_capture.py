@@ -1,24 +1,33 @@
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 import httpx
 
 from app.database import get_db
-from app.services.core_auth import get_current_user_from_token
+from app.services.core_auth import get_current_user_from_token, require_role
 from app.security.tokens import require_vault_unlocked
 from app.models.core import User
 from app.models.crm_capture import LeadCacheCell, LeadAuditScore, LeadDuplicateCandidate, PermanentDiscard
 from app.services.crm_capture import CrmCaptureService, OSMProviderError
 from app.config import settings
 
+from pydantic import BaseModel, Field, field_validator, model_validator
+from app.schemas.validators import validate_single_phone
+from app.schemas import validate_nonblank_input
+
 router = APIRouter(prefix="/crm/capture", tags=["CRM Capture"])
 
 class SearchBounds(BaseModel):
-    min_lat: float = Field(..., ge=-90, le=90)
-    min_lon: float = Field(..., ge=-180, le=180)
-    max_lat: float = Field(..., ge=-90, le=90)
-    max_lon: float = Field(..., ge=-180, le=180)
+    min_lat: float = Field(..., ge=-90, le=90, allow_inf_nan=False)
+    min_lon: float = Field(..., ge=-180, le=180, allow_inf_nan=False)
+    max_lat: float = Field(..., ge=-90, le=90, allow_inf_nan=False)
+    max_lon: float = Field(..., ge=-180, le=180, allow_inf_nan=False)
+
+    @model_validator(mode="after")
+    def check_bounds_order(self):
+        if self.min_lat >= self.max_lat or self.min_lon >= self.max_lon:
+            raise ValueError("El cuadrante geográfico es inválido: min debe ser menor que max.")
+        return self
 
 
 class SearchRequest(BaseModel):
@@ -30,21 +39,30 @@ class SearchRequest(BaseModel):
 
 class AuditRequest(BaseModel):
     target_url: str = Field(..., min_length=4, max_length=512)
-    prospect_id: str | None = None
+    prospect_id: str | None = Field(None, max_length=36)
 
 class MergeRequest(BaseModel):
-    primary_id: str
-    secondary_id: str
+    primary_id: str = Field(..., min_length=1, max_length=36)
+    secondary_id: str = Field(..., min_length=1, max_length=36)
+
+    @model_validator(mode="after")
+    def check_distinct_ids(self):
+        if self.primary_id.strip() == self.secondary_id.strip():
+            raise ValueError("No puedes fusionar un prospecto consigo mismo.")
+        return self
 
 class DiscardRequest(BaseModel):
     company_name: str = Field(..., min_length=2, max_length=180)
     reason: str = Field(..., min_length=2, max_length=255)
-    domain: str | None = None
-    phone: str | None = None
+    domain: str | None = Field(None, max_length=255)
+    phone: str | None = Field(None, max_length=32)
+
+    _valid_text = field_validator("company_name", "reason")(validate_nonblank_input)
+    _valid_phone = field_validator("phone")(validate_single_phone)
 
 class GoogleEstimateRequest(BaseModel):
     query_count: int = Field(..., ge=1, le=1000)
-    field_mask: list[str] = Field(default_factory=list)
+    field_mask: list[str] = Field(default_factory=list, max_length=50)
 
 @router.get("/zones")
 async def get_zones(_: bool = Depends(require_vault_unlocked)):
@@ -55,9 +73,12 @@ async def get_zones(_: bool = Depends(require_vault_unlocked)):
 async def get_map_config(_: bool = Depends(require_vault_unlocked)):
     return {
         "tile_url_template": settings.OSM_TILE_URL_TEMPLATE,
-        "center": [32.527, -117.022],
-        "zoom": 12,
-        "attribution": '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© OpenStreetMap contributors</a>',
+        "center": [settings.MAP_DEFAULT_CENTER_LAT, settings.MAP_DEFAULT_CENTER_LON],
+        "zoom": settings.MAP_DEFAULT_ZOOM,
+        "default_city": settings.MAP_DEFAULT_CITY,
+        "default_zone": settings.MAP_DEFAULT_ZONE_SLUG,
+        "default_sector": settings.MAP_DEFAULT_SECTOR,
+        "attribution": settings.MAP_ATTRIBUTION_HTML,
     }
 
 @router.post("/search")
@@ -89,7 +110,7 @@ async def search_leads(
 async def audit_website(
     req: AuditRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user_from_token)
+    current_user: User = Depends(require_role(["owner", "business_admin", "seller", "operator"]))
 ):
     try:
         audit = await CrmCaptureService.audit_website(
@@ -129,7 +150,7 @@ async def get_duplicate_candidates(
 async def merge_candidates(
     req: MergeRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user_from_token)
+    current_user: User = Depends(require_role(["owner", "business_admin", "seller", "operator"]))
 ):
     try:
         cand = await CrmCaptureService.merge_prospects(
@@ -150,7 +171,7 @@ async def merge_candidates(
 async def undo_merge(
     candidate_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user_from_token)
+    current_user: User = Depends(require_role(["owner", "business_admin", "seller", "operator"]))
 ):
     try:
         await CrmCaptureService.undo_merge(session=db, candidate_id=candidate_id, user_id=current_user.id)
@@ -171,7 +192,7 @@ async def get_discards(
 async def add_discard(
     req: DiscardRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user_from_token)
+    current_user: User = Depends(require_role(["owner", "business_admin", "seller", "operator"]))
 ):
     discard = await CrmCaptureService.add_permanent_discard(
         session=db,
@@ -194,7 +215,7 @@ async def google_places_status(current_user: User = Depends(get_current_user_fro
 @router.post("/google-places/estimate")
 async def google_places_estimate(
     req: GoogleEstimateRequest,
-    current_user: User = Depends(get_current_user_from_token)
+    current_user: User = Depends(require_role(["owner", "business_admin", "seller", "operator"]))
 ):
     return CrmCaptureService.estimate_google_places_cost(
         query_count=req.query_count,

@@ -42,6 +42,8 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     restart: unless-stopped
+    env_file:
+      - .env
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:?Configura POSTGRES_USER en .env}:${POSTGRES_PASSWORD:?Genera POSTGRES_PASSWORD en .env}@db:5432/${POSTGRES_DB:?Configura POSTGRES_DB en .env}
       REDIS_URL: redis://redis:6379/0
@@ -138,10 +140,10 @@ networks:
 
 volumes:
   postgres_data:
-    name: emailsaver_postgres_data
+    name: ${POSTGRES_VOLUME_NAME:-emailsaver_postgres_data}
   redis_data:
-    name: emailsaver_redis_data
+    name: ${REDIS_VOLUME_NAME:-emailsaver_redis_data}
   vault_media:
-    name: emailsaver_vault_media
+    name: ${VAULT_MEDIA_VOLUME_NAME:-emailsaver_vault_media}
   backup_data:
-    name: lessso_backup_data
+    name: ${BACKUP_VOLUME_NAME:-lessso_backup_data}

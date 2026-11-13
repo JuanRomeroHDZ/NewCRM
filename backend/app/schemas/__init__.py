@@ -3,7 +3,17 @@ from datetime import date
 import math
 import re
 from urllib.parse import urlsplit
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
+
+from .validators import (
+    normalize_and_validate_card_digits,
+    validate_calendar_date,
+    validate_card_consistency,
+    validate_phone_list,
+    validate_rfc_input,
+    validate_service_dates_order,
+    validate_single_phone,
+)
 
 def validate_email_input(value: str | None) -> str | None:
     if value is None:
@@ -25,12 +35,23 @@ def validate_web_url_input(value: str | None) -> str | None:
         raise ValueError('Ingresa una dirección web válida que comience con http o https.')
     return value
 
-def validate_nonblank_input(value: str | None) -> str | None:
+def validate_nonblank_input(value: str | None, error_message: str = 'El campo no puede quedar vacío.') -> str | None:
     if value is None:
         return None
     value = value.strip()
     if not value:
-        raise ValueError('El campo no puede quedar vacío.')
+        raise ValueError(error_message)
+    return value
+
+
+def validate_finite_number_input(
+    value: float | int | None,
+    error_message: str = 'Ingresa un número finito válido.',
+) -> float | int | None:
+    if value is None:
+        return None
+    if not math.isfinite(float(value)):
+        raise ValueError(error_message)
     return value
 
 def validate_expiry_month_input(value: str | None) -> str | None:
@@ -52,7 +73,7 @@ class MasterPasswordSetup(BaseModel):
     master_password: str = Field(..., min_length=8, max_length=256)
 
 class VaultUnlockRequest(BaseModel):
-    master_password: str
+    master_password: str = Field(..., min_length=1, max_length=256)
 
 class VaultStatusResponse(BaseModel):
     is_setup: bool
@@ -246,6 +267,12 @@ class PlatformCreate(PlatformBase):
 
     _valid_name = field_validator('name')(validate_nonblank_input)
     _valid_login_url = field_validator('login_url')(validate_web_url_input)
+    _valid_dates = field_validator('start_date', 'next_billing_date', 'trial_end_date')(validate_calendar_date)
+
+    @model_validator(mode='after')
+    def check_service_dates_order(self):
+        validate_service_dates_order(self.start_date, self.next_billing_date, self.trial_end_date)
+        return self
 
 class PlatformUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=128)
@@ -280,6 +307,12 @@ class PlatformUpdate(BaseModel):
 
     _valid_name = field_validator('name')(validate_nonblank_input)
     _valid_login_url = field_validator('login_url')(validate_web_url_input)
+    _valid_dates = field_validator('start_date', 'next_billing_date', 'trial_end_date')(validate_calendar_date)
+
+    @model_validator(mode='after')
+    def check_service_dates_order(self):
+        validate_service_dates_order(self.start_date, self.next_billing_date, self.trial_end_date)
+        return self
 
 class PlatformResponse(PlatformBase):
     id: str
@@ -340,6 +373,18 @@ class PaymentMethodCreate(PaymentMethodBase):
     _valid_name = field_validator('issuer', 'alias')(validate_nonblank_input)
     _valid_expiry_month = field_validator('expiry_month')(validate_expiry_month_input)
     _valid_expiry_year = field_validator('expiry_year')(validate_expiry_year_input)
+    _valid_card_number = field_validator('card_number')(normalize_and_validate_card_digits)
+
+    @model_validator(mode='after')
+    def check_card_fields(self):
+        validate_card_consistency(
+            self.card_number,
+            self.last_four,
+            self.expiry_month,
+            self.expiry_year,
+            require_complete_expiry=True,
+        )
+        return self
 
 class PaymentMethodUpdate(BaseModel):
     issuer: str | None = Field(default=None, min_length=1, max_length=64)
@@ -354,6 +399,18 @@ class PaymentMethodUpdate(BaseModel):
     _valid_name = field_validator('issuer', 'alias')(validate_nonblank_input)
     _valid_expiry_month = field_validator('expiry_month')(validate_expiry_month_input)
     _valid_expiry_year = field_validator('expiry_year')(validate_expiry_year_input)
+    _valid_card_number = field_validator('card_number')(normalize_and_validate_card_digits)
+
+    @model_validator(mode='after')
+    def check_card_fields(self):
+        validate_card_consistency(
+            self.card_number,
+            self.last_four,
+            self.expiry_month,
+            self.expiry_year,
+            require_complete_expiry=False,
+        )
+        return self
 
 class PaymentMethodResponse(PaymentMethodBase):
     id: str
@@ -529,6 +586,8 @@ class ProspectCreate(ProspectBase):
 
     _valid_contact_email = field_validator('contact_email')(validate_email_input)
     _valid_web_urls = field_validator('demo_url', 'maps_url')(validate_web_url_input)
+    _valid_whatsapp = field_validator('whatsapp')(validate_single_phone)
+    _valid_phones = field_validator('phones')(validate_phone_list)
 
     @field_validator('company_name')
     @classmethod
@@ -570,6 +629,8 @@ class ProspectUpdate(BaseModel):
 
     _valid_contact_email = field_validator('contact_email')(validate_email_input)
     _valid_web_urls = field_validator('demo_url', 'maps_url')(validate_web_url_input)
+    _valid_whatsapp = field_validator('whatsapp')(validate_single_phone)
+    _valid_phones = field_validator('phones')(validate_phone_list)
 
     @field_validator('company_name')
     @classmethod
@@ -834,23 +895,42 @@ class InternalProjectBase(BaseModel):
     notes: str | None = None
 
 class InternalProjectCreate(InternalProjectBase):
-    pass
+    name: str = Field(..., min_length=1, max_length=180)
+    category: str = Field(default="Sistema / SaaS", min_length=1, max_length=64)
+    status: str = Field(default="en_desarrollo", pattern="^(idea|en_desarrollo|en_produccion|pausado)$")
+    scope: str = Field(default="business", pattern="^(business|personal|shared)$")
+    email_id: str | None = Field(default=None, max_length=36)
+    production_url: str | None = Field(default=None, max_length=512)
+    repo_url: str | None = Field(default=None, max_length=512)
+    tech_stack: str | None = Field(default=None, max_length=500)
+    monthly_maintenance_cost: float = Field(default=0.0, ge=0, le=100000000, allow_inf_nan=False)
+    currency: str = Field(default="MXN", pattern="^(MXN|USD)$")
+    linked_platform_ids: list[str] = Field(default_factory=list, max_length=100)
+    linked_domain_ids: list[str] = Field(default_factory=list, max_length=100)
+    tags: list[TagInput] = Field(default_factory=list, max_length=100)
+    notes: str | None = Field(default=None, max_length=10000)
+
+    _valid_name = field_validator('name', 'category')(validate_nonblank_input)
+    _valid_urls = field_validator('production_url', 'repo_url')(validate_web_url_input)
 
 class InternalProjectUpdate(BaseModel):
-    name: str | None = None
-    category: str | None = None
-    status: str | None = None
-    scope: str | None = None
-    email_id: str | None = None
-    production_url: str | None = None
-    repo_url: str | None = None
-    tech_stack: str | None = None
-    monthly_maintenance_cost: float | None = None
-    currency: str | None = None
-    linked_platform_ids: list[str] | None = None
-    linked_domain_ids: list[str] | None = None
-    tags: list[TagItem] | None = None
-    notes: str | None = None
+    name: str | None = Field(default=None, min_length=1, max_length=180)
+    category: str | None = Field(default=None, min_length=1, max_length=64)
+    status: str | None = Field(default=None, pattern="^(idea|en_desarrollo|en_produccion|pausado)$")
+    scope: str | None = Field(default=None, pattern="^(business|personal|shared)$")
+    email_id: str | None = Field(default=None, max_length=36)
+    production_url: str | None = Field(default=None, max_length=512)
+    repo_url: str | None = Field(default=None, max_length=512)
+    tech_stack: str | None = Field(default=None, max_length=500)
+    monthly_maintenance_cost: float | None = Field(default=None, ge=0, le=100000000, allow_inf_nan=False)
+    currency: str | None = Field(default=None, pattern="^(MXN|USD)$")
+    linked_platform_ids: list[str] | None = Field(default=None, max_length=100)
+    linked_domain_ids: list[str] | None = Field(default=None, max_length=100)
+    tags: list[TagInput] | None = Field(default=None, max_length=100)
+    notes: str | None = Field(default=None, max_length=10000)
+
+    _valid_name = field_validator('name', 'category')(validate_nonblank_input)
+    _valid_urls = field_validator('production_url', 'repo_url')(validate_web_url_input)
 
 class InternalProjectResponse(InternalProjectBase):
     id: str
@@ -913,9 +993,9 @@ class SecureResourceResponse(SecureResourceBase):
 
 # Núcleo / Core Schemas
 class UserLoginRequest(BaseModel):
-    username_or_email: str
-    password: str
-    totp_code: str | None = None
+    username_or_email: str = Field(..., min_length=1, max_length=255)
+    password: str = Field(..., min_length=1, max_length=256)
+    totp_code: str | None = Field(default=None, min_length=4, max_length=32)
 
 class UserResponse(BaseModel):
     id: str
@@ -934,33 +1014,53 @@ class UserLoginResponse(BaseModel):
     expires_in_minutes: int
 
 class UserCreateRequest(BaseModel):
-    username: str = Field(..., min_length=3, max_length=64)
-    email: str = Field(..., pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+    username: str = Field(..., min_length=3, max_length=64, pattern=r"^[a-zA-Z0-9._-]+$")
+    email: str = Field(..., max_length=255, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
     full_name: str = Field(..., min_length=2, max_length=128)
     role: str = Field("seller", pattern="^(owner|business_admin|seller|readonly)$")
+
+    @field_validator("full_name")
+    @classmethod
+    def check_full_name(cls, value: str) -> str:
+        return validate_nonblank_input(value, "Ingresa el nombre completo.")
 
 class UserCreateResponse(UserResponse):
     temporary_password: str
 
 class UserUpdateRequest(BaseModel):
-    full_name: str | None = None
+    full_name: str | None = Field(default=None, min_length=2, max_length=128)
     role: str | None = Field(None, pattern="^(owner|business_admin|seller|readonly)$")
     is_active: bool | None = None
     unlock: bool = False
+
+    @field_validator("full_name")
+    @classmethod
+    def check_full_name(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return validate_nonblank_input(value, "El nombre completo no puede estar vacío.")
+
+class UserChangePasswordRequest(BaseModel):
+    current_password: str = Field(..., min_length=1, max_length=256)
+    new_password: str = Field(..., min_length=8, max_length=256)
+    totp_code: str | None = Field(default=None, min_length=4, max_length=32)
+
+class TotpSetupConfirmRequest(BaseModel):
+    current_password: str | None = Field(default=None, min_length=1, max_length=256)
 
 class TotpSetupResponse(BaseModel):
     secret: str
     recovery_codes: list[str]
 
 class TotpVerifyRequest(BaseModel):
-    code: str
+    code: str = Field(..., min_length=6, max_length=16, pattern=r"^\d{6,8}$")
 
 class CatalogUpdateRequest(BaseModel):
-    items: list[Any]
+    items: list[Any] = Field(..., max_length=500)
 
 class ConfigParamUpdateRequest(BaseModel):
     value: Any
-    description: str | None = None
+    description: str | None = Field(default=None, max_length=255)
 
 class JobResponse(BaseModel):
     id: str

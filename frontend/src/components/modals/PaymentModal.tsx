@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, CreditCard, AlertCircle, ShieldCheck } from 'lucide-react';
 import { useVault } from '../../context/VaultContext';
 import { api } from '../../lib/api';
-import { isValidLastFour, isValidExpiryMonth, isValidExpiryYear, INPUT_LIMITS } from '../../lib/validation';
+import { isValidLastFour, isValidExpiryMonth, isValidExpiryYear, validateCardFields, INPUT_LIMITS } from '../../lib/validation';
 
 export const PaymentModal: React.FC = () => {
   const { isPaymentModalOpen, closePaymentModal, editingPayment, showToast, triggerDataReload } = useVault();
@@ -11,8 +11,8 @@ export const PaymentModal: React.FC = () => {
   const [alias, setAlias] = useState('');
   const [lastFour, setLastFour] = useState('');
   const [cardNumber, setCardNumber] = useState('');
-  const [expiryMonth, setExpiryMonth] = useState('12');
-  const [expiryYear, setExpiryYear] = useState('28');
+  const [expiryMonth, setExpiryMonth] = useState('');
+  const [expiryYear, setExpiryYear] = useState('');
   const [billingNotes, setBillingNotes] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -33,8 +33,8 @@ export const PaymentModal: React.FC = () => {
         setAlias('');
         setLastFour('');
         setCardNumber('');
-        setExpiryMonth('12');
-        setExpiryYear('28');
+        setExpiryMonth('');
+        setExpiryYear('');
         setBillingNotes('');
       }
     }
@@ -71,6 +71,13 @@ export const PaymentModal: React.FC = () => {
       const msg = 'El año de expiración debe tener formato numérico válido (ej. 28 o 2028).';
       setFormError(msg);
       showToast(msg, 'error');
+      return;
+    }
+
+    const cardError = validateCardFields(cardNumber, lastFour, expiryMonth, expiryYear);
+    if (cardError) {
+      setFormError(cardError);
+      showToast(cardError, 'error');
       return;
     }
 

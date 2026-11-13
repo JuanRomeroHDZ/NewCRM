@@ -2,10 +2,11 @@ import {
   EmailAccount, PlatformAccount, PaymentMethod, VaultStatus, 
   ExchangeRate, GraphData, AuditLogItem, VaultCredentialItem, Prospect,
   ClientIncome, DomainRenewal, AdvanceRenewalPayload,
-  OneTimeExpense, InternalProject, SecureResource
+  OneTimeExpense, InternalProject, SecureResource,
+  CoreUser, CoreLoginResponse, CoreUserCreateResponse, TotpSetupResponse, CoreUserRole
 } from '../types';
 
-const API_BASE = '/api/v1';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api/v1';
 
 export interface OSMBounds {
   min_lat: number;
@@ -28,6 +29,9 @@ export interface OSMMapConfig {
   center: [number, number];
   zoom: number;
   attribution: string;
+  default_city?: string;
+  default_zone?: string;
+  default_sector?: string;
 }
 
 export interface OSMLead {
@@ -63,6 +67,7 @@ export interface OSMSearchResponse {
 }
 
 let currentVaultToken: string | null = localStorage.getItem('emailsaver_vault_token');
+let currentUserToken: string | null = sessionStorage.getItem('emailsaver_user_token');
 
 export function setApiVaultToken(token: string | null) {
   currentVaultToken = token;
@@ -77,6 +82,46 @@ export function getApiVaultToken(): string | null {
   return currentVaultToken;
 }
 
+export function setApiUserToken(token: string | null) {
+  currentUserToken = token;
+  if (token) {
+    sessionStorage.setItem('emailsaver_user_token', token);
+  } else {
+    sessionStorage.removeItem('emailsaver_user_token');
+  }
+}
+
+export function getApiUserToken(): string | null {
+  return currentUserToken;
+}
+
+const CORE_USER_ENDPOINT_PREFIXES = [
+  '/auth/login',
+  '/auth/logout',
+  '/auth/me',
+  '/auth/change-password',
+  '/auth/setup-2fa',
+  '/auth/verify-2fa',
+  '/users',
+  '/crm/sales',
+  '/crm/capture/audit-url',
+  '/crm/capture/duplicates',
+  '/crm/capture/merge',
+  '/crm/capture/undo-merge',
+  '/crm/capture/discards',
+  '/crm/capture/discard',
+  '/crm/capture/google-places',
+  '/personal-finances',
+  '/agenda',
+  '/comms',
+  '/workshop',
+  '/integrations',
+];
+
+function isCoreUserEndpoint(endpoint: string): boolean {
+  return CORE_USER_ENDPOINT_PREFIXES.some((prefix) => endpoint.startsWith(prefix));
+}
+
 async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -86,6 +131,9 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
   if (currentVaultToken) {
     headers['X-Vault-Token'] = currentVaultToken;
   }
+  if (currentUserToken) {
+    headers['Authorization'] = `Bearer ${currentUserToken}`;
+  }
 
   const response = await fetch(`${API_BASE}${endpoint}`, {
     ...options,
@@ -93,7 +141,25 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
   });
 
   if (!response.ok) {
-    if ((response.status === 401 || response.status === 403) && !endpoint.startsWith('/auth/unlock') && !endpoint.startsWith('/auth/status')) {
+    const coreEndpoint = isCoreUserEndpoint(endpoint);
+    if (coreEndpoint) {
+      if (
+        response.status === 401 &&
+        !endpoint.startsWith('/auth/login') &&
+        !endpoint.startsWith('/auth/change-password') &&
+        !endpoint.startsWith('/auth/setup-2fa') &&
+        !endpoint.startsWith('/auth/verify-2fa')
+      ) {
+        setApiUserToken(null);
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('core_user_session_expired'));
+        }
+      }
+    } else if (
+      (response.status === 401 || response.status === 403) &&
+      !endpoint.startsWith('/auth/unlock') &&
+      !endpoint.startsWith('/auth/status')
+    ) {
       setApiVaultToken(null);
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('vault_locked'));
@@ -367,5 +433,27 @@ export const api = {
     request<SecureResource>(`/finances/resources/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteResource: (id: string) =>
     request<{ message: string }>(`/finances/resources/${id}`, { method: 'DELETE' }),
+
+  // Core User Auth, 2FA & RBAC Users
+  userLogin: (payload: { username_or_email: string; password: string; totp_code?: string }) =>
+    request<CoreLoginResponse>('/auth/login', { method: 'POST', body: JSON.stringify(payload) }),
+  userLogout: () => request<{ message: string }>('/auth/logout', { method: 'POST' }),
+  getCurrentUser: () => request<CoreUser>('/auth/me'),
+  changeUserPassword: (payload: { current_password: string; new_password: string; totp_code?: string }) =>
+    request<{ message: string }>('/auth/change-password', { method: 'POST', body: JSON.stringify(payload) }),
+  setup2FA: (current_password?: string) =>
+    request<TotpSetupResponse>('/auth/setup-2fa', {
+      method: 'POST',
+      body: JSON.stringify(current_password ? { current_password } : {}),
+    }),
+  verify2FA: (code: string) =>
+    request<{ message: string }>('/auth/verify-2fa', { method: 'POST', body: JSON.stringify({ code }) }),
+  listUsers: () => request<CoreUser[]>('/users'),
+  createUser: (payload: { username: string; email: string; full_name: string; role: CoreUserRole }) =>
+    request<CoreUserCreateResponse>('/users', { method: 'POST', body: JSON.stringify(payload) }),
+  updateUser: (
+    userId: string,
+    payload: { full_name?: string; role?: CoreUserRole; is_active?: boolean; unlock?: boolean }
+  ) => request<CoreUser>(`/users/${userId}`, { method: 'PUT', body: JSON.stringify(payload) }),
 };
 

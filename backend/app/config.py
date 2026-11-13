@@ -45,8 +45,42 @@ class Settings(BaseSettings):
     EXCHANGE_RATE_SECONDARY_URL: str = "https://api.exchangerate-api.com/v4/latest/USD"
     EXCHANGE_RATE_TERTIARY_URL: str = "https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json"
     FALLBACK_USD_MXN_RATE: float = Field(gt=0, le=1000)
+    DEFAULT_CURRENCY: str = "MXN"
 
-    model_config = SettingsConfigDict(case_sensitive=True, env_file="../.env", env_file_encoding="utf-8")
+    # Mapas, Captura OSM y Teselas Locales
+    LOCAL_TILES_DIR: str = "/app/data/tiles/baja_california"
+    MAP_DEFAULT_CITY: str = "Tijuana"
+    MAP_DEFAULT_ZONE_SLUG: str = "zona-rio"
+    MAP_DEFAULT_SECTOR: str = "dentistas"
+    MAP_DEFAULT_CENTER_LAT: float = 32.527
+    MAP_DEFAULT_CENTER_LON: float = -117.022
+    MAP_DEFAULT_ZOOM: int = Field(default=12, ge=1, le=20)
+    MAP_MAX_SEARCH_AREA_DEG: float = Field(default=0.05, gt=0, le=5)
+    MAP_FULL_BOUNDS_ZONE_SLUG: str = "tijuana-full"
+    MAP_ATTRIBUTION_HTML: str = '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© OpenStreetMap contributors</a>'
+    MAP_DATA_ATTRIBUTION: str = "© Colaboradores de OpenStreetMap (ODbL)"
+    GOOGLE_PLACES_ESTIMATED_USD_PER_QUERY: float = Field(default=0.017, ge=0, le=10)
+
+    # Integraciones externas y utilidades configurables
+    PWNED_PASSWORDS_API_URL: str = "https://api.pwnedpasswords.com/range"
+    PWNED_USER_AGENT: str = "ContactLESSSO/2.0"
+    FAVICON_FALLBACK_URL_TEMPLATE: str = "https://www.google.com/s2/favicons?domain={domain}&sz=128"
+    WHATSAPP_SHARE_BASE_URL: str = "https://wa.me"
+    ZOHO_MAIL_COMPOSE_URL: str = "https://mail.zoho.com/zm/#compose"
+    AGENDA_WORK_START_HOUR: int = Field(default=9, ge=0, le=23)
+    AGENDA_WORK_END_HOUR: int = Field(default=18, ge=1, le=24)
+
+    # Preferencias iniciales por defecto de la bóveda (cuando aún no existen en BD)
+    DEFAULT_SEARCH_HOTKEY: str = "ctrl+k"
+    DEFAULT_ACCENT_COLOR: str = "#6366f1"
+    DEFAULT_CANVAS_STYLE: str = "dot-grid"
+    DEFAULT_TAG_COLOR: str = "#6366f1"
+    DEFAULT_PASSWORD_ROTATION_DAYS_ROOT: int = Field(default=90, ge=7, le=3650)
+    DEFAULT_PASSWORD_ROTATION_DAYS_SECONDARY: int = Field(default=180, ge=7, le=3650)
+    DEFAULT_MAX_FOLLOWUP_ATTEMPTS: int = Field(default=3, ge=1, le=20)
+    DEFAULT_IMPORT_EMAIL: str = ""
+
+    model_config = SettingsConfigDict(case_sensitive=True, env_file="../.env", env_file_encoding="utf-8", extra="ignore")
 
 
 settings = Settings()

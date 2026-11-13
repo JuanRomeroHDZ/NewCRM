@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select, or_, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.models.communications import (
     UnifiedThread, CommunicationMessage, DoNotContactList,
     MessageTemplate, WhatsAppConfig, TelegramConfig
@@ -73,8 +74,11 @@ class CommunicationsService:
         encoded_body = quote(body)
         encoded_subject = quote(subject or "")
 
-        whatsapp_url = f"https://wa.me/{clean_phone.replace('+', '')}?text={encoded_body}"
-        zoho_url = f"https://mail.zoho.com/zm/#compose?to={recipient}&subject={encoded_subject}&body={encoded_body}"
+        whatsapp_base = settings.WHATSAPP_SHARE_BASE_URL.rstrip("/")
+        zoho_base = settings.ZOHO_MAIL_COMPOSE_URL
+        separator = "&" if "?" in zoho_base else "?"
+        whatsapp_url = f"{whatsapp_base}/{clean_phone.replace('+', '')}?text={encoded_body}"
+        zoho_url = f"{zoho_base}{separator}to={quote(recipient)}&subject={encoded_subject}&body={encoded_body}"
         mailto_url = f"mailto:{recipient}?subject={encoded_subject}&body={encoded_body}"
 
         return {

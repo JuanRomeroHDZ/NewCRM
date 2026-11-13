@@ -116,16 +116,16 @@ def validate_search_bounds(bounds: dict[str, float]) -> dict[str, float]:
     if not (-90 <= clean["min_lat"] < clean["max_lat"] <= 90 and -180 <= clean["min_lon"] < clean["max_lon"] <= 180):
         raise ValueError("El área del mapa no tiene coordenadas válidas.")
 
-    tijuana = next(zone["bbox"] for zone in TIJUANA_ZONES if zone["slug"] == "tijuana-full")
-    if (
-        clean["min_lat"] < tijuana["min_lat"]
-        or clean["max_lat"] > tijuana["max_lat"]
-        or clean["min_lon"] < tijuana["min_lon"]
-        or clean["max_lon"] > tijuana["max_lon"]
+    full_bounds = next((zone["bbox"] for zone in TIJUANA_ZONES if zone["slug"] == settings.MAP_FULL_BOUNDS_ZONE_SLUG), None)
+    if full_bounds and (
+        clean["min_lat"] < full_bounds["min_lat"]
+        or clean["max_lat"] > full_bounds["max_lat"]
+        or clean["min_lon"] < full_bounds["min_lon"]
+        or clean["max_lon"] > full_bounds["max_lon"]
     ):
-        raise ValueError("La búsqueda se limita al área de Tijuana.")
+        raise ValueError(f"La búsqueda se limita al área de {settings.MAP_DEFAULT_CITY}.")
     area = (clean["max_lat"] - clean["min_lat"]) * (clean["max_lon"] - clean["min_lon"])
-    if area > 0.05:
+    if area > settings.MAP_MAX_SEARCH_AREA_DEG:
         raise ValueError("Selecciona un área más pequeña para evitar una consulta demasiado amplia.")
     return clean
 
@@ -322,7 +322,7 @@ class CrmCaptureService:
                 " ".join(part for part in [street, house_number] if part),
                 neighborhood,
                 tags.get("addr:postcode"),
-                tags.get("addr:city") or "Tijuana",
+                tags.get("addr:city") or settings.MAP_DEFAULT_CITY,
             ] if part)
             published_email = tags.get("contact:email") or tags.get("email")
             if published_email:
@@ -367,7 +367,7 @@ class CrmCaptureService:
                 result_count=len(results),
                 source="openstreetmap",
                 status="complete",
-                attribution="© Colaboradores de OpenStreetMap (ODbL)",
+                attribution=settings.MAP_DATA_ATTRIBUTION,
                 fetched_at=now,
                 expires_at=expires_at
             )
@@ -672,7 +672,7 @@ class CrmCaptureService:
 
     @staticmethod
     def estimate_google_places_cost(query_count: int, field_mask: list[str]) -> dict:
-        base_rate_usd = 0.017  # Standard Places API search per request
+        base_rate_usd = settings.GOOGLE_PLACES_ESTIMATED_USD_PER_QUERY
         usd_to_mxn = settings.FALLBACK_USD_MXN_RATE
         cost_usd = query_count * base_rate_usd
         cost_mxn = cost_usd * usd_to_mxn

@@ -239,7 +239,7 @@ export const DashboardView: React.FC = () => {
             onClick={() => setActiveSection('subscriptions')}
             className="text-xs font-semibold text-amber-300 hover:text-white flex items-center gap-1 transition-colors whitespace-nowrap flex-shrink-0"
           >
-            <span>Revisar</span>
+            <span>Ver detalles</span>
             <ArrowRight size={13} />
           </button>
         </div>
@@ -346,7 +346,7 @@ export const DashboardView: React.FC = () => {
             onClick={() => setActiveSection('subscriptions')}
             className="text-xs text-indigo-400 hover:text-indigo-300 font-medium flex items-center gap-1 transition-colors flex-shrink-0"
           >
-            <span>Ir a Finanzas e Ingresos</span>
+            <span>Ver todos</span>
             <ArrowRight size={13} />
           </button>
         </div>

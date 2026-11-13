@@ -7,6 +7,7 @@ import { useVault } from '../../context/VaultContext';
 import { api } from '../../lib/api';
 import { InfoTooltip } from '../common/InfoTooltip';
 import { INPUT_LIMITS } from '../../lib/validation';
+import { OperatorAuthSection } from '../settings/OperatorAuthSection';
 
 export const SettingsView: React.FC = () => {
   const { 
@@ -518,6 +519,8 @@ export const SettingsView: React.FC = () => {
           </button>
         </div>
       </div>
+
+      <OperatorAuthSection />
     </div>
   );
 };
