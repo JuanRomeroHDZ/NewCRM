@@ -10,6 +10,7 @@ export type SectionType =
   | 'prospects'
   | 'passwords'
   | 'graph'
+  | 'writeups'
   | 'subscriptions'
   | 'trash'
   | 'settings'

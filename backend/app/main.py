@@ -17,7 +17,7 @@ from app.api.v1 import (
     graph, trash, exchange, settings as settings_api, health,
     security, importer, prospects, audit, vault_backup, finances,
     users, system_config, jobs, activity, personal_finances, workshop, crm_capture,
-    crm_sales, agenda, communications, integrations, metrics_and_inbound
+    crm_sales, agenda, communications, integrations, metrics_and_inbound, writeups
 )
 from app.services.config_service import initialize_default_catalogs
 from app.services.core_auth import get_or_create_initial_owner
@@ -194,6 +194,7 @@ app.include_router(agenda.router, prefix=settings.API_V1_PREFIX)
 app.include_router(communications.router, prefix=settings.API_V1_PREFIX)
 app.include_router(integrations.router, prefix=settings.API_V1_PREFIX)
 app.include_router(metrics_and_inbound.router, prefix=settings.API_V1_PREFIX)
+app.include_router(writeups.router, prefix=settings.API_V1_PREFIX)
 
 @app.get("/")
 def root():

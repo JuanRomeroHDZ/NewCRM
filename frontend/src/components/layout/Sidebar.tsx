@@ -3,7 +3,7 @@ import type { LucideIcon } from 'lucide-react';
 import {
   LayoutDashboard, Mail, Globe, Key, Network, CreditCard, Trash2, Settings,
   Lock, Unlock, Search, Sparkles, ChevronLeft, ChevronRight, ChevronDown,
-  Shield, ShieldCheck, FileText, Code, Rocket, MapPinned, Briefcase, X,
+  Shield, ShieldCheck, FileText, Code, Rocket, MapPinned, Briefcase, X, BookOpen,
 } from 'lucide-react';
 import { useVault, SectionType } from '../../context/VaultContext';
 
@@ -64,6 +64,7 @@ const navGroups: NavGroup[] = [
     icon: ShieldCheck,
     items: [
       { id: 'passwords', label: 'Contraseñas y notas', icon: Key, requiresVault: true },
+      { id: 'writeups', label: 'Writeups y pizarra', icon: BookOpen, requiresVault: true },
       { id: 'security_audit', label: 'Auditoría de seguridad', icon: ShieldCheck, requiresVault: true },
       { id: 'audit_logs', label: 'Historial de actividad', icon: FileText, requiresVault: true },
       { id: 'trash', label: 'Papelera', icon: Trash2, requiresVault: true },

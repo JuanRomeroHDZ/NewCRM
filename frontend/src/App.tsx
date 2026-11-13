@@ -25,6 +25,7 @@ const ProspectsView = lazy(() => import('./components/views/ProspectsView').then
 const MapCaptureView = lazy(() => import('./components/views/MapCaptureView').then((module) => ({ default: module.MapCaptureView })));
 const PasswordsView = lazy(() => import('./components/views/PasswordsView').then((module) => ({ default: module.PasswordsView })));
 const GraphView = lazy(() => import('./components/views/GraphView').then((module) => ({ default: module.GraphView })));
+const WriteupsView = lazy(() => import('./components/writeups/WriteupsView').then((module) => ({ default: module.WriteupsView })));
 const SubscriptionsView = lazy(() => import('./components/views/SubscriptionsView').then((module) => ({ default: module.SubscriptionsView })));
 const TrashView = lazy(() => import('./components/views/TrashView').then((module) => ({ default: module.TrashView })));
 const SettingsView = lazy(() => import('./components/views/SettingsView').then((module) => ({ default: module.SettingsView })));
@@ -73,6 +74,8 @@ const MainLayout: React.FC = () => {
         return <PasswordsView />;
       case 'graph':
         return <GraphView />;
+      case 'writeups':
+        return <WriteupsView />;
       case 'subscriptions':
         return <SubscriptionsView />;
       case 'security_audit':

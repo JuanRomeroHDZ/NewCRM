@@ -168,6 +168,39 @@ def decrypt_note(stored_text: str | None, key: bytes | None = None) -> str | Non
         return None if decrypted == "••••••••" else decrypted
     return stored_text
 
+
+BYTES_ENC_PREFIX = b"ENCB1:"
+
+
+def encrypt_bytes(raw_bytes: bytes, key: bytes | None = None) -> bytes:
+    """Encrypts binary payload (such as optimized images) with AES-256-GCM."""
+    effective_key = get_effective_encryption_key(key)
+    nonce = os.urandom(12)
+    ciphertext = AESGCM(effective_key).encrypt(nonce, raw_bytes, None)
+    return BYTES_ENC_PREFIX + nonce + ciphertext
+
+
+def decrypt_bytes(blob: bytes, key: bytes | None = None) -> bytes:
+    """Decrypts binary AES-256-GCM asset payload using effective key or configured fallbacks."""
+    if not blob.startswith(BYTES_ENC_PREFIX):
+        return blob
+    payload = blob[len(BYTES_ENC_PREFIX):]
+    if len(payload) < 28:
+        raise ValueError("Payload binario cifrado inválido")
+    nonce, ciphertext = payload[:12], payload[12:]
+    primary_key = get_effective_encryption_key(key)
+    candidates = [primary_key, get_server_seed_key(), *get_legacy_server_seed_keys()]
+    seen: set[bytes] = set()
+    for candidate in candidates:
+        if candidate in seen:
+            continue
+        seen.add(candidate)
+        try:
+            return AESGCM(candidate).decrypt(nonce, ciphertext, None)
+        except Exception:
+            continue
+    raise ValueError("No fue posible descifrar el recurso binario con la llave activa")
+
 def calculate_entropy(password: str) -> dict:
     """Calculates Shannon entropy and strength score (0-100)."""
     if not password:

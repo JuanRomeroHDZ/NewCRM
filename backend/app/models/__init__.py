@@ -386,3 +386,11 @@ from app.models.agenda import AgendaEvent, OperationTask, ClientAsset, PentestEn
 from app.models.communications import UnifiedThread, CommunicationMessage, DoNotContactList, MessageTemplate, WhatsAppConfig, TelegramConfig
 from app.models.cloud_lease import ServerLease
 from app.models.inbound_whatsapp import InboundMessageDedup, InboundAdapterConfig
+from app.models.writeups import (
+    Writeup,
+    WriteupBoard,
+    WriteupCitation,
+    WriteupAsset,
+    WriteupRevision,
+    WriteupExportLog,
+)

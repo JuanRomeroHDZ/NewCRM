@@ -12,8 +12,17 @@ from sqlalchemy.orm.attributes import flag_modified
 from app.models import (
     ClientIncome, DomainRenewal, EmailAccount, InternalProject, OneTimeExpense,
     PasswordHistory, PaymentMethod, PlatformAccount, Prospect, SecureResource, UserSettings,
+    Writeup, WriteupAsset, WriteupBoard, WriteupCitation, WriteupRevision,
 )
-from app.security.crypto import NOTE_ENC_PREFIX, encrypt_note, encrypt_secret, get_server_seed_key
+from app.security.crypto import (
+    BYTES_ENC_PREFIX,
+    NOTE_ENC_PREFIX,
+    decrypt_bytes,
+    encrypt_bytes,
+    encrypt_note,
+    encrypt_secret,
+    get_server_seed_key,
+)
 
 
 class RekeyError(Exception):
@@ -30,8 +39,12 @@ NOTE_FIELDS = {
     EmailAccount: ("notes",), PlatformAccount: ("notes",), PaymentMethod: ("billing_notes",),
     Prospect: ("notes",), ClientIncome: ("notes",), DomainRenewal: ("notes",),
     OneTimeExpense: ("notes",), InternalProject: ("notes",), SecureResource: ("notes", "encrypted_content"),
+    Writeup: ("encrypted_markdown", "encrypted_executive_summary", "encrypted_findings_json"),
+    WriteupBoard: ("encrypted_scene_json", "encrypted_svg_snapshot"),
+    WriteupCitation: ("quoted_text", "note"),
+    WriteupRevision: ("encrypted_markdown",),
 }
-MODELS = tuple(dict.fromkeys((*SECRET_FIELDS, *NOTE_FIELDS)))
+MODELS = tuple(dict.fromkeys((*SECRET_FIELDS, *NOTE_FIELDS, WriteupAsset)))
 
 
 def _decrypt_verified(value: str, old_key: bytes) -> str:
@@ -60,6 +73,18 @@ def _rekey_note(value: str | None, old_key: bytes, new_key: bytes) -> str | None
         return value
     plain = _decrypt_verified(value[len(NOTE_ENC_PREFIX):], old_key) if value.startswith(NOTE_ENC_PREFIX) else value
     return encrypt_note(plain, key=new_key)
+
+
+def _rekey_blob(value: bytes | None, old_key: bytes, new_key: bytes) -> bytes | None:
+    if not value:
+        return value
+    if not value.startswith(BYTES_ENC_PREFIX):
+        return encrypt_bytes(value, key=new_key)
+    try:
+        plain = decrypt_bytes(value, key=old_key)
+        return encrypt_bytes(plain, key=new_key)
+    except ValueError as exc:
+        raise RekeyError("No se pudo verificar un recurso binario cifrado.") from exc
 
 
 def _rekey_items(value: str | None, key_name: str, old_key: bytes, new_key: bytes, *, flagged: bool = False) -> str | None:
@@ -92,6 +117,8 @@ async def rekey_vault(db: AsyncSession, old_key: bytes, new_key: bytes) -> None:
                 setattr(row, field, _rekey_secret(getattr(row, field), old_key, new_key))
             for field in NOTE_FIELDS.get(model, ()):
                 setattr(row, field, _rekey_note(getattr(row, field), old_key, new_key))
+            if model is WriteupAsset:
+                row.encrypted_blob = _rekey_blob(row.encrypted_blob, old_key, new_key)
             if model is EmailAccount:
                 row.encrypted_backup_codes = _rekey_items(row.encrypted_backup_codes, "code", old_key, new_key, flagged=True)
                 row.encrypted_security_questions = _rekey_items(row.encrypted_security_questions, "answer", old_key, new_key, flagged=True)

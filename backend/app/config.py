@@ -80,6 +80,21 @@ class Settings(BaseSettings):
     DEFAULT_MAX_FOLLOWUP_ATTEMPTS: int = Field(default=3, ge=1, le=20)
     DEFAULT_IMPORT_EMAIL: str = ""
 
+    # Módulo de Writeups de Pentesting (imágenes, pizarra y exportación)
+    WRITEUP_MAX_IMAGE_BYTES: int = Field(default=10 * 1024 * 1024, ge=65536, le=50 * 1024 * 1024)
+    WRITEUP_MAX_IMAGE_DIM: int = Field(default=1920, ge=256, le=8192)
+    WRITEUP_IMAGE_QUALITY: int = Field(default=84, ge=30, le=100)
+    WRITEUP_IMAGE_FORMAT: str = "webp"
+    WRITEUP_MAX_CONTENT_CHARS: int = Field(default=500000, ge=10000, le=5000000)
+    WRITEUP_MAX_SVG_CHARS: int = Field(default=1500000, ge=10000, le=10000000)
+    WRITEUP_MAX_VIDEO_BYTES: int = Field(default=35 * 1024 * 1024, ge=65536, le=100 * 1024 * 1024)
+    WRITEUP_MAX_ANIM_DIM: int = Field(default=960, ge=160, le=3840)
+    WRITEUP_GIF_FPS: int = Field(default=12, ge=1, le=30)
+    WRITEUP_MAX_GIF_FRAMES: int = Field(default=300, ge=10, le=1500)
+    WRITEUP_MAX_VIDEO_SECONDS: int = Field(default=45, ge=1, le=300)
+    WRITEUP_WATERMARK_DEFAULT: str = "CONFIDENCIAL — SOLO USO AUTORIZADO"
+    WRITEUP_ORGANIZATION_NAME: str = "Contact | LESSSO"
+
     model_config = SettingsConfigDict(case_sensitive=True, env_file="../.env", env_file_encoding="utf-8", extra="ignore")
 
 

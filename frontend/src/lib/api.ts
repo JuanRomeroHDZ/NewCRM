@@ -3,7 +3,9 @@ import {
   ExchangeRate, GraphData, AuditLogItem, VaultCredentialItem, Prospect,
   ClientIncome, DomainRenewal, AdvanceRenewalPayload,
   OneTimeExpense, InternalProject, SecureResource,
-  CoreUser, CoreLoginResponse, CoreUserCreateResponse, TotpSetupResponse, CoreUserRole
+  CoreUser, CoreLoginResponse, CoreUserCreateResponse, TotpSetupResponse, CoreUserRole,
+  WriteupSummary, WriteupDetail, WriteupBoard, WriteupCitation, WriteupAsset,
+  WriteupRevision, WriteupExportFormat, WriteupStructuredFinding, WriteupStatus, WriteupSeverity
 } from '../types';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api/v1';
@@ -122,66 +124,97 @@ function isCoreUserEndpoint(endpoint: string): boolean {
   return CORE_USER_ENDPOINT_PREFIXES.some((prefix) => endpoint.startsWith(prefix));
 }
 
-async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    ...(options.headers as Record<string, string> || {})
-  };
-
+function buildAuthHeaders(extra?: Record<string, string>, includeJsonContentType = true): Record<string, string> {
+  const headers: Record<string, string> = {};
+  if (includeJsonContentType) {
+    headers['Content-Type'] = 'application/json';
+  }
+  if (extra) {
+    Object.assign(headers, extra);
+  }
   if (currentVaultToken) {
     headers['X-Vault-Token'] = currentVaultToken;
   }
   if (currentUserToken) {
     headers['Authorization'] = `Bearer ${currentUserToken}`;
   }
+  return headers;
+}
 
+async function handleApiErrorResponse(endpoint: string, response: Response): Promise<never> {
+  const coreEndpoint = isCoreUserEndpoint(endpoint);
+  if (coreEndpoint) {
+    if (
+      response.status === 401 &&
+      !endpoint.startsWith('/auth/login') &&
+      !endpoint.startsWith('/auth/change-password') &&
+      !endpoint.startsWith('/auth/setup-2fa') &&
+      !endpoint.startsWith('/auth/verify-2fa')
+    ) {
+      setApiUserToken(null);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('core_user_session_expired'));
+      }
+    }
+  } else if (
+    response.status === 401 &&
+    !endpoint.startsWith('/auth/unlock') &&
+    !endpoint.startsWith('/auth/status')
+  ) {
+    setApiVaultToken(null);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('vault_locked'));
+    }
+  }
+  let errorDetail = 'Error en la petición al servidor';
+  try {
+    const err = await response.json();
+    if (typeof err.detail === 'string') {
+      errorDetail = err.detail;
+    } else if (Array.isArray(err.detail)) {
+      errorDetail = 'Revisa los datos ingresados: algún campo tiene un formato incorrecto o supera el límite permitido.';
+    } else if (typeof err.message === 'string') {
+      errorDetail = err.message;
+    }
+  } catch (_) {
+    // ignore
+  }
+  throw new Error(errorDetail);
+}
+
+async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  const headers = buildAuthHeaders(options.headers as Record<string, string> | undefined, true);
   const response = await fetch(`${API_BASE}${endpoint}`, {
     ...options,
-    headers
+    headers,
   });
 
   if (!response.ok) {
-    const coreEndpoint = isCoreUserEndpoint(endpoint);
-    if (coreEndpoint) {
-      if (
-        response.status === 401 &&
-        !endpoint.startsWith('/auth/login') &&
-        !endpoint.startsWith('/auth/change-password') &&
-        !endpoint.startsWith('/auth/setup-2fa') &&
-        !endpoint.startsWith('/auth/verify-2fa')
-      ) {
-        setApiUserToken(null);
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('core_user_session_expired'));
-        }
-      }
-    } else if (
-      (response.status === 401 || response.status === 403) &&
-      !endpoint.startsWith('/auth/unlock') &&
-      !endpoint.startsWith('/auth/status')
-    ) {
-      setApiVaultToken(null);
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('vault_locked'));
-      }
-    }
-    let errorDetail = 'Error en la petición al servidor';
-    try {
-      const err = await response.json();
-      if (typeof err.detail === 'string') {
-        errorDetail = err.detail;
-      } else if (Array.isArray(err.detail)) {
-        errorDetail = 'Revisa los datos ingresados: algún campo tiene un formato incorrecto o supera el límite permitido.';
-      } else if (typeof err.message === 'string') {
-        errorDetail = err.message;
-      }
-    } catch (_) {
-      // ignore
-    }
-    throw new Error(errorDetail);
+    await handleApiErrorResponse(endpoint, response);
   }
-
+  if (response.status === 204) {
+    return undefined as T;
+  }
   return response.json();
+}
+
+async function requestBlobResponse(endpoint: string, options: RequestInit = {}): Promise<{ blob: Blob; filename: string; sha256?: string }> {
+  const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
+  const headers = buildAuthHeaders(options.headers as Record<string, string> | undefined, !isFormData);
+  const response = await fetch(`${API_BASE}${endpoint}`, {
+    ...options,
+    headers,
+  });
+  if (!response.ok) {
+    await handleApiErrorResponse(endpoint, response);
+  }
+  const disposition = response.headers.get('Content-Disposition') || '';
+  const nameMatch = disposition.match(/filename="([^"]+)"/);
+  return {
+    blob: await response.blob(),
+    filename: nameMatch ? nameMatch[1] : 'export',
+    sha256: response.headers.get('X-Export-SHA256') || undefined,
+  };
 }
 
 export const api = {
@@ -455,5 +488,154 @@ export const api = {
     userId: string,
     payload: { full_name?: string; role?: CoreUserRole; is_active?: boolean; unlock?: boolean }
   ) => request<CoreUser>(`/users/${userId}`, { method: 'PUT', body: JSON.stringify(payload) }),
+
+  // Pentest Writeups & Whiteboards
+  listWriteups: (filters?: { status?: string; severity?: string; prospect_id?: string; project_id?: string; q?: string }) => {
+    const params = new URLSearchParams();
+    if (filters?.status) params.append('status', filters.status);
+    if (filters?.severity) params.append('severity', filters.severity);
+    if (filters?.prospect_id) params.append('prospect_id', filters.prospect_id);
+    if (filters?.project_id) params.append('project_id', filters.project_id);
+    if (filters?.q) params.append('q', filters.q);
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    return request<WriteupSummary[]>(`/writeups${qs}`);
+  },
+  createWriteup: (payload: {
+    title: string;
+    status?: WriteupStatus;
+    severity?: WriteupSeverity;
+    cvss_score?: number | null;
+    cvss_vector?: string | null;
+    cwe_id?: string | null;
+    cve_id?: string | null;
+    target_scope?: string | null;
+    tags?: string[];
+    markdown_content?: string;
+    executive_summary?: string | null;
+    findings?: WriteupStructuredFinding[];
+    prospect_id?: string | null;
+    project_id?: string | null;
+  }) => request<WriteupDetail>('/writeups', { method: 'POST', body: JSON.stringify(payload) }),
+  getWriteup: (writeupId: string) => request<WriteupDetail>(`/writeups/${writeupId}`),
+  updateWriteup: (
+    writeupId: string,
+    payload: {
+      title?: string;
+      status?: WriteupStatus;
+      severity?: WriteupSeverity;
+      cvss_score?: number | null;
+      cvss_vector?: string | null;
+      cwe_id?: string | null;
+      cve_id?: string | null;
+      target_scope?: string | null;
+      tags?: string[];
+      markdown_content?: string;
+      executive_summary?: string | null;
+      findings?: WriteupStructuredFinding[];
+      prospect_id?: string | null;
+      project_id?: string | null;
+      save_revision?: boolean;
+      revision_note?: string;
+    }
+  ) => request<WriteupDetail>(`/writeups/${writeupId}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  deleteWriteup: (writeupId: string) => request<void>(`/writeups/${writeupId}`, { method: 'DELETE' }),
+  listWriteupRevisions: (writeupId: string) => request<WriteupRevision[]>(`/writeups/${writeupId}/revisions`),
+  restoreWriteupRevision: (writeupId: string, revisionId: string) =>
+    request<WriteupDetail>(`/writeups/${writeupId}/revisions/${revisionId}/restore`, { method: 'POST' }),
+
+  uploadWriteupAsset: async (
+    writeupId: string,
+    file: File,
+    caption?: string,
+    convertToGif = false
+  ): Promise<WriteupAsset> => {
+    const form = new FormData();
+    form.append('file', file);
+    if (caption) form.append('caption', caption);
+    if (convertToGif) form.append('convert_to_gif', 'true');
+    const headers = buildAuthHeaders(undefined, false);
+    const response = await fetch(`${API_BASE}/writeups/${writeupId}/assets`, {
+      method: 'POST',
+      headers,
+      body: form,
+    });
+    if (!response.ok) {
+      await handleApiErrorResponse(`/writeups/${writeupId}/assets`, response);
+    }
+    return response.json();
+  },
+  convertWriteupVideoToGif: (
+    writeupId: string,
+    assetId: string,
+    opts?: { fps?: number; maxWidth?: number }
+  ) => {
+    const params = new URLSearchParams();
+    if (opts?.fps) params.set('fps', String(opts.fps));
+    if (opts?.maxWidth) params.set('max_width', String(opts.maxWidth));
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    return request<WriteupAsset>(`/writeups/${writeupId}/assets/${assetId}/convert-to-gif${qs}`, {
+      method: 'POST',
+    });
+  },
+  fetchWriteupAssetBlob: async (writeupId: string, assetId: string): Promise<Blob> => {
+    const { blob } = await requestBlobResponse(`/writeups/${writeupId}/assets/${assetId}`);
+    return blob;
+  },
+  deleteWriteupAsset: (writeupId: string, assetId: string) =>
+    request<void>(`/writeups/${writeupId}/assets/${assetId}`, { method: 'DELETE' }),
+
+  createWriteupBoard: (writeupId: string, payload: { title: string; scene_json?: string; svg_snapshot?: string | null; element_count?: number }) =>
+    request<WriteupBoard>(`/writeups/${writeupId}/boards`, { method: 'POST', body: JSON.stringify(payload) }),
+  updateWriteupBoard: (
+    writeupId: string,
+    boardId: string,
+    payload: { title?: string; scene_json?: string; svg_snapshot?: string | null; element_count?: number }
+  ) => request<WriteupBoard>(`/writeups/${writeupId}/boards/${boardId}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  deleteWriteupBoard: (writeupId: string, boardId: string) =>
+    request<void>(`/writeups/${writeupId}/boards/${boardId}`, { method: 'DELETE' }),
+
+  createWriteupCitation: (
+    writeupId: string,
+    payload: {
+      board_id: string;
+      anchor_id: string;
+      board_element_id?: string | null;
+      heading_path?: string | null;
+      line_start: number;
+      line_end: number;
+      quoted_text: string;
+      color?: string;
+      note?: string | null;
+    }
+  ) => request<WriteupCitation>(`/writeups/${writeupId}/citations`, { method: 'POST', body: JSON.stringify(payload) }),
+  updateWriteupCitation: (
+    writeupId: string,
+    citationId: string,
+    payload: { board_element_id?: string | null; quoted_text?: string; color?: string; note?: string | null; line_start?: number; line_end?: number }
+  ) => request<WriteupCitation>(`/writeups/${writeupId}/citations/${citationId}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  deleteWriteupCitation: (writeupId: string, citationId: string) =>
+    request<void>(`/writeups/${writeupId}/citations/${citationId}`, { method: 'DELETE' }),
+
+  previewWriteup: (writeupId: string, redactForClient = false) =>
+    request<{ sanitized_html: string; redacted_for_client: boolean }>(
+      `/writeups/${writeupId}/preview?redact_for_client=${redactForClient ? 'true' : 'false'}`,
+      { method: 'POST' }
+    ),
+  exportWriteup: (
+    writeupId: string,
+    payload: {
+      format: WriteupExportFormat;
+      redact_for_client?: boolean;
+      include_watermark?: boolean;
+      include_toc?: boolean;
+      watermark_text?: string;
+      rendered_diagrams?: Record<string, string>;
+    }
+  ) => requestBlobResponse(`/writeups/${writeupId}/export`, { method: 'POST', body: JSON.stringify(payload) }),
+  cloneWriteup: (writeupId: string, title?: string) =>
+    request<WriteupDetail>(`/writeups/${writeupId}/clone`, {
+      method: 'POST',
+      body: JSON.stringify(title ? { title } : {}),
+    }),
 };
 

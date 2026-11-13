@@ -10,7 +10,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir --user -r requirements.txt
+RUN pip install --no-cache-dir --default-timeout=100 --retries 5 --user -r requirements.txt
 
 # Final Runtime Stage
 FROM python:3.12-slim AS runner
@@ -21,6 +21,15 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 \
     curl \
+    libpango-1.0-0 \
+    libpangocairo-1.0-0 \
+    libpangoft2-1.0-0 \
+    libcairo2 \
+    libffi8 \
+    shared-mime-info \
+    fonts-dejavu-core \
+    ffmpeg \
+    librsvg2-bin \
     && rm -rf /var/lib/apt/lists/*
 
 # Create unprivileged non-root user

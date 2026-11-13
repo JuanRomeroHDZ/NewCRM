@@ -535,3 +535,118 @@ export interface TotpSetupResponse {
   secret: string;
   recovery_codes: string[];
 }
+
+export type WriteupStatus = 'borrador' | 'en_revision' | 'finalizado' | 'entregado';
+export type WriteupSeverity = 'informativa' | 'baja' | 'media' | 'alta' | 'critica';
+export type WriteupExportFormat = 'pdf' | 'docx' | 'html' | 'md_zip' | 'md' | 'sarif' | 'json' | 'csv';
+
+export interface WriteupStructuredFinding {
+  id: string;
+  title: string;
+  severity: WriteupSeverity;
+  cvss_score?: number | null;
+  cvss_vector?: string | null;
+  cwe_id?: string | null;
+  cve_id?: string | null;
+  affected_target?: string | null;
+  status: 'abierta' | 'mitigada' | 'riesgo_aceptado' | 'falso_positivo';
+  summary: string;
+  remediation: string;
+  anchor_id?: string | null;
+}
+
+export interface WriteupAsset {
+  id: string;
+  writeup_id: string;
+  filename: string;
+  mime_type: string;
+  original_size_bytes: number;
+  optimized_size_bytes: number;
+  width: number;
+  height: number;
+  sha256: string;
+  exif_stripped: boolean;
+  caption?: string | null;
+  created_at: string;
+}
+
+export interface WriteupBoard {
+  id: string;
+  writeup_id: string;
+  title: string;
+  scene_json: string;
+  svg_snapshot?: string | null;
+  element_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WriteupCitation {
+  id: string;
+  writeup_id: string;
+  board_id: string;
+  anchor_id: string;
+  board_element_id?: string | null;
+  heading_path?: string | null;
+  line_start: number;
+  line_end: number;
+  quoted_text: string;
+  quote_hash: string;
+  is_stale: boolean;
+  color: string;
+  note?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WriteupRevision {
+  id: string;
+  writeup_id: string;
+  revision_number: number;
+  change_note?: string | null;
+  content_hash: string;
+  markdown_content: string;
+  created_at: string;
+}
+
+export interface WriteupExportLog {
+  id: string;
+  writeup_id: string;
+  export_format: string;
+  redacted_for_client: boolean;
+  sha256: string;
+  byte_size: number;
+  created_at: string;
+}
+
+export interface WriteupSummary {
+  id: string;
+  title: string;
+  slug: string;
+  status: WriteupStatus;
+  severity: WriteupSeverity;
+  cvss_score?: number | null;
+  cwe_id?: string | null;
+  cve_id?: string | null;
+  target_scope?: string | null;
+  tags: string[];
+  prospect_id?: string | null;
+  project_id?: string | null;
+  engagement_id?: string | null;
+  boards_count: number;
+  assets_count: number;
+  citations_count: number;
+  updated_at: string;
+  created_at: string;
+}
+
+export interface WriteupDetail extends WriteupSummary {
+  cvss_vector?: string | null;
+  markdown_content: string;
+  executive_summary?: string | null;
+  findings: WriteupStructuredFinding[];
+  boards: WriteupBoard[];
+  citations: WriteupCitation[];
+  assets: WriteupAsset[];
+  export_logs: WriteupExportLog[];
+}
