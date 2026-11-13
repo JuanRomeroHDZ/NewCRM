@@ -65,3 +65,4 @@ Thumbs.db
 # Stray AI models / scratch
 Modelfile*
 summary.md
+.env.runtime
