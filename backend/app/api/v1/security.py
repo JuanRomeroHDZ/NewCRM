@@ -251,8 +251,6 @@ async def generate_emergency_kit(db: AsyncSession = Depends(get_db)):
 
     return EmergencyKitResponse(
         generated_at=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"),
-        vault_id="ES-VAULT-PROD-01",
-        master_salt="argon2id_v1_emailsaver_salt_64mb",
         total_emails=len(emails),
         total_platforms=len(platforms),
         root_emails=[

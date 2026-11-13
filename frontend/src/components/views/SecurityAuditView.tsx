@@ -29,7 +29,7 @@ export const SecurityAuditView: React.FC = () => {
 
   if (!isUnlocked) {
     return (
-      <div className="p-8 max-w-xl mx-auto text-center space-y-5 pt-24 animate-fadeIn">
+      <div className="mx-auto max-w-xl space-y-4 p-3 pt-6 text-center animate-fadeIn sm:p-8 sm:pt-24">
         <div className="w-16 h-16 mx-auto rounded-3xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
           <Lock size={32} />
         </div>
@@ -59,13 +59,13 @@ export const SecurityAuditView: React.FC = () => {
   const stalePassCount = audit?.stale_passwords_count || 0;
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6 animate-fadeIn">
+    <div className="mx-auto max-w-7xl min-w-0 space-y-4 p-3 sm:space-y-6 sm:p-6 lg:p-8 animate-fadeIn">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2 min-w-0">
           <ShieldCheck className="text-indigo-400 shrink-0" size={18} />
           <h2 className="text-base font-bold text-white tracking-tight truncate">
-            Nivel de Seguridad de tus Cuentas y Correos
+            Seguridad
           </h2>
           <InfoTooltip
             title="Revisión de Seguridad"
@@ -74,14 +74,14 @@ export const SecurityAuditView: React.FC = () => {
           />
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={() => setActiveSection('settings')}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-obsidian-panel hover:bg-obsidian-surface border border-obsidian-border text-obsidian-muted hover:text-white text-xs font-medium"
           >
             <RefreshCw size={13} />
-            <span>Cada cuánto cambiar claves</span>
+            <span>Frecuencia de cambio</span>
           </button>
           <button
             type="button"
@@ -89,16 +89,16 @@ export const SecurityAuditView: React.FC = () => {
             className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-obsidian-surface hover:bg-obsidian-border border border-obsidian-border text-white text-xs font-semibold shrink-0"
           >
             <Sparkles size={14} className="text-cyan-400 shrink-0" />
-            <span>Generar Contraseña</span>
+            <span>Generar contraseña</span>
           </button>
         </div>
       </div>
 
       {/* Main Score Hero Card */}
-      <div className="p-5 sm:p-6 rounded-2xl bg-gradient-to-br from-obsidian-panel to-obsidian-card border border-obsidian-border shadow-2xl flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-6">
-        <div className="flex flex-col sm:flex-row items-center sm:items-center gap-5 min-w-0 flex-1">
+      <div className="flex min-w-0 flex-col items-stretch justify-between gap-4 rounded-xl border border-obsidian-border bg-obsidian-panel p-3 sm:p-5 xl:flex-row xl:items-center">
+        <div className="flex min-w-0 flex-1 items-center gap-3 sm:gap-5">
           {/* Radial Score Gauge */}
-          <div className="relative w-24 h-24 sm:w-28 sm:h-28 flex items-center justify-center shrink-0">
+          <div className="relative flex h-16 w-16 shrink-0 items-center justify-center sm:h-24 sm:w-24">
             <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
               <circle
                 cx="50"
@@ -127,9 +127,9 @@ export const SecurityAuditView: React.FC = () => {
             </div>
           </div>
 
-          <div className="min-w-0 text-center sm:text-left">
-            <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
-              <span className="text-base font-bold text-white">Nivel de Seguridad General</span>
+          <div className="min-w-0 text-left">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm font-bold text-white">Nivel de seguridad</span>
               <span
                 className="font-bold text-xs uppercase px-2.5 py-0.5 rounded-md shrink-0"
                 style={{ color: scoreColor, backgroundColor: `${scoreColor}20` }}
@@ -148,36 +148,36 @@ export const SecurityAuditView: React.FC = () => {
         </div>
 
         {/* Quick Audit Metrics - Responsive Non-Overlapping Grid */}
-        <div className="grid grid-cols-1 min-[360px]:grid-cols-2 sm:grid-cols-5 gap-2.5 w-full xl:w-auto shrink-0">
-          <div className="px-3.5 py-2.5 rounded-xl bg-obsidian-bg border border-obsidian-border min-w-0 flex flex-col items-center justify-center text-center">
+        <div className="grid w-full min-w-0 grid-cols-2 gap-2 border-t border-obsidian-border pt-3 sm:grid-cols-5 xl:w-auto xl:border-l xl:border-t-0 xl:pl-4 xl:pt-0">
+          <div className="flex min-w-0 flex-col px-1 py-1">
             <span className="text-lg font-mono font-bold text-rose-400 block leading-tight">
               {audit?.reused_passwords_count || 0}
             </span>
-            <span className="text-[10px] text-obsidian-muted mt-0.5 truncate max-w-full">Repetidas</span>
+            <span className="mt-0.5 break-words text-[10px] text-obsidian-muted">Repetidas</span>
           </div>
-          <div className="px-3.5 py-2.5 rounded-xl bg-obsidian-bg border border-obsidian-border min-w-0 flex flex-col items-center justify-center text-center">
+          <div className="flex min-w-0 flex-col px-1 py-1">
             <span className="text-lg font-mono font-bold text-amber-400 block leading-tight">
               {audit?.weak_passwords_count || 0}
             </span>
-            <span className="text-[10px] text-obsidian-muted mt-0.5 truncate max-w-full">Fáciles de adivinar</span>
+            <span className="mt-0.5 break-words text-[10px] text-obsidian-muted">Fáciles de adivinar</span>
           </div>
-          <div className="px-3.5 py-2.5 rounded-xl bg-obsidian-bg border border-obsidian-border min-w-0 flex flex-col items-center justify-center text-center">
+          <div className="flex min-w-0 flex-col px-1 py-1">
             <span className="text-lg font-mono font-bold text-cyan-400 block leading-tight">
               {audit?.no_2fa_emails_count || 0}
             </span>
-            <span className="text-[10px] text-obsidian-muted mt-0.5 truncate max-w-full">Sin 2 pasos</span>
+            <span className="mt-0.5 break-words text-[10px] text-obsidian-muted">Sin 2 pasos</span>
           </div>
-          <div className="px-3.5 py-2.5 rounded-xl bg-obsidian-bg border border-obsidian-border min-w-0 flex flex-col items-center justify-center text-center">
+          <div className="flex min-w-0 flex-col px-1 py-1">
             <span className="text-lg font-mono font-bold text-rose-300 block leading-tight">
               {urgentApiCount}
             </span>
-            <span className="text-[10px] text-obsidian-muted mt-0.5 truncate max-w-full">Llaves por vencer</span>
+            <span className="mt-0.5 break-words text-[10px] text-obsidian-muted">Llaves por vencer</span>
           </div>
-          <div className="px-3.5 py-2.5 rounded-xl bg-obsidian-bg border border-obsidian-border min-w-0 flex flex-col items-center justify-center text-center min-[360px]:col-span-2 sm:col-span-1">
+          <div className="flex min-w-0 flex-col px-1 py-1">
             <span className="text-lg font-mono font-bold text-indigo-300 block leading-tight">
               {stalePassCount}
             </span>
-            <span className="text-[10px] text-obsidian-muted mt-0.5 truncate max-w-full">Sin cambiar hace mucho</span>
+            <span className="mt-0.5 break-words text-[10px] text-obsidian-muted">Sin cambiar hace mucho</span>
           </div>
         </div>
       </div>

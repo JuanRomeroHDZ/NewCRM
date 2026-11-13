@@ -218,8 +218,8 @@ export const PlatformModal: React.FC = () => {
     }
 
     const numericCost = Number(subscriptionCost);
-    if (isNaN(numericCost) || numericCost < 0) {
-      const msg = 'El costo de la suscripción debe ser un número mayor o igual a 0.';
+    if (!Number.isFinite(numericCost) || numericCost < 0 || numericCost > INPUT_LIMITS.COST_AMOUNT) {
+      const msg = `Ingresa un costo entre 0 y ${INPUT_LIMITS.COST_AMOUNT.toLocaleString('es-MX')}.`;
       setFormError(msg);
       showToast(msg, 'error');
       return;
@@ -662,7 +662,7 @@ export const PlatformModal: React.FC = () => {
                   <input
                     type="text"
                     inputMode="decimal"
-                    maxLength={INPUT_LIMITS.COST_AMOUNT}
+                    maxLength={12}
                     value={subscriptionCost}
                     onChange={(e) => setSubscriptionCost(e.target.value.replace(/[^0-9.]/g, ''))}
                     className="w-full min-w-0 px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-indigo-500"

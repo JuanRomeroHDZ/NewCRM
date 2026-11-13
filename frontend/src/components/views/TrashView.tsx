@@ -74,7 +74,7 @@ export const TrashView: React.FC = () => {
 
   if (!isUnlocked) {
     return (
-      <div className="p-8 max-w-xl mx-auto text-center space-y-6 pt-24 animate-fadeIn">
+      <div className="mx-auto max-w-xl space-y-4 p-3 pt-6 text-center animate-fadeIn sm:p-8 sm:pt-24">
         <div className="w-16 h-16 mx-auto rounded-3xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
           <Lock size={32} />
         </div>
@@ -99,13 +99,13 @@ export const TrashView: React.FC = () => {
   }
 
   return (
-    <div className="p-4 sm:p-8 max-w-7xl mx-auto space-y-6 animate-fadeIn">
+    <div className="mx-auto max-w-7xl min-w-0 space-y-4 p-3 sm:space-y-6 sm:p-8 animate-fadeIn">
       {/* Header, Retention Policy & Tab Switcher */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-2 min-w-0">
           <Trash2 className="text-indigo-400 flex-shrink-0" size={18} />
           <h2 className="text-base font-bold text-white tracking-tight truncate">
-            Papelera de Elementos Eliminados
+            Papelera
           </h2>
           <InfoTooltip
             title="Conservación Segura"
@@ -113,9 +113,9 @@ export const TrashView: React.FC = () => {
           />
         </div>
 
-        <div className="flex flex-wrap items-center gap-3 shrink-0">
+        <div className="flex max-w-full min-w-0 flex-wrap items-center gap-3">
           {/* Auto-Purge Policy Selector */}
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-obsidian-panel border border-obsidian-border text-xs">
+          <div className="flex max-w-full min-w-0 flex-wrap items-center gap-2 rounded-lg border border-obsidian-border bg-obsidian-panel px-3 py-1.5 text-xs">
             <Clock size={13} className="text-indigo-400 shrink-0" />
             <span className="text-obsidian-muted font-medium">Vaciar automáticamente:</span>
             <select
@@ -130,7 +130,7 @@ export const TrashView: React.FC = () => {
             </select>
           </div>
 
-          <div className="flex items-center p-1 rounded-xl bg-obsidian-panel border border-obsidian-border text-xs flex-shrink-0">
+          <div className="flex max-w-full flex-wrap items-center rounded-lg border border-obsidian-border bg-obsidian-panel p-1 text-xs">
             <button
               type="button"
               onClick={() => setActiveTab('trash')}
@@ -187,7 +187,7 @@ export const TrashView: React.FC = () => {
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2 flex-shrink-0">
+                    <div className="flex max-w-full flex-wrap items-center gap-2">
                       <button
                         type="button"
                         onClick={() => handleRestore(item.type, item.id)}
@@ -210,7 +210,7 @@ export const TrashView: React.FC = () => {
               })}
             </div>
           ) : (
-            <div className="py-16 text-center text-xs text-obsidian-muted">
+            <div className="px-3 py-8 text-center text-xs text-obsidian-muted">
               La papelera está vacía. Ningún elemento eliminado.
             </div>
           )}

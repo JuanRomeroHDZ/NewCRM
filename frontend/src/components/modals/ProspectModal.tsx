@@ -170,6 +170,14 @@ export const ProspectModal: React.FC = () => {
       return;
     }
 
+    const numericValue = estimatedValue.trim() === '' ? 0 : Number(estimatedValue);
+    if (!Number.isFinite(numericValue) || numericValue < 0 || numericValue > INPUT_LIMITS.ESTIMATED_VALUE) {
+      const msg = `Ingresa un valor entre 0 y ${INPUT_LIMITS.ESTIMATED_VALUE.toLocaleString('es-MX')}.`;
+      setFormError(msg);
+      showToast(msg, 'error');
+      return;
+    }
+
     if (contactEmail.trim() && !isValidEmail(contactEmail)) {
       const msg = 'El correo electrónico del prospecto no tiene un formato válido.';
       setFormError(msg);
@@ -216,8 +224,8 @@ export const ProspectModal: React.FC = () => {
     const slaValidation = validateSlaHours(slaHours);
     if (!slaValidation.valid) {
       setShowFollowupConfig(true);
-      setFormError(slaValidation.error || 'Tiempo límite estipulado (SLA) inválido.');
-      showToast(slaValidation.error || 'Tiempo límite estipulado (SLA) inválido.', 'error');
+      setFormError(slaValidation.error || 'El tiempo de respuesta no es válido.');
+      showToast(slaValidation.error || 'El tiempo de respuesta no es válido.', 'error');
       return;
     }
 
@@ -245,7 +253,7 @@ export const ProspectModal: React.FC = () => {
         workflow_type: workflowType,
         status,
         demo_url: normalizedDemoUrl || null,
-        estimated_value: Math.max(0, Number(estimatedValue) || 0),
+        estimated_value: numericValue,
         currency,
         billing_type: billingType,
         whatsapp: whatsapp.trim() || null,
@@ -265,7 +273,7 @@ export const ProspectModal: React.FC = () => {
         showToast('Ficha de prospecto actualizada correctamente.', 'success');
       } else {
         await api.createProspect(payload);
-        showToast('Prospecto registrado con temporizador SLA activo.', 'success');
+        showToast('Prospecto registrado con seguimiento activo.', 'success');
       }
       closeProspectModal();
       triggerDataReload();
@@ -557,7 +565,7 @@ export const ProspectModal: React.FC = () => {
                 <input
                   type="text"
                   inputMode="decimal"
-                  maxLength={INPUT_LIMITS.ESTIMATED_VALUE}
+                  maxLength={12}
                   value={estimatedValue}
                   onChange={(e) => setEstimatedValue(e.target.value.replace(/[^0-9.]/g, ''))}
                   placeholder="0.00"
@@ -597,7 +605,7 @@ export const ProspectModal: React.FC = () => {
             className="rounded-xl border border-obsidian-border bg-obsidian-panel/60"
           >
             <summary className="cursor-pointer rounded-xl px-4 py-3 text-xs font-semibold text-obsidian-text marker:text-indigo-300 hover:bg-obsidian-surface/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300">
-              Correo y reglas de seguimiento <span className="ml-1 font-normal text-obsidian-muted">· SLA {slaHours || '—'} h · cadencia +{followupSlaHours} h</span>
+              Correo y seguimiento <span className="ml-1 font-normal text-obsidian-muted">· respuesta {slaHours || '—'} h · seguimiento +{followupSlaHours} h</span>
             </summary>
             <div className="space-y-3 p-3 pt-0">
           {/* BLOQUE 2: Correlación de Emails */}
@@ -746,7 +754,7 @@ export const ProspectModal: React.FC = () => {
                   <input
                     type="text"
                     inputMode="decimal"
-                    maxLength={INPUT_LIMITS.SLA_HOURS}
+                    maxLength={10}
                     value={slaHours}
                     onChange={(e) => setSlaHours(e.target.value.replace(/[^0-9.]/g, ''))}
                     className="w-28 px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-indigo-500"

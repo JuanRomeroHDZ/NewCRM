@@ -30,6 +30,13 @@ export const PlatformsView: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!isUnlocked) {
+      setPlatforms([]);
+      setEmails([]);
+      setLoading(false);
+      return;
+    }
+    let active = true;
     setLoading(true);
     Promise.all([
       api.getPlatforms({
@@ -40,10 +47,11 @@ export const PlatformsView: React.FC = () => {
       }),
       api.getEmails()
     ]).then(([pList, eList]) => {
-      setPlatforms(pList);
-      setEmails(eList);
-    }).catch(console.error).finally(() => setLoading(false));
-  }, [search, selectedEmail, selectedStatus, selectedTag, isUnlocked, dataVersion]);
+      if (active) { setPlatforms(pList); setEmails(eList); }
+    }).catch((error) => { if (active) showToast(error.message || 'No se pudieron cargar las cuentas.', 'error'); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [search, selectedEmail, selectedStatus, selectedTag, isUnlocked, dataVersion, showToast]);
 
   const filteredPlatforms = platforms.filter((p) => matchesScope(p.scope));
   const filteredEmails = emails.filter((e) => matchesScope(e.scope));
@@ -71,7 +79,7 @@ export const PlatformsView: React.FC = () => {
   const hasActiveFilters = Boolean(search || selectedEmail || selectedStatus || selectedTag);
 
   return (
-    <div className="p-4 sm:p-8 max-w-7xl mx-auto space-y-6 animate-fadeIn">
+    <div className="mx-auto max-w-7xl min-w-0 space-y-4 p-3 sm:space-y-6 sm:p-8 animate-fadeIn">
       {/* Header and Add button */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-2 min-w-0">
@@ -94,15 +102,15 @@ export const PlatformsView: React.FC = () => {
               openPlatformModal();
             }
           }}
-          className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md shadow-indigo-600/20 transition-all whitespace-nowrap flex-shrink-0"
+          className="inline-flex min-h-10 max-w-full items-center gap-1.5 rounded-lg bg-indigo-600 px-3 text-left text-xs font-semibold text-white transition-colors hover:bg-indigo-500"
         >
           <Plus size={14} />
-          <span>Nueva Cuenta o Servicio</span>
+          <span>Nueva cuenta o servicio</span>
         </button>
       </div>
 
       {/* Filter Toolbar */}
-      <div className="p-4 rounded-2xl bg-obsidian-panel border border-obsidian-border flex flex-wrap items-center justify-between gap-3 text-xs">
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 border-y border-obsidian-border py-3 text-xs">
         <div className="flex flex-wrap items-center gap-2 flex-1 min-w-0">
           {/* Search box */}
           <div className="relative min-w-0 w-full flex-1 sm:min-w-[180px]">
@@ -121,7 +129,7 @@ export const PlatformsView: React.FC = () => {
           <select
             value={selectedEmail}
             onChange={(e) => setSelectedEmail(e.target.value)}
-            className="px-3 py-1.5 rounded-xl bg-obsidian-bg border border-obsidian-border text-obsidian-text focus:outline-none focus:border-indigo-500 max-w-[220px] truncate"
+            className="max-w-full min-w-0 rounded-lg border border-obsidian-border bg-obsidian-bg px-3 py-2 text-obsidian-text focus:border-indigo-500 focus:outline-none sm:max-w-[220px]"
           >
             <option value="">Todos los Correos Principales</option>
             {filteredEmails.map((e) => (
@@ -135,7 +143,7 @@ export const PlatformsView: React.FC = () => {
           <select
             value={selectedStatus}
             onChange={(e) => setSelectedStatus(e.target.value)}
-            className="px-3 py-1.5 rounded-xl bg-obsidian-bg border border-obsidian-border text-obsidian-text focus:outline-none focus:border-indigo-500"
+            className="max-w-full min-w-0 rounded-lg border border-obsidian-border bg-obsidian-bg px-3 py-2 text-obsidian-text focus:border-indigo-500 focus:outline-none"
           >
             <option value="">Todos los Estados</option>
             <option value="active">Activa (Con cobro)</option>
@@ -150,7 +158,7 @@ export const PlatformsView: React.FC = () => {
             <select
               value={selectedTag}
               onChange={(e) => setSelectedTag(e.target.value)}
-              className="px-3 py-1.5 rounded-xl bg-obsidian-bg border border-obsidian-border text-obsidian-text focus:outline-none focus:border-indigo-500"
+              className="max-w-full min-w-0 rounded-lg border border-obsidian-border bg-obsidian-bg px-3 py-2 text-obsidian-text focus:border-indigo-500 focus:outline-none"
             >
               <option value="">Todas las Etiquetas</option>
               {allTags.map((t) => (
@@ -163,7 +171,7 @@ export const PlatformsView: React.FC = () => {
         </div>
 
         {/* View Toggle */}
-        <div className="flex items-center p-1 rounded-xl bg-obsidian-bg border border-obsidian-border flex-shrink-0">
+        <div className="hidden shrink-0 items-center rounded-xl border border-obsidian-border bg-obsidian-bg p-1 md:flex">
           <button
             type="button"
             onClick={() => setViewMode('table')}
@@ -187,7 +195,7 @@ export const PlatformsView: React.FC = () => {
 
       {/* Content Rendering */}
       {filteredPlatforms.length > 0 && viewMode === 'table' && (
-        <div className="rounded-2xl bg-obsidian-panel border border-obsidian-border overflow-hidden">
+        <div className="hidden overflow-hidden rounded-xl border border-obsidian-border bg-obsidian-panel md:block">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs text-obsidian-text">
               <thead className="bg-obsidian-surface/60 border-b border-obsidian-border text-obsidian-muted font-semibold uppercase text-[10px] tracking-wider">
@@ -348,15 +356,15 @@ export const PlatformsView: React.FC = () => {
       )}
 
       {/* Grid view */}
-      {filteredPlatforms.length > 0 && viewMode === 'grid' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      {filteredPlatforms.length > 0 && (
+        <div className={`grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3 ${viewMode === 'table' ? 'md:hidden' : ''}`}>
           {filteredPlatforms.map((p) => (
             <div
               key={p.id}
               onClick={() => openInspector('platform', p.id)}
-              className="p-5 rounded-2xl bg-obsidian-panel border border-obsidian-border hover:border-obsidian-borderLight transition-all cursor-pointer group space-y-3 shadow-lg min-w-0 overflow-hidden"
+              className="group min-w-0 cursor-pointer space-y-3 overflow-hidden rounded-xl border border-obsidian-border bg-obsidian-panel p-3 transition-colors hover:border-obsidian-borderLight sm:p-4"
             >
-              <div className="flex items-start justify-between gap-2">
+              <div className="flex flex-wrap items-start justify-between gap-2">
                 <div className="flex items-center gap-2.5 min-w-0">
                   <PlatformIcon name={p.name} iconUrl={p.icon_url} size="md" />
                   <div className="min-w-0">
@@ -406,7 +414,7 @@ export const PlatformsView: React.FC = () => {
                 </div>
               </div>
 
-              <div className="p-2.5 rounded-xl bg-obsidian-surface border border-obsidian-border text-xs flex items-center justify-between gap-2 min-w-0">
+              <div className="flex min-w-0 flex-wrap items-center justify-between gap-2 border-t border-obsidian-border/60 pt-3 text-xs">
                 <span className="text-obsidian-muted font-mono text-[11px] truncate" title={p.username || p.specific_alias || 'Sin usuario'}>
                   {p.username || p.specific_alias || 'Sin usuario'}
                 </span>
@@ -448,7 +456,7 @@ export const PlatformsView: React.FC = () => {
 
       {/* Clean Empty State */}
       {filteredPlatforms.length === 0 && !loading && (
-        <div className="py-16 px-4 rounded-2xl bg-obsidian-panel border border-obsidian-border text-center space-y-3">
+        <div className="space-y-3 rounded-xl border border-obsidian-border bg-obsidian-panel px-4 py-8 text-center">
           <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center mx-auto">
             <Globe size={22} />
           </div>

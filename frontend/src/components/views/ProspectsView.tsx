@@ -46,30 +46,30 @@ export const ProspectsView: React.FC = () => {
   }, [prospects, search, status, matchesScope]);
 
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-5 p-4 sm:p-6 lg:p-8">
-      <header className="flex flex-col gap-4 rounded-2xl border border-obsidian-borderLight bg-gradient-to-r from-obsidian-card via-obsidian-panel to-obsidian-surface p-5 sm:flex-row sm:items-center sm:justify-between sm:p-7">
-        <div className="flex min-w-0 items-start gap-3.5">
-          <span className="rounded-xl border border-indigo-500/25 bg-indigo-500/10 p-3 text-indigo-300"><Briefcase size={22} /></span>
+    <div className="mx-auto w-full max-w-6xl space-y-4 p-3 sm:space-y-5 sm:p-6 lg:p-8">
+      <header className="flex min-w-0 flex-wrap items-center justify-between gap-3">
+        <div className="flex min-w-0 items-start gap-2.5">
+          <Briefcase size={19} className="mt-1 shrink-0 text-indigo-300" />
           <div className="min-w-0">
-            <h1 className="text-xl font-bold tracking-tight text-white sm:text-2xl">Prospectos</h1>
-            <p className="mt-1 max-w-2xl text-sm leading-relaxed text-obsidian-muted">Revisa oportunidades, registra contactos y continúa el seguimiento comercial.</p>
+            <h1 className="text-lg font-bold tracking-tight text-white sm:text-xl">Prospectos</h1>
+            <p className="mt-0.5 text-xs text-obsidian-muted">Oportunidades y seguimiento.</p>
           </div>
         </div>
-        <div className="flex flex-col gap-2 min-[380px]:flex-row">
-          <button type="button" onClick={() => setActiveSection('capture')} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-obsidian-border bg-obsidian-surface px-3.5 text-xs font-semibold text-obsidian-text transition-colors hover:border-indigo-500/40 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300">
+        <div className="flex max-w-full flex-wrap gap-2">
+          <button type="button" onClick={() => setActiveSection('capture')} className="inline-flex min-h-10 max-w-full items-center justify-center gap-2 rounded-lg border border-obsidian-border bg-obsidian-surface px-3 text-xs font-semibold text-obsidian-text transition-colors hover:border-indigo-500/40 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300">
             <MapPinned size={15} className="text-indigo-300" /> Captar en mapa
           </button>
-          <button type="button" onClick={() => isUnlocked ? openProspectModal() : openUnlockModal()} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-3.5 text-xs font-semibold text-white shadow-md shadow-indigo-950/30 transition-colors hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300">
+          <button type="button" onClick={() => isUnlocked ? openProspectModal() : openUnlockModal()} className="inline-flex min-h-10 max-w-full items-center justify-center gap-2 rounded-lg bg-indigo-600 px-3 text-xs font-semibold text-white transition-colors hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300">
             <Plus size={15} /> Nuevo prospecto
           </button>
         </div>
       </header>
 
       <section aria-labelledby="prospectos-lista" className="overflow-hidden rounded-2xl border border-obsidian-border bg-obsidian-card">
-        <div className="border-b border-obsidian-border p-4 sm:p-5">
-          <div className="mb-4">
+        <div className="border-b border-obsidian-border p-3 sm:p-5">
+          <div className="mb-3 flex flex-wrap items-baseline justify-between gap-1">
             <h2 id="prospectos-lista" className="text-base font-semibold text-white">Seguimiento</h2>
-            <p className="mt-1 text-xs text-obsidian-muted">{prospects.length} prospectos · selecciona un registro para abrir su ficha</p>
+            <p className="text-xs text-obsidian-muted">{visibleProspects.length} prospectos</p>
           </div>
           <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(12rem,0.45fr)]">
             <label className="min-w-0 text-xs font-medium text-obsidian-muted">

@@ -206,8 +206,6 @@ export interface BillingRecord {
 
 export interface EmergencyKitResponse {
   generated_at: string;
-  vault_id: string;
-  master_salt: string;
   total_emails: number;
   total_platforms: number;
   root_emails: { address: string; provider: string; two_factor: string; phone: string }[];

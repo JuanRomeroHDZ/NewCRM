@@ -60,7 +60,8 @@ services:
       LOCAL_MODE: ${LOCAL_MODE:-true}
       CORS_ORIGINS: ${CORS_ORIGINS:-[]}
       BACKUP_LOCAL_PATH: ${BACKUP_LOCAL_PATH:-/app/backups}
-      OSM_OVERPASS_URL: ${OSM_OVERPASS_URL:-https://overpass-api.de/api/interpreter}
+      OSM_OVERPASS_URL: ${OSM_OVERPASS_URL:-https://ovp.dresel.systems/api-na/interpreter}
+      OSM_OVERPASS_FALLBACK_URLS: ${OSM_OVERPASS_FALLBACK_URLS-https://overpass-api.de/api/interpreter}
       OSM_TILE_URL_TEMPLATE: ${OSM_TILE_URL_TEMPLATE:?Configura OSM_TILE_URL_TEMPLATE en .env}
       OSM_USER_AGENT: ${OSM_USER_AGENT:-ContactLESSSO/2.0 local-prospect-research}
       OSM_REQUEST_TIMEOUT_SECONDS: ${OSM_REQUEST_TIMEOUT_SECONDS:-20}

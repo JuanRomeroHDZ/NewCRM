@@ -1,11 +1,55 @@
-from typing import Any
+from typing import Annotated, Any
 from datetime import date
 import math
+import re
+from urllib.parse import urlsplit
 from pydantic import BaseModel, EmailStr, Field, field_validator
+
+def validate_email_input(value: str | None) -> str | None:
+    if value is None:
+        return None
+    value = value.strip()
+    if not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+', value):
+        raise ValueError('Ingresa un correo electrónico válido.')
+    return value
+
+def validate_web_url_input(value: str | None) -> str | None:
+    if value is None or value == '':
+        return value
+    try:
+        parts = urlsplit(value)
+        if parts.scheme.lower() not in ('http', 'https') or not parts.hostname or parts.username or parts.password:
+            raise ValueError
+        _ = parts.port
+    except ValueError:
+        raise ValueError('Ingresa una dirección web válida que comience con http o https.')
+    return value
+
+def validate_nonblank_input(value: str | None) -> str | None:
+    if value is None:
+        return None
+    value = value.strip()
+    if not value:
+        raise ValueError('El campo no puede quedar vacío.')
+    return value
+
+def validate_expiry_month_input(value: str | None) -> str | None:
+    if value is None or value == '':
+        return value
+    if not re.fullmatch(r'\d{1,2}', value) or not 1 <= int(value) <= 12:
+        raise ValueError('El mes debe estar entre 1 y 12.')
+    return value
+
+def validate_expiry_year_input(value: str | None) -> str | None:
+    if value is None or value == '':
+        return value
+    if not (re.fullmatch(r'\d{2}', value) or (re.fullmatch(r'\d{4}', value) and 1900 <= int(value) <= 2199)):
+        raise ValueError('El año debe tener dos o cuatro dígitos.')
+    return value
 
 # Auth & Vault
 class MasterPasswordSetup(BaseModel):
-    master_password: str = Field(..., min_length=8)
+    master_password: str = Field(..., min_length=8, max_length=256)
 
 class VaultUnlockRequest(BaseModel):
     master_password: str
@@ -36,6 +80,15 @@ class SecurityQuestionItem(BaseModel):
     question: str
     answer: str
 
+class BackupCodeInput(BackupCodeItem):
+    code: str = Field(max_length=256)
+
+class SecurityQuestionInput(SecurityQuestionItem):
+    question: str = Field(max_length=500)
+    answer: str = Field(max_length=1000)
+
+EmailAliasInput = Annotated[str, Field(max_length=255)]
+
 class EmailBase(BaseModel):
     address: str
     provider: str = "Google"
@@ -49,24 +102,40 @@ class EmailBase(BaseModel):
     scope: str = "business"
 
 class EmailCreate(EmailBase):
-    password: str | None = None
-    backup_codes: list[BackupCodeItem] = []
-    security_questions: list[SecurityQuestionItem] = []
+    address: str = Field(..., min_length=3, max_length=255)
+    provider: str = Field(default="Google", max_length=64)
+    inbox_url: str | None = Field(default=None, max_length=512)
+    icon: str | None = Field(default=None, max_length=1000000)
+    notes: str | None = Field(default=None, max_length=5000)
+    recovery_email_id: str | None = Field(default=None, max_length=36)
+    recovery_phone: str | None = Field(default=None, max_length=64)
+    two_factor_method: str = Field(default="none", max_length=32)
+    scope: str = Field(default="business", max_length=32)
+    password: str | None = Field(default=None, max_length=256)
+    aliases: list[EmailAliasInput] = Field(default_factory=list, max_length=100)
+    backup_codes: list[BackupCodeInput] = Field(default_factory=list, max_length=100)
+    security_questions: list[SecurityQuestionInput] = Field(default_factory=list, max_length=100)
+
+    _valid_address = field_validator('address')(validate_email_input)
+    _valid_inbox_url = field_validator('inbox_url')(validate_web_url_input)
 
 class EmailUpdate(BaseModel):
-    address: str | None = None
-    provider: str | None = None
-    inbox_url: str | None = None
-    icon: str | None = None
-    notes: str | None = None
-    password: str | None = None
-    recovery_email_id: str | None = None
-    recovery_phone: str | None = None
-    two_factor_method: str | None = None
-    backup_codes: list[BackupCodeItem] | None = None
-    security_questions: list[SecurityQuestionItem] | None = None
-    aliases: list[str] | None = None
-    scope: str | None = None
+    address: str | None = Field(default=None, min_length=3, max_length=255)
+    provider: str | None = Field(default=None, max_length=64)
+    inbox_url: str | None = Field(default=None, max_length=512)
+    icon: str | None = Field(default=None, max_length=1000000)
+    notes: str | None = Field(default=None, max_length=5000)
+    password: str | None = Field(default=None, max_length=256)
+    recovery_email_id: str | None = Field(default=None, max_length=36)
+    recovery_phone: str | None = Field(default=None, max_length=64)
+    two_factor_method: str | None = Field(default=None, max_length=32)
+    backup_codes: list[BackupCodeInput] | None = Field(default=None, max_length=100)
+    security_questions: list[SecurityQuestionInput] | None = Field(default=None, max_length=100)
+    aliases: list[EmailAliasInput] | None = Field(default=None, max_length=100)
+    scope: str | None = Field(default=None, max_length=32)
+
+    _valid_address = field_validator('address')(validate_email_input)
+    _valid_inbox_url = field_validator('inbox_url')(validate_web_url_input)
 
 class EmailResponse(EmailBase):
     id: str
@@ -102,6 +171,23 @@ class TagItem(BaseModel):
     name: str
     color: str = "#6366f1"
 
+class ApiKeyInput(ApiKeyItem):
+    id: str = Field(max_length=64)
+    label: str = Field(max_length=100)
+    key: str | None = Field(default=None, max_length=500)
+    key_masked: str = Field(default="••••••••••••••••", max_length=128)
+    created_at: str | None = Field(default=None, max_length=64)
+    expires_at: str | None = Field(default=None, max_length=64)
+
+class EnvVarInput(EnvVarItem):
+    key: str = Field(max_length=100)
+    value: str | None = Field(default=None, max_length=1000)
+    value_masked: str = Field(default="••••••••", max_length=128)
+
+class TagInput(TagItem):
+    name: str = Field(min_length=1, max_length=50)
+    color: str = Field(default="#6366f1", max_length=32)
+
 class PlatformBase(BaseModel):
     name: str
     email_id: str | None = None
@@ -128,43 +214,72 @@ class PlatformBase(BaseModel):
     tags: list[TagItem] = []
 
 class PlatformCreate(PlatformBase):
-    password: str | None = None
-    pin: str | None = None
-    recovery_codes: str | None = None
-    totp_secret: str | None = None
-    api_keys: list[ApiKeyItem] = []
-    env_variables: list[EnvVarItem] = []
+    name: str = Field(..., min_length=1, max_length=128)
+    email_id: str | None = Field(default=None, max_length=36)
+    prospect_id: str | None = Field(default=None, max_length=36)
+    project_id: str | None = Field(default=None, max_length=36)
+    payment_method_id: str | None = Field(default=None, max_length=36)
+    specific_alias: str | None = Field(default=None, max_length=255)
+    ownership_type: str = Field(default="own", max_length=32)
+    scope: str = Field(default="business", max_length=32)
+    icon_type: str = Field(default="catalog", max_length=32)
+    access_type: str = Field(default="own_password", max_length=32)
+    subscription_status: str = Field(default="active", max_length=32)
+    currency: str = Field(default="MXN", max_length=8)
+    billing_cycle: str = Field(default="monthly", max_length=32)
+    login_url: str | None = Field(default=None, max_length=512)
+    username: str | None = Field(default=None, max_length=128)
+    notes: str | None = Field(default=None, max_length=5000)
+    icon_url: str | None = Field(default=None, max_length=1000000)
+    start_date: str | None = Field(default=None, max_length=32)
+    next_billing_date: str | None = Field(default=None, max_length=32)
+    trial_end_date: str | None = Field(default=None, max_length=32)
+    subscription_cost: float = Field(default=0.0, ge=0, le=100000000, allow_inf_nan=False)
+    business_share_percent: float = Field(default=100.0, ge=0, le=100, allow_inf_nan=False)
+    password: str | None = Field(default=None, max_length=256)
+    pin: str | None = Field(default=None, max_length=64)
+    recovery_codes: str | None = Field(default=None, max_length=5000)
+    totp_secret: str | None = Field(default=None, max_length=128)
+    api_keys: list[ApiKeyInput] = Field(default_factory=list, max_length=100)
+    env_variables: list[EnvVarInput] = Field(default_factory=list, max_length=100)
+    tags: list[TagInput] = Field(default_factory=list, max_length=100)
+
+    _valid_name = field_validator('name')(validate_nonblank_input)
+    _valid_login_url = field_validator('login_url')(validate_web_url_input)
 
 class PlatformUpdate(BaseModel):
-    name: str | None = None
-    email_id: str | None = None
-    prospect_id: str | None = None
-    project_id: str | None = None
-    ownership_type: str | None = None
-    scope: str | None = None
-    business_share_percent: float | None = None
-    specific_alias: str | None = None
-    login_url: str | None = None
-    username: str | None = None
-    notes: str | None = None
-    icon_url: str | None = None
-    icon_type: str | None = None
-    access_type: str | None = None
-    password: str | None = None
-    pin: str | None = None
-    recovery_codes: str | None = None
-    totp_secret: str | None = None
-    api_keys: list[ApiKeyItem] | None = None
-    env_variables: list[EnvVarItem] | None = None
-    subscription_status: str | None = None
-    subscription_cost: float | None = None
-    currency: str | None = None
-    billing_cycle: str | None = None
-    start_date: str | None = None
-    next_billing_date: str | None = None
-    trial_end_date: str | None = None
-    payment_method_id: str | None = None
-    tags: list[TagItem] | None = None
+    name: str | None = Field(default=None, min_length=1, max_length=128)
+    email_id: str | None = Field(default=None, max_length=36)
+    prospect_id: str | None = Field(default=None, max_length=36)
+    project_id: str | None = Field(default=None, max_length=36)
+    ownership_type: str | None = Field(default=None, max_length=32)
+    scope: str | None = Field(default=None, max_length=32)
+    business_share_percent: float | None = Field(default=None, ge=0, le=100, allow_inf_nan=False)
+    specific_alias: str | None = Field(default=None, max_length=255)
+    login_url: str | None = Field(default=None, max_length=512)
+    username: str | None = Field(default=None, max_length=128)
+    notes: str | None = Field(default=None, max_length=5000)
+    icon_url: str | None = Field(default=None, max_length=1000000)
+    icon_type: str | None = Field(default=None, max_length=32)
+    access_type: str | None = Field(default=None, max_length=32)
+    password: str | None = Field(default=None, max_length=256)
+    pin: str | None = Field(default=None, max_length=64)
+    recovery_codes: str | None = Field(default=None, max_length=5000)
+    totp_secret: str | None = Field(default=None, max_length=128)
+    api_keys: list[ApiKeyInput] | None = Field(default=None, max_length=100)
+    env_variables: list[EnvVarInput] | None = Field(default=None, max_length=100)
+    subscription_status: str | None = Field(default=None, max_length=32)
+    subscription_cost: float | None = Field(default=None, ge=0, le=100000000, allow_inf_nan=False)
+    currency: str | None = Field(default=None, max_length=8)
+    billing_cycle: str | None = Field(default=None, max_length=32)
+    start_date: str | None = Field(default=None, max_length=32)
+    next_billing_date: str | None = Field(default=None, max_length=32)
+    trial_end_date: str | None = Field(default=None, max_length=32)
+    payment_method_id: str | None = Field(default=None, max_length=36)
+    tags: list[TagInput] | None = Field(default=None, max_length=100)
+
+    _valid_name = field_validator('name')(validate_nonblank_input)
+    _valid_login_url = field_validator('login_url')(validate_web_url_input)
 
 class PlatformResponse(PlatformBase):
     id: str
@@ -186,7 +301,7 @@ class PlatformResponse(PlatformBase):
     updated_at: Any = None
 
 class TotpSetupRequest(BaseModel):
-    totp_secret: str
+    totp_secret: str = Field(..., min_length=1, max_length=128)
 
 class TotpResponse(BaseModel):
     code: str
@@ -213,17 +328,32 @@ class PaymentMethodBase(BaseModel):
     billing_notes: str | None = None
 
 class PaymentMethodCreate(PaymentMethodBase):
-    card_number: str | None = None
+    issuer: str = Field(..., min_length=1, max_length=64)
+    alias: str = Field(..., min_length=1, max_length=128)
+    last_four: str = Field(..., pattern=r'^\d{4}$')
+    scope: str = Field(default="business", max_length=32)
+    expiry_month: str | None = Field(default=None, max_length=4)
+    expiry_year: str | None = Field(default=None, max_length=4)
+    billing_notes: str | None = Field(default=None, max_length=5000)
+    card_number: str | None = Field(default=None, max_length=32)
+
+    _valid_name = field_validator('issuer', 'alias')(validate_nonblank_input)
+    _valid_expiry_month = field_validator('expiry_month')(validate_expiry_month_input)
+    _valid_expiry_year = field_validator('expiry_year')(validate_expiry_year_input)
 
 class PaymentMethodUpdate(BaseModel):
-    issuer: str | None = None
-    alias: str | None = None
-    last_four: str | None = None
-    scope: str | None = None
-    card_number: str | None = None
-    expiry_month: str | None = None
-    expiry_year: str | None = None
-    billing_notes: str | None = None
+    issuer: str | None = Field(default=None, min_length=1, max_length=64)
+    alias: str | None = Field(default=None, min_length=1, max_length=128)
+    last_four: str | None = Field(default=None, pattern=r'^\d{4}$')
+    scope: str | None = Field(default=None, max_length=32)
+    card_number: str | None = Field(default=None, max_length=32)
+    expiry_month: str | None = Field(default=None, max_length=4)
+    expiry_year: str | None = Field(default=None, max_length=4)
+    billing_notes: str | None = Field(default=None, max_length=5000)
+
+    _valid_name = field_validator('issuer', 'alias')(validate_nonblank_input)
+    _valid_expiry_month = field_validator('expiry_month')(validate_expiry_month_input)
+    _valid_expiry_year = field_validator('expiry_year')(validate_expiry_year_input)
 
 class PaymentMethodResponse(PaymentMethodBase):
     id: str
@@ -290,20 +420,20 @@ class SettingsResponse(BaseModel):
     max_followup_attempts: int = 3
 
 class SettingsUpdate(BaseModel):
-    vault_timeout_minutes: int | None = None
-    clipboard_clear_seconds: int | None = None
+    vault_timeout_minutes: int | None = Field(default=None, ge=1, le=1440)
+    clipboard_clear_seconds: int | None = Field(default=None, ge=0, le=3600)
     allow_reveal_passwords: bool | None = None
-    search_hotkey: str | None = None
-    accent_color: str | None = None
-    canvas_style: str | None = None
-    budget_cap_amount: float | None = None
-    budget_cap_currency: str | None = None
-    password_rotation_days_root: int | None = None
-    password_rotation_days_secondary: int | None = None
-    trash_retention_days: int | None = None
-    max_followup_attempts: int | None = None
+    search_hotkey: str | None = Field(default=None, max_length=32)
+    accent_color: str | None = Field(default=None, max_length=32)
+    canvas_style: str | None = Field(default=None, max_length=32)
+    budget_cap_amount: float | None = Field(default=None, ge=0, le=100000000, allow_inf_nan=False)
+    budget_cap_currency: str | None = Field(default=None, max_length=8)
+    password_rotation_days_root: int | None = Field(default=None, ge=1, le=3650)
+    password_rotation_days_secondary: int | None = Field(default=None, ge=1, le=3650)
+    trash_retention_days: int | None = Field(default=None, ge=0, le=3650)
+    max_followup_attempts: int | None = Field(default=None, ge=1, le=10)
     current_master_password: str | None = None
-    new_master_password: str | None = None
+    new_master_password: str | None = Field(default=None, max_length=256)
 
 # Billing Record History
 class BillingRecordResponse(BaseModel):
@@ -343,8 +473,6 @@ class SecurityAuditResponse(BaseModel):
 
 class EmergencyKitResponse(BaseModel):
     generated_at: str
-    vault_id: str
-    master_salt: str
     total_emails: int
     total_platforms: int
     root_emails: list[dict[str, Any]]
@@ -377,6 +505,31 @@ class ProspectBase(BaseModel):
     max_followup_attempts: int = 3
 
 class ProspectCreate(ProspectBase):
+    contact_name: str | None = Field(default=None, max_length=128)
+    contact_email: str | None = Field(default=None, max_length=255)
+    email_id: str | None = Field(default=None, max_length=36)
+    specific_alias: str | None = Field(default=None, max_length=255)
+    scope: str = Field(default="business", max_length=32)
+    workflow_type: str = Field(default="demo_first", max_length=32)
+    status: str = Field(default="demo_creada", max_length=32)
+    currency: str = Field(default="MXN", max_length=8)
+    billing_type: str = Field(default="one_time", max_length=32)
+    started_at: str | None = Field(default=None, max_length=64)
+    demo_url: str | None = Field(default=None, max_length=512)
+    maps_url: str | None = Field(default=None, max_length=512)
+    whatsapp: str | None = Field(default=None, max_length=64)
+    phones: str | None = Field(default=None, max_length=500)
+    social_links: str | None = Field(default=None, max_length=1000)
+    notes: str | None = Field(default=None, max_length=5000)
+    tags: list[TagInput] = Field(default_factory=list, max_length=100)
+    estimated_value: float = Field(default=0, ge=0, le=100000000, allow_inf_nan=False)
+    sla_hours: float = Field(default=48, ge=0, le=87600, allow_inf_nan=False)
+    followup_sla_hours: float = Field(default=48, ge=0, le=87600, allow_inf_nan=False)
+    max_followup_attempts: int = Field(default=3, ge=1, le=100)
+
+    _valid_contact_email = field_validator('contact_email')(validate_email_input)
+    _valid_web_urls = field_validator('demo_url', 'maps_url')(validate_web_url_input)
+
     @field_validator('company_name')
     @classmethod
     def validate_company_name(cls, value: str) -> str:
@@ -387,33 +540,36 @@ class ProspectCreate(ProspectBase):
 
 class ProspectUpdate(BaseModel):
     company_name: str | None = None
-    contact_name: str | None = None
-    contact_email: str | None = None
-    email_id: str | None = None
-    specific_alias: str | None = None
-    scope: str | None = None
-    workflow_type: str | None = None
-    status: str | None = None
-    demo_url: str | None = None
-    estimated_value: float | None = None
-    currency: str | None = None
-    billing_type: str | None = None
-    whatsapp: str | None = None
-    phones: str | None = None
-    maps_url: str | None = None
-    social_links: str | None = None
-    notes: str | None = None
-    tags: list[TagItem] | None = None
-    started_at: str | None = None
-    sla_hours: float | None = None
-    responded_at: str | None = None
-    response_time_seconds: int | None = None
+    contact_name: str | None = Field(default=None, max_length=128)
+    contact_email: str | None = Field(default=None, max_length=255)
+    email_id: str | None = Field(default=None, max_length=36)
+    specific_alias: str | None = Field(default=None, max_length=255)
+    scope: str | None = Field(default=None, max_length=32)
+    workflow_type: str | None = Field(default=None, max_length=32)
+    status: str | None = Field(default=None, max_length=32)
+    demo_url: str | None = Field(default=None, max_length=512)
+    estimated_value: float | None = Field(default=None, ge=0, le=100000000, allow_inf_nan=False)
+    currency: str | None = Field(default=None, max_length=8)
+    billing_type: str | None = Field(default=None, max_length=32)
+    whatsapp: str | None = Field(default=None, max_length=64)
+    phones: str | None = Field(default=None, max_length=500)
+    maps_url: str | None = Field(default=None, max_length=512)
+    social_links: str | None = Field(default=None, max_length=1000)
+    notes: str | None = Field(default=None, max_length=5000)
+    tags: list[TagInput] | None = Field(default=None, max_length=100)
+    started_at: str | None = Field(default=None, max_length=64)
+    sla_hours: float | None = Field(default=None, ge=0, le=87600, allow_inf_nan=False)
+    responded_at: str | None = Field(default=None, max_length=64)
+    response_time_seconds: int | None = Field(default=None, ge=0, le=2147483647)
     met_sla: bool | None = None
-    last_contacted_at: str | None = None
-    followup_count: int | None = None
-    last_contact_channel: str | None = None
-    followup_sla_hours: float | None = None
-    max_followup_attempts: int | None = None
+    last_contacted_at: str | None = Field(default=None, max_length=64)
+    followup_count: int | None = Field(default=None, ge=0, le=2147483647)
+    last_contact_channel: str | None = Field(default=None, max_length=32)
+    followup_sla_hours: float | None = Field(default=None, ge=0, le=87600, allow_inf_nan=False)
+    max_followup_attempts: int | None = Field(default=None, ge=1, le=100)
+
+    _valid_contact_email = field_validator('contact_email')(validate_email_input)
+    _valid_web_urls = field_validator('demo_url', 'maps_url')(validate_web_url_input)
 
     @field_validator('company_name')
     @classmethod
@@ -462,8 +618,33 @@ class FinancialInputValidation(BaseModel):
     @field_validator('amount', 'renewal_cost', 'client_charge_amount', 'charged_amount', check_fields=False)
     @classmethod
     def validate_amount(cls, value: float | None) -> float | None:
-        if value is not None and (not math.isfinite(value) or value < 0):
-            raise ValueError('El monto debe ser un número finito y no negativo.')
+        if value is not None and (not math.isfinite(value) or value < 0 or value > 100000000):
+            raise ValueError('El monto debe estar entre 0 y 100,000,000.')
+        return value
+
+    @field_validator(
+        'client_name', 'concept', 'domain_or_service', 'category', 'service_type',
+        'provider', 'vendor', 'payment_method_label', 'notes', 'currency',
+        'charged_currency', 'scope', 'ownership_type', 'status', 'income_status',
+        'billing_cycle', 'paid_by', 'prospect_id', 'project_id', 'platform_id',
+        check_fields=False,
+    )
+    @classmethod
+    def validate_text_size(cls, value: str | None, info) -> str | None:
+        if value is None:
+            return None
+        limits = {
+            'client_name': 180, 'concept': 180, 'domain_or_service': 255,
+            'category': 64, 'service_type': 64, 'provider': 128, 'vendor': 128,
+            'payment_method_label': 64, 'notes': 5000, 'currency': 8,
+            'charged_currency': 8, 'scope': 32, 'ownership_type': 32,
+            'status': 32, 'income_status': 32, 'billing_cycle': 32, 'paid_by': 32,
+            'prospect_id': 36, 'project_id': 36, 'platform_id': 36,
+        }
+        if len(value) > limits[info.field_name]:
+            raise ValueError(f'El campo admite hasta {limits[info.field_name]} caracteres.')
+        if info.field_name in {'client_name', 'concept', 'domain_or_service'} and not value.strip():
+            raise ValueError('El campo no puede quedar vacío.')
         return value
 
     @field_validator('business_share_percent', check_fields=False)
@@ -694,20 +875,34 @@ class SecureResourceBase(BaseModel):
     notes: str | None = None
 
 class SecureResourceCreate(SecureResourceBase):
-    pass
+    title: str = Field(..., min_length=1, max_length=180)
+    resource_type: str = Field(default="nota_segura", max_length=64)
+    scope: str = Field(default="business", max_length=32)
+    ownership_type: str = Field(default="own", max_length=32)
+    content: str | None = Field(default=None, max_length=1000000)
+    email_id: str | None = Field(default=None, max_length=36)
+    platform_id: str | None = Field(default=None, max_length=36)
+    prospect_id: str | None = Field(default=None, max_length=36)
+    project_id: str | None = Field(default=None, max_length=36)
+    tags: list[TagInput] = Field(default_factory=list, max_length=100)
+    notes: str | None = Field(default=None, max_length=5000)
+
+    _valid_title = field_validator('title')(validate_nonblank_input)
 
 class SecureResourceUpdate(BaseModel):
-    title: str | None = None
-    resource_type: str | None = None
-    scope: str | None = None
-    ownership_type: str | None = None
-    content: str | None = None
-    email_id: str | None = None
-    platform_id: str | None = None
-    prospect_id: str | None = None
-    project_id: str | None = None
-    tags: list[TagItem] | None = None
-    notes: str | None = None
+    title: str | None = Field(default=None, min_length=1, max_length=180)
+    resource_type: str | None = Field(default=None, max_length=64)
+    scope: str | None = Field(default=None, max_length=32)
+    ownership_type: str | None = Field(default=None, max_length=32)
+    content: str | None = Field(default=None, max_length=1000000)
+    email_id: str | None = Field(default=None, max_length=36)
+    platform_id: str | None = Field(default=None, max_length=36)
+    prospect_id: str | None = Field(default=None, max_length=36)
+    project_id: str | None = Field(default=None, max_length=36)
+    tags: list[TagInput] | None = Field(default=None, max_length=100)
+    notes: str | None = Field(default=None, max_length=5000)
+
+    _valid_title = field_validator('title')(validate_nonblank_input)
 
 class SecureResourceResponse(SecureResourceBase):
     id: str

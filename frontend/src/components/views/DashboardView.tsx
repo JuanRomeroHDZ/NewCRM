@@ -246,33 +246,33 @@ export const DashboardView: React.FC = () => {
       )}
 
       {/* Top 4 Executive KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 gap-2 sm:gap-4 lg:grid-cols-4">
         {/* Total Monthly Spend */}
-        <div className="p-5 rounded-2xl bg-obsidian-panel border border-obsidian-border hover:border-obsidian-borderLight transition-all min-w-0">
+        <div className="min-w-0 rounded-2xl border border-obsidian-border bg-obsidian-panel p-3 transition-all hover:border-obsidian-borderLight sm:p-5">
           <div className="flex items-center justify-between text-obsidian-muted mb-2 gap-2">
-            <span className="text-xs font-medium truncate">Gasto Mensual en Suscripciones</span>
+            <span className="min-w-0 text-xs font-medium">Gasto mensual <span className="block text-[10px]">Suscripciones</span></span>
             <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 flex-shrink-0">
               <DollarSign size={16} />
             </div>
           </div>
-          <div className="text-2xl font-bold font-mono text-white tracking-tight truncate" title={`$${formatMoney(fin.monthlyMXN)} MXN`}>
+          <div className="break-words text-base font-bold font-mono tracking-tight text-white sm:text-2xl" title={`$${formatMoney(fin.monthlyMXN)} MXN`}>
             ${formatMoney(fin.monthlyMXN)} <span className="text-xs font-sans text-obsidian-muted">MXN</span>
           </div>
-          <div className="text-[11px] text-obsidian-muted mt-1 font-mono truncate">
+          <div className="mt-1 break-words text-[10px] text-obsidian-muted sm:text-[11px]">
             ${formatMoney(fin.monthlyUSD)} USD • Semanal: ${formatMoney(fin.weeklyMXN)} MXN
           </div>
         </div>
 
         {/* Ganancia Neta Real del Mes */}
-        <div className="p-5 rounded-2xl bg-obsidian-panel border border-obsidian-border hover:border-obsidian-borderLight transition-all min-w-0">
+        <div className="min-w-0 rounded-2xl border border-obsidian-border bg-obsidian-panel p-3 transition-all hover:border-obsidian-borderLight sm:p-5">
           <div className="flex items-center justify-between text-obsidian-muted mb-2 gap-2">
-            <span className="text-xs font-medium truncate">Ganancia Neta Real (Mes)</span>
+            <span className="min-w-0 text-xs font-medium">Ganancia del mes</span>
             <div className="p-1.5 rounded-lg bg-indigo-500/10 text-indigo-400 flex-shrink-0">
               <Wallet size={16} />
             </div>
           </div>
           <div
-            className={`text-2xl font-bold font-mono tracking-tight truncate ${
+            className={`break-words text-base font-bold font-mono tracking-tight sm:text-2xl ${
               realProfit.netMonthMXN >= 0 ? 'text-emerald-400' : 'text-rose-400'
             }`}
             title={`$${formatMoney(realProfit.netMonthMXN)} MXN`}
@@ -280,37 +280,37 @@ export const DashboardView: React.FC = () => {
             {realProfit.netMonthMXN >= 0 ? '+' : '-'}${formatMoney(Math.abs(realProfit.netMonthMXN))}{' '}
             <span className="text-xs font-sans text-obsidian-muted">MXN</span>
           </div>
-          <div className="text-[11px] text-obsidian-muted mt-1 font-mono truncate">
+          <div className="mt-1 break-words text-[10px] text-obsidian-muted sm:text-[11px]">
             Cobrado: ${formatMoney(realProfit.monthIncomeMXN)} MXN • Año: {realProfit.netYearMXN >= 0 ? '+' : '-'}${formatMoney(Math.abs(realProfit.netYearMXN), 0)}
           </div>
         </div>
 
         {/* SSO vs Own Password Ratio */}
-        <div className="p-5 rounded-2xl bg-obsidian-panel border border-obsidian-border hover:border-obsidian-borderLight transition-all min-w-0">
+        <div className="min-w-0 rounded-2xl border border-obsidian-border bg-obsidian-panel p-3 transition-all hover:border-obsidian-borderLight sm:p-5">
           <div className="flex items-center justify-between text-obsidian-muted mb-2 gap-2">
-            <span className="text-xs font-medium truncate">Forma de Inicio de Sesión</span>
+            <span className="min-w-0 text-xs font-medium">Acceso con correo</span>
             <div className="p-1.5 rounded-lg bg-cyan-500/10 text-cyan-400 flex-shrink-0">
               <Key size={16} />
             </div>
           </div>
-          <div className="text-2xl font-bold font-mono text-white tracking-tight truncate">
+          <div className="break-words text-base font-bold font-mono tracking-tight text-white sm:text-2xl">
             {ssoPercentage}% <span className="text-xs font-sans text-obsidian-muted">Con tu correo</span>
           </div>
-          <div className="text-[11px] text-obsidian-muted mt-1 flex items-center justify-between gap-2">
+          <div className="mt-1 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-[10px] text-obsidian-muted sm:text-[11px]">
             <span className="truncate">{ssoCount} con correo</span>
             <span className="truncate">{ownPasswordCount} con clave propia</span>
           </div>
         </div>
 
         {/* Security Health */}
-        <div className="p-5 rounded-2xl bg-obsidian-panel border border-obsidian-border hover:border-obsidian-borderLight transition-all min-w-0">
+        <div className="min-w-0 rounded-2xl border border-obsidian-border bg-obsidian-panel p-3 transition-all hover:border-obsidian-borderLight sm:p-5">
           <div className="flex items-center justify-between text-obsidian-muted mb-2 gap-2">
-            <span className="text-xs font-medium truncate">Protección de Correos Principales</span>
+            <span className="min-w-0 text-xs font-medium">Correos protegidos</span>
             <div className="p-1.5 rounded-lg bg-rose-500/10 text-rose-400 flex-shrink-0">
               <Shield size={16} />
             </div>
           </div>
-          <div className="text-2xl font-bold font-mono text-white tracking-tight truncate">
+          <div className="break-words text-base font-bold font-mono tracking-tight text-white sm:text-2xl">
             {emails.length - emailsWithout2FA.length} / {emails.length} <span className="text-xs font-sans text-obsidian-muted">con 2 pasos</span>
           </div>
           <div className="text-[11px] text-obsidian-muted mt-1 flex items-center gap-1.5 min-w-0">
@@ -353,7 +353,7 @@ export const DashboardView: React.FC = () => {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {/* Ganancia Neta Real (Semana / Mes / Año) */}
-          <div className="p-3.5 rounded-xl bg-obsidian-surface/60 border border-emerald-500/25 min-w-0">
+          <div className="min-w-0 border-b border-obsidian-border pb-3 sm:border-b-0 sm:border-l sm:pl-3">
             <div className="text-[10px] font-semibold text-emerald-300 uppercase flex items-center gap-1">
               <Wallet size={11} className="text-emerald-400 shrink-0" />
               <span className="truncate">Ganancia Neta Real</span>
@@ -380,7 +380,7 @@ export const DashboardView: React.FC = () => {
             </div>
           </div>
 
-          <div className="p-3.5 rounded-xl bg-obsidian-surface/60 border border-obsidian-border min-w-0">
+          <div className="min-w-0 border-b border-obsidian-border pb-3 last:border-b-0 sm:border-b-0 sm:border-l sm:pl-3">
             <div className="text-[10px] font-semibold text-obsidian-muted uppercase">Gastos en Suscripciones</div>
             <div className="mt-1.5 space-y-1 text-xs font-mono">
               <div className="flex min-w-0 flex-wrap justify-between gap-x-2 gap-y-1">
@@ -398,7 +398,7 @@ export const DashboardView: React.FC = () => {
             </div>
           </div>
 
-          <div className="p-3.5 rounded-xl bg-obsidian-surface/60 border border-obsidian-border min-w-0">
+          <div className="min-w-0 border-b border-obsidian-border pb-3 last:border-b-0 sm:border-b-0 sm:border-l sm:pl-3">
             <div className="text-[10px] font-semibold text-obsidian-muted uppercase flex items-center gap-1">
               <TrendingUp size={11} className="text-rose-400 shrink-0" />
               <span className="truncate">Mes con Más y Menos Gasto</span>
@@ -419,7 +419,7 @@ export const DashboardView: React.FC = () => {
             </div>
           </div>
 
-          <div className="p-3.5 rounded-xl bg-obsidian-surface/60 border border-obsidian-border min-w-0">
+          <div className="min-w-0 border-b border-obsidian-border pb-3 last:border-b-0 sm:border-b-0 sm:border-l sm:pl-3">
             <div className="text-[10px] font-semibold text-obsidian-muted uppercase flex items-center gap-1">
               <Server size={11} className="text-cyan-400 shrink-0" />
               <span className="truncate">Dominios y Hosting ({realProfit.activeRenewalsCount})</span>
@@ -567,7 +567,7 @@ export const DashboardView: React.FC = () => {
               onClick={() => setActiveSection('prospects')}
               className="text-xs text-indigo-400 hover:text-indigo-300 font-medium flex items-center gap-1 transition-colors px-2 py-1"
             >
-              <span>Ver Todos</span>
+              <span>Ver todos</span>
               <ArrowRight size={13} />
             </button>
           </div>
@@ -868,7 +868,7 @@ export const DashboardView: React.FC = () => {
           </div>
         </div>
         <div className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md transition-all flex-shrink-0">
-          <span>Ver Mapa</span>
+          <span>Ver mapa</span>
           <ArrowRight size={14} />
         </div>
       </div>

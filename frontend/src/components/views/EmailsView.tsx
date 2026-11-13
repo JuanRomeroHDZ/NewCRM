@@ -27,12 +27,19 @@ export const EmailsView: React.FC = () => {
   const filteredEmails = emails.filter((email) => matchesScope(email.scope));
 
   useEffect(() => {
+    if (!isUnlocked) {
+      setEmails([]);
+      setLoading(false);
+      return;
+    }
+    let active = true;
     setLoading(true);
     api.getEmails(search || undefined)
-      .then(setEmails)
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, [search, isUnlocked, dataVersion]);
+      .then((items) => { if (active) setEmails(items); })
+      .catch((error) => { if (active) showToast(error.message || 'No se pudieron cargar los correos.', 'error'); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [search, isUnlocked, dataVersion, showToast]);
 
   const handleDeleteEmail = async (e: React.MouseEvent, email: EmailAccount) => {
     e.stopPropagation();
@@ -51,7 +58,7 @@ export const EmailsView: React.FC = () => {
   };
 
   return (
-    <div className="p-4 sm:p-8 max-w-7xl mx-auto space-y-6 animate-fadeIn">
+    <div className="mx-auto max-w-7xl min-w-0 space-y-4 p-3 sm:space-y-6 sm:p-8 animate-fadeIn">
       {/* Top Header & Search */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-2 min-w-0">
@@ -65,14 +72,14 @@ export const EmailsView: React.FC = () => {
           />
         </div>
 
-        <div className="flex items-center gap-3 w-full sm:w-auto">
+        <div className="flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto">
           <input
             type="text"
             maxLength={INPUT_LIMITS.SEARCH}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar por dirección o proveedor..."
-            className="px-3.5 py-1.5 rounded-xl bg-obsidian-panel border border-obsidian-border text-xs text-white placeholder-obsidian-muted/60 focus:outline-none focus:border-indigo-500 w-full sm:w-64"
+            className="min-h-10 min-w-0 flex-1 rounded-lg border border-obsidian-border bg-obsidian-panel px-3 text-xs text-white placeholder-obsidian-muted/60 focus:border-indigo-500 focus:outline-none sm:w-64 sm:flex-none"
           />
           <button
             type="button"
@@ -83,10 +90,10 @@ export const EmailsView: React.FC = () => {
                 openEmailModal();
               }
             }}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md shadow-indigo-600/20 transition-all whitespace-nowrap flex-shrink-0"
+            className="inline-flex min-h-10 max-w-full items-center gap-1.5 rounded-lg bg-indigo-600 px-3 text-left text-xs font-semibold text-white transition-colors hover:bg-indigo-500"
           >
             <Plus size={14} />
-            <span>Nuevo Correo Principal</span>
+            <span>Nuevo correo</span>
           </button>
         </div>
       </div>
@@ -116,11 +123,11 @@ export const EmailsView: React.FC = () => {
             <div
               key={email.id}
               onClick={() => openInspector('email', email.id)}
-              className="p-5 rounded-2xl bg-obsidian-panel border border-obsidian-border hover:border-obsidian-borderLight transition-all cursor-pointer group flex flex-col justify-between space-y-4 hover:shadow-xl min-w-0 overflow-hidden"
+              className="group flex min-w-0 cursor-pointer flex-col justify-between gap-3 overflow-hidden rounded-xl border border-obsidian-border bg-obsidian-panel p-3 transition-colors hover:border-obsidian-borderLight sm:p-4"
             >
               {/* Upper part */}
               <div className="min-w-0">
-                <div className="flex items-start justify-between gap-3">
+                <div className="flex flex-wrap items-start justify-between gap-2">
                   <div className="flex items-center gap-3 min-w-0 flex-1">
                     <PlatformIcon name={email.provider} size="md" />
                     <div className="min-w-0 flex-1">
@@ -193,7 +200,7 @@ export const EmailsView: React.FC = () => {
                 </div>
 
                 {/* Middle Credential / Password bar */}
-                <div className="mt-4 p-3 rounded-xl bg-obsidian-surface/60 border border-obsidian-border flex items-center justify-between gap-2 text-xs min-w-0">
+                <div className="mt-3 flex min-w-0 flex-wrap items-center justify-between gap-2 border-t border-obsidian-border/60 pt-3 text-xs">
                   <span className="text-obsidian-muted flex-shrink-0">Contraseña:</span>
                   <SecretField
                     value={email.password_plain}
@@ -207,20 +214,20 @@ export const EmailsView: React.FC = () => {
                   <div className="flex flex-wrap items-center gap-2 min-w-0 flex-1">
                     {email.recovery_email_address ? (
                       <div
-                        className="px-2.5 py-1 rounded-lg bg-cyan-500/10 border border-cyan-500/20 text-cyan-300 flex items-center gap-1.5 max-w-full min-w-0"
+                        className="flex max-w-full min-w-0 items-center gap-1.5 text-cyan-300"
                         title={`Recupera a: ${email.recovery_email_address}`}
                       >
                         <span className="text-obsidian-muted flex-shrink-0">Recupera:</span>
                         <strong className="font-mono truncate">{email.recovery_email_address}</strong>
                       </div>
                     ) : (
-                      <div className="px-2.5 py-1 rounded-lg bg-obsidian-surface border border-obsidian-border text-obsidian-muted">
+                      <div className="text-obsidian-muted">
                         Sin correo de respaldo
                       </div>
                     )}
 
                     {email.recovery_phone && (
-                      <div className="px-2.5 py-1 rounded-lg bg-obsidian-surface border border-obsidian-border text-obsidian-text flex items-center gap-1 flex-shrink-0">
+                      <div className="flex min-w-0 max-w-full items-center gap-1 text-obsidian-text">
                         <Smartphone size={12} className="text-obsidian-muted flex-shrink-0" />
                         <span className="font-mono truncate">{email.recovery_phone}</span>
                       </div>
@@ -228,7 +235,7 @@ export const EmailsView: React.FC = () => {
                   </div>
 
                   {/* Quick link buttons */}
-                  <div className="flex items-center gap-1.5 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex max-w-full flex-wrap items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
                     <button
                       type="button"
                       onClick={() => {
@@ -255,14 +262,14 @@ export const EmailsView: React.FC = () => {
               </div>
 
               {/* Bottom info footer */}
-              <div className="pt-3 border-t border-obsidian-border/60 flex items-center justify-between gap-2 text-[11px] text-obsidian-muted">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-obsidian-border/60 pt-3 text-[11px] text-obsidian-muted">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className={`px-2 py-0.5 rounded text-[10px] font-semibold uppercase ${
                     email.two_factor_method !== 'none'
                       ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
                       : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
                   }`}>
-                    2FA: {email.two_factor_method}
+                    {email.two_factor_method === 'none' ? 'Sin verificación en dos pasos' : 'Verificación en dos pasos activa'}
                   </span>
 
                   {email.backup_codes && email.backup_codes.length > 0 && (
@@ -282,7 +289,7 @@ export const EmailsView: React.FC = () => {
 
       {/* Clean Empty State */}
       {filteredEmails.length === 0 && !loading && (
-        <div className="py-16 px-4 rounded-2xl bg-obsidian-panel border border-obsidian-border text-center space-y-3">
+        <div className="space-y-3 rounded-xl border border-obsidian-border bg-obsidian-panel px-4 py-8 text-center">
           <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center mx-auto">
             <Mail size={22} />
           </div>
@@ -299,7 +306,7 @@ export const EmailsView: React.FC = () => {
               className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md shadow-indigo-600/20"
             >
               <Plus size={14} />
-              <span>Registrar Primer Correo Principal</span>
+              <span>Nuevo correo</span>
             </button>
           </div>
         </div>

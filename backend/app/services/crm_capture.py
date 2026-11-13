@@ -4,6 +4,7 @@ import socket
 import ipaddress
 import hashlib
 import unicodedata
+import asyncio
 from datetime import datetime, timezone, timedelta
 from urllib.parse import urlparse
 import httpx
@@ -183,35 +184,60 @@ class CrmCaptureService:
 
     @staticmethod
     async def fetch_osm_elements(query: str) -> list[dict]:
-        try:
-            async with httpx.AsyncClient(timeout=settings.OSM_REQUEST_TIMEOUT_SECONDS, follow_redirects=True) as client:
-                response = await client.post(
-                    settings.OSM_OVERPASS_URL,
-                    data={"data": query},
-                    headers={
-                        "User-Agent": settings.OSM_USER_AGENT,
-                        "Accept": "application/json",
-                        "Content-Type": "application/x-www-form-urlencoded",
-                    },
-                )
-        except httpx.TimeoutException as exc:
-            raise OSMProviderError("OpenStreetMap tardó demasiado en responder. Intenta de nuevo más tarde.", 504) from exc
-        except httpx.RequestError as exc:
-            raise OSMProviderError("No se pudo conectar con el servicio de OpenStreetMap.", 503) from exc
+        urls = list(dict.fromkeys(
+            url.strip() for url in [settings.OSM_OVERPASS_URL, *settings.OSM_OVERPASS_FALLBACK_URLS.split(',')]
+            if url.strip()
+        ))
+        if not urls:
+            raise OSMProviderError("No hay un proveedor de OpenStreetMap configurado.", 503)
 
-        if response.status_code == 429:
-            raise OSMProviderError("OpenStreetMap está limitando consultas. Espera un momento antes de reintentar.", 429)
-        if response.status_code >= 500:
-            raise OSMProviderError("El servicio de OpenStreetMap no está disponible en este momento.", 503)
-        if response.status_code < 200 or response.status_code >= 300:
-            raise OSMProviderError("OpenStreetMap rechazó la consulta.", 502)
+        # Share one bounded time budget among providers so a failed server does
+        # not leave the interface waiting for a full timeout on every attempt.
+        total_timeout = settings.OSM_REQUEST_TIMEOUT_SECONDS
+        deadline = asyncio.get_running_loop().time() + total_timeout
+        last_error = OSMProviderError("No se pudo consultar OpenStreetMap.", 503)
         try:
-            payload = response.json()
-            if not isinstance(payload, dict) or not isinstance(payload.get("elements", []), list):
-                raise ValueError("invalid Overpass response")
-            return payload.get("elements", [])
-        except (ValueError, AttributeError) as exc:
-            raise OSMProviderError("OpenStreetMap devolvió una respuesta inválida.", 502) from exc
+            async with asyncio.timeout(total_timeout):
+                async with httpx.AsyncClient(timeout=total_timeout, follow_redirects=True) as client:
+                    for index, url in enumerate(urls):
+                        remaining = max(0.001, deadline - asyncio.get_running_loop().time())
+                        attempt_timeout = remaining if index == len(urls) - 1 else max(1.0, remaining * 0.75)
+                        try:
+                            response = await client.post(
+                                url,
+                                data={"data": query},
+                                timeout=attempt_timeout,
+                                headers={
+                                    "User-Agent": settings.OSM_USER_AGENT,
+                                    "Accept": "application/json",
+                                    "Content-Type": "application/x-www-form-urlencoded",
+                                },
+                            )
+                        except httpx.TimeoutException:
+                            last_error = OSMProviderError("OpenStreetMap tardó demasiado en responder. Intenta de nuevo más tarde.", 504)
+                            continue
+                        except httpx.RequestError:
+                            last_error = OSMProviderError("No se pudo conectar con el servicio de OpenStreetMap.", 503)
+                            continue
+
+                        if response.status_code == 429:
+                            last_error = OSMProviderError("OpenStreetMap está limitando consultas. Espera un momento antes de reintentar.", 429)
+                            continue
+                        if not response.is_success:
+                            last_error = OSMProviderError("El servicio de OpenStreetMap no pudo completar la consulta.", 503 if response.status_code >= 500 else 502)
+                            continue
+                        try:
+                            payload = response.json()
+                            if not isinstance(payload, dict) or not isinstance(payload.get("elements"), list) or payload.get("remark"):
+                                raise ValueError("invalid or incomplete Overpass response")
+                        except (ValueError, AttributeError):
+                            last_error = OSMProviderError("OpenStreetMap devolvió una respuesta incompleta o inválida.", 502)
+                            continue
+                        return payload["elements"]
+        except TimeoutError as exc:
+            raise OSMProviderError("OpenStreetMap tardó demasiado en responder. Intenta de nuevo más tarde.", 504) from exc
+
+        raise last_error
 
     @staticmethod
     async def search_osm_leads(

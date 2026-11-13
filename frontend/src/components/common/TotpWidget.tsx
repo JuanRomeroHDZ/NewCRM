@@ -84,7 +84,7 @@ export const TotpWidget: React.FC<TotpWidgetProps> = ({
     return (
       <div 
         onClick={handleCopy}
-        title="Copiar código 2FA"
+        title="Copiar código de verificación"
         className="inline-flex items-center gap-2 px-2.5 py-1 rounded-md bg-obsidian-surface border border-obsidian-border hover:border-indigo-500/50 cursor-pointer transition-all group font-mono text-xs"
       >
         <span className="text-white font-bold tracking-wider">{formattedCode}</span>
@@ -135,7 +135,7 @@ export const TotpWidget: React.FC<TotpWidgetProps> = ({
         </div>
         <div>
           <div className="text-[10px] uppercase font-bold tracking-wider text-white/40">
-            Código 2FA (TOTP)
+            Código de verificación
           </div>
           <div className="font-mono text-lg font-bold text-white tracking-widest flex items-center gap-2">
             <span>{formattedCode}</span>

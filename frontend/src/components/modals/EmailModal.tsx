@@ -320,7 +320,7 @@ export const EmailModal: React.FC = () => {
           <div className="p-4 rounded-xl bg-obsidian-surface/60 border border-obsidian-border space-y-3">
             <div>
               <span className="font-semibold text-white uppercase text-[10px] tracking-wider block">
-                Respaldo de Cuenta y Verificación en 2 Pasos (2FA)
+                Recuperación y verificación en dos pasos
               </span>
             </div>
 
@@ -356,7 +356,7 @@ export const EmailModal: React.FC = () => {
               </div>
 
               <div>
-                <label className="text-obsidian-muted block mb-1">Verificación en 2 Pasos (2FA)</label>
+                <label className="text-obsidian-muted block mb-1">Verificación en dos pasos</label>
                 <select
                   value={twoFactorMethod}
                   onChange={(e) => setTwoFactorMethod(e.target.value as any)}

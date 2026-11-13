@@ -32,7 +32,8 @@ class Settings(BaseSettings):
     # OpenStreetMap services are public infrastructure, not credentials. Keep
     # their endpoints configurable so the operator can select an appropriate
     # provider without changing application code.
-    OSM_OVERPASS_URL: str = "https://overpass-api.de/api/interpreter"
+    OSM_OVERPASS_URL: str = "https://ovp.dresel.systems/api-na/interpreter"
+    OSM_OVERPASS_FALLBACK_URLS: str = "https://overpass-api.de/api/interpreter"
     OSM_TILE_URL_TEMPLATE: str = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
     OSM_USER_AGENT: str = "ContactLESSSO/2.0 (local prospect research)"
     OSM_REQUEST_TIMEOUT_SECONDS: float = Field(default=20.0, ge=5.0, le=60.0)

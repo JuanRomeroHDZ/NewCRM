@@ -139,3 +139,25 @@
     transform: none;
   }
 }
+
+@media print {
+  body:has(.recovery-print) #root > div > :not(.recovery-overlay) {
+    display: none !important;
+  }
+
+  .recovery-overlay {
+    position: static !important;
+    display: block !important;
+    padding: 0 !important;
+    background: white !important;
+  }
+
+  .recovery-print {
+    max-height: none !important;
+    max-width: none !important;
+    overflow: visible !important;
+    border: 0 !important;
+    background: white !important;
+    box-shadow: none !important;
+  }
+}

@@ -6,7 +6,7 @@ export const INPUT_LIMITS = {
   BUDGET_CAP: 100000000,
   CARD_NUMBER: 19,
   COMPANY_NAME: 150,
-  CONTACT_NAME: 150,
+  CONTACT_NAME: 128,
   COST_AMOUNT: 100000000,
   EMAIL: 254,
   ENV_KEY: 100,
@@ -25,6 +25,8 @@ export const INPUT_LIMITS = {
   PAYMENT_ALIAS: 100,
   PHONE: 30,
   PHONES_LIST: 500,
+  RESOURCE_CONTENT: 1000000,
+  RESOURCE_TAGS: 5100,
   PIN: 12,
   PLATFORM_NAME: 100,
   SEARCH: 200,
@@ -32,7 +34,7 @@ export const INPUT_LIMITS = {
   SOCIAL_LINKS: 500,
   TAG_NAME: 50,
   TOTP_SECRET: 128,
-  URL: 2048,
+  URL: 512,
   USERNAME: 100,
 };
 
@@ -58,8 +60,11 @@ export function validateAndNormalizeUrl(url: string, fieldName = 'URL'): { valid
   }
   try {
     const parsed = new URL(trimmed);
-    if (!parsed.hostname || !parsed.hostname.includes('.')) {
+    if (!['http:', 'https:'].includes(parsed.protocol) || !parsed.hostname || !parsed.hostname.includes('.')) {
       return { valid: false, error: `${fieldName} debe ser un dominio válido.` };
+    }
+    if (parsed.toString().length > INPUT_LIMITS.URL) {
+      return { valid: false, error: `${fieldName} no puede superar ${INPUT_LIMITS.URL} caracteres.` };
     }
     return { valid: true, normalized: parsed.toString() };
   } catch {
@@ -69,8 +74,8 @@ export function validateAndNormalizeUrl(url: string, fieldName = 'URL'): { valid
 
 export function validateSlaHours(hours: string | number): { valid: boolean; error?: string; hours?: number } {
   const num = Number(hours);
-  if (isNaN(num) || num < 0 || num > INPUT_LIMITS.SLA_HOURS) {
-    return { valid: false, error: 'El tiempo límite estipulado (SLA) debe ser un número válido mayor o igual a 0.' };
+  if (String(hours).trim() === '' || !Number.isFinite(num) || num < 0 || num > INPUT_LIMITS.SLA_HOURS) {
+    return { valid: false, error: 'El tiempo de respuesta debe ser un número entre 0 y 87,600 horas.' };
   }
   return { valid: true, hours: num };
 }
@@ -86,7 +91,8 @@ export function isValidExpiryMonth(val: string | number): boolean {
 }
 
 export function isValidExpiryYear(val: string | number): boolean {
-  const y = Number(val);
-  const currentYear = new Date().getFullYear();
-  return !isNaN(y) && y >= currentYear % 100 && y <= (currentYear + 25) % 100;
+  const text = String(val).trim();
+  if (/^\d{2}$/.test(text)) return true;
+  const year = Number(text);
+  return /^\d{4}$/.test(text) && year >= 1900 && year <= 2199;
 }

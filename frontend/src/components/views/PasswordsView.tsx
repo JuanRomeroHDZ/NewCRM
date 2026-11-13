@@ -145,13 +145,18 @@ export const PasswordsView: React.FC = () => {
       return;
     }
 
-    setSavingResource(true);
-    try {
-      const parsedTags: TagItem[] = resTags
+    const tagNames = resTags
         .split(',')
         .map((t) => t.trim())
-        .filter(Boolean)
-        .map((t) => ({ name: t, color: '#6366f1' }));
+        .filter(Boolean);
+    if (tagNames.length > 100 || tagNames.some((tag) => tag.length > INPUT_LIMITS.TAG_NAME)) {
+      showToast('Usa hasta 100 etiquetas de máximo 50 caracteres cada una.', 'error');
+      return;
+    }
+
+    setSavingResource(true);
+    try {
+      const parsedTags: TagItem[] = tagNames.map((name) => ({ name, color: '#6366f1' }));
 
       const payload: Partial<SecureResource> = {
         title: resTitle.trim(),
@@ -168,7 +173,7 @@ export const PasswordsView: React.FC = () => {
         showToast(`Recurso "${resTitle}" actualizado exitosamente.`, 'success');
       } else {
         await api.createResource(payload);
-        showToast(`Recurso "${resTitle}" guardado en la espacio seguro.`, 'success');
+        showToast(`Recurso "${resTitle}" guardado en el espacio seguro.`, 'success');
       }
 
       setIsResourceModalOpen(false);
@@ -247,7 +252,7 @@ export const PasswordsView: React.FC = () => {
         };
       case 'backup_codes':
         return {
-          label: 'Códigos 2FA / Backup',
+          label: 'Códigos de recuperación',
           icon: KeyRound,
           badgeClass: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
         };
@@ -628,7 +633,7 @@ export const PasswordsView: React.FC = () => {
                 { id: 'all', label: 'Todos' },
                 { id: 'env_file', label: 'Variables (.env)' },
                 { id: 'ssh_key', label: 'Llaves SSH' },
-                { id: 'backup_codes', label: 'Códigos 2FA' },
+                { id: 'backup_codes', label: 'Códigos de verificación' },
                 { id: 'software_license', label: 'Licencias' },
                 { id: 'nota_segura', label: 'Notas Privadas' },
               ].map((tf) => (
@@ -876,7 +881,7 @@ export const PasswordsView: React.FC = () => {
                   >
                     <option value="env_file">Archivo .env (Variables)</option>
                     <option value="ssh_key">Llave SSH / Certificado</option>
-                    <option value="backup_codes">Códigos 2FA / Backup</option>
+                    <option value="backup_codes">Códigos de recuperación</option>
                     <option value="software_license">Licencia de Software</option>
                     <option value="nota_segura">Nota Privada Libre</option>
                   </select>
@@ -925,9 +930,10 @@ export const PasswordsView: React.FC = () => {
                 </div>
                 <textarea
                   rows={6}
+                  maxLength={INPUT_LIMITS.RESOURCE_CONTENT}
                   value={resContent}
                   onChange={(e) => setResContent(e.target.value)}
-                  placeholder="Pega aquí el contenido de tu archivo .env, clave SSH privada o pública, códigos de recuperación 2FA, seriales de licencia o secretos..."
+                  placeholder="Pega aquí el contenido de tu archivo .env, clave SSH privada o pública, códigos de recuperación, seriales de licencia o secretos..."
                   className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-indigo-100 font-mono text-[11px] placeholder-obsidian-muted/60 focus:outline-none focus:border-indigo-500 whitespace-pre"
                 />
               </div>
@@ -939,6 +945,7 @@ export const PasswordsView: React.FC = () => {
                 </label>
                 <input
                   type="text"
+                  maxLength={INPUT_LIMITS.RESOURCE_TAGS}
                   value={resTags}
                   onChange={(e) => setResTags(e.target.value)}
                   placeholder="Ej. aws, docker, backend, produccion..."

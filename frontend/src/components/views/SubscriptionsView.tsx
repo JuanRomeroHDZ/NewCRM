@@ -838,12 +838,12 @@ export const SubscriptionsView: React.FC = () => {
         </div>
 
         {/* GANANCIA NETA REAL (INGRESOS COBRADOS VS GASTOS) */}
-        <div className="p-4 rounded-xl bg-obsidian-bg/80 border border-emerald-500/25 space-y-3">
+        <div className="min-w-0 space-y-3 border-b border-obsidian-border pb-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2 min-w-0">
               <Wallet size={15} className="text-emerald-400 shrink-0" />
               <span className="text-xs font-bold text-white truncate">
-                Balance de Ganancia Neta Real (Pagos Cobrados menos Gastos)
+                Ganancia neta
               </span>
               <InfoTooltip content="Resta tus gastos de suscripciones (más dominios/hosting que pagas por tu cuenta) a los pagos ya cobrados de tus clientes en los últimos 7 días, este mes y este año." />
             </div>
@@ -865,9 +865,9 @@ export const SubscriptionsView: React.FC = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 min-[340px]:grid-cols-2 lg:grid-cols-4 gap-3">
             {/* Ganancia Neta Semanal */}
-            <div className="p-3 rounded-xl bg-obsidian-surface/60 border border-obsidian-border min-w-0 space-y-1">
+            <div className="min-w-0 space-y-1 border-l border-obsidian-border pl-3">
               <div className="flex items-center justify-between gap-1 text-[10px] text-obsidian-muted uppercase font-semibold">
                 <span className="truncate">Ganancia Neta (Semana)</span>
                 <span className="font-mono text-white/50">7 días</span>
@@ -882,7 +882,7 @@ export const SubscriptionsView: React.FC = () => {
             </div>
 
             {/* Ganancia Neta Mensual */}
-            <div className="p-3 rounded-xl bg-obsidian-surface/60 border border-emerald-500/20 min-w-0 space-y-1">
+            <div className="min-w-0 space-y-1 border-l border-emerald-500/30 pl-3">
               <div className="flex items-center justify-between gap-1 text-[10px] text-emerald-300 uppercase font-semibold">
                 <span className="truncate">Ganancia Neta (Mes Actual)</span>
                 <span className="font-mono">Mes</span>
@@ -897,7 +897,7 @@ export const SubscriptionsView: React.FC = () => {
             </div>
 
             {/* Ganancia Neta Anual */}
-            <div className="p-3 rounded-xl bg-obsidian-surface/60 border border-obsidian-border min-w-0 space-y-1">
+            <div className="min-w-0 space-y-1 border-l border-obsidian-border pl-3">
               <div className="flex items-center justify-between gap-1 text-[10px] text-obsidian-muted uppercase font-semibold">
                 <span className="truncate">Ganancia Neta (Año Actual)</span>
                 <span className="font-mono">Año</span>
@@ -912,7 +912,7 @@ export const SubscriptionsView: React.FC = () => {
             </div>
 
             {/* Pendiente por Cobrar e Igualas */}
-            <div className="p-3 rounded-xl bg-obsidian-surface/60 border border-obsidian-border min-w-0 space-y-1">
+            <div className="min-w-0 space-y-1 border-l border-obsidian-border pl-3">
               <div className="flex items-center justify-between gap-1 text-[10px] text-amber-300 uppercase font-semibold">
                 <span className="truncate">Pagos Pendientes por Cobrar</span>
                 <Clock size={12} className="text-amber-400 shrink-0" />
@@ -928,9 +928,9 @@ export const SubscriptionsView: React.FC = () => {
         </div>
 
         {/* 1. Temporal Analysis: Weekly, Monthly, Annual (MXN & USD) + Key Metrics */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+        <div className="grid grid-cols-1 min-[340px]:grid-cols-2 lg:grid-cols-4 gap-3.5">
           {/* Weekly Spend */}
-          <div className="p-4 rounded-xl bg-obsidian-surface/60 border border-obsidian-border min-w-0 space-y-1">
+          <div className="min-w-0 space-y-1 border-l border-obsidian-border pl-3">
             <div className="flex items-center justify-between gap-2">
               <span className="text-[11px] font-semibold text-obsidian-muted uppercase tracking-wider truncate">
                 Gasto Semanal Total
@@ -951,7 +951,7 @@ export const SubscriptionsView: React.FC = () => {
           </div>
 
           {/* Monthly Spend */}
-          <div className="p-4 rounded-xl bg-obsidian-surface/60 border border-indigo-500/30 min-w-0 space-y-1">
+          <div className="min-w-0 space-y-1 border-l border-indigo-500/30 pl-3">
             <div className="flex items-center justify-between gap-2">
               <span className="text-[11px] font-semibold text-indigo-300 uppercase tracking-wider truncate">
                 Gasto Mensual Total
@@ -972,7 +972,7 @@ export const SubscriptionsView: React.FC = () => {
           </div>
 
           {/* Annual Spend */}
-          <div className="p-4 rounded-xl bg-obsidian-surface/60 border border-obsidian-border min-w-0 space-y-1">
+          <div className="min-w-0 space-y-1 border-l border-obsidian-border pl-3">
             <div className="flex items-center justify-between gap-2">
               <span className="text-[11px] font-semibold text-obsidian-muted uppercase tracking-wider truncate">
                 Gasto Anual Estimado
@@ -993,7 +993,7 @@ export const SubscriptionsView: React.FC = () => {
           </div>
 
           {/* Key Metric: Avg Cost & Potential Savings */}
-          <div className="p-4 rounded-xl bg-obsidian-surface/60 border border-emerald-500/25 min-w-0 space-y-1">
+          <div className="min-w-0 space-y-1 border-l border-emerald-500/25 pl-3">
             <div className="flex items-center justify-between gap-2">
               <span className="text-[11px] font-semibold text-emerald-300 uppercase tracking-wider truncate">
                 Promedio por Cuenta y Ahorro
@@ -2171,6 +2171,7 @@ export const SubscriptionsView: React.FC = () => {
                       <input
                         type="text"
                         autoFocus
+                        maxLength={INPUT_LIMITS.COMPANY_NAME}
                         value={quickClientNameInInc}
                         onChange={(e) => setQuickClientNameInInc(e.target.value)}
                         placeholder="Nombre del nuevo cliente"
@@ -2274,6 +2275,7 @@ export const SubscriptionsView: React.FC = () => {
                     type="number"
                     step="0.01"
                     min="0.01"
+                    max={INPUT_LIMITS.COST_AMOUNT}
                     required
                     value={incAmount}
                     onChange={(e) => setIncAmount(e.target.value)}
@@ -2448,6 +2450,7 @@ export const SubscriptionsView: React.FC = () => {
                       <input
                         type="text"
                         autoFocus
+                        maxLength={INPUT_LIMITS.COMPANY_NAME}
                         value={quickClientNameInRen}
                         onChange={(e) => setQuickClientNameInRen(e.target.value)}
                         placeholder="Nombre del nuevo cliente"
@@ -2576,6 +2579,7 @@ export const SubscriptionsView: React.FC = () => {
                     type="number"
                     step="0.01"
                     min="0"
+                    max={INPUT_LIMITS.COST_AMOUNT}
                     required
                     value={renCost}
                     onChange={(e) => setRenCost(e.target.value)}
@@ -2651,6 +2655,7 @@ export const SubscriptionsView: React.FC = () => {
                       type="number"
                       step="0.01"
                       min="0"
+                      max={INPUT_LIMITS.COST_AMOUNT}
                       value={renClientCharge}
                       onChange={(e) => setRenClientCharge(e.target.value)}
                       placeholder={renCost || '500'}
@@ -2771,6 +2776,7 @@ export const SubscriptionsView: React.FC = () => {
                       type="number"
                       step="0.01"
                       min="0"
+                      max={INPUT_LIMITS.COST_AMOUNT}
                       autoFocus
                       required
                       value={advanceChargedAmount}
@@ -2902,6 +2908,7 @@ export const SubscriptionsView: React.FC = () => {
                     type="number"
                     step="0.01"
                     min="0.01"
+                    max={INPUT_LIMITS.COST_AMOUNT}
                     required
                     value={expAmount}
                     onChange={(e) => setExpAmount(e.target.value)}

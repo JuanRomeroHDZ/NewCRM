@@ -78,7 +78,7 @@ export const CommandPalette: React.FC = () => {
     {
       id: 'cmd_new_prospect',
       title: 'Nuevo Prospecto / Demo',
-      subtitle: 'Registrar cliente, página demo y contador SLA de respuesta',
+      subtitle: 'Registrar un prospecto y dar seguimiento a su respuesta',
       icon: Plus,
       color: 'text-indigo-400',
       action: () => {
@@ -89,7 +89,7 @@ export const CommandPalette: React.FC = () => {
     {
       id: 'cmd_prospects_view',
       title: 'Ir a Prospectos & Demos (CRM)',
-      subtitle: 'Ver semáforos SLA, links a demos, WhatsApp y Google Maps',
+      subtitle: 'Revisar prospectos, mensajes y páginas de muestra',
       icon: Briefcase,
       color: 'text-amber-400',
       action: () => {

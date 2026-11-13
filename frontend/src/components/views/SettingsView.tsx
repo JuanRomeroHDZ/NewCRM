@@ -33,6 +33,7 @@ export const SettingsView: React.FC = () => {
 
   const [newMasterPassword, setNewMasterPassword] = useState('');
   const [confirmMasterPassword, setConfirmMasterPassword] = useState('');
+  const [currentMasterPassword, setCurrentMasterPassword] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
@@ -89,7 +90,11 @@ export const SettingsView: React.FC = () => {
     e.preventDefault();
     setIsSaving(true);
     try {
-      const capNum = parseFloat(budgetCapAmount);
+      const capNum = budgetCapAmount.trim() === '' ? 0 : Number(budgetCapAmount);
+      if (!Number.isFinite(capNum) || capNum < 0 || capNum > INPUT_LIMITS.BUDGET_CAP) {
+        showToast(`Ingresa un presupuesto entre 0 y ${INPUT_LIMITS.BUDGET_CAP.toLocaleString('es-MX')}.`, 'error');
+        return;
+      }
       const payload: any = {
         vault_timeout_minutes: localTimeout,
         clipboard_clear_seconds: localClipboard,
@@ -101,14 +106,18 @@ export const SettingsView: React.FC = () => {
         password_rotation_days_secondary: rotationSecondaryDays,
         trash_retention_days: trashRetentionDays,
         max_followup_attempts: maxFollowupAttempts,
-        budget_cap_amount: isNaN(capNum) || capNum < 0 ? 0 : capNum,
+        budget_cap_amount: capNum,
         budget_cap_currency: budgetCapCurrency
       };
 
       if (newMasterPassword) {
-        if (newMasterPassword.length < 6) {
-          showToast('La nueva contraseña debe tener al menos 6 caracteres.', 'error');
+        if (newMasterPassword.length < 8) {
+          showToast('La nueva contraseña debe tener al menos 8 caracteres.', 'error');
           setIsSaving(false);
+          return;
+        }
+        if (!currentMasterPassword) {
+          showToast('Ingresa tu contraseña actual para confirmar el cambio.', 'error');
           return;
         }
         if (newMasterPassword !== confirmMasterPassword) {
@@ -117,6 +126,7 @@ export const SettingsView: React.FC = () => {
           return;
         }
         payload.new_master_password = newMasterPassword;
+        payload.current_master_password = currentMasterPassword;
       }
 
       await api.updateSettings(payload);
@@ -126,6 +136,7 @@ export const SettingsView: React.FC = () => {
       triggerDataReload();
       setNewMasterPassword('');
       setConfirmMasterPassword('');
+      setCurrentMasterPassword('');
       showToast('Ajustes de seguridad, presupuesto y preferencias guardados.', 'success');
     } catch (err: any) {
       showToast(err.message, 'error');
@@ -161,7 +172,7 @@ export const SettingsView: React.FC = () => {
   ];
 
   return (
-    <div className="p-4 sm:p-8 max-w-4xl mx-auto space-y-7 animate-fadeIn">
+    <div className="mx-auto max-w-4xl min-w-0 space-y-5 p-3 sm:space-y-7 sm:p-8 animate-fadeIn">
       <div className="flex items-center gap-2 min-w-0">
         <Settings className="text-indigo-400 flex-shrink-0" size={18} />
         <h2 className="text-base font-bold text-white tracking-tight truncate">
@@ -175,10 +186,10 @@ export const SettingsView: React.FC = () => {
 
       <form onSubmit={handleSavePreferences} className="space-y-6">
         {/* Visual Customization (Notion & Obsidian aesthetics) */}
-        <div className="p-6 rounded-2xl bg-obsidian-panel border border-obsidian-border space-y-4">
+        <div className="min-w-0 space-y-4 rounded-xl border border-obsidian-border bg-obsidian-panel p-3 sm:p-5">
           <h3 className="text-sm font-bold text-white flex items-center gap-2">
             <Palette size={16} className="text-indigo-400" />
-            <span>Apariencia Visual</span>
+            <span>Apariencia</span>
           </h3>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
@@ -187,7 +198,7 @@ export const SettingsView: React.FC = () => {
               <label className="text-obsidian-text font-medium block">
                 Color Principal de la Interfaz
               </label>
-              <div className="flex items-center gap-2.5">
+              <div className="flex flex-wrap items-center gap-2.5">
                 {colorOptions.map((opt) => (
                   <button
                     key={opt.color}
@@ -224,7 +235,7 @@ export const SettingsView: React.FC = () => {
         </div>
 
         {/* Security Parameters */}
-        <div className="p-6 rounded-2xl bg-obsidian-panel border border-obsidian-border space-y-5">
+        <div className="min-w-0 space-y-5 rounded-xl border border-obsidian-border bg-obsidian-panel p-3 sm:p-5">
           <div className="flex items-center gap-2">
             <Shield size={16} className="text-indigo-400" />
             <h3 className="text-sm font-bold text-white">Sesión y Portapapeles</h3>
@@ -300,7 +311,7 @@ export const SettingsView: React.FC = () => {
         </div>
 
         {/* Reglas de Rotación, Papelera Híbrida, Presupuesto y Seguimiento */}
-        <div className="p-6 rounded-2xl bg-obsidian-panel border border-obsidian-border space-y-5">
+        <div className="min-w-0 space-y-5 rounded-xl border border-obsidian-border bg-obsidian-panel p-3 sm:p-5">
           <div className="flex items-center gap-2">
             <Clock size={16} className="text-indigo-400" />
             <h3 className="text-sm font-bold text-white">
@@ -384,7 +395,7 @@ export const SettingsView: React.FC = () => {
                 <input
                   type="text"
                   inputMode="decimal"
-                  maxLength={INPUT_LIMITS.BUDGET_CAP}
+                  maxLength={12}
                   value={budgetCapAmount}
                   onChange={(e) => setBudgetCapAmount(e.target.value.replace(/[^0-9.]/g, ''))}
                   placeholder="Ej. 5000"
@@ -404,7 +415,7 @@ export const SettingsView: React.FC = () => {
         </div>
 
         {/* Change Master Password */}
-        <div className="p-6 rounded-2xl bg-obsidian-panel border border-obsidian-border space-y-4">
+        <div className="min-w-0 space-y-4 rounded-xl border border-obsidian-border bg-obsidian-panel p-3 sm:p-5">
           <div className="flex items-center gap-2">
             <Key size={16} className="text-indigo-400" />
             <h3 className="text-sm font-bold text-white">Cambiar contraseña de acceso</h3>
@@ -412,6 +423,22 @@ export const SettingsView: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+            {newMasterPassword && (
+              <div className="space-y-1.5 md:col-span-2">
+                <label className="text-obsidian-text font-medium block" htmlFor="current-access-password">
+                  Contraseña actual
+                </label>
+                <input
+                  id="current-access-password"
+                  type="password"
+                  autoComplete="current-password"
+                  maxLength={4096}
+                  value={currentMasterPassword}
+                  onChange={(e) => setCurrentMasterPassword(e.target.value)}
+                  className="w-full px-3.5 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+            )}
             <div className="space-y-1.5">
               <label className="text-obsidian-text font-medium block">
                 Nueva contraseña de acceso
@@ -450,7 +477,7 @@ export const SettingsView: React.FC = () => {
             className="inline-flex items-center gap-2 px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white text-xs font-semibold shadow-lg shadow-indigo-600/20 transition-all disabled:opacity-50"
           >
             <Save size={14} />
-            <span>{isSaving ? 'Guardando...' : 'Guardar Ajustes'}</span>
+            <span>{isSaving ? 'Guardando…' : 'Guardar cambios'}</span>
           </button>
         </div>
       </form>
@@ -458,7 +485,7 @@ export const SettingsView: React.FC = () => {
       {/* Backup & Import/Export Section */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Import */}
-        <div className="p-5 rounded-2xl bg-obsidian-panel border border-obsidian-border flex flex-col justify-between space-y-4">
+        <div className="flex min-w-0 flex-col justify-between gap-3 rounded-xl border border-obsidian-border bg-obsidian-panel p-3 sm:p-5">
           <div className="flex items-center gap-2">
             <Upload size={16} className="text-emerald-400 flex-shrink-0" />
             <h3 className="text-sm font-bold text-white truncate">Importar Contraseñas</h3>
@@ -470,12 +497,12 @@ export const SettingsView: React.FC = () => {
             className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-obsidian-surface hover:bg-obsidian-border border border-obsidian-border text-white text-xs font-semibold transition-all w-full"
           >
             <Upload size={14} />
-            <span>Abrir Asistente de Importación</span>
+            <span>Importar</span>
           </button>
         </div>
 
         {/* Export */}
-        <div className="p-5 rounded-2xl bg-obsidian-panel border border-obsidian-border flex flex-col justify-between space-y-4">
+        <div className="flex min-w-0 flex-col justify-between gap-3 rounded-xl border border-obsidian-border bg-obsidian-panel p-3 sm:p-5">
           <div className="flex items-center gap-2">
             <Download size={16} className="text-cyan-400 flex-shrink-0" />
             <h3 className="text-sm font-bold text-white truncate">Descargar Respaldo Encriptado</h3>
@@ -487,7 +514,7 @@ export const SettingsView: React.FC = () => {
             className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-obsidian-surface hover:bg-obsidian-border border border-obsidian-border text-white text-xs font-semibold transition-all w-full"
           >
             <Download size={14} />
-            <span>Descargar Respaldo (.json)</span>
+            <span>Descargar respaldo</span>
           </button>
         </div>
       </div>

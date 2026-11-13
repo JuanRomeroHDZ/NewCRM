@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Shield, Download, RefreshCw, Filter, 
+  Shield, Download, RefreshCw,
   Search, Lock 
 } from 'lucide-react';
 import { useVault } from '../../context/VaultContext';
@@ -78,7 +78,7 @@ export const AuditLogsView: React.FC = () => {
       case 'copy_secret':
         return <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-purple-500/10 text-purple-400 border border-purple-500/20">Copia Secreto</span>;
       case 'update_2fa':
-        return <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-blue-500/10 text-blue-400 border border-blue-500/20">2FA / TOTP</span>;
+        return <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-blue-500/10 text-blue-400 border border-blue-500/20">Verificación en dos pasos</span>;
       case 'contact_followup':
       case 'contact_attempt':
         return <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-amber-500/10 text-amber-300 border border-amber-500/20">Seguimiento</span>;
@@ -122,7 +122,7 @@ export const AuditLogsView: React.FC = () => {
   }
 
   return (
-    <div className="p-4 sm:p-8 max-w-7xl mx-auto space-y-6">
+    <div className="mx-auto max-w-7xl min-w-0 space-y-4 p-3 sm:space-y-6 sm:p-8">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-obsidian-border">
         <div className="flex items-center gap-2 min-w-0">
@@ -136,7 +136,7 @@ export const AuditLogsView: React.FC = () => {
           />
         </div>
 
-        <div className="flex items-center gap-2.5 flex-shrink-0">
+        <div className="flex max-w-full flex-wrap items-center gap-2">
           <button
             onClick={fetchLogs}
             disabled={loading}
@@ -149,7 +149,7 @@ export const AuditLogsView: React.FC = () => {
             onClick={exportLogsAsJson}
             className="px-3.5 py-2 rounded-xl bg-obsidian-surface border border-obsidian-border hover:border-obsidian-borderLight text-white text-xs font-medium flex items-center gap-2 transition-all hover:bg-white/5"
           >
-            <Download className="w-4 h-4 text-white/60" /> Descargar Historial
+            <Download className="w-4 h-4 text-white/60" /> Descargar historial
           </button>
         </div>
       </div>
@@ -168,29 +168,29 @@ export const AuditLogsView: React.FC = () => {
           />
         </div>
 
-        <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0">
-          <span className="text-xs text-white/40 flex items-center gap-1 flex-shrink-0">
-            <Filter className="w-3.5 h-3.5" /> Filtrar:
-          </span>
-          {['all', 'vault_unlock', 'copy_secret', 'create', 'update', 'contact_followup', 'billing_renewal', 'auto_archive', 'reactivate', 'recycle_demo', 'auto_purge', 'update_2fa', 'export', 'delete'].map((action) => (
-            <button
-              key={action}
-              onClick={() => setSelectedAction(action)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${
-                selectedAction === action
-                  ? 'bg-indigo-600 text-white'
-                  : 'bg-obsidian-surface border border-obsidian-border text-white/60 hover:text-white'
-              }`}
-            >
-              {action === 'all' ? 'Todos' : action.replace(/_/g, ' ')}
-            </button>
-          ))}
-        </div>
+        <label className="flex w-full min-w-0 items-center gap-2 text-xs text-white/60 sm:w-auto">
+          Acción
+          <select value={selectedAction} onChange={(event) => setSelectedAction(event.target.value)} className="min-h-10 min-w-0 flex-1 rounded-lg border border-obsidian-border bg-obsidian-surface px-3 text-white sm:w-48">
+            {[
+              ['all','Todas'], ['vault_unlock','Desbloqueo'], ['copy_secret','Copia'], ['create','Creación'], ['update','Actualización'], ['contact_followup','Seguimiento'], ['billing_renewal','Renovación'], ['auto_archive','Archivo'], ['reactivate','Reactivación'], ['recycle_demo','Reciclar demo'], ['auto_purge','Eliminación automática'], ['update_2fa','Verificación en dos pasos'], ['export','Exportación'], ['delete','Eliminación'],
+            ].map(([value,label]) => <option key={value} value={value}>{label}</option>)}
+          </select>
+        </label>
       </div>
 
       {/* Logs Table */}
       <div className="rounded-2xl border border-obsidian-border bg-obsidian-surface/60 overflow-hidden backdrop-blur-md">
-        <div className="overflow-x-auto">
+        <div className="divide-y divide-obsidian-border md:hidden">
+          {loading ? <p className="p-4 text-xs text-white/50" role="status">Cargando actividad…</p> : filteredLogs.length === 0 ? <p className="p-4 text-xs text-white/50">No se encontraron eventos.</p> : filteredLogs.map((log) => (
+            <div key={log.id} className="min-w-0 space-y-2 p-3 text-xs">
+              <div className="flex flex-wrap items-center justify-between gap-2">{getActionBadge(log.action)}<time className="text-white/50">{new Date(log.timestamp).toLocaleString()}</time></div>
+              <p className="break-words font-medium text-white">{log.entity_name || log.entity_id || log.entity_type || '—'}</p>
+              {log.details && <p className="break-words text-white/70">{log.details}</p>}
+              <p className="break-words text-white/40">{log.ip_address || 'Este equipo'}</p>
+            </div>
+          ))}
+        </div>
+        <div className="hidden overflow-x-auto md:block">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-obsidian-border bg-black/20 text-[11px] font-mono uppercase tracking-wider text-white/40">

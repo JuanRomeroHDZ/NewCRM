@@ -102,7 +102,13 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     let errorDetail = 'Error en la petición al servidor';
     try {
       const err = await response.json();
-      errorDetail = err.detail || err.message || errorDetail;
+      if (typeof err.detail === 'string') {
+        errorDetail = err.detail;
+      } else if (Array.isArray(err.detail)) {
+        errorDetail = 'Revisa los datos ingresados: algún campo tiene un formato incorrecto o supera el límite permitido.';
+      } else if (typeof err.message === 'string') {
+        errorDetail = err.message;
+      }
     } catch (_) {
       // ignore
     }

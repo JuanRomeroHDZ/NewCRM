@@ -1074,6 +1074,7 @@ export const InspectorDrawer: React.FC = () => {
                           <input
                             type="text"
                             required
+                            maxLength={180}
                             value={incConcept}
                             onChange={(e) => setIncConcept(e.target.value)}
                             placeholder="Concepto (ej. Anticipo 50% Página Web)"
@@ -1084,6 +1085,7 @@ export const InspectorDrawer: React.FC = () => {
                               type="number"
                               step="0.01"
                               min="0"
+                              max={INPUT_LIMITS.COST_AMOUNT}
                               required
                               value={incAmount}
                               onChange={(e) => setIncAmount(e.target.value)}
@@ -1202,6 +1204,7 @@ export const InspectorDrawer: React.FC = () => {
                           <input
                             type="text"
                             required
+                            maxLength={255}
                             value={domName}
                             onChange={(e) => setDomName(e.target.value)}
                             placeholder="Dominio o Servicio (ej. www.cliente.com)"
@@ -1220,6 +1223,7 @@ export const InspectorDrawer: React.FC = () => {
                             </select>
                             <input
                               type="text"
+                              maxLength={128}
                               value={domProvider}
                               onChange={(e) => setDomProvider(e.target.value)}
                               placeholder="Proveedor (ej. Namecheap)"
@@ -1231,6 +1235,7 @@ export const InspectorDrawer: React.FC = () => {
                               type="number"
                               step="0.01"
                               min="0"
+                              max={INPUT_LIMITS.COST_AMOUNT}
                               value={domCost}
                               onChange={(e) => setDomCost(e.target.value)}
                               placeholder="Costo base"
@@ -1240,6 +1245,7 @@ export const InspectorDrawer: React.FC = () => {
                               type="number"
                               step="0.01"
                               min="0"
+                              max={INPUT_LIMITS.COST_AMOUNT}
                               value={domCharge}
                               onChange={(e) => setDomCharge(e.target.value)}
                               placeholder="Cobro cliente"
@@ -1501,10 +1507,10 @@ export const InspectorDrawer: React.FC = () => {
                               <button
                                 type="button"
                                 onClick={async () => {
-                                  if (!confirm('¿Eliminar el autenticador 2FA de esta plataforma?')) return;
+                                  if (!confirm('¿Eliminar el código de verificación de esta cuenta?')) return;
                                   try {
                                     await api.deletePlatformTotp(platformData.id);
-                                    showToast('Autenticador 2FA eliminado', 'info');
+                                    showToast('Código de verificación eliminado', 'info');
                                     triggerDataReload();
                                   } catch (e: any) {
                                     showToast(e.message, 'error');
@@ -1542,7 +1548,7 @@ export const InspectorDrawer: React.FC = () => {
                                     if (!totpInput.trim()) return;
                                     try {
                                       await api.setupPlatformTotp(platformData.id, totpInput.trim());
-                                      showToast('Autenticador 2FA activado con éxito', 'success');
+                                      showToast('Código de verificación activado', 'success');
                                       setIsAddingTotp(false);
                                       setTotpInput('');
                                       triggerDataReload();
@@ -1563,7 +1569,7 @@ export const InspectorDrawer: React.FC = () => {
                               className="w-full py-2.5 px-3 rounded-xl bg-obsidian-surface/60 hover:bg-obsidian-surface border border-obsidian-border hover:border-indigo-500/30 text-xs font-medium text-white/60 hover:text-indigo-300 transition-all flex items-center justify-center gap-2"
                             >
                               <ShieldCheck className="w-4 h-4 text-indigo-400" />
-                              <span>Activar Autenticador 2FA (TOTP)</span>
+                              <span>Activar código de verificación</span>
                             </button>
                           )
                         )}
