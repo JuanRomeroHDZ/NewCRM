@@ -250,7 +250,7 @@ export const AuditLogsView: React.FC = () => {
         />
       ) : (
         <div className="rounded-2xl border border-obsidian-border bg-obsidian-surface/60 overflow-hidden backdrop-blur-md">
-          <div className="divide-y divide-obsidian-border md:hidden">
+          <div className="divide-y divide-obsidian-border xl:hidden">
             {loading ? (
               <p className="p-4 text-xs text-white/50" role="status">
                 Cargando actividad...
@@ -289,7 +289,7 @@ export const AuditLogsView: React.FC = () => {
               ))
             )}
           </div>
-          <div className="hidden overflow-x-auto md:block">
+          <div className="hidden overflow-x-auto xl:block">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-obsidian-border bg-black/20 text-[11px] font-mono uppercase tracking-wider text-white/40">

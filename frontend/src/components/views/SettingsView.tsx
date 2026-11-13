@@ -627,7 +627,7 @@ export const SettingsView: React.FC = () => {
                   value={budgetCapAmount}
                   onChange={(e) => setBudgetCapAmount(e.target.value.replace(/[^0-9.]/g, ''))}
                   placeholder="Ej. 5000"
-                  className="flex-1 px-3.5 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white font-mono text-xs focus:outline-none focus:border-indigo-500"
+                  className="min-w-0 flex-1 px-3.5 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white font-mono text-xs focus:outline-none focus:border-indigo-500"
                 />
                 <label htmlFor="budget-cap-currency" className="sr-only">
                   Moneda del presupuesto mensual
@@ -636,7 +636,7 @@ export const SettingsView: React.FC = () => {
                   id="budget-cap-currency"
                   value={budgetCapCurrency}
                   onChange={(e) => setBudgetCapCurrency(e.target.value)}
-                  className="w-28 px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white font-semibold"
+                  className="w-20 shrink-0 px-2 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white font-semibold sm:w-28 sm:px-3"
                 >
                   {currencySelectOptions.map((code) => (
                     <option key={code} value={code}>

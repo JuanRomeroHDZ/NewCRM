@@ -519,7 +519,23 @@ export const PasswordsView: React.FC = () => {
             </div>
 
             {/* Category Pills */}
-            <div className="flex items-center gap-1.5 overflow-x-auto max-w-full">
+            <label className="w-full min-w-0 sm:hidden">
+              <span className="sr-only">Filtrar contraseñas por tipo</span>
+              <select
+                value={categoryFilter}
+                onChange={(event) => setCategoryFilter(event.target.value)}
+                className="min-h-10 w-full min-w-0 rounded-xl border border-obsidian-border bg-obsidian-bg px-3 text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
+              >
+                {[
+                  { id: 'all', label: 'Todas' },
+                  { id: 'email', label: 'Correos principales' },
+                  { id: 'platform', label: 'Cuentas y servicios' },
+                  { id: 'pin', label: 'PINs' },
+                  { id: 'api_key', label: 'Llaves API' },
+                ].map((cat) => <option key={cat.id} value={cat.id}>{cat.label}</option>)}
+              </select>
+            </label>
+            <div className="hidden max-w-full flex-wrap items-center gap-1.5 sm:flex">
               {[
                 { id: 'all', label: 'Todas' },
                 { id: 'email', label: 'Correos Principales' },
@@ -836,7 +852,24 @@ export const PasswordsView: React.FC = () => {
             </div>
 
             {/* Type Filter Pills */}
-            <div className="flex items-center gap-1.5 overflow-x-auto max-w-full">
+            <label className="w-full min-w-0 sm:hidden">
+              <span className="sr-only">Filtrar notas por tipo</span>
+              <select
+                value={resTypeFilter}
+                onChange={(event) => setResTypeFilter(event.target.value)}
+                className="min-h-10 w-full min-w-0 rounded-xl border border-obsidian-border bg-obsidian-bg px-3 text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
+              >
+                {[
+                  { id: 'all', label: 'Todos' },
+                  { id: 'env_file', label: 'Variables (.env)' },
+                  { id: 'ssh_key', label: 'Llaves SSH' },
+                  { id: 'backup_codes', label: 'Códigos de verificación' },
+                  { id: 'software_license', label: 'Licencias' },
+                  { id: 'nota_segura', label: 'Notas privadas' },
+                ].map((type) => <option key={type.id} value={type.id}>{type.label}</option>)}
+              </select>
+            </label>
+            <div className="hidden max-w-full flex-wrap items-center gap-1.5 sm:flex">
               {[
                 { id: 'all', label: 'Todos' },
                 { id: 'env_file', label: 'Variables (.env)' },

@@ -800,9 +800,9 @@ export const ProspectModal: React.FC = () => {
                     maxLength={10}
                     value={slaHours}
                     onChange={(e) => setSlaHours(e.target.value.replace(/[^0-9.]/g, ''))}
-                    className="w-28 px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-indigo-500"
+                    className="w-20 shrink-0 px-2 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-indigo-500 sm:w-28 sm:px-3"
                   />
-                  <span className="text-obsidian-muted text-[11px]">
+                  <span className="min-w-0 text-obsidian-muted text-[11px]">
                     horas ({numericSlaPreview > 0 ? (numericSlaPreview / 24).toFixed(1).replace(/\.0$/, '') : '0'} días)
                   </span>
                 </div>
