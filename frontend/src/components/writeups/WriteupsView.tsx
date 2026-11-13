@@ -30,6 +30,7 @@ import {
   X,
 } from 'lucide-react';
 import { useVault } from '../../context/VaultContext';
+import { EmptyState } from '../common/EmptyState';
 import { api } from '../../lib/api';
 import {
   InternalProject,
@@ -75,7 +76,7 @@ const SEVERITY_BAR_COLOR: Record<WriteupSeverity, string> = {
 type WorkspaceMode = 'markdown' | 'whiteboard' | 'dual' | 'findings' | 'assets';
 
 export const WriteupsView: React.FC = () => {
-  const { isUnlocked, openUnlockModal, showToast } = useVault();
+  const { isUnlocked, openUnlockModal, showToast, confirm, prompt, systemLocale } = useVault();
   const [items, setItems] = useState<WriteupSummary[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<WriteupDetail | null>(null);
@@ -88,6 +89,7 @@ export const WriteupsView: React.FC = () => {
   );
   const [showMetadata, setShowMetadata] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   const [severityFilter, setSeverityFilter] = useState<string>('');
   const [loadingList, setLoadingList] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -103,9 +105,22 @@ export const WriteupsView: React.FC = () => {
   const [prospects, setProspects] = useState<Prospect[]>([]);
   const [projects, setProjects] = useState<InternalProject[]>([]);
   const [assetUrls, setAssetUrls] = useState<Record<string, string>>({});
+  const [failedAssetIds, setFailedAssetIds] = useState<Record<string, boolean>>({});
   const [jumpTarget, setJumpTarget] = useState<{ line: number; anchorId: string; ts: number } | null>(null);
   const assetUrlsRef = useRef<Record<string, string>>({});
+  const selectedIdRef = useRef<string | null>(selectedId);
   const mediaTabUploadRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    selectedIdRef.current = selectedId;
+  }, [selectedId]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [searchQuery]);
 
   // Editable draft fields
   const [title, setTitle] = useState('');
@@ -151,17 +166,29 @@ export const WriteupsView: React.FC = () => {
 
   const preloadAssetUrls = useCallback(async (writeup: WriteupDetail) => {
     const nextMap: Record<string, string> = { ...assetUrlsRef.current };
+    const nextErrors: Record<string, boolean> = {};
     for (const asset of writeup.assets) {
       if (nextMap[asset.id]) continue;
       try {
         const blob = await api.fetchWriteupAssetBlob(writeup.id, asset.id);
         nextMap[asset.id] = URL.createObjectURL(blob);
       } catch {
-        // Ignore individual asset fetch failures
+        nextErrors[asset.id] = true;
       }
     }
     assetUrlsRef.current = nextMap;
     setAssetUrls(nextMap);
+    setFailedAssetIds((prev) => {
+      const updated = { ...prev };
+      for (const asset of writeup.assets) {
+        if (nextMap[asset.id]) {
+          delete updated[asset.id];
+        } else if (nextErrors[asset.id]) {
+          updated[asset.id] = true;
+        }
+      }
+      return updated;
+    });
   }, []);
 
   const loadList = useCallback(async () => {
@@ -170,7 +197,7 @@ export const WriteupsView: React.FC = () => {
     try {
       const [rows, pros, projs] = await Promise.all([
         api.listWriteups({
-          q: searchQuery.trim() || undefined,
+          q: debouncedSearchQuery.trim() || undefined,
           severity: severityFilter || undefined,
         }),
         api.getProspects().catch(() => [] as Prospect[]),
@@ -179,7 +206,7 @@ export const WriteupsView: React.FC = () => {
       setItems(rows);
       setProspects(pros);
       setProjects(projs);
-      if (!selectedId && rows.length > 0) {
+      if (!selectedIdRef.current && rows.length > 0) {
         setSelectedId(rows[0].id);
       }
     } catch (err) {
@@ -187,7 +214,7 @@ export const WriteupsView: React.FC = () => {
     } finally {
       setLoadingList(false);
     }
-  }, [isUnlocked, searchQuery, severityFilter, selectedId, showToast]);
+  }, [isUnlocked, debouncedSearchQuery, severityFilter, showToast]);
 
   const loadDetail = useCallback(async (id: string) => {
     if (!isUnlocked) return;
@@ -222,7 +249,13 @@ export const WriteupsView: React.FC = () => {
   };
 
   const handleCreateWriteup = async () => {
-    const newTitle = window.prompt('Título del nuevo writeup de pentesting:', 'Auditoría API REST — Cliente');
+    const newTitle = await prompt({
+      title: 'Nuevo writeup de pentesting',
+      message: 'Título del nuevo writeup de pentesting:',
+      defaultValue: 'Auditoría API REST — Cliente',
+      confirmLabel: 'Crear',
+      required: true,
+    });
     if (!newTitle || !newTitle.trim()) return;
     try {
       const created = await api.createWriteup({
@@ -280,7 +313,13 @@ export const WriteupsView: React.FC = () => {
 
   const handleDeleteWriteup = async () => {
     if (!detail) return;
-    if (!window.confirm(`¿Eliminar el writeup "${detail.title}"?`)) return;
+    const confirmed = await confirm({
+      title: 'Eliminar writeup',
+      message: `¿Eliminar el writeup "${detail.title}"?`,
+      confirmLabel: 'Eliminar',
+      tone: 'danger',
+    });
+    if (!confirmed) return;
     try {
       await api.deleteWriteup(detail.id);
       setDetail(null);
@@ -359,7 +398,13 @@ export const WriteupsView: React.FC = () => {
 
   const handleCreateBoard = async () => {
     if (!detail) return;
-    const name = window.prompt('Nombre de la nueva pizarra:', `Diagrama #${detail.boards.length + 1}`);
+    const name = await prompt({
+      title: 'Nueva pizarra',
+      message: 'Nombre de la nueva pizarra:',
+      defaultValue: `Diagrama #${detail.boards.length + 1}`,
+      confirmLabel: 'Crear',
+      required: true,
+    });
     if (!name || !name.trim()) return;
     try {
       const board = await api.createWriteupBoard(detail.id, { title: name.trim() });
@@ -370,6 +415,64 @@ export const WriteupsView: React.FC = () => {
       showToast(err instanceof Error ? err.message : 'Error creando pizarra', 'error');
     }
   };
+
+  const handleDeleteAsset = async (asset: WriteupAsset) => {
+    if (!detail) return;
+    const confirmed = await confirm({
+      title: 'Eliminar evidencia multimedia',
+      message: `¿Eliminar "${asset.filename}" de este writeup?`,
+      confirmLabel: 'Eliminar',
+      tone: 'danger',
+    });
+    if (!confirmed) return;
+    try {
+      await api.deleteWriteupAsset(detail.id, asset.id);
+      const cachedUrl = assetUrlsRef.current[asset.id];
+      if (cachedUrl) {
+        URL.revokeObjectURL(cachedUrl);
+        delete assetUrlsRef.current[asset.id];
+        setAssetUrls({ ...assetUrlsRef.current });
+      }
+      await loadDetail(detail.id);
+      showToast('Evidencia eliminada', 'info');
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Error al eliminar evidencia', 'error');
+    }
+  };
+
+  const handleRestoreRevision = async (rev: WriteupRevision, closeDiffModal = false) => {
+    if (!detail) return;
+    const confirmed = await confirm({
+      title: `Restaurar revisión v${rev.revision_number}`,
+      message: `Se reemplazará el borrador actual con la revisión v${rev.revision_number}. ¿Continuar?`,
+      confirmLabel: 'Restaurar',
+      tone: 'warning',
+    });
+    if (!confirmed) return;
+    try {
+      const restored = await api.restoreWriteupRevision(detail.id, rev.id);
+      hydrateDraft(restored);
+      setRevisions(await api.listWriteupRevisions(detail.id));
+      if (closeDiffModal) {
+        setDiffRevision(null);
+      }
+      showToast(`Restaurado desde v${rev.revision_number}`, 'success');
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'No se pudo restaurar la revisión', 'error');
+    }
+  };
+
+  useEffect(() => {
+    if (!lightboxAsset && !diffRevision) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (diffRevision) setDiffRevision(null);
+        else if (lightboxAsset) setLightboxAsset(null);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [lightboxAsset, diffRevision]);
 
   const handleCreateCitation = async (payload: {
     anchor_id: string;
@@ -953,6 +1056,7 @@ export const WriteupsView: React.FC = () => {
                   citations={detail.citations}
                   assets={detail.assets}
                   assetObjectUrls={assetUrls}
+                  assetLoadErrors={failedAssetIds}
                   targetScope={targetScope}
                   findings={findings}
                   onSaveBoard={handleSaveBoard}
@@ -996,6 +1100,7 @@ export const WriteupsView: React.FC = () => {
                       citations={detail.citations}
                       assets={detail.assets}
                       assetObjectUrls={assetUrls}
+                      assetLoadErrors={failedAssetIds}
                       targetScope={targetScope}
                       findings={findings}
                       onSaveBoard={handleSaveBoard}
@@ -1030,7 +1135,7 @@ export const WriteupsView: React.FC = () => {
                       const counts = sevOrder.map((s) => findings.filter((x) => x.severity === s).length);
                       const maxCount = Math.max(1, ...counts);
                       return (
-                        <div className="grid grid-cols-5 gap-2 items-end pt-1">
+                        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 items-end pt-1">
                           {sevOrder.map((sevKey, i) => {
                             const cnt = counts[i];
                             const barHeight = Math.max(6, Math.round((cnt / maxCount) * 38));
@@ -1456,12 +1561,10 @@ export const WriteupsView: React.FC = () => {
                             </button>
                             <button
                               type="button"
-                              onClick={async () => {
-                                await api.deleteWriteupAsset(detail.id, asset.id);
-                                await loadDetail(detail.id);
-                              }}
+                              onClick={() => void handleDeleteAsset(asset)}
                               className="p-1.5 rounded text-slate-400 hover:text-rose-400"
                               title="Eliminar medio"
+                              aria-label="Eliminar medio"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
@@ -1530,7 +1633,7 @@ export const WriteupsView: React.FC = () => {
                                 v{rev.revision_number} · {rev.change_note || 'Revisión'}
                               </div>
                               <div className="text-[10px] text-slate-400 font-mono">
-                                {new Date(rev.created_at).toLocaleString()} · {rev.content_hash.slice(0, 12)}
+                                {new Date(rev.created_at).toLocaleString(systemLocale || 'es-MX')} · {rev.content_hash.slice(0, 12)}
                               </div>
                             </div>
                             <div className="flex items-center gap-1.5">
@@ -1545,12 +1648,7 @@ export const WriteupsView: React.FC = () => {
                               </button>
                               <button
                                 type="button"
-                                onClick={async () => {
-                                  const restored = await api.restoreWriteupRevision(detail.id, rev.id);
-                                  hydrateDraft(restored);
-                                  setRevisions(await api.listWriteupRevisions(detail.id));
-                                  showToast(`Restaurado desde v${rev.revision_number}`, 'success');
-                                }}
+                                onClick={() => void handleRestoreRevision(rev)}
                                 className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-indigo-300 flex items-center gap-1"
                               >
                                 <RotateCcw className="w-3 h-3" />
@@ -1564,16 +1662,25 @@ export const WriteupsView: React.FC = () => {
 
                     <div className="space-y-2">
                       <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">Auditoría de exportaciones</h3>
-                      {detail.export_logs.map((log) => (
-                        <div key={log.id} className="flex items-center justify-between p-2 rounded-lg bg-slate-950/70 border border-slate-800 text-[11px] text-slate-300 tabular-nums">
-                          <span className="flex items-center gap-1.5">
-                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                            <strong className="uppercase">{log.export_format}</strong>
-                            {log.redacted_for_client && <span className="px-1 py-0.5 rounded bg-emerald-500/20 text-emerald-300">Cliente</span>}
-                          </span>
-                          <span className="font-mono text-slate-400">{log.sha256.slice(0, 12)} · {(log.byte_size / 1024).toFixed(1)}KB</span>
-                        </div>
-                      ))}
+                      {detail.export_logs.length === 0 ? (
+                        <EmptyState
+                          icon={Download}
+                          title="Sin exportaciones registradas"
+                          description="Exporta el reporte para registrar su auditoría SHA-256."
+                          className="p-4"
+                        />
+                      ) : (
+                        detail.export_logs.map((log) => (
+                          <div key={log.id} className="flex items-center justify-between p-2 rounded-lg bg-slate-950/70 border border-slate-800 text-[11px] text-slate-300 tabular-nums">
+                            <span className="flex items-center gap-1.5">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                              <strong className="uppercase">{log.export_format}</strong>
+                              {log.redacted_for_client && <span className="px-1 py-0.5 rounded bg-emerald-500/20 text-emerald-300">Cliente</span>}
+                            </span>
+                            <span className="font-mono text-slate-400">{log.sha256.slice(0, 12)} · {(log.byte_size / 1024).toFixed(1)}KB</span>
+                          </div>
+                        ))
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1598,12 +1705,15 @@ export const WriteupsView: React.FC = () => {
           onClick={() => setLightboxAsset(null)}
         >
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="lightbox-modal-title"
             className="w-full max-w-3xl max-h-[90vh] flex flex-col bg-slate-900 border border-slate-700 rounded-2xl overflow-hidden shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800 bg-slate-900/95">
               <div className="min-w-0">
-                <h3 className="text-sm font-semibold text-white truncate">{lightboxAsset.filename}</h3>
+                <h3 id="lightbox-modal-title" className="text-sm font-semibold text-white truncate">{lightboxAsset.filename}</h3>
                 <p className="text-[11px] text-slate-400 font-mono truncate">
                   {lightboxAsset.mime_type} · {lightboxAsset.width}x{lightboxAsset.height}px · SHA-256: {lightboxAsset.sha256.slice(0, 16)}…
                 </p>
@@ -1617,13 +1727,17 @@ export const WriteupsView: React.FC = () => {
                 <X className="w-4 h-4" />
               </button>
             </div>
-            <div className="flex-1 overflow-auto p-4 bg-slate-950 flex items-center justify-center">
-              {assetUrls[lightboxAsset.id] && (
+            <div className="flex-1 overflow-auto p-4 bg-slate-950 flex items-center justify-center min-h-[220px]">
+              {assetUrls[lightboxAsset.id] ? (
                 lightboxAsset.mime_type.toLowerCase().startsWith('video/') ? (
                   <video src={assetUrls[lightboxAsset.id]} controls autoPlay loop muted className="max-h-[60vh] rounded-lg border border-slate-800" />
                 ) : (
                   <img src={assetUrls[lightboxAsset.id]} alt={lightboxAsset.filename} className="max-h-[60vh] object-contain rounded-lg border border-slate-800" />
                 )
+              ) : failedAssetIds[lightboxAsset.id] ? (
+                <p className="text-xs text-rose-400">No se pudo descifrar o cargar esta evidencia multimedia.</p>
+              ) : (
+                <p className="text-xs text-slate-400">Descifrando evidencia…</p>
               )}
             </div>
             <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-t border-slate-800 bg-slate-900 text-xs">
@@ -1672,28 +1786,25 @@ export const WriteupsView: React.FC = () => {
           onClick={() => setDiffRevision(null)}
         >
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="diff-modal-title"
             className="w-full max-w-3xl max-h-[88vh] flex flex-col bg-slate-900 border border-slate-700 rounded-2xl overflow-hidden shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800">
               <div>
-                <h3 className="text-sm font-semibold text-white">
+                <h3 id="diff-modal-title" className="text-sm font-semibold text-white">
                   Comparación v{diffRevision.revision_number} vs borrador actual
                 </h3>
                 <p className="text-[11px] text-slate-400">
-                  Snapshot del {new Date(diffRevision.created_at).toLocaleString()}
+                  Snapshot del {new Date(diffRevision.created_at).toLocaleString(systemLocale || 'es-MX')}
                 </p>
               </div>
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={async () => {
-                    const restored = await api.restoreWriteupRevision(detail.id, diffRevision.id);
-                    hydrateDraft(restored);
-                    setRevisions(await api.listWriteupRevisions(detail.id));
-                    setDiffRevision(null);
-                    showToast(`Restaurado desde v${diffRevision.revision_number}`, 'success');
-                  }}
+                  onClick={() => void handleRestoreRevision(diffRevision, true)}
                   className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium flex items-center gap-1"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />

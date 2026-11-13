@@ -271,6 +271,10 @@ async def build_export_context(
             if clean_svg:
                 sanitized_diagrams[key.lower()] = clean_svg
 
+    from app.services.config_service import get_runtime_config
+    runtime_cfg = await get_runtime_config(db)
+    writeup_defaults = runtime_cfg.get("writeup_defaults") or {}
+
     return ExportBundleContext(
         writeup_id=writeup.id,
         title=detail["title"],
@@ -292,7 +296,8 @@ async def build_export_context(
         redact_for_client=redact_for_client,
         include_watermark=include_watermark,
         include_toc=include_toc,
-        watermark_text=watermark_text,
+        watermark_text=watermark_text or writeup_defaults.get("watermark_default"),
+        organization_name=writeup_defaults.get("organization_name"),
         rendered_diagrams=sanitized_diagrams,
     )
 

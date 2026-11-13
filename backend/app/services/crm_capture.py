@@ -54,6 +54,19 @@ COMMON_OSM_MAPPINGS = {
     "farmacia": [("amenity", "pharmacy")],
 }
 
+DEFAULT_SECTOR_CATALOG = [
+    {"id": "dentistas", "label": "Dentistas", "stems": ["dentist", "dental", "denti"], "osm_tags": [["amenity", "dentist"], ["healthcare", "dentist"]]},
+    {"id": "contadores", "label": "Contadores y Fiscales", "stems": ["contab", "fiscal"], "osm_tags": [["office", "accountant"], ["office", "tax_advisor"]]},
+    {"id": "veterinarias", "label": "Veterinarias", "stems": ["veterin"], "osm_tags": [["amenity", "veterinary"]]},
+    {"id": "gimnasios", "label": "Gimnasios y Fitness", "stems": ["gimnas", "fit"], "osm_tags": [["leisure", "fitness_centre"]]},
+    {"id": "restaurantes", "label": "Restaurantes y Cafés", "stems": ["restauran", "cafe"], "osm_tags": [["amenity", "restaurant"], ["amenity", "cafe"]]},
+    {"id": "talleres", "label": "Talleres Mecánicos", "stems": ["taller", "mecanic"], "osm_tags": [["shop", "car_repair"]]},
+    {"id": "belleza", "label": "Estéticas y Spa", "stems": ["belleza", "estetica", "lash", "spa"], "osm_tags": [["shop", "beauty"], ["shop", "hairdresser"]]},
+    {"id": "abogados", "label": "Despachos Legales", "stems": ["abogad", "legal"], "osm_tags": [["office", "lawyer"]]},
+    {"id": "medicos", "label": "Clínicas y Médicos", "stems": ["medico", "doctor"], "osm_tags": [["amenity", "doctors"], ["amenity", "clinic"]]},
+    {"id": "farmacias", "label": "Farmacias", "stems": ["farmacia"], "osm_tags": [["amenity", "pharmacy"]]},
+]
+
 
 class OSMProviderError(RuntimeError):
     def __init__(self, message: str, status_code: int = 503):
@@ -111,29 +124,54 @@ def compute_query_hash(sector: str, subsector: str | None, zone: str, bbox: dict
     return hashlib.sha256(key.encode("utf-8")).hexdigest()
 
 
-def validate_search_bounds(bounds: dict[str, float]) -> dict[str, float]:
+def validate_search_bounds(
+    bounds: dict[str, float],
+    zones: list[dict] | None = None,
+    map_defaults: dict | None = None,
+) -> dict[str, float]:
     clean = {key: float(bounds[key]) for key in ("min_lat", "min_lon", "max_lat", "max_lon")}
     if not (-90 <= clean["min_lat"] < clean["max_lat"] <= 90 and -180 <= clean["min_lon"] < clean["max_lon"] <= 180):
         raise ValueError("El área del mapa no tiene coordenadas válidas.")
 
-    full_bounds = next((zone["bbox"] for zone in TIJUANA_ZONES if zone["slug"] == settings.MAP_FULL_BOUNDS_ZONE_SLUG), None)
+    active_zones = zones or TIJUANA_ZONES
+    defaults = map_defaults or {}
+    full_slug = defaults.get("full_bounds_zone_slug") or settings.MAP_FULL_BOUNDS_ZONE_SLUG
+    city_name = defaults.get("default_city") or settings.MAP_DEFAULT_CITY
+    max_area_deg = float(defaults.get("max_search_area_deg") or settings.MAP_MAX_SEARCH_AREA_DEG)
+
+    full_bounds = next((zone.get("bbox") for zone in active_zones if zone.get("slug") == full_slug), None)
     if full_bounds and (
         clean["min_lat"] < full_bounds["min_lat"]
         or clean["max_lat"] > full_bounds["max_lat"]
         or clean["min_lon"] < full_bounds["min_lon"]
         or clean["max_lon"] > full_bounds["max_lon"]
     ):
-        raise ValueError(f"La búsqueda se limita al área de {settings.MAP_DEFAULT_CITY}.")
+        raise ValueError(f"La búsqueda se limita al área de {city_name}.")
     area = (clean["max_lat"] - clean["min_lat"]) * (clean["max_lon"] - clean["min_lon"])
-    if area > settings.MAP_MAX_SEARCH_AREA_DEG:
+    if area > max_area_deg:
         raise ValueError("Selecciona un área más pequeña para evitar una consulta demasiado amplia.")
     return clean
 
 
-def build_overpass_query(sector: str, subsector: str | None, bounds: dict[str, float]) -> str:
+def build_overpass_query(
+    sector: str,
+    subsector: str | None,
+    bounds: dict[str, float],
+    sector_catalog: list[dict] | None = None,
+) -> str:
     bbox = ",".join(f"{bounds[key]:.5f}" for key in ("min_lat", "min_lon", "max_lat", "max_lon"))
+
     def tags_for(value: str) -> list[tuple[str, str]]:
         search_text = normalize_search_term(value)
+        if not search_text:
+            return []
+        if sector_catalog:
+            for entry in sector_catalog:
+                stems = [normalize_search_term(str(s)) for s in (entry.get("stems") or [])]
+                label = normalize_search_term(str(entry.get("label") or ""))
+                entry_id = normalize_search_term(str(entry.get("id") or ""))
+                if any(stem and stem in search_text for stem in stems) or (entry_id and entry_id in search_text) or (label and label in search_text):
+                    return [(pair[0], pair[1]) for pair in (entry.get("osm_tags") or []) if isinstance(pair, (list, tuple)) and len(pair) == 2]
         return next((tags for stem, tags in COMMON_OSM_MAPPINGS.items() if stem in search_text), [])
 
     mappings = list(dict.fromkeys(tags_for(sector) or tags_for(subsector or "")))
@@ -156,6 +194,29 @@ class CrmCaptureService:
     @staticmethod
     def get_tijuana_zones():
         return TIJUANA_ZONES
+
+    @staticmethod
+    async def get_zones(session: AsyncSession) -> list[dict]:
+        from app.services.config_service import get_runtime_config
+        cfg = await get_runtime_config(session)
+        return cfg.get("map_zones") or TIJUANA_ZONES
+
+    @staticmethod
+    async def get_map_config(session: AsyncSession) -> dict:
+        from app.services.config_service import get_runtime_config
+        cfg = await get_runtime_config(session)
+        defaults = cfg.get("map_defaults") or {}
+        sectors = cfg.get("map_sectors") or DEFAULT_SECTOR_CATALOG
+        return {
+            "tile_url_template": defaults.get("tile_url_template") or settings.OSM_TILE_URL_TEMPLATE,
+            "center": defaults.get("center") or [settings.MAP_DEFAULT_CENTER_LAT, settings.MAP_DEFAULT_CENTER_LON],
+            "zoom": defaults.get("zoom") or settings.MAP_DEFAULT_ZOOM,
+            "default_city": defaults.get("default_city") or settings.MAP_DEFAULT_CITY,
+            "default_zone": defaults.get("default_zone") or settings.MAP_DEFAULT_ZONE_SLUG,
+            "default_sector": defaults.get("default_sector") or settings.MAP_DEFAULT_SECTOR,
+            "attribution": defaults.get("attribution") or settings.MAP_ATTRIBUTION_HTML,
+            "sectors": sectors,
+        }
 
     @staticmethod
     async def is_permanently_discarded(session: AsyncSession, company_name: str, domain: str | None = None, phone: str | None = None) -> bool:
@@ -249,16 +310,23 @@ class CrmCaptureService:
         custom_bbox: dict[str, float] | None = None,
     ) -> dict:
         """
-        Search a bounded Tijuana area through Overpass or return a fresh cached cell.
+        Search a bounded area through Overpass or return a fresh cached cell.
         Results contain only data returned by OpenStreetMap; no lead is fabricated.
         """
+        from app.services.config_service import get_runtime_config
+        runtime_cfg = await get_runtime_config(session)
+        active_zones = runtime_cfg.get("map_zones") or TIJUANA_ZONES
+        map_defaults = runtime_cfg.get("map_defaults") or {}
+        sector_catalog = runtime_cfg.get("map_sectors") or DEFAULT_SECTOR_CATALOG
+        city_name = map_defaults.get("default_city") or settings.MAP_DEFAULT_CITY
+
         zone_info = next(
-            (item for item in TIJUANA_ZONES if item["slug"] == zone or item["zone"].casefold() == zone.casefold()),
+            (item for item in active_zones if item.get("slug") == zone or str(item.get("zone") or "").casefold() == zone.casefold()),
             None,
         )
         if not zone_info:
-            raise ValueError("Selecciona una zona válida de Tijuana.")
-        bounds = validate_search_bounds(custom_bbox or zone_info["bbox"])
+            raise ValueError(f"Selecciona una zona válida de {city_name}.")
+        bounds = validate_search_bounds(custom_bbox or zone_info["bbox"], zones=active_zones, map_defaults=map_defaults)
         zone_key = zone_info["slug"]
         q_hash = compute_query_hash(sector, subsector, zone_key, bounds)
         now = utc_now()
@@ -293,7 +361,7 @@ class CrmCaptureService:
                 "results": json.loads(cached.results_json)
             }
 
-        query = build_overpass_query(sector, subsector, bounds)
+        query = build_overpass_query(sector, subsector, bounds, sector_catalog=sector_catalog)
         elements = await CrmCaptureService.fetch_osm_elements(query)
 
         results = []
@@ -322,7 +390,7 @@ class CrmCaptureService:
                 " ".join(part for part in [street, house_number] if part),
                 neighborhood,
                 tags.get("addr:postcode"),
-                tags.get("addr:city") or settings.MAP_DEFAULT_CITY,
+                tags.get("addr:city") or city_name,
             ] if part)
             published_email = tags.get("contact:email") or tags.get("email")
             if published_email:

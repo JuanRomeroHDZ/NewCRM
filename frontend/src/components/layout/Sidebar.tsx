@@ -143,13 +143,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onCloseMobile })
     <aside
       ref={asideRef}
       aria-label="Navegación principal"
-      role={!isDesktop && isMobileOpen ? 'dialog' : undefined}
-      aria-modal={!isDesktop && isMobileOpen ? true : undefined}
       aria-hidden={!isDesktop && !isMobileOpen ? true : undefined}
       onKeyDown={handleMobileTab}
       className={`responsive-sidebar fixed inset-y-0 left-0 z-50 flex h-[100dvh] w-72 max-w-[calc(100vw-2rem)] shrink-0 flex-col border-r border-obsidian-border bg-obsidian-panel transition-transform duration-200 ease-out lg:static lg:h-[100dvh] lg:max-w-none ${collapsed ? 'lg:w-16' : 'lg:w-64'} ${isMobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}
     >
-      <div className="flex h-16 shrink-0 items-center justify-between border-b border-obsidian-border px-4">
+      <div className={`flex h-16 shrink-0 items-center justify-between border-b border-obsidian-border ${compact ? 'px-2' : 'px-4'}`}>
         {!compact ? (
           <div className="flex min-w-0 items-center gap-2.5">
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr from-indigo-600 to-indigo-400 text-white shadow-md shadow-indigo-600/30">
@@ -161,7 +159,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onCloseMobile })
             </div>
           </div>
         ) : (
-          <div className="mx-auto flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-600 text-white" aria-label="Contact | LESSSO">
+          <div className="mx-auto flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-white" aria-label="Contact | LESSSO">
             <Network size={18} />
           </div>
         )}
@@ -169,29 +167,42 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onCloseMobile })
         <button type="button" onClick={onCloseMobile} className="rounded-lg p-2 text-obsidian-muted hover:bg-obsidian-surface hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 lg:hidden" aria-label="Cerrar menú">
           <X size={18} />
         </button>
-        <button type="button" onClick={() => setCollapsed((value) => !value)} className="hidden rounded-lg p-1.5 text-obsidian-muted hover:bg-obsidian-surface hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 lg:inline-flex" title={collapsed ? 'Expandir menú' : 'Colapsar menú'} aria-label={collapsed ? 'Expandir menú' : 'Colapsar menú'}>
+        <button type="button" onClick={() => setCollapsed((value) => !value)} className={`hidden rounded-lg p-1.5 text-obsidian-muted hover:bg-obsidian-surface hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 lg:inline-flex ${compact ? 'shrink-0' : ''}`} title={collapsed ? 'Expandir menú' : 'Colapsar menú'} aria-label={collapsed ? 'Expandir menú' : 'Colapsar menú'}>
           {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
         </button>
       </div>
 
-      <div className="shrink-0 p-3">
-        <div className={`flex items-center justify-between gap-2 rounded-xl border p-2.5 transition-colors ${isUnlocked ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300' : 'border-obsidian-border bg-obsidian-surface text-obsidian-muted'}`}>
-          <div className="flex min-w-0 items-center gap-2">
-            {isUnlocked ? <Unlock size={16} className="shrink-0 text-emerald-400" /> : <Lock size={16} className="shrink-0 text-amber-400" />}
-            {!compact && <div className="min-w-0">
-              <div className="truncate text-[11px] font-semibold text-white">{isUnlocked ? 'Bóveda desbloqueada' : 'Bóveda bloqueada'}</div>
-              <div className="truncate text-[10px] text-obsidian-muted">{isUnlocked ? `Se bloquea en ${formatTimer(remainingSeconds)}` : 'Protegida con contraseña de acceso'}</div>
-            </div>}
+      <div className={`shrink-0 ${compact ? 'px-2 py-2.5' : 'p-3'}`}>
+        {compact ? (
+          <div className={`flex items-center justify-center rounded-xl border p-1 transition-colors ${isUnlocked ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300' : 'border-obsidian-border bg-obsidian-surface text-obsidian-muted'}`}>
+            <button
+              type="button"
+              onClick={toggleVault}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-current hover:bg-obsidian-border/60 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
+              title={isUnlocked ? `Bóveda desbloqueada (${formatTimer(remainingSeconds)})` : 'Bóveda bloqueada'}
+              aria-label={isUnlocked ? 'Bloquear bóveda' : 'Desbloquear bóveda'}
+            >
+              {isUnlocked ? <Unlock size={15} className="text-emerald-400" /> : <Lock size={15} className="text-amber-400" />}
+            </button>
           </div>
-          {!compact && <button type="button" onClick={toggleVault} className={`min-h-8 shrink-0 rounded-lg px-2 text-[10px] font-semibold transition-colors ${isUnlocked ? 'bg-emerald-500/20 text-emerald-100 hover:bg-emerald-500/30' : 'bg-indigo-600 text-white hover:bg-indigo-500'}`}>
-            {isUnlocked ? 'Bloquear' : 'Desbloquear'}
-          </button>}
-          {compact && <button type="button" onClick={toggleVault} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-obsidian-muted hover:bg-obsidian-border hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300" aria-label={isUnlocked ? 'Bloquear bóveda' : 'Desbloquear bóveda'}>{isUnlocked ? <Unlock size={15} /> : <Lock size={15} />}</button>}
-        </div>
+        ) : (
+          <div className={`flex items-center justify-between gap-2 rounded-xl border p-2.5 transition-colors ${isUnlocked ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300' : 'border-obsidian-border bg-obsidian-surface text-obsidian-muted'}`}>
+            <div className="flex min-w-0 items-center gap-2">
+              {isUnlocked ? <Unlock size={16} className="shrink-0 text-emerald-400" /> : <Lock size={16} className="shrink-0 text-amber-400" />}
+              <div className="min-w-0">
+                <div className="truncate text-[11px] font-semibold text-white">{isUnlocked ? 'Bóveda desbloqueada' : 'Bóveda bloqueada'}</div>
+                <div className="truncate text-[10px] text-obsidian-muted">{isUnlocked ? `Se bloquea en ${formatTimer(remainingSeconds)}` : 'Protegida con contraseña de acceso'}</div>
+              </div>
+            </div>
+            <button type="button" onClick={toggleVault} className={`min-h-8 shrink-0 rounded-lg px-2 text-[10px] font-semibold transition-colors ${isUnlocked ? 'bg-emerald-500/20 text-emerald-100 hover:bg-emerald-500/30' : 'bg-indigo-600 text-white hover:bg-indigo-500'}`}>
+              {isUnlocked ? 'Bloquear' : 'Desbloquear'}
+            </button>
+          </div>
+        )}
       </div>
 
-      <div className="shrink-0 px-3 pb-2">
-        <button type="button" onClick={() => { openCommandPalette(); onCloseMobile(); }} className="group flex min-h-10 w-full items-center justify-between gap-2 rounded-xl border border-obsidian-border bg-obsidian-bg px-3 text-xs text-obsidian-muted transition-colors hover:bg-obsidian-surface hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300" title={compact ? 'Buscador rápido' : undefined} aria-label="Abrir buscador rápido">
+      <div className={`shrink-0 pb-2 ${compact ? 'px-2' : 'px-3'}`}>
+        <button type="button" onClick={() => { openCommandPalette(); onCloseMobile(); }} className={`group flex min-h-10 w-full items-center rounded-xl border border-obsidian-border bg-obsidian-bg text-xs text-obsidian-muted transition-colors hover:bg-obsidian-surface hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 ${compact ? 'justify-center px-2' : 'justify-between gap-2 px-3'}`} title={compact ? 'Buscador rápido' : undefined} aria-label="Abrir buscador rápido">
           <span className="flex min-w-0 items-center gap-2"><Search size={14} className="shrink-0 group-hover:text-indigo-300" />{!compact && <span className="truncate">Buscar en LESSSO</span>}</span>
           {!compact && <kbd className="shrink-0 rounded border border-obsidian-border bg-obsidian-panel px-1.5 py-0.5 font-mono text-[10px]">{searchHotkey.toUpperCase()}</kbd>}
         </button>
@@ -217,7 +228,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onCloseMobile })
                     const active = activeSection === item.id;
                     const locked = Boolean(item.requiresVault && !isUnlocked);
                     return <li key={item.id}>
-                      <button type="button" onClick={() => selectSection(item)} aria-current={active ? 'page' : undefined} title={compact ? item.label : undefined} className={`flex min-h-10 w-full items-center gap-2.5 rounded-lg px-3 text-left text-xs font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 ${active ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-950/30' : 'text-obsidian-text hover:bg-obsidian-surface hover:text-white'}`}>
+                      <button type="button" onClick={() => selectSection(item)} aria-current={active ? 'page' : undefined} title={compact ? item.label : undefined} aria-label={compact ? item.label : undefined} className={`flex min-h-10 w-full items-center rounded-lg text-left text-xs font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 ${compact ? 'justify-center px-2' : 'gap-2.5 px-3'} ${active ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-950/30' : 'text-obsidian-text hover:bg-obsidian-surface hover:text-white'}`}>
                         <Icon size={15} className={`shrink-0 ${active ? 'text-white' : 'text-obsidian-muted'}`} />
                         {!compact && <span className="min-w-0 flex-1 truncate">{item.label}</span>}
                         {!compact && locked && <Lock size={11} className="shrink-0 text-amber-400/80" aria-label="Requiere desbloquear la bóveda" />}
@@ -231,14 +242,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onCloseMobile })
         </ul>
       </nav>
 
-      <div className={`shrink-0 space-y-1.5 border-t border-obsidian-border p-3 ${compact ? 'lg:px-2' : ''}`}>
-        <button type="button" onClick={() => { openEnvExport(); onCloseMobile(); }} title={compact ? 'Descargar archivo .env' : undefined} aria-label="Descargar archivo .env" className="flex min-h-9 w-full items-center gap-2.5 rounded-lg border border-obsidian-border bg-obsidian-surface/60 px-3 text-left text-[11px] text-obsidian-muted transition-colors hover:bg-obsidian-surface hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300">
+      <div className={`shrink-0 space-y-1.5 border-t border-obsidian-border ${compact ? 'p-2' : 'p-3'}`}>
+        <button type="button" onClick={() => { openEnvExport(); onCloseMobile(); }} title={compact ? 'Descargar archivo .env' : undefined} aria-label="Descargar archivo .env" className={`flex min-h-9 w-full items-center rounded-lg border border-obsidian-border bg-obsidian-surface/60 text-left text-[11px] text-obsidian-muted transition-colors hover:bg-obsidian-surface hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 ${compact ? 'justify-center px-2' : 'gap-2.5 px-3'}`}>
           <Code size={14} className="shrink-0 text-cyan-300" />{!compact && <span className="truncate">Exportar configuración</span>}
         </button>
-        <button type="button" onClick={() => { openEmergencyKit(); onCloseMobile(); }} title={compact ? 'Hoja de recuperación' : undefined} aria-label="Abrir hoja de recuperación" className="flex min-h-9 w-full items-center gap-2.5 rounded-lg border border-obsidian-border bg-obsidian-surface/60 px-3 text-left text-[11px] text-obsidian-muted transition-colors hover:bg-obsidian-surface hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300">
+        <button type="button" onClick={() => { openEmergencyKit(); onCloseMobile(); }} title={compact ? 'Hoja de recuperación' : undefined} aria-label="Abrir hoja de recuperación" className={`flex min-h-9 w-full items-center rounded-lg border border-obsidian-border bg-obsidian-surface/60 text-left text-[11px] text-obsidian-muted transition-colors hover:bg-obsidian-surface hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 ${compact ? 'justify-center px-2' : 'gap-2.5 px-3'}`}>
           <Shield size={14} className="shrink-0 text-indigo-300" />{!compact && <span className="truncate">Hoja de recuperación</span>}
         </button>
-        <button type="button" onClick={() => { openPasswordGen(); onCloseMobile(); }} title={compact ? 'Generar contraseña' : undefined} aria-label="Generar contraseña" className="flex min-h-10 w-full items-center gap-2.5 rounded-lg border border-obsidian-border bg-obsidian-surface px-3 text-left text-xs text-obsidian-text transition-colors hover:bg-obsidian-border hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300">
+        <button type="button" onClick={() => { openPasswordGen(); onCloseMobile(); }} title={compact ? 'Generar contraseña' : undefined} aria-label="Generar contraseña" className={`flex min-h-10 w-full items-center rounded-lg border border-obsidian-border bg-obsidian-surface text-left text-xs text-obsidian-text transition-colors hover:bg-obsidian-border hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 ${compact ? 'justify-center px-2' : 'gap-2.5 px-3'}`}>
           <Sparkles size={15} className="shrink-0 text-cyan-300" />{!compact && <span className="truncate font-medium">Generar contraseña</span>}
         </button>
       </div>

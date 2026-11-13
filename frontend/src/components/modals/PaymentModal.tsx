@@ -40,6 +40,18 @@ export const PaymentModal: React.FC = () => {
     }
   }, [isPaymentModalOpen, editingPayment]);
 
+  useEffect(() => {
+    if (!isPaymentModalOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        closePaymentModal();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isPaymentModalOpen, closePaymentModal]);
+
   if (!isPaymentModalOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -116,18 +128,19 @@ export const PaymentModal: React.FC = () => {
   return (
     <div 
       className="responsive-overlay fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-fadeIn"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="payment-modal-title"
+      onClick={closePaymentModal}
     >
       <div 
-        className="relative w-full max-w-lg bg-obsidian-panel border border-obsidian-borderLight rounded-2xl shadow-2xl p-6 overflow-hidden max-h-[90vh] flex flex-col"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="payment-modal-title"
+        className="relative w-full max-w-lg bg-obsidian-panel border border-obsidian-borderLight rounded-2xl shadow-2xl p-6 overflow-hidden max-h-[90dvh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between pb-4 border-b border-obsidian-border">
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 flex-shrink-0">
-              <CreditCard size={20} />
+              <CreditCard size={20} aria-hidden="true" />
             </div>
             <div className="min-w-0">
               <h2 id="payment-modal-title" className="text-base font-bold text-white tracking-tight truncate">
@@ -141,7 +154,7 @@ export const PaymentModal: React.FC = () => {
             className="p-1.5 text-obsidian-muted hover:text-white rounded-lg hover:bg-obsidian-surface flex-shrink-0"
             aria-label="Cerrar modal"
           >
-            <X size={18} />
+            <X size={18} aria-hidden="true" />
           </button>
         </div>
 

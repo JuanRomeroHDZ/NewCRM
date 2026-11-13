@@ -92,6 +92,7 @@ class ExportBundleContext:
     include_watermark: bool = True
     include_toc: bool = True
     watermark_text: str | None = None
+    organization_name: str | None = None
     rendered_diagrams: dict[str, str] = field(default_factory=dict)
 
 
@@ -327,18 +328,19 @@ def build_standalone_html_document(ctx: ExportBundleContext, *, embed_video: boo
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     target_scope = html_lib.escape(apply_redaction_markers(ctx.target_scope or "No especificado", ctx.redact_for_client))
 
+    org_name = html_lib.escape(ctx.organization_name or settings.WRITEUP_ORGANIZATION_NAME)
     return f"""<!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>{html_lib.escape(ctx.title)} — {html_lib.escape(settings.WRITEUP_ORGANIZATION_NAME)}</title>
+<title>{html_lib.escape(ctx.title)} — {org_name}</title>
 <style>
   @page {{
     size: A4;
     margin: 20mm 16mm 20mm 16mm;
     @bottom-right {{ content: "Página " counter(page) " de " counter(pages); font-size: 9pt; color: #64748b; }}
-    @bottom-left {{ content: "{html_lib.escape(settings.WRITEUP_ORGANIZATION_NAME)}"; font-size: 9pt; color: #64748b; }}
+    @bottom-left {{ content: "{org_name}"; font-size: 9pt; color: #64748b; }}
   }}
   body {{ font-family: 'DejaVu Sans', system-ui, -apple-system, sans-serif; color: #0f172a; line-height: 1.55; max-width: 960px; margin: 0 auto; padding: 24px; background: #ffffff; }}
   .watermark {{ background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; padding: 6px 12px; font-size: 11px; font-weight: 700; text-align: center; letter-spacing: 0.08em; border-radius: 6px; margin-bottom: 18px; }}
@@ -637,7 +639,7 @@ def _build_sarif_artifact(ctx: ExportBundleContext) -> tuple[bytes, str, str]:
         "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
         "version": "2.1.0",
         "runs": [{
-            "tool": {"driver": {"name": settings.WRITEUP_ORGANIZATION_NAME, "rules": rules}},
+            "tool": {"driver": {"name": ctx.organization_name or settings.WRITEUP_ORGANIZATION_NAME, "rules": rules}},
             "results": results,
         }],
     }

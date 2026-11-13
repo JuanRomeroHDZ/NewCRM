@@ -9,7 +9,7 @@ export const PlatformModal: React.FC = () => {
   const { 
     isPlatformModalOpen, closePlatformModal, editingPlatformId, 
     platformModalDefaultEmailId, showToast, triggerDataReload, 
-    openPasswordGen, defaultEntityScope 
+    openPasswordGen, defaultEntityScope, supportedCurrencies, baseCurrency, systemLocale
   } = useVault();
 
   const [emails, setEmails] = useState<EmailAccount[]>([]);
@@ -45,7 +45,7 @@ export const PlatformModal: React.FC = () => {
   // Subscription
   const [subscriptionStatus, setSubscriptionStatus] = useState<'active' | 'free_trial' | 'paused' | 'cancelled' | 'free'>('active');
   const [subscriptionCost, setSubscriptionCost] = useState<string>('0');
-  const [currency, setCurrency] = useState<'MXN' | 'USD'>('MXN');
+  const [currency, setCurrency] = useState<string>(baseCurrency || 'MXN');
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly' | 'weekly' | 'daily' | 'one_time'>('monthly');
   const [startDate, setStartDate] = useState('');
   const [nextBillingDate, setNextBillingDate] = useState('');
@@ -68,79 +68,108 @@ export const PlatformModal: React.FC = () => {
 
   const [formError, setFormError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadingDetail, setLoadingDetail] = useState(false);
+
+  const fallbackCurrency = baseCurrency || 'MXN';
+  const currencyOptions = supportedCurrencies.length > 0
+    ? (supportedCurrencies.some((c) => c.code === currency)
+        ? supportedCurrencies
+        : [...supportedCurrencies, { code: currency, name: currency, symbol: '' }])
+    : [{ code: fallbackCurrency, name: fallbackCurrency, symbol: '$' }];
 
   useEffect(() => {
-    if (isPlatformModalOpen) {
-      setFormError(null);
-      Promise.all([
-        api.getEmails(),
-        api.getPaymentMethods(),
-        api.getProspects().catch(() => [])
-      ]).then(([eList, pList, prList]) => {
-        setEmails(eList);
-        setPayments(pList);
-        setProspects(prList || []);
+    if (!isPlatformModalOpen) return;
+    setFormError(null);
+    Promise.all([
+      api.getEmails(),
+      api.getPaymentMethods(),
+      api.getProspects().catch(() => [])
+    ]).then(([eList, pList, prList]) => {
+      setEmails(eList);
+      setPayments(pList);
+      setProspects(prList || []);
 
-        if (platformModalDefaultEmailId) {
-          setEmailId(platformModalDefaultEmailId);
-        }
-      }).catch(console.error);
+      if (platformModalDefaultEmailId) {
+        setEmailId(platformModalDefaultEmailId);
+      }
+    }).catch((err: any) => {
+      showToast(err?.message || 'No se pudieron cargar los catálogos auxiliares.', 'warning');
+    });
 
-      if (editingPlatformId) {
-        api.getPlatformDetail(editingPlatformId).then((p) => {
-          setScope(p.scope || 'business');
-          setOwnershipType(p.ownership_type || (p.prospect_id ? 'client' : 'own'));
-          setProspectId(p.prospect_id || '');
-          setName(p.name);
-          setEmailId(p.email_id || '');
-          setSpecificAlias(p.specific_alias || '');
-          setLoginUrl(p.login_url || '');
-          setUsername(p.username || '');
-          setAccessType(p.access_type);
-          setPassword('');
-          setPin('');
-          setRecoveryCodes(p.recovery_codes_plain || '');
-          setNotes(p.notes || '');
-          setSubscriptionStatus(p.subscription_status);
-          setSubscriptionCost(String(p.subscription_cost ?? 0));
-          setCurrency(p.currency);
-          setBillingCycle(p.billing_cycle as any);
-          setStartDate(p.start_date || '');
-          setNextBillingDate(p.next_billing_date || '');
-          setTrialEndDate(p.trial_end_date || '');
-          setPaymentMethodId(p.payment_method_id || '');
-          setApiKeys(p.api_keys || []);
-          setEnvVars(p.env_variables || []);
-          setTags(p.tags || []);
-        });
-      } else {
-        setScope(defaultEntityScope);
-        setOwnershipType('own');
-        setProspectId('');
-        setName('');
-        setEmailId(platformModalDefaultEmailId || '');
-        setSpecificAlias('');
-        setLoginUrl('');
-        setUsername('');
-        setAccessType('own_password');
+    if (editingPlatformId) {
+      setLoadingDetail(true);
+      api.getPlatformDetail(editingPlatformId).then((p) => {
+        setScope(p.scope || 'business');
+        setOwnershipType(p.ownership_type || (p.prospect_id ? 'client' : 'own'));
+        setProspectId(p.prospect_id || '');
+        setName(p.name);
+        setEmailId(p.email_id || '');
+        setSpecificAlias(p.specific_alias || '');
+        setLoginUrl(p.login_url || '');
+        setUsername(p.username || '');
+        setAccessType(p.access_type);
         setPassword('');
         setPin('');
-        setRecoveryCodes('');
-        setNotes('');
-        setSubscriptionStatus('active');
-        setSubscriptionCost('0');
-        setCurrency('MXN');
-        setBillingCycle('monthly');
-        setStartDate('');
-        setNextBillingDate('');
-        setTrialEndDate('');
-        setPaymentMethodId('');
-        setApiKeys([]);
-        setEnvVars([]);
-        setTags([]);
-      }
+        setRecoveryCodes(p.recovery_codes_plain || '');
+        setNotes(p.notes || '');
+        setSubscriptionStatus(p.subscription_status);
+        setSubscriptionCost(String(p.subscription_cost ?? 0));
+        setCurrency(p.currency || fallbackCurrency);
+        setBillingCycle(p.billing_cycle as any);
+        setStartDate(p.start_date || '');
+        setNextBillingDate(p.next_billing_date || '');
+        setTrialEndDate(p.trial_end_date || '');
+        setPaymentMethodId(p.payment_method_id || '');
+        setApiKeys(p.api_keys || []);
+        setEnvVars(p.env_variables || []);
+        setTags(p.tags || []);
+      }).catch((err: any) => {
+        const msg = err?.message || 'Error al cargar los detalles de la plataforma.';
+        setFormError(msg);
+        showToast(msg, 'error');
+      }).finally(() => {
+        setLoadingDetail(false);
+      });
+    } else {
+      setLoadingDetail(false);
+      setScope(defaultEntityScope);
+      setOwnershipType('own');
+      setProspectId('');
+      setName('');
+      setEmailId(platformModalDefaultEmailId || '');
+      setSpecificAlias('');
+      setLoginUrl('');
+      setUsername('');
+      setAccessType('own_password');
+      setPassword('');
+      setPin('');
+      setRecoveryCodes('');
+      setNotes('');
+      setSubscriptionStatus('active');
+      setSubscriptionCost('0');
+      setCurrency(fallbackCurrency);
+      setBillingCycle('monthly');
+      setStartDate('');
+      setNextBillingDate('');
+      setTrialEndDate('');
+      setPaymentMethodId('');
+      setApiKeys([]);
+      setEnvVars([]);
+      setTags([]);
     }
-  }, [isPlatformModalOpen, editingPlatformId, platformModalDefaultEmailId, defaultEntityScope]);
+  }, [isPlatformModalOpen, editingPlatformId, platformModalDefaultEmailId, defaultEntityScope, fallbackCurrency, showToast]);
+
+  useEffect(() => {
+    if (!isPlatformModalOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        closePlatformModal();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isPlatformModalOpen, closePlatformModal]);
 
   const handleQuickCreateEmail = async () => {
     const trimmed = newEmailAddress.trim();
@@ -222,7 +251,7 @@ export const PlatformModal: React.FC = () => {
 
     const numericCost = Number(subscriptionCost);
     if (!Number.isFinite(numericCost) || numericCost < 0 || numericCost > INPUT_LIMITS.COST_AMOUNT) {
-      const msg = `Ingresa un costo entre 0 y ${INPUT_LIMITS.COST_AMOUNT.toLocaleString('es-MX')}.`;
+      const msg = `Ingresa un costo entre 0 y ${INPUT_LIMITS.COST_AMOUNT.toLocaleString(systemLocale || 'es-MX')}.`;
       setFormError(msg);
       showToast(msg, 'error');
       return;
@@ -326,18 +355,19 @@ export const PlatformModal: React.FC = () => {
   return (
     <div 
       className="responsive-overlay fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-2 sm:p-4 bg-black/75 backdrop-blur-md animate-fadeIn"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="platform-modal-title"
+      onClick={closePlatformModal}
     >
       <div 
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="platform-modal-title"
         className="relative w-full max-w-2xl bg-obsidian-panel border border-obsidian-borderLight rounded-xl sm:rounded-2xl shadow-2xl p-4 sm:p-6 overflow-hidden max-h-[calc(100dvh-1rem)] sm:max-h-[90dvh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between pb-4 border-b border-obsidian-border">
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="p-2 rounded-xl bg-indigo-500/10 text-indigo-400 flex-shrink-0">
-              <Globe size={20} />
+              <Globe size={20} aria-hidden="true" />
             </div>
             <div className="min-w-0">
               <h2 id="platform-modal-title" className="text-base font-bold text-white tracking-tight truncate">
@@ -348,16 +378,23 @@ export const PlatformModal: React.FC = () => {
           <button
             type="button"
             onClick={closePlatformModal}
+            aria-label="Cerrar formulario"
             className="p-1.5 text-obsidian-muted hover:text-white rounded-lg hover:bg-obsidian-surface flex-shrink-0"
           >
-            <X size={18} />
+            <X size={18} aria-hidden="true" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto py-4 space-y-4 text-xs pr-1">
+        <form onSubmit={handleSubmit} className="flex-1 min-h-0 flex flex-col overflow-hidden">
+          <div className="flex-1 overflow-y-auto py-4 space-y-4 text-xs pr-1">
+          {loadingDetail && (
+            <div className="p-3 rounded-xl bg-obsidian-surface border border-obsidian-border text-obsidian-muted text-xs" role="status">
+              Cargando detalles de la plataforma...
+            </div>
+          )}
           {formError && (
-            <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 flex items-start gap-2 text-rose-300 text-xs">
-              <AlertCircle size={15} className="text-rose-400 flex-shrink-0 mt-0.5" />
+            <div role="alert" className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 flex items-start gap-2 text-rose-300 text-xs">
+              <AlertCircle size={15} className="text-rose-400 flex-shrink-0 mt-0.5" aria-hidden="true" />
               <span className="break-words">{formError}</span>
             </div>
           )}
@@ -679,12 +716,14 @@ export const PlatformModal: React.FC = () => {
                     className="w-full min-w-0 px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-indigo-500"
                   />
                   <select
+                    aria-label="Divisa"
                     value={currency}
                     onChange={(e) => setCurrency(e.target.value as any)}
                     className="px-2 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs font-mono flex-shrink-0"
                   >
-                    <option value="MXN">MXN</option>
-                    <option value="USD">USD</option>
+                    {currencyOptions.map((c) => (
+                      <option key={c.code} value={c.code}>{c.code}</option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -911,25 +950,25 @@ export const PlatformModal: React.FC = () => {
               className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs focus:outline-none focus:border-indigo-500"
             />
           </div>
-        </form>
+          </div>
 
-        <div className="pt-3 border-t border-obsidian-border flex items-center justify-end gap-2.5">
-          <button
-            type="button"
-            onClick={closePlatformModal}
-            className="px-4 py-2 text-xs font-medium text-obsidian-muted hover:text-white"
-          >
-            Cancelar
-          </button>
-          <button
-            type="button"
-            onClick={handleSubmit}
-            disabled={loading || emails.length === 0}
-            className="inline-flex items-center gap-1.5 px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md shadow-indigo-600/20 disabled:opacity-50"
-          >
-            {loading ? 'Guardando...' : editingPlatformId ? 'Guardar Cambios' : 'Guardar Plataforma'}
-          </button>
-        </div>
+          <div className="pt-3 border-t border-obsidian-border flex items-center justify-end gap-2.5 flex-shrink-0">
+            <button
+              type="button"
+              onClick={closePlatformModal}
+              className="px-4 py-2 text-xs font-medium text-obsidian-muted hover:text-white"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={loading || loadingDetail}
+              className="inline-flex items-center gap-1.5 px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md shadow-indigo-600/20 disabled:opacity-50"
+            >
+              {loading ? 'Guardando...' : editingPlatformId ? 'Guardar Cambios' : 'Guardar Plataforma'}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );

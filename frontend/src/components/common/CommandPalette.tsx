@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
-  Search, Shield, Key, Mail, Globe, Lock, CreditCard, 
-  Sparkles, Network, ArrowRight, X, Briefcase, Plus, MapPin
+  Search, Shield, Mail, Globe, Lock, Sparkles, Network, ArrowRight,
+  X, Briefcase, Plus, MapPin, BookOpen, AlertCircle, RefreshCw
 } from 'lucide-react';
-import { useVault, SectionType } from '../../context/VaultContext';
+import { useVault } from '../../context/VaultContext';
 import { api } from '../../lib/api';
-import { PlatformAccount, EmailAccount, Prospect } from '../../types';
+import { PlatformAccount, EmailAccount, Prospect, WriteupSummary } from '../../types';
 import { getSlaBadgeMeta } from '../../lib/prospectUtils';
 import { INPUT_LIMITS } from '../../lib/validation';
 
@@ -20,21 +20,60 @@ export const CommandPalette: React.FC = () => {
   const [platforms, setPlatforms] = useState<PlatformAccount[]>([]);
   const [emails, setEmails] = useState<EmailAccount[]>([]);
   const [prospects, setProspects] = useState<Prospect[]>([]);
+  const [writeups, setWriteups] = useState<WriteupSummary[]>([]);
+  const [loadingData, setLoadingData] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    if (isCommandPaletteOpen) {
-      setQuery('');
-      setSelectedIndex(0);
-      setTimeout(() => inputRef.current?.focus(), 50);
+  const loadSearchIndex = useCallback(async () => {
+    setLoadingData(true);
+    setLoadError(null);
+    const results = await Promise.allSettled([
+      api.getPlatforms(),
+      api.getEmails(),
+      api.getProspects(),
+      isUnlocked ? api.listWriteups() : Promise.resolve([] as WriteupSummary[]),
+    ]);
 
-      // Fetch items for searching
-      api.getPlatforms().then(setPlatforms).catch(() => {});
-      api.getEmails().then(setEmails).catch(() => {});
-      api.getProspects().then(setProspects).catch(() => {});
+    const errors: string[] = [];
+    if (results[0].status === 'fulfilled') setPlatforms(results[0].value);
+    else errors.push('plataformas');
+
+    if (results[1].status === 'fulfilled') setEmails(results[1].value);
+    else errors.push('correos');
+
+    if (results[2].status === 'fulfilled') setProspects(results[2].value);
+    else errors.push('prospectos');
+
+    if (results[3].status === 'fulfilled') setWriteups(results[3].value);
+    else if (isUnlocked) errors.push('writeups');
+
+    if (errors.length > 0) {
+      setLoadError(`No se pudieron cargar: ${errors.join(', ')}.`);
     }
-  }, [isCommandPaletteOpen]);
+    setLoadingData(false);
+  }, [isUnlocked]);
+
+  useEffect(() => {
+    if (!isCommandPaletteOpen) return;
+    setQuery('');
+    setSelectedIndex(0);
+    const focusTimer = window.setTimeout(() => inputRef.current?.focus(), 50);
+    void loadSearchIndex();
+
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        closeCommandPalette();
+      }
+    };
+    window.addEventListener('keydown', handleEscape);
+    return () => {
+      window.clearTimeout(focusTimer);
+      window.removeEventListener('keydown', handleEscape);
+    };
+  }, [isCommandPaletteOpen, loadSearchIndex, closeCommandPalette]);
 
   if (!isCommandPaletteOpen) return null;
 
@@ -60,6 +99,15 @@ export const CommandPalette: React.FC = () => {
     e.address.toLowerCase().includes(cleanQ) ||
     e.provider.toLowerCase().includes(cleanQ) ||
     e.aliases.some(a => a.toLowerCase().includes(cleanQ))
+  ).slice(0, 4);
+
+  const filteredWriteups = writeups.filter(w =>
+    w.title.toLowerCase().includes(cleanQ) ||
+    (w.target_scope && w.target_scope.toLowerCase().includes(cleanQ)) ||
+    (w.cwe_id && w.cwe_id.toLowerCase().includes(cleanQ)) ||
+    (w.cve_id && w.cve_id.toLowerCase().includes(cleanQ)) ||
+    w.severity.toLowerCase().includes(cleanQ) ||
+    (w.tags && w.tags.some(t => t.toLowerCase().includes(cleanQ)))
   ).slice(0, 4);
 
   // Global static commands
@@ -95,6 +143,18 @@ export const CommandPalette: React.FC = () => {
       action: () => {
         closeCommandPalette();
         setActiveSection('prospects');
+      }
+    },
+    {
+      id: 'cmd_writeups_view',
+      title: 'Ir a Writeups y Pentesting',
+      subtitle: 'Editor Markdown, pizarras de ataque y reportes cifrados',
+      icon: BookOpen,
+      color: 'text-emerald-400',
+      action: () => {
+        closeCommandPalette();
+        setActiveSection('writeups');
+        if (!isUnlocked) openUnlockModal();
       }
     },
     {
@@ -136,7 +196,12 @@ export const CommandPalette: React.FC = () => {
     }
   ].filter(c => cleanQ === '' || c.title.toLowerCase().includes(cleanQ) || c.subtitle.toLowerCase().includes(cleanQ));
 
-  const totalResultsCount = filteredProspects.length + filteredPlatforms.length + filteredEmails.length + staticCommands.length;
+  const totalResultsCount =
+    filteredProspects.length +
+    filteredPlatforms.length +
+    filteredEmails.length +
+    filteredWriteups.length +
+    staticCommands.length;
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'ArrowDown') {
@@ -155,7 +220,6 @@ export const CommandPalette: React.FC = () => {
 
   const executeCurrentSelection = () => {
     let cursor = 0;
-    // Check prospects
     for (const pr of filteredProspects) {
       if (cursor === selectedIndex) {
         closeCommandPalette();
@@ -164,7 +228,6 @@ export const CommandPalette: React.FC = () => {
       }
       cursor++;
     }
-    // Check platforms
     for (const p of filteredPlatforms) {
       if (cursor === selectedIndex) {
         closeCommandPalette();
@@ -173,7 +236,6 @@ export const CommandPalette: React.FC = () => {
       }
       cursor++;
     }
-    // Check emails
     for (const em of filteredEmails) {
       if (cursor === selectedIndex) {
         closeCommandPalette();
@@ -182,7 +244,15 @@ export const CommandPalette: React.FC = () => {
       }
       cursor++;
     }
-    // Check static
+    for (const w of filteredWriteups) {
+      if (cursor === selectedIndex) {
+        closeCommandPalette();
+        setActiveSection('writeups');
+        if (!isUnlocked) openUnlockModal();
+        return;
+      }
+      cursor++;
+    }
     for (const cmd of staticCommands) {
       if (cursor === selectedIndex) {
         cmd.action();
@@ -192,21 +262,32 @@ export const CommandPalette: React.FC = () => {
     }
   };
 
+  const writeupsOffset = filteredProspects.length + filteredPlatforms.length + filteredEmails.length;
+  const commandsOffset = writeupsOffset + filteredWriteups.length;
+
   return (
-    <div className="responsive-overlay fixed inset-0 z-50 flex items-start justify-center pt-20 p-4 bg-black/70 backdrop-blur-sm animate-fadeIn">
+    <div
+      className="responsive-overlay fixed inset-0 z-50 flex items-start justify-center pt-14 sm:pt-20 p-3 sm:p-4 bg-black/70 backdrop-blur-sm animate-fadeIn"
+      onClick={closeCommandPalette}
+    >
       <div 
         role="dialog"
         aria-modal="true"
         aria-label="Paleta de comandos"
-        className="w-full max-w-2xl bg-obsidian-panel border border-obsidian-borderLight rounded-2xl shadow-2xl overflow-hidden flex flex-col"
+        className="w-full max-w-2xl bg-obsidian-panel border border-obsidian-borderLight rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85dvh]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Search Input */}
-        <div className="relative flex items-center px-4 py-3.5 border-b border-obsidian-border">
-          <Search size={18} className="text-obsidian-muted mr-3 flex-shrink-0" />
+        <div className="relative flex items-center gap-2 px-3 sm:px-4 py-3 border-b border-obsidian-border">
+          <Search size={18} className="text-obsidian-muted flex-shrink-0" aria-hidden="true" />
+          <label htmlFor="command-palette-search" className="sr-only">
+            Buscar en LESSSO
+          </label>
           <input
+            id="command-palette-search"
             ref={inputRef}
             type="text"
+            aria-label="Buscar prospecto, plataforma, correo, writeup o comando"
             maxLength={INPUT_LIMITS.SEARCH}
             value={query}
             onChange={(e) => {
@@ -214,18 +295,51 @@ export const CommandPalette: React.FC = () => {
               setSelectedIndex(0);
             }}
             onKeyDown={handleKeyDown}
-            placeholder="Buscar prospecto, página demo, plataforma, correo, alias o comando..."
+            placeholder="Buscar prospecto, plataforma, correo, writeup o comando..."
             className="w-full bg-transparent text-sm text-white placeholder-obsidian-muted/60 focus:outline-none min-w-0"
           />
-          <div className="flex items-center gap-1.5 ml-2">
-            <kbd className="px-2 py-0.5 text-[10px] font-mono bg-obsidian-surface border border-obsidian-border rounded text-obsidian-muted">
+          <div className="flex items-center gap-1.5 shrink-0">
+            <kbd className="hidden sm:inline-block px-2 py-0.5 text-[10px] font-mono bg-obsidian-surface border border-obsidian-border rounded text-obsidian-muted">
               ESC
             </kbd>
+            <button
+              type="button"
+              onClick={closeCommandPalette}
+              aria-label="Cerrar paleta de comandos"
+              className="inline-flex min-h-[36px] items-center gap-1 rounded-lg border border-obsidian-border bg-obsidian-surface px-2.5 py-1 text-xs font-medium text-obsidian-muted hover:text-white hover:border-obsidian-borderLight focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
+            >
+              <X size={14} aria-hidden="true" />
+              <span>Cerrar</span>
+            </button>
           </div>
         </div>
 
+        {/* Loading / Error Banner */}
+        {(loadingData || loadError) && (
+          <div className="px-4 py-2 border-b border-obsidian-border bg-obsidian-surface/60 flex items-center justify-between gap-2 text-[11px]">
+            {loadingData ? (
+              <span className="text-obsidian-muted" role="status">Actualizando índice de búsqueda...</span>
+            ) : (
+              <>
+                <span className="flex items-center gap-1.5 text-amber-300" role="alert">
+                  <AlertCircle size={13} className="shrink-0" aria-hidden="true" />
+                  <span>{loadError}</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => void loadSearchIndex()}
+                  className="inline-flex items-center gap-1 rounded-md border border-obsidian-border bg-obsidian-panel px-2 py-1 text-white hover:bg-obsidian-surface shrink-0"
+                >
+                  <RefreshCw size={11} aria-hidden="true" />
+                  Reintentar
+                </button>
+              </>
+            )}
+          </div>
+        )}
+
         {/* Results List */}
-        <div className="max-h-96 overflow-y-auto p-2 space-y-4">
+        <div role="listbox" aria-label="Resultados de búsqueda" className="max-h-96 overflow-y-auto p-2 space-y-4">
           {/* Prospects & Demos */}
           {filteredProspects.length > 0 && (
             <div>
@@ -237,32 +351,35 @@ export const CommandPalette: React.FC = () => {
                   const isCurrent = idx === selectedIndex;
                   const slaMeta = getSlaBadgeMeta(pr.sla_status);
                   return (
-                    <div
+                    <button
                       key={pr.id}
+                      type="button"
+                      role="option"
+                      aria-selected={isCurrent}
                       onClick={() => {
                         closeCommandPalette();
                         openInspector('prospect', pr.id);
                       }}
-                      className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs cursor-pointer transition-colors ${
+                      className={`w-full text-left flex items-center justify-between px-3 py-2 rounded-xl text-xs transition-colors ${
                         isCurrent ? 'bg-indigo-600/20 text-white border border-indigo-500/30' : 'text-obsidian-text hover:bg-obsidian-surface'
                       }`}
                     >
-                      <div className="flex items-center gap-2.5">
-                        <Briefcase size={16} className="text-amber-400 flex-shrink-0" />
-                        <div>
-                          <div className="font-medium text-white">{pr.company_name}</div>
-                          <div className="text-[11px] text-obsidian-muted">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <Briefcase size={16} className="text-amber-400 flex-shrink-0" aria-hidden="true" />
+                        <div className="min-w-0">
+                          <div className="font-medium text-white truncate">{pr.company_name}</div>
+                          <div className="text-[11px] text-obsidian-muted truncate">
                             {pr.contact_name || 'Sin contacto'} • {pr.email_address || 'Sin correo vinculado'}
                           </div>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 shrink-0">
                         <span className={`text-[10px] px-1.5 py-0.5 rounded border font-semibold ${slaMeta.badgeClass}`}>
                           {slaMeta.shortLabel}
                         </span>
-                        <ArrowRight size={13} className="text-obsidian-muted" />
+                        <ArrowRight size={13} className="text-obsidian-muted" aria-hidden="true" />
                       </div>
-                    </div>
+                    </button>
                   );
                 })}
               </div>
@@ -280,34 +397,37 @@ export const CommandPalette: React.FC = () => {
                   const globalIdx = filteredProspects.length + idx;
                   const isCurrent = globalIdx === selectedIndex;
                   return (
-                    <div
+                    <button
                       key={p.id}
+                      type="button"
+                      role="option"
+                      aria-selected={isCurrent}
                       onClick={() => {
                         closeCommandPalette();
                         openInspector('platform', p.id);
                       }}
-                      className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs cursor-pointer transition-colors ${
+                      className={`w-full text-left flex items-center justify-between px-3 py-2 rounded-xl text-xs transition-colors ${
                         isCurrent ? 'bg-indigo-600/20 text-white border border-indigo-500/30' : 'text-obsidian-text hover:bg-obsidian-surface'
                       }`}
                     >
-                      <div className="flex items-center gap-2.5">
-                        <Globe size={16} className="text-indigo-400 flex-shrink-0" />
-                        <div>
-                          <div className="font-medium text-white">{p.name}</div>
-                          <div className="text-[11px] text-obsidian-muted">
-                            {p.username || 'Sin usuario'} • {p.email_address}
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <Globe size={16} className="text-indigo-400 flex-shrink-0" aria-hidden="true" />
+                        <div className="min-w-0">
+                          <div className="font-medium text-white truncate">{p.name}</div>
+                          <div className="text-[11px] text-obsidian-muted truncate">
+                            {p.username || 'Sin usuario'} • {p.email_address || 'Sin correo'}
                           </div>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 shrink-0">
                         {p.subscription_status === 'active' && (
                           <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-mono">
                             ${p.subscription_cost} {p.currency}
                           </span>
                         )}
-                        <ArrowRight size={13} className="text-obsidian-muted" />
+                        <ArrowRight size={13} className="text-obsidian-muted" aria-hidden="true" />
                       </div>
-                    </div>
+                    </button>
                   );
                 })}
               </div>
@@ -325,27 +445,72 @@ export const CommandPalette: React.FC = () => {
                   const globalIdx = filteredProspects.length + filteredPlatforms.length + idx;
                   const isCurrent = globalIdx === selectedIndex;
                   return (
-                    <div
+                    <button
                       key={e.id}
+                      type="button"
+                      role="option"
+                      aria-selected={isCurrent}
                       onClick={() => {
                         closeCommandPalette();
                         openInspector('email', e.id);
                       }}
-                      className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs cursor-pointer transition-colors ${
+                      className={`w-full text-left flex items-center justify-between px-3 py-2 rounded-xl text-xs transition-colors ${
                         isCurrent ? 'bg-indigo-600/20 text-white border border-indigo-500/30' : 'text-obsidian-text hover:bg-obsidian-surface'
                       }`}
                     >
-                      <div className="flex items-center gap-2.5">
-                        <Mail size={16} className="text-cyan-400 flex-shrink-0" />
-                        <div>
-                          <div className="font-medium text-white">{e.address}</div>
-                          <div className="text-[11px] text-obsidian-muted">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <Mail size={16} className="text-cyan-400 flex-shrink-0" aria-hidden="true" />
+                        <div className="min-w-0">
+                          <div className="font-medium text-white truncate">{e.address}</div>
+                          <div className="text-[11px] text-obsidian-muted truncate">
                             {e.provider} • {e.platform_count} plataformas • {e.prospect_count || 0} prospectos
                           </div>
                         </div>
                       </div>
-                      <ArrowRight size={13} className="text-obsidian-muted" />
-                    </div>
+                      <ArrowRight size={13} className="text-obsidian-muted shrink-0" aria-hidden="true" />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Writeups */}
+          {filteredWriteups.length > 0 && (
+            <div>
+              <div className="px-3 py-1 text-[11px] font-semibold text-obsidian-muted tracking-wider uppercase">
+                Writeups y Pentesting
+              </div>
+              <div className="space-y-1 mt-1">
+                {filteredWriteups.map((w, idx) => {
+                  const globalIdx = writeupsOffset + idx;
+                  const isCurrent = globalIdx === selectedIndex;
+                  return (
+                    <button
+                      key={w.id}
+                      type="button"
+                      role="option"
+                      aria-selected={isCurrent}
+                      onClick={() => {
+                        closeCommandPalette();
+                        setActiveSection('writeups');
+                        if (!isUnlocked) openUnlockModal();
+                      }}
+                      className={`w-full text-left flex items-center justify-between px-3 py-2 rounded-xl text-xs transition-colors ${
+                        isCurrent ? 'bg-indigo-600/20 text-white border border-indigo-500/30' : 'text-obsidian-text hover:bg-obsidian-surface'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <BookOpen size={16} className="text-emerald-400 flex-shrink-0" aria-hidden="true" />
+                        <div className="min-w-0">
+                          <div className="font-medium text-white truncate">{w.title}</div>
+                          <div className="text-[11px] text-obsidian-muted truncate">
+                            {w.severity.toUpperCase()} • {w.status} {w.target_scope ? `• ${w.target_scope}` : ''}
+                          </div>
+                        </div>
+                      </div>
+                      <ArrowRight size={13} className="text-obsidian-muted shrink-0" aria-hidden="true" />
+                    </button>
                   );
                 })}
               </div>
@@ -360,26 +525,29 @@ export const CommandPalette: React.FC = () => {
               </div>
               <div className="space-y-1 mt-1">
                 {staticCommands.map((cmd, idx) => {
-                  const globalIdx = filteredProspects.length + filteredPlatforms.length + filteredEmails.length + idx;
+                  const globalIdx = commandsOffset + idx;
                   const isCurrent = globalIdx === selectedIndex;
                   const Icon = cmd.icon;
                   return (
-                    <div
+                    <button
                       key={cmd.id}
+                      type="button"
+                      role="option"
+                      aria-selected={isCurrent}
                       onClick={cmd.action}
-                      className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs cursor-pointer transition-colors ${
+                      className={`w-full text-left flex items-center justify-between px-3 py-2 rounded-xl text-xs transition-colors ${
                         isCurrent ? 'bg-indigo-600/20 text-white border border-indigo-500/30' : 'text-obsidian-text hover:bg-obsidian-surface'
                       }`}
                     >
-                      <div className="flex items-center gap-2.5">
-                        <Icon size={16} className={cmd.color} />
-                        <div>
-                          <div className="font-medium text-white">{cmd.title}</div>
-                          <div className="text-[11px] text-obsidian-muted">{cmd.subtitle}</div>
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <Icon size={16} className={`${cmd.color} shrink-0`} aria-hidden="true" />
+                        <div className="min-w-0">
+                          <div className="font-medium text-white truncate">{cmd.title}</div>
+                          <div className="text-[11px] text-obsidian-muted truncate">{cmd.subtitle}</div>
                         </div>
                       </div>
-                      <span className="text-[11px] text-obsidian-muted font-mono">↵ Ejecutar</span>
-                    </div>
+                      <span className="text-[11px] text-obsidian-muted font-mono shrink-0">Ejecutar</span>
+                    </button>
                   );
                 })}
               </div>
@@ -405,3 +573,4 @@ export const CommandPalette: React.FC = () => {
     </div>
   );
 };
+

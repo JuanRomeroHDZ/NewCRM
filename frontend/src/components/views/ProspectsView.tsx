@@ -1,14 +1,36 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ArrowUpRight, Briefcase, MapPinned, Plus, Search } from 'lucide-react';
+import {
+  AlertTriangle,
+  ArrowUpRight,
+  Briefcase,
+  Clock,
+  DollarSign,
+  LoaderCircle,
+  MapPinned,
+  MessageCircle,
+  Phone,
+  Plus,
+  Search,
+} from 'lucide-react';
 import { useVault } from '../../context/VaultContext';
 import { api } from '../../lib/api';
-import { getStatusMeta, PROSPECT_STATUS_OPTIONS } from '../../lib/prospectUtils';
+import { getSlaBadgeMeta, getStatusMeta, PROSPECT_STATUS_OPTIONS } from '../../lib/prospectUtils';
+import { INPUT_LIMITS } from '../../lib/validation';
+import { EmptyState } from '../common/EmptyState';
 import type { Prospect } from '../../types';
 
 export const ProspectsView: React.FC = () => {
   const {
-    setActiveSection, isUnlocked, openUnlockModal, openProspectModal,
-    openInspector, dataVersion, matchesScope,
+    setActiveSection,
+    isUnlocked,
+    openUnlockModal,
+    openProspectModal,
+    openInspector,
+    dataVersion,
+    matchesScope,
+    supportedCurrencies,
+    baseCurrency,
+    systemLocale,
   } = useVault();
   const [prospects, setProspects] = useState<Prospect[]>([]);
   const [search, setSearch] = useState('');
@@ -27,40 +49,86 @@ export const ProspectsView: React.FC = () => {
     let active = true;
     setLoading(true);
     setError('');
-    api.getProspects()
-      .then((items) => { if (active) setProspects(items); })
-      .catch(() => { if (active) setError('No se pudieron cargar los prospectos. Vuelve a intentarlo.'); })
-      .finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
+    api
+      .getProspects()
+      .then((items) => {
+        if (active) setProspects(items);
+      })
+      .catch((err) => {
+        if (active) {
+          setError(
+            err instanceof Error && err.message
+              ? err.message
+              : 'No se pudieron cargar los prospectos. Vuelve a intentarlo.'
+          );
+        }
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, [isUnlocked, dataVersion, attempt]);
 
   const visibleProspects = useMemo(() => {
     const term = search.trim().toLocaleLowerCase();
     return prospects.filter((prospect) => {
-      const text = [prospect.company_name, prospect.contact_name, prospect.contact_email]
-        .filter(Boolean).join(' ').toLocaleLowerCase();
-      return matchesScope(prospect.scope)
-        && (status === 'todos' || prospect.status === status)
-        && (!term || text.includes(term));
+      const tagText = prospect.tags?.map((t) => t.name).join(' ') || '';
+      const text = [
+        prospect.company_name,
+        prospect.contact_name,
+        prospect.contact_email,
+        prospect.phones,
+        prospect.whatsapp,
+        prospect.notes,
+        tagText,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLocaleLowerCase();
+      return (
+        matchesScope(prospect.scope) &&
+        (status === 'todos' || prospect.status === status) &&
+        (!term || text.includes(term))
+      );
     });
   }, [prospects, search, status, matchesScope]);
+
+  const formatEstimatedValue = (amount?: number, currencyCode?: string) => {
+    const code = currencyCode || baseCurrency;
+    const symbol = supportedCurrencies.find((c) => c.code === code)?.symbol || '$';
+    const formatted = Number(amount || 0).toLocaleString(systemLocale, {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2,
+    });
+    return `${symbol}${formatted} ${code}`;
+  };
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-4 p-3 sm:space-y-5 sm:p-6 lg:p-8">
       <header className="flex min-w-0 flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 items-start gap-2.5">
-          <Briefcase size={19} className="mt-1 shrink-0 text-indigo-300" />
+          <Briefcase size={19} className="mt-1 shrink-0 text-indigo-300" aria-hidden="true" />
           <div className="min-w-0">
             <h1 className="text-lg font-bold tracking-tight text-white sm:text-xl">Prospectos</h1>
             <p className="mt-0.5 text-xs text-obsidian-muted">Oportunidades y seguimiento.</p>
           </div>
         </div>
         <div className="flex max-w-full flex-wrap gap-2">
-          <button type="button" onClick={() => setActiveSection('capture')} className="inline-flex min-h-10 max-w-full items-center justify-center gap-2 rounded-lg border border-obsidian-border bg-obsidian-surface px-3 text-xs font-semibold text-obsidian-text transition-colors hover:border-indigo-500/40 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300">
-            <MapPinned size={15} className="text-indigo-300" /> Captar en mapa
+          <button
+            type="button"
+            onClick={() => setActiveSection('capture')}
+            className="inline-flex min-h-10 max-w-full items-center justify-center gap-2 rounded-lg border border-obsidian-border bg-obsidian-surface px-3 text-xs font-semibold text-obsidian-text transition-colors hover:border-indigo-500/40 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
+          >
+            <MapPinned size={15} className="text-indigo-300" aria-hidden="true" /> Captar en mapa
           </button>
-          <button type="button" onClick={() => isUnlocked ? openProspectModal() : openUnlockModal()} className="inline-flex min-h-10 max-w-full items-center justify-center gap-2 rounded-lg bg-indigo-600 px-3 text-xs font-semibold text-white transition-colors hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300">
-            <Plus size={15} /> Nuevo prospecto
+          <button
+            type="button"
+            onClick={() => (isUnlocked ? openProspectModal() : openUnlockModal())}
+            className="inline-flex min-h-10 max-w-full items-center justify-center gap-2 rounded-lg bg-indigo-600 px-3 text-xs font-semibold text-white transition-colors hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
+          >
+            <Plus size={15} aria-hidden="true" /> Nuevo prospecto
           </button>
         </div>
       </header>
@@ -68,22 +136,45 @@ export const ProspectsView: React.FC = () => {
       <section aria-labelledby="prospectos-lista" className="overflow-hidden rounded-2xl border border-obsidian-border bg-obsidian-card">
         <div className="border-b border-obsidian-border p-3 sm:p-5">
           <div className="mb-3 flex flex-wrap items-baseline justify-between gap-1">
-            <h2 id="prospectos-lista" className="text-base font-semibold text-white">Seguimiento</h2>
-            <p className="text-xs text-obsidian-muted">{visibleProspects.length} prospectos</p>
+            <h2 id="prospectos-lista" className="text-base font-semibold text-white">
+              Seguimiento
+            </h2>
+            <p aria-live="polite" className="text-xs text-obsidian-muted">
+              {visibleProspects.length} {visibleProspects.length === 1 ? 'prospecto' : 'prospectos'}
+            </p>
           </div>
           <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(12rem,0.45fr)]">
             <label className="min-w-0 text-xs font-medium text-obsidian-muted">
               Buscar
               <span className="relative mt-1.5 block">
-                <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-obsidian-muted" />
-                <input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Empresa, contacto o correo" className="min-h-11 w-full rounded-xl border border-obsidian-border bg-obsidian-bg pl-9 pr-3 text-sm text-white placeholder:text-obsidian-muted focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20" />
+                <Search
+                  size={15}
+                  className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-obsidian-muted"
+                  aria-hidden="true"
+                />
+                <input
+                  type="search"
+                  maxLength={INPUT_LIMITS.SEARCH}
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Empresa, contacto, correo, teléfono, notas o etiquetas"
+                  className="min-h-11 w-full rounded-xl border border-obsidian-border bg-obsidian-bg pl-9 pr-3 text-sm text-white placeholder:text-obsidian-muted focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                />
               </span>
             </label>
             <label className="min-w-0 text-xs font-medium text-obsidian-muted">
               Etapa
-              <select value={status} onChange={(event) => setStatus(event.target.value)} className="mt-1.5 min-h-11 w-full rounded-xl border border-obsidian-border bg-obsidian-bg px-3 text-sm text-white focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20">
+              <select
+                value={status}
+                onChange={(event) => setStatus(event.target.value)}
+                className="mt-1.5 min-h-11 w-full rounded-xl border border-obsidian-border bg-obsidian-bg px-3 text-sm text-white focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+              >
                 <option value="todos">Todas las etapas</option>
-                {PROSPECT_STATUS_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                {PROSPECT_STATUS_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
               </select>
             </label>
           </div>
@@ -92,35 +183,115 @@ export const ProspectsView: React.FC = () => {
         {!isUnlocked ? (
           <div className="p-5 text-sm text-obsidian-muted">
             Desbloquea la bóveda para consultar tus prospectos.{' '}
-            <button type="button" onClick={openUnlockModal} className="text-indigo-300 underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300">Desbloquear</button>
+            <button
+              type="button"
+              onClick={openUnlockModal}
+              className="text-indigo-300 underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
+            >
+              Desbloquear
+            </button>
           </div>
         ) : loading ? (
-          <p role="status" className="p-5 text-sm text-obsidian-muted">Cargando prospectos…</p>
+          <div role="status" className="flex items-center gap-2.5 p-6 text-sm text-obsidian-muted">
+            <LoaderCircle size={18} className="animate-spin text-indigo-300" aria-hidden="true" />
+            <span>Cargando prospectos…</span>
+          </div>
         ) : error ? (
-          <div role="alert" className="flex flex-col gap-3 p-5 text-sm text-rose-200 sm:flex-row sm:items-center sm:justify-between">
-            <span>{error}</span>
-            <button type="button" onClick={() => setAttempt((value) => value + 1)} className="min-h-10 w-fit rounded-lg border border-rose-500/30 px-3 text-xs font-semibold hover:bg-rose-500/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-rose-300">Reintentar</button>
+          <div className="p-4 sm:p-5">
+            <EmptyState
+              icon={AlertTriangle}
+              tone="error"
+              title="Error al cargar prospectos"
+              description={error}
+              actionLabel="Reintentar"
+              onAction={() => setAttempt((value) => value + 1)}
+            />
           </div>
         ) : visibleProspects.length === 0 ? (
           <div className="flex flex-col items-start gap-3 p-5 sm:p-7">
-            <p className="text-sm text-obsidian-muted">{prospects.length ? 'No hay prospectos que coincidan con los filtros.' : 'Todavía no hay prospectos en tu seguimiento.'}</p>
-            {!prospects.length && <button type="button" onClick={() => setActiveSection('capture')} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-indigo-500/25 bg-indigo-500/10 px-3 text-xs font-semibold text-indigo-200 hover:bg-indigo-500/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"><MapPinned size={14} />Buscar negocios en el mapa<ArrowUpRight size={13} /></button>}
+            <p className="text-sm text-obsidian-muted">
+              {prospects.length
+                ? 'No hay prospectos que coincidan con los filtros.'
+                : 'Todavía no hay prospectos en tu seguimiento.'}
+            </p>
+            {!prospects.length && (
+              <button
+                type="button"
+                onClick={() => setActiveSection('capture')}
+                className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-indigo-500/25 bg-indigo-500/10 px-3 text-xs font-semibold text-indigo-200 hover:bg-indigo-500/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
+              >
+                <MapPinned size={14} aria-hidden="true" />
+                Buscar negocios en el mapa
+                <ArrowUpRight size={13} aria-hidden="true" />
+              </button>
+            )}
           </div>
         ) : (
           <ul className="divide-y divide-obsidian-border" aria-label="Lista de prospectos">
             {visibleProspects.map((prospect) => {
               const statusMeta = getStatusMeta(prospect.status);
-              return <li key={prospect.id}>
-                <button type="button" onClick={() => openInspector('prospect', prospect.id)} className="flex min-h-[68px] w-full flex-wrap items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-obsidian-surface/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400 sm:px-5">
-                  <span className="min-w-0 flex-1">
-                    <span className="block break-words text-sm font-medium text-white">{prospect.company_name}</span>
-                    <span className="mt-0.5 block break-words text-xs text-obsidian-muted">{prospect.contact_name || prospect.contact_email || 'Sin contacto registrado'}</span>
-                  </span>
-                  <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-medium ${statusMeta.badgeClass}`}>
-                    <span className={`h-1.5 w-1.5 rounded-full ${statusMeta.dotClass}`} />{statusMeta.label}
-                  </span>
-                </button>
-              </li>;
+              const slaMeta = getSlaBadgeMeta(prospect.sla_status);
+              const contactPreview = prospect.whatsapp || prospect.phones;
+              const followupCount = prospect.followup_count ?? 0;
+              const maxFollowups = prospect.max_followup_attempts ?? 3;
+
+              return (
+                <li key={prospect.id}>
+                  <button
+                    type="button"
+                    onClick={() => openInspector('prospect', prospect.id)}
+                    className="flex min-h-[76px] w-full flex-col gap-2.5 px-4 py-3.5 text-left transition-colors hover:bg-obsidian-surface/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400 sm:flex-row sm:items-center sm:justify-between sm:px-5"
+                  >
+                    <div className="min-w-0 flex-1 space-y-1">
+                      <span className="block break-words text-sm font-medium text-white">
+                        {prospect.company_name}
+                      </span>
+                      <span className="block break-words text-xs text-obsidian-muted">
+                        {prospect.contact_name || prospect.contact_email || 'Sin contacto registrado'}
+                      </span>
+                      <div className="flex flex-wrap items-center gap-1.5 pt-0.5 text-[11px]">
+                        {(prospect.estimated_value || 0) > 0 && (
+                          <span className="inline-flex items-center gap-1 rounded-md border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 font-mono font-semibold text-emerald-300">
+                            <DollarSign size={10} aria-hidden="true" />
+                            <span>{formatEstimatedValue(prospect.estimated_value, prospect.currency)}</span>
+                          </span>
+                        )}
+                        <span className="inline-flex items-center gap-1 rounded-md border border-obsidian-border bg-obsidian-surface px-2 py-0.5 text-obsidian-text">
+                          <Clock size={10} className="text-indigo-300" aria-hidden="true" />
+                          <span>
+                            Seguimientos: {followupCount}/{maxFollowups}
+                          </span>
+                        </span>
+                        {contactPreview && (
+                          <span className="inline-flex max-w-full items-center gap-1 truncate rounded-md border border-obsidian-border bg-obsidian-bg px-2 py-0.5 font-mono text-obsidian-muted">
+                            {prospect.whatsapp ? (
+                              <MessageCircle size={10} className="shrink-0 text-emerald-400" aria-hidden="true" />
+                            ) : (
+                              <Phone size={10} className="shrink-0 text-cyan-400" aria-hidden="true" />
+                            )}
+                            <span className="truncate">{contactPreview}</span>
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex shrink-0 flex-wrap items-center gap-1.5 sm:justify-end">
+                      <span
+                        className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium ${slaMeta.badgeClass}`}
+                      >
+                        <span className={`h-1.5 w-1.5 rounded-full ${slaMeta.dotClass}`} aria-hidden="true" />
+                        <span>{slaMeta.shortLabel}</span>
+                      </span>
+                      <span
+                        className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-medium ${statusMeta.badgeClass}`}
+                      >
+                        <span className={`h-1.5 w-1.5 rounded-full ${statusMeta.dotClass}`} aria-hidden="true" />
+                        <span>{statusMeta.label}</span>
+                      </span>
+                    </div>
+                  </button>
+                </li>
+              );
             })}
           </ul>
         )}

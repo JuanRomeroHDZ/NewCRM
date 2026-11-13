@@ -106,8 +106,10 @@ async def update_settings(payload: SettingsUpdate, db: AsyncSession = Depends(ge
         s.canvas_style = payload.canvas_style
     if payload.budget_cap_amount is not None:
         s.budget_cap_amount = max(0.0, float(payload.budget_cap_amount))
-    if payload.budget_cap_currency is not None and payload.budget_cap_currency in ("MXN", "USD"):
-        s.budget_cap_currency = payload.budget_cap_currency
+    if payload.budget_cap_currency is not None:
+        candidate_currency = payload.budget_cap_currency.strip().upper()
+        if candidate_currency.isalpha() and 3 <= len(candidate_currency) <= 8:
+            s.budget_cap_currency = candidate_currency
     if payload.password_rotation_days_root is not None:
         s.password_rotation_days_root = int(payload.password_rotation_days_root)
     if payload.password_rotation_days_secondary is not None:
@@ -134,12 +136,30 @@ async def update_settings(payload: SettingsUpdate, db: AsyncSession = Depends(ge
         accent_color=s.accent_color,
         canvas_style=s.canvas_style,
         budget_cap_amount=float(getattr(s, "budget_cap_amount", 0.0) or 0.0),
-        budget_cap_currency=getattr(s, "budget_cap_currency", "MXN") or "MXN",
-        password_rotation_days_root=int(getattr(s, "password_rotation_days_root", 90) or 90),
-        password_rotation_days_secondary=int(getattr(s, "password_rotation_days_secondary", 180) or 180),
+        budget_cap_currency=getattr(s, "budget_cap_currency", app_settings.DEFAULT_CURRENCY) or app_settings.DEFAULT_CURRENCY,
+        password_rotation_days_root=int(getattr(s, "password_rotation_days_root", app_settings.DEFAULT_PASSWORD_ROTATION_DAYS_ROOT) or app_settings.DEFAULT_PASSWORD_ROTATION_DAYS_ROOT),
+        password_rotation_days_secondary=int(getattr(s, "password_rotation_days_secondary", app_settings.DEFAULT_PASSWORD_ROTATION_DAYS_SECONDARY) or app_settings.DEFAULT_PASSWORD_ROTATION_DAYS_SECONDARY),
         trash_retention_days=int(getattr(s, "trash_retention_days", 0) or 0),
-        max_followup_attempts=int(getattr(s, "max_followup_attempts", 3) or 3)
+        max_followup_attempts=int(getattr(s, "max_followup_attempts", app_settings.DEFAULT_MAX_FOLLOWUP_ATTEMPTS) or app_settings.DEFAULT_MAX_FOLLOWUP_ATTEMPTS)
     )
+
+
+@router.get("/runtime-config")
+async def get_settings_runtime_config(db: AsyncSession = Depends(get_db)):
+    from app.services.config_service import get_runtime_config
+    return await get_runtime_config(db)
+
+
+@router.put("/runtime-config")
+async def update_settings_runtime_config(payload: dict, db: AsyncSession = Depends(get_db)):
+    from app.services.config_service import update_runtime_config
+    updated = await update_runtime_config(db, payload)
+    await log_audit_event(
+        db, action="update", entity_type="runtime_config",
+        details="Configuración dinámica de monedas, geografía y reportes actualizada"
+    )
+    await db.commit()
+    return updated
 
 @router.get("/export")
 async def export_vault(db: AsyncSession = Depends(get_db)):

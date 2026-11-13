@@ -318,7 +318,7 @@ async def create_prospect(
         status=payload.status or ("demo_creada" if payload.workflow_type == "demo_first" else "en_cotizacion"),
         demo_url=payload.demo_url.strip() if payload.demo_url else None,
         estimated_value=max(0.0, float(payload.estimated_value or 0.0)),
-        currency=payload.currency if payload.currency in ("MXN", "USD") else "MXN",
+        currency=(payload.currency or "").strip().upper() if (payload.currency or "").strip().upper().isalpha() and 3 <= len((payload.currency or "").strip()) <= 8 else app_settings.DEFAULT_CURRENCY if "app_settings" in globals() else "MXN",
         billing_type=payload.billing_type if payload.billing_type in ("one_time", "monthly_retainer") else "one_time",
         whatsapp=payload.whatsapp.strip() if payload.whatsapp else None,
         phones=payload.phones.strip() if payload.phones else None,
@@ -385,8 +385,10 @@ async def update_prospect(
         p.demo_url = payload.demo_url.strip() if payload.demo_url else None
     if payload.estimated_value is not None:
         p.estimated_value = max(0.0, float(payload.estimated_value))
-    if payload.currency is not None and payload.currency in ("MXN", "USD"):
-        p.currency = payload.currency
+    if payload.currency is not None:
+        curr_code = payload.currency.strip().upper()
+        if curr_code.isalpha() and 3 <= len(curr_code) <= 8:
+            p.currency = curr_code
     if payload.billing_type is not None and payload.billing_type in ("one_time", "monthly_retainer"):
         p.billing_type = payload.billing_type
     if payload.whatsapp is not None:

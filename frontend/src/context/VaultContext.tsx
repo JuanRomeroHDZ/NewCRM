@@ -1,6 +1,8 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { VaultStatus, ExchangeRate, PaymentMethod, ScopeFilter, EntityScope } from '../types';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import { VaultStatus, ExchangeRate, PaymentMethod, ScopeFilter, EntityScope, RuntimeConfig, RuntimeCurrencyOption } from '../types';
 import { api, setApiVaultToken, getApiVaultToken } from '../lib/api';
+import { ConfirmDialog, ConfirmDialogOptions } from '../components/common/ConfirmDialog';
+import { PromptDialog, PromptDialogOptions } from '../components/common/PromptDialog';
 
 export type SectionType = 
   | 'dashboard'
@@ -112,9 +114,18 @@ interface VaultContextType {
   closePaymentModal: () => void;
   editingPayment?: PaymentMethod;
 
-  // Exchange Rate
+  // Exchange Rate & Runtime Config
   exchangeRate: ExchangeRate | null;
   refreshExchangeRate: () => Promise<void>;
+  runtimeConfig: RuntimeConfig | null;
+  refreshRuntimeConfig: () => Promise<void>;
+  supportedCurrencies: RuntimeCurrencyOption[];
+  baseCurrency: string;
+  systemLocale: string;
+
+  // Accessible Dialogs
+  confirm: (options: ConfirmDialogOptions) => Promise<boolean>;
+  prompt: (options: PromptDialogOptions) => Promise<string | null>;
 
   // Toasts
   toasts: Toast[];
@@ -190,9 +201,51 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [editingPayment, setEditingPayment] = useState<PaymentMethod | undefined>();
 
-  // Exchange rate & data reload
+  // Exchange rate, runtime config & data reload
   const [exchangeRate, setExchangeRate] = useState<ExchangeRate | null>(null);
+  const [runtimeConfig, setRuntimeConfig] = useState<RuntimeConfig | null>(null);
   const [dataVersion, setDataVersion] = useState(0);
+
+  // Accessible Dialog state (replaces window.confirm / window.prompt)
+  const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogOptions | null>(null);
+  const confirmResolverRef = useRef<((accepted: boolean) => void) | null>(null);
+
+  const [promptDialog, setPromptDialog] = useState<PromptDialogOptions | null>(null);
+  const promptResolverRef = useRef<((value: string | null) => void) | null>(null);
+
+  const confirm = useCallback((options: ConfirmDialogOptions): Promise<boolean> => {
+    if (confirmResolverRef.current) {
+      confirmResolverRef.current(false);
+    }
+    return new Promise<boolean>((resolve) => {
+      confirmResolverRef.current = resolve;
+      setConfirmDialog(options);
+    });
+  }, []);
+
+  const prompt = useCallback((options: PromptDialogOptions): Promise<string | null> => {
+    if (promptResolverRef.current) {
+      promptResolverRef.current(null);
+    }
+    return new Promise<string | null>((resolve) => {
+      promptResolverRef.current = resolve;
+      setPromptDialog(options);
+    });
+  }, []);
+
+  const handleConfirmResult = useCallback((accepted: boolean) => {
+    const resolve = confirmResolverRef.current;
+    confirmResolverRef.current = null;
+    setConfirmDialog(null);
+    resolve?.(accepted);
+  }, []);
+
+  const handlePromptResult = useCallback((value: string | null) => {
+    const resolve = promptResolverRef.current;
+    promptResolverRef.current = null;
+    setPromptDialog(null);
+    resolve?.(value);
+  }, []);
 
   // Toasts
   const [toasts, setToasts] = useState<Toast[]>([]);
@@ -242,6 +295,15 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   }, []);
 
+  const refreshRuntimeConfig = useCallback(async () => {
+    try {
+      const cfg = await api.getRuntimeConfig();
+      setRuntimeConfig(cfg);
+    } catch (err) {
+      console.error('Error fetching runtime config:', err);
+    }
+  }, []);
+
   useEffect(() => {
     refreshVaultStatus();
     const handleVaultLocked = () => {
@@ -255,10 +317,26 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   useEffect(() => {
     if (!isUnlocked) {
       setExchangeRate(null);
+      setRuntimeConfig(null);
       return;
     }
     refreshExchangeRate();
-  }, [isUnlocked, refreshExchangeRate]);
+    refreshRuntimeConfig();
+  }, [isUnlocked, refreshExchangeRate, refreshRuntimeConfig]);
+
+  const supportedCurrencies: RuntimeCurrencyOption[] =
+    runtimeConfig?.currencies && runtimeConfig.currencies.length > 0
+      ? runtimeConfig.currencies
+      : [
+          { code: 'MXN', name: 'Peso Mexicano', symbol: '$', is_base: true },
+          { code: 'USD', name: 'Dólar Estadounidense', symbol: 'US$', is_base: false },
+        ];
+  const baseCurrency =
+    runtimeConfig?.currency_config?.base_currency ||
+    supportedCurrencies.find((c) => c.is_base)?.code ||
+    supportedCurrencies[0]?.code ||
+    'MXN';
+  const systemLocale = runtimeConfig?.currency_config?.locale || 'es-MX';
 
   // Countdown timer for vault auto-lock
   useEffect(() => {
@@ -551,6 +629,13 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         editingPayment,
         exchangeRate,
         refreshExchangeRate,
+        runtimeConfig,
+        refreshRuntimeConfig,
+        supportedCurrencies,
+        baseCurrency,
+        systemLocale,
+        confirm,
+        prompt,
         toasts,
         showToast,
         dismissToast,
@@ -559,6 +644,29 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }}
     >
       {children}
+      <ConfirmDialog
+        open={confirmDialog !== null}
+        title={confirmDialog?.title || 'Confirmar acción'}
+        message={confirmDialog?.message || ''}
+        confirmLabel={confirmDialog?.confirmLabel}
+        cancelLabel={confirmDialog?.cancelLabel}
+        tone={confirmDialog?.tone}
+        onConfirm={() => handleConfirmResult(true)}
+        onCancel={() => handleConfirmResult(false)}
+      />
+      <PromptDialog
+        open={promptDialog !== null}
+        title={promptDialog?.title || 'Ingresar valor'}
+        message={promptDialog?.message}
+        defaultValue={promptDialog?.defaultValue}
+        placeholder={promptDialog?.placeholder}
+        confirmLabel={promptDialog?.confirmLabel}
+        cancelLabel={promptDialog?.cancelLabel}
+        required={promptDialog?.required}
+        maxLength={promptDialog?.maxLength}
+        onSubmit={(val) => handlePromptResult(val)}
+        onCancel={() => handlePromptResult(null)}
+      />
     </VaultContext.Provider>
   );
 };

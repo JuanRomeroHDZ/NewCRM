@@ -65,21 +65,19 @@ class GoogleEstimateRequest(BaseModel):
     field_mask: list[str] = Field(default_factory=list, max_length=50)
 
 @router.get("/zones")
-async def get_zones(_: bool = Depends(require_vault_unlocked)):
-    return {"zones": CrmCaptureService.get_tijuana_zones()}
+async def get_zones(
+    db: AsyncSession = Depends(get_db),
+    _: bool = Depends(require_vault_unlocked),
+):
+    return {"zones": await CrmCaptureService.get_zones(db)}
 
 
 @router.get("/map-config")
-async def get_map_config(_: bool = Depends(require_vault_unlocked)):
-    return {
-        "tile_url_template": settings.OSM_TILE_URL_TEMPLATE,
-        "center": [settings.MAP_DEFAULT_CENTER_LAT, settings.MAP_DEFAULT_CENTER_LON],
-        "zoom": settings.MAP_DEFAULT_ZOOM,
-        "default_city": settings.MAP_DEFAULT_CITY,
-        "default_zone": settings.MAP_DEFAULT_ZONE_SLUG,
-        "default_sector": settings.MAP_DEFAULT_SECTOR,
-        "attribution": settings.MAP_ATTRIBUTION_HTML,
-    }
+async def get_map_config(
+    db: AsyncSession = Depends(get_db),
+    _: bool = Depends(require_vault_unlocked),
+):
+    return await CrmCaptureService.get_map_config(db)
 
 @router.post("/search")
 async def search_leads(

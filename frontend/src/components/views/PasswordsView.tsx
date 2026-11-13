@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { 
   Key, Search, Lock, Sparkles, Plus, FileCode, Terminal, 
   KeyRound, ShieldCheck, FileText, Tag, Edit3, Trash2, Eye, EyeOff, 
-  FolderLock, Check, Briefcase, User, Users, X, Info
+  FolderLock, Check, Briefcase, User, Users, X, Info, AlertTriangle
 } from 'lucide-react';
 import { useVault } from '../../context/VaultContext';
 import { api } from '../../lib/api';
@@ -13,13 +13,15 @@ import {
 import { CopyButton } from '../common/CopyButton';
 import { SecretField } from '../common/SecretField';
 import { InfoTooltip } from '../common/InfoTooltip';
+import { EmptyState } from '../common/EmptyState';
 import { INPUT_LIMITS } from '../../lib/validation';
 
 export const PasswordsView: React.FC = () => {
   const { 
     isUnlocked, openUnlockModal, openPasswordGen, 
     openInspector, openEmailModal, openPlatformModal, dataVersion,
-    triggerDataReload, showToast, activeScope, matchesScope, defaultEntityScope 
+    triggerDataReload, showToast, activeScope, matchesScope, defaultEntityScope,
+    confirm
   } = useVault();
 
   // Active view tab
@@ -30,12 +32,14 @@ export const PasswordsView: React.FC = () => {
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [loadingCreds, setLoadingCreds] = useState(true);
+  const [credsError, setCredsError] = useState<string | null>(null);
 
   // Secure Resources State
   const [resources, setResources] = useState<SecureResource[]>([]);
   const [resSearch, setResSearch] = useState('');
   const [resTypeFilter, setResTypeFilter] = useState('all');
   const [loadingResources, setLoadingResources] = useState(true);
+  const [resError, setResError] = useState<string | null>(null);
   const [revealedResourceIds, setRevealedResourceIds] = useState<Set<string>>(new Set());
 
   // Resource Modal State
@@ -51,50 +55,93 @@ export const PasswordsView: React.FC = () => {
   const [savingResource, setSavingResource] = useState(false);
 
   const titleInputRef = useRef<HTMLInputElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
 
-  // Load Credentials
-  useEffect(() => {
+  const loadCredentials = useCallback(async () => {
     if (!isUnlocked) {
       setLoadingCreds(false);
       return;
     }
     setLoadingCreds(true);
-    api.getVaultCredentials()
-      .then(setCredentials)
-      .catch(console.error)
-      .finally(() => setLoadingCreds(false));
-  }, [isUnlocked, dataVersion]);
+    setCredsError(null);
+    try {
+      const data = await api.getVaultCredentials();
+      setCredentials(data);
+    } catch (err: any) {
+      setCredsError(err?.message || 'No se pudieron cargar las credenciales.');
+    } finally {
+      setLoadingCreds(false);
+    }
+  }, [isUnlocked]);
 
-  // Load Resources
-  useEffect(() => {
+  const loadResources = useCallback(async () => {
     if (!isUnlocked) {
       setLoadingResources(false);
       return;
     }
     setLoadingResources(true);
-    api.getResources()
-      .then(setResources)
-      .catch(console.error)
-      .finally(() => setLoadingResources(false));
-  }, [isUnlocked, dataVersion]);
+    setResError(null);
+    try {
+      const data = await api.getResources();
+      setResources(data);
+    } catch (err: any) {
+      setResError(err?.message || 'No se pudieron cargar los recursos seguros.');
+    } finally {
+      setLoadingResources(false);
+    }
+  }, [isUnlocked]);
 
-  // ESC Listener for Resource Modal
   useEffect(() => {
-    if (!isResourceModalOpen) return;
+    loadCredentials();
+  }, [loadCredentials, dataVersion]);
+
+  useEffect(() => {
+    loadResources();
+  }, [loadResources, dataVersion]);
+
+  // Modal Escape, Focus Trap & Focus Restoration
+  useEffect(() => {
+    if (!isResourceModalOpen) {
+      if (previousFocusRef.current) {
+        previousFocusRef.current.focus();
+        previousFocusRef.current = null;
+      }
+      return;
+    }
+
+    previousFocusRef.current = document.activeElement as HTMLElement | null;
+    const focusTimer = window.setTimeout(() => titleInputRef.current?.focus(), 50);
+
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         setIsResourceModalOpen(false);
+        return;
+      }
+      if (e.key === 'Tab' && dialogRef.current) {
+        const focusables = Array.from(
+          dialogRef.current.querySelectorAll<HTMLElement>(
+            'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+          )
+        ).filter((el) => el.offsetParent !== null);
+        if (focusables.length === 0) return;
+        const first = focusables[0];
+        const last = focusables[focusables.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
       }
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isResourceModalOpen]);
 
-  // Focus title input when modal opens
-  useEffect(() => {
-    if (isResourceModalOpen) {
-      setTimeout(() => titleInputRef.current?.focus(), 50);
-    }
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.clearTimeout(focusTimer);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
   }, [isResourceModalOpen]);
 
   const toggleRevealResource = (id: string) => {
@@ -190,7 +237,14 @@ export const PasswordsView: React.FC = () => {
       openUnlockModal();
       return;
     }
-    if (!window.confirm(`¿Enviar el recurso "${title}" a la papelera?`)) return;
+    const ok = await confirm({
+      title: 'Enviar recurso a la papelera',
+      message: `¿Enviar el recurso "${title}" a la papelera? Podrás restaurarlo más adelante.`,
+      confirmLabel: 'Enviar a papelera',
+      cancelLabel: 'Cancelar',
+      tone: 'warning',
+    });
+    if (!ok) return;
 
     try {
       await api.deleteResource(id);
@@ -383,7 +437,7 @@ export const PasswordsView: React.FC = () => {
       </div>
 
       {/* Main Tab Switcher */}
-      <div className="flex items-center gap-2 border-b border-obsidian-border pb-3">
+      <div className="flex flex-wrap items-center gap-2 border-b border-obsidian-border pb-3">
         <button
           type="button"
           onClick={() => setActiveTab('passwords')}
@@ -393,7 +447,7 @@ export const PasswordsView: React.FC = () => {
               : 'bg-obsidian-panel border border-obsidian-border text-obsidian-muted hover:text-white hover:bg-obsidian-surface'
           }`}
         >
-          <Key size={14} />
+          <Key size={14} aria-hidden="true" />
           <span>Contraseñas y Llaves</span>
           <span className="ml-1 text-[10px] px-1.5 py-0.2 rounded-md bg-white/10">
             {filteredCredentials.length}
@@ -409,7 +463,7 @@ export const PasswordsView: React.FC = () => {
               : 'bg-obsidian-panel border border-obsidian-border text-obsidian-muted hover:text-white hover:bg-obsidian-surface'
           }`}
         >
-          <FolderLock size={14} />
+          <FolderLock size={14} aria-hidden="true" />
           <span>Recursos Libres y Notas Seguras</span>
           <span className="ml-1 text-[10px] px-1.5 py-0.2 rounded-md bg-white/10">
             {filteredResources.length}
@@ -423,19 +477,20 @@ export const PasswordsView: React.FC = () => {
           {/* Filter toolbar */}
           <div className="p-4 rounded-2xl bg-obsidian-panel border border-obsidian-border flex flex-wrap items-center justify-between gap-3 text-xs">
             <div className="relative min-w-0 w-full flex-1 sm:min-w-[220px]">
-              <Search size={14} className="absolute left-3 top-2.5 text-obsidian-muted" />
+              <Search size={14} className="absolute left-3 top-2.5 text-obsidian-muted" aria-hidden="true" />
               <input
                 type="text"
                 maxLength={INPUT_LIMITS.SEARCH}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
+                aria-label="Buscar contraseñas por nombre, usuario o correo"
                 placeholder="Buscar contraseña por nombre, usuario o correo..."
                 className="w-full pl-8 pr-3 py-1.5 rounded-xl bg-obsidian-bg border border-obsidian-border text-xs text-white placeholder-obsidian-muted/60 focus:outline-none focus:border-indigo-500"
               />
             </div>
 
             {/* Category Pills */}
-            <div className="flex items-center gap-1.5 overflow-x-auto">
+            <div className="flex items-center gap-1.5 overflow-x-auto max-w-full">
               {[
                 { id: 'all', label: 'Todas' },
                 { id: 'email', label: 'Correos Principales' },
@@ -445,6 +500,7 @@ export const PasswordsView: React.FC = () => {
               ].map((cat) => (
                 <button
                   key={cat.id}
+                  type="button"
                   onClick={() => setCategoryFilter(cat.id)}
                   className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors whitespace-nowrap ${
                     categoryFilter === cat.id
@@ -458,9 +514,111 @@ export const PasswordsView: React.FC = () => {
             </div>
           </div>
 
-          {/* Credentials Table */}
-          {filteredCredentials.length > 0 && (
-            <div className="rounded-2xl bg-obsidian-panel border border-obsidian-border overflow-hidden">
+          {loadingCreds && (
+            <div className="space-y-3" role="status" aria-label="Cargando contraseñas y llaves">
+              <div className="h-20 rounded-2xl bg-obsidian-panel border border-obsidian-border animate-pulse" />
+              <div className="h-20 rounded-2xl bg-obsidian-panel border border-obsidian-border animate-pulse" />
+              <div className="h-20 rounded-2xl bg-obsidian-panel border border-obsidian-border animate-pulse" />
+            </div>
+          )}
+
+          {credsError && !loadingCreds && (
+            <EmptyState
+              icon={AlertTriangle}
+              tone="error"
+              title="No se pudieron cargar las credenciales"
+              description={credsError}
+              actionLabel="Reintentar"
+              onAction={loadCredentials}
+            />
+          )}
+
+          {/* Mobile Credentials Card List (<md) */}
+          {!loadingCreds && !credsError && filteredCredentials.length > 0 && (
+            <div className="space-y-3 md:hidden">
+              {filteredCredentials.map((item) => (
+                <div
+                  key={item.id}
+                  className="p-4 rounded-2xl bg-obsidian-panel border border-obsidian-border space-y-3"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (item.type === 'email_password') {
+                          openInspector('email', item.entity_id);
+                        } else {
+                          openInspector('platform', item.entity_id);
+                        }
+                      }}
+                      className="min-w-0 flex-1 text-left group"
+                    >
+                      <div className="font-semibold text-white text-sm break-words group-hover:text-indigo-300 transition-colors">
+                        {item.name}
+                      </div>
+                      {item.parent_email && (
+                        <div className="text-[11px] text-obsidian-muted font-mono break-all mt-0.5">
+                          {item.parent_email}
+                        </div>
+                      )}
+                    </button>
+                    <CopyButton
+                      value={item.credential_plain || ''}
+                      label={item.name}
+                      size="md"
+                    />
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span
+                      className={`px-2 py-0.5 rounded text-[10px] font-semibold uppercase ${
+                        item.type === 'api_key'
+                          ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20'
+                          : item.type === 'pin'
+                          ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                          : item.type === 'email_password'
+                          ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20'
+                          : 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20'
+                      }`}
+                    >
+                      {item.category}
+                    </span>
+                    {getScopeBadge(item.scope)}
+                    {item.entropy && (
+                      <span
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-obsidian-bg border border-obsidian-border"
+                        style={{ color: item.entropy.color }}
+                      >
+                        <span
+                          className="w-1.5 h-1.5 rounded-full shrink-0"
+                          style={{ backgroundColor: item.entropy.color }}
+                        />
+                        {item.entropy.label} ({item.entropy.score})
+                      </span>
+                    )}
+                  </div>
+
+                  {item.username && (
+                    <div className="text-[11px] text-obsidian-muted font-mono break-all">
+                      Usuario: <span className="text-white">{item.username}</span>
+                    </div>
+                  )}
+
+                  <div className="pt-1 border-t border-obsidian-border/60">
+                    <SecretField
+                      value={item.credential_plain}
+                      masked={item.credential_masked}
+                      label={item.name}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Desktop Credentials Table (>=md) */}
+          {!loadingCreds && !credsError && filteredCredentials.length > 0 && (
+            <div className="hidden md:block rounded-2xl bg-obsidian-panel border border-obsidian-border overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[850px] text-left text-xs text-obsidian-text">
                   <thead className="bg-obsidian-surface/60 border-b border-obsidian-border text-obsidian-muted font-semibold uppercase text-[10px] tracking-wider">
@@ -478,30 +636,36 @@ export const PasswordsView: React.FC = () => {
                     {filteredCredentials.map((item) => (
                       <tr
                         key={item.id}
-                        onClick={() => {
-                          if (item.type === 'email_password') {
-                            openInspector('email', item.entity_id);
-                          } else {
-                            openInspector('platform', item.entity_id);
-                          }
-                        }}
-                        className="hover:bg-obsidian-surface/50 transition-colors cursor-pointer group"
+                        className="hover:bg-obsidian-surface/50 transition-colors group"
                       >
                         <td className="py-3.5 px-4 max-w-[220px]">
-                          <div
-                            className="font-semibold text-white group-hover:text-indigo-300 transition-colors truncate"
-                            title={item.name}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (item.type === 'email_password') {
+                                openInspector('email', item.entity_id);
+                              } else {
+                                openInspector('platform', item.entity_id);
+                              }
+                            }}
+                            aria-label={`Inspeccionar ${item.name}`}
+                            className="w-full text-left focus:outline-none focus:underline"
                           >
-                            {item.name}
-                          </div>
-                          {item.parent_email && (
                             <div
-                              className="text-[10px] text-obsidian-muted font-mono truncate"
-                              title={item.parent_email}
+                              className="font-semibold text-white group-hover:text-indigo-300 transition-colors truncate"
+                              title={item.name}
                             >
-                              {item.parent_email}
+                              {item.name}
                             </div>
-                          )}
+                            {item.parent_email && (
+                              <div
+                                className="text-[10px] text-obsidian-muted font-mono truncate"
+                                title={item.parent_email}
+                              >
+                                {item.parent_email}
+                              </div>
+                            )}
+                          </button>
                         </td>
 
                         <td className="py-3.5 px-4 whitespace-nowrap">
@@ -531,7 +695,7 @@ export const PasswordsView: React.FC = () => {
                           {item.username || '—'}
                         </td>
 
-                        <td className="py-3.5 px-4" onClick={(e) => e.stopPropagation()}>
+                        <td className="py-3.5 px-4">
                           <SecretField
                             value={item.credential_plain}
                             masked={item.credential_masked}
@@ -558,7 +722,7 @@ export const PasswordsView: React.FC = () => {
                           )}
                         </td>
 
-                        <td className="py-3.5 px-4 text-right" onClick={(e) => e.stopPropagation()}>
+                        <td className="py-3.5 px-4 text-right">
                           <CopyButton
                             value={item.credential_plain || ''}
                             label={item.name}
@@ -573,10 +737,10 @@ export const PasswordsView: React.FC = () => {
             </div>
           )}
 
-          {filteredCredentials.length === 0 && !loadingCreds && (
-            <div className="p-12 rounded-2xl bg-obsidian-panel border border-obsidian-border text-center space-y-3">
+          {filteredCredentials.length === 0 && !loadingCreds && !credsError && (
+            <div className="p-8 sm:p-12 rounded-2xl bg-obsidian-panel border border-obsidian-border text-center space-y-3">
               <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 mx-auto">
-                <Key size={22} />
+                <Key size={22} aria-hidden="true" />
               </div>
               {credentials.length === 0 ? (
                 <>
@@ -589,7 +753,7 @@ export const PasswordsView: React.FC = () => {
                       onClick={() => openEmailModal()}
                       className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition-all"
                     >
-                      <Plus size={14} />
+                      <Plus size={14} aria-hidden="true" />
                       <span>Agregar Correo Principal</span>
                     </button>
                     <button
@@ -597,13 +761,27 @@ export const PasswordsView: React.FC = () => {
                       onClick={() => openPlatformModal()}
                       className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-obsidian-surface hover:bg-obsidian-border border border-obsidian-border text-white text-xs font-semibold transition-all"
                     >
-                      <Plus size={14} className="text-cyan-400" />
+                      <Plus size={14} className="text-cyan-400" aria-hidden="true" />
                       <span>Nueva Cuenta o Servicio</span>
                     </button>
                   </div>
                 </>
               ) : (
-                <div className="text-sm font-bold text-white">Sin coincidencias para "{search}"</div>
+                <div className="space-y-3">
+                  <div className="text-sm font-bold text-white">
+                    {search ? `Sin coincidencias para "${search}"` : 'No hay credenciales en este filtro'}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearch('');
+                      setCategoryFilter('all');
+                    }}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-obsidian-surface hover:bg-obsidian-border border border-obsidian-border text-white text-xs font-semibold transition-colors"
+                  >
+                    Limpiar filtros
+                  </button>
+                </div>
               )}
             </div>
           )}
@@ -616,19 +794,20 @@ export const PasswordsView: React.FC = () => {
           {/* Filter Toolbar */}
           <div className="p-4 rounded-2xl bg-obsidian-panel border border-obsidian-border flex flex-wrap items-center justify-between gap-3 text-xs">
             <div className="relative min-w-0 w-full flex-1 sm:min-w-[220px]">
-              <Search size={14} className="absolute left-3 top-2.5 text-obsidian-muted" />
+              <Search size={14} className="absolute left-3 top-2.5 text-obsidian-muted" aria-hidden="true" />
               <input
                 type="text"
                 maxLength={INPUT_LIMITS.SEARCH}
                 value={resSearch}
                 onChange={(e) => setResSearch(e.target.value)}
+                aria-label="Buscar recursos seguros por título, etiquetas o notas"
                 placeholder="Buscar por título, etiquetas o notas..."
                 className="w-full pl-8 pr-3 py-1.5 rounded-xl bg-obsidian-bg border border-obsidian-border text-xs text-white placeholder-obsidian-muted/60 focus:outline-none focus:border-indigo-500"
               />
             </div>
 
             {/* Type Filter Pills */}
-            <div className="flex items-center gap-1.5 overflow-x-auto">
+            <div className="flex items-center gap-1.5 overflow-x-auto max-w-full">
               {[
                 { id: 'all', label: 'Todos' },
                 { id: 'env_file', label: 'Variables (.env)' },
@@ -639,6 +818,7 @@ export const PasswordsView: React.FC = () => {
               ].map((tf) => (
                 <button
                   key={tf.id}
+                  type="button"
                   onClick={() => setResTypeFilter(tf.id)}
                   className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors whitespace-nowrap ${
                     resTypeFilter === tf.id
@@ -652,8 +832,27 @@ export const PasswordsView: React.FC = () => {
             </div>
           </div>
 
+          {loadingResources && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" role="status" aria-label="Cargando recursos seguros">
+              <div className="h-52 rounded-2xl bg-obsidian-panel border border-obsidian-border animate-pulse" />
+              <div className="h-52 rounded-2xl bg-obsidian-panel border border-obsidian-border animate-pulse" />
+              <div className="h-52 rounded-2xl bg-obsidian-panel border border-obsidian-border animate-pulse" />
+            </div>
+          )}
+
+          {resError && !loadingResources && (
+            <EmptyState
+              icon={AlertTriangle}
+              tone="error"
+              title="No se pudieron cargar los recursos seguros"
+              description={resError}
+              actionLabel="Reintentar"
+              onAction={loadResources}
+            />
+          )}
+
           {/* Resources Grid */}
-          {filteredResources.length > 0 && (
+          {!loadingResources && !resError && filteredResources.length > 0 && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {filteredResources.map((res) => {
                 const meta = getResourceTypeMeta(res.resource_type);
@@ -670,7 +869,7 @@ export const PasswordsView: React.FC = () => {
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex items-center gap-2.5 min-w-0 flex-1">
                           <div className="p-2 rounded-xl bg-obsidian-surface border border-obsidian-border text-white flex-shrink-0">
-                            <IconComp size={16} />
+                            <IconComp size={16} aria-hidden="true" />
                           </div>
                           <div className="min-w-0 flex-1">
                             <h3
@@ -695,18 +894,20 @@ export const PasswordsView: React.FC = () => {
                           <button
                             type="button"
                             onClick={() => handleOpenEditResourceModal(res)}
+                            aria-label={`Editar recurso ${res.title}`}
                             className="p-1.5 rounded-lg bg-obsidian-surface hover:bg-obsidian-border text-obsidian-muted hover:text-white transition-colors"
                             title="Editar recurso"
                           >
-                            <Edit3 size={13} />
+                            <Edit3 size={13} aria-hidden="true" />
                           </button>
                           <button
                             type="button"
                             onClick={() => handleDeleteResource(res.id, res.title)}
+                            aria-label={`Enviar recurso ${res.title} a la papelera`}
                             className="p-1.5 rounded-lg bg-obsidian-surface hover:bg-rose-500/20 text-obsidian-muted hover:text-rose-400 transition-colors"
                             title="Enviar a papelera"
                           >
-                            <Trash2 size={13} />
+                            <Trash2 size={13} aria-hidden="true" />
                           </button>
                         </div>
                       </div>
@@ -719,10 +920,11 @@ export const PasswordsView: React.FC = () => {
                             <button
                               type="button"
                               onClick={() => toggleRevealResource(res.id)}
+                              aria-label={isRevealed ? `Ocultar contenido de ${res.title}` : `Revelar contenido de ${res.title}`}
                               className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-obsidian-surface hover:bg-obsidian-border text-[10px] text-obsidian-muted hover:text-white transition-colors"
                               title={isRevealed ? 'Ocultar contenido' : 'Mostrar contenido'}
                             >
-                              {isRevealed ? <EyeOff size={11} /> : <Eye size={11} />}
+                              {isRevealed ? <EyeOff size={11} aria-hidden="true" /> : <Eye size={11} aria-hidden="true" />}
                               <span>{isRevealed ? 'Ocultar' : 'Revelar'}</span>
                             </button>
                             <CopyButton
@@ -788,10 +990,10 @@ export const PasswordsView: React.FC = () => {
           )}
 
           {/* Empty State */}
-          {filteredResources.length === 0 && !loadingResources && (
-            <div className="p-12 rounded-2xl bg-obsidian-panel border border-obsidian-border text-center space-y-3">
+          {filteredResources.length === 0 && !loadingResources && !resError && (
+            <div className="p-8 sm:p-12 rounded-2xl bg-obsidian-panel border border-obsidian-border text-center space-y-3">
               <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 mx-auto">
-                <FolderLock size={22} />
+                <FolderLock size={22} aria-hidden="true" />
               </div>
               {resources.length === 0 ? (
                 <>
@@ -807,13 +1009,27 @@ export const PasswordsView: React.FC = () => {
                       onClick={handleOpenCreateResourceModal}
                       className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md shadow-indigo-600/20 transition-all"
                     >
-                      <Plus size={14} />
-                      <span>+ Crear Recurso Seguro</span>
+                      <Plus size={14} aria-hidden="true" />
+                      <span>Crear Recurso Seguro</span>
                     </button>
                   </div>
                 </>
               ) : (
-                <div className="text-sm font-bold text-white">Sin coincidencias para "{resSearch}"</div>
+                <div className="space-y-3">
+                  <div className="text-sm font-bold text-white">
+                    {resSearch ? `Sin coincidencias para "${resSearch}"` : 'No hay recursos en este filtro'}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setResSearch('');
+                      setResTypeFilter('all');
+                    }}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-obsidian-surface hover:bg-obsidian-border border border-obsidian-border text-white text-xs font-semibold transition-colors"
+                  >
+                    Limpiar filtros
+                  </button>
+                </div>
               )}
             </div>
           )}
@@ -822,16 +1038,29 @@ export const PasswordsView: React.FC = () => {
 
       {/* SECURE RESOURCE MODAL */}
       {isResourceModalOpen && (
-        <div className="responsive-overlay fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-fadeIn">
-          <div className="relative w-full max-w-xl rounded-2xl bg-obsidian-panel border border-obsidian-border shadow-2xl overflow-hidden">
+        <div
+          className="responsive-overlay fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/75 backdrop-blur-sm animate-fadeIn"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setIsResourceModalOpen(false);
+            }
+          }}
+        >
+          <div
+            ref={dialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="resource-modal-title"
+            className="relative w-full max-w-xl rounded-2xl bg-obsidian-panel border border-obsidian-border shadow-2xl overflow-hidden"
+          >
             {/* Modal Header */}
             <div className="p-5 border-b border-obsidian-border flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <div className="p-2 rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-                  <FolderLock size={18} />
+                  <FolderLock size={18} aria-hidden="true" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-white text-sm">
+                  <h3 id="resource-modal-title" className="font-bold text-white text-sm">
                     {editingResource ? 'Editar Recurso Seguro' : 'Nuevo Recurso Seguro'}
                   </h3>
                   <div className="text-[11px] text-obsidian-muted">
@@ -841,10 +1070,11 @@ export const PasswordsView: React.FC = () => {
               </div>
               <button
                 type="button"
+                aria-label="Cerrar modal"
                 onClick={() => setIsResourceModalOpen(false)}
                 className="p-1.5 rounded-lg bg-obsidian-surface hover:bg-obsidian-border text-obsidian-muted hover:text-white transition-colors"
               >
-                <X size={16} />
+                <X size={16} aria-hidden="true" />
               </button>
             </div>
 
@@ -852,10 +1082,11 @@ export const PasswordsView: React.FC = () => {
             <form onSubmit={handleSaveResource} className="p-5 space-y-4 max-h-[80vh] overflow-y-auto text-xs">
               {/* Title */}
               <div>
-                <label className="block text-obsidian-muted font-medium mb-1.5">
+                <label htmlFor="res-title-input" className="block text-obsidian-muted font-medium mb-1.5">
                   Título o Nombre del Recurso *
                 </label>
                 <input
+                  id="res-title-input"
                   ref={titleInputRef}
                   type="text"
                   required
@@ -871,10 +1102,11 @@ export const PasswordsView: React.FC = () => {
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {/* Resource Type */}
                 <div>
-                  <label className="block text-obsidian-muted font-medium mb-1.5">
+                  <label htmlFor="res-type-select" className="block text-obsidian-muted font-medium mb-1.5">
                     Tipo de Recurso
                   </label>
                   <select
+                    id="res-type-select"
                     value={resType}
                     onChange={(e) => setResType(e.target.value as SecureResourceType)}
                     className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs focus:outline-none focus:border-indigo-500"
@@ -889,10 +1121,11 @@ export const PasswordsView: React.FC = () => {
 
                 {/* Scope */}
                 <div>
-                  <label className="block text-obsidian-muted font-medium mb-1.5">
+                  <label htmlFor="res-scope-select" className="block text-obsidian-muted font-medium mb-1.5">
                     Ámbito
                   </label>
                   <select
+                    id="res-scope-select"
                     value={resScope}
                     onChange={(e) => setResScope(e.target.value as EntityScope)}
                     className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs focus:outline-none focus:border-indigo-500"
@@ -905,10 +1138,11 @@ export const PasswordsView: React.FC = () => {
 
                 {/* Ownership */}
                 <div>
-                  <label className="block text-obsidian-muted font-medium mb-1.5">
+                  <label htmlFor="res-ownership-select" className="block text-obsidian-muted font-medium mb-1.5">
                     Destino
                   </label>
                   <select
+                    id="res-ownership-select"
                     value={resOwnership}
                     onChange={(e) => setResOwnership(e.target.value as OwnershipType)}
                     className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs focus:outline-none focus:border-indigo-500"
@@ -923,12 +1157,13 @@ export const PasswordsView: React.FC = () => {
               {/* Secret Content */}
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <label className="block text-obsidian-muted font-medium">
+                  <label htmlFor="res-content-textarea" className="block text-obsidian-muted font-medium">
                     Contenido privado
                   </label>
                   <span className="text-[10px] text-indigo-400 font-mono">100% Local</span>
                 </div>
                 <textarea
+                  id="res-content-textarea"
                   rows={6}
                   maxLength={INPUT_LIMITS.RESOURCE_CONTENT}
                   value={resContent}
@@ -940,10 +1175,11 @@ export const PasswordsView: React.FC = () => {
 
               {/* Tags */}
               <div>
-                <label className="block text-obsidian-muted font-medium mb-1.5">
+                <label htmlFor="res-tags-input" className="block text-obsidian-muted font-medium mb-1.5">
                   Etiquetas (separadas por coma)
                 </label>
                 <input
+                  id="res-tags-input"
                   type="text"
                   maxLength={INPUT_LIMITS.RESOURCE_TAGS}
                   value={resTags}
@@ -955,10 +1191,11 @@ export const PasswordsView: React.FC = () => {
 
               {/* Notes */}
               <div>
-                <label className="block text-obsidian-muted font-medium mb-1.5">
+                <label htmlFor="res-notes-textarea" className="block text-obsidian-muted font-medium mb-1.5">
                   Notas Privadas o Instrucciones Adicionales
                 </label>
                 <textarea
+                  id="res-notes-textarea"
                   rows={2}
                   maxLength={INPUT_LIMITS.NOTES}
                   value={resNotes}
@@ -982,7 +1219,7 @@ export const PasswordsView: React.FC = () => {
                   disabled={savingResource}
                   className="inline-flex items-center gap-1.5 px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-semibold shadow-md shadow-indigo-600/20 transition-all"
                 >
-                  <Check size={14} />
+                  <Check size={14} aria-hidden="true" />
                   <span>{savingResource ? 'Guardando...' : editingResource ? 'Actualizar Recurso' : 'Guardar Recurso'}</span>
                 </button>
               </div>

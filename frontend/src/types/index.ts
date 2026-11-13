@@ -92,7 +92,7 @@ export interface PlatformAccount {
   env_variables: EnvVarItem[];
   subscription_status: 'active' | 'paused' | 'cancelled' | 'free_trial' | 'free';
   subscription_cost: number;
-  currency: 'MXN' | 'USD';
+  currency: string;
   billing_cycle: 'daily' | 'weekly' | 'monthly' | 'yearly' | 'one_time' | 'free';
   start_date?: string;
   next_billing_date?: string;
@@ -135,7 +135,7 @@ export interface VaultStatus {
   accent_color: string;
   canvas_style: string;
   budget_cap_amount?: number;
-  budget_cap_currency?: 'MXN' | 'USD';
+  budget_cap_currency?: string;
   password_rotation_days_root?: number;
   password_rotation_days_secondary?: number;
   trash_retention_days?: number;
@@ -196,7 +196,7 @@ export interface BillingRecord {
   platform_id: string;
   platform_name: string;
   amount: number;
-  currency: 'MXN' | 'USD';
+  currency: string;
   billing_cycle: string;
   charged_date: string;
   billing_date?: string;
@@ -337,7 +337,7 @@ export interface Prospect {
   status: ProspectStatus;
   demo_url?: string;
   estimated_value?: number;
-  currency?: 'MXN' | 'USD';
+  currency?: string;
   billing_type?: 'one_time' | 'monthly_retainer';
   whatsapp?: string;
   phones?: string;
@@ -382,7 +382,7 @@ export interface ClientIncome {
   concept: string;
   category: IncomeCategory;
   amount: number;
-  currency: 'MXN' | 'USD';
+  currency: string;
   status: IncomeStatus;
   received_date: string;
   payment_method_label?: string | null;
@@ -401,7 +401,7 @@ export type RenewalExpirySemaphore = 'en_orden' | 'proximo' | 'urgente' | 'venci
 export interface AdvanceRenewalPayload {
   create_income?: boolean;
   charged_amount?: number;
-  charged_currency?: 'MXN' | 'USD';
+  charged_currency?: string;
   payment_method_label?: string;
   income_status?: IncomeStatus;
 }
@@ -421,7 +421,7 @@ export interface DomainRenewal {
   renewal_date: string;
   renewal_cost: number;
   client_charge_amount?: number;
-  currency: 'MXN' | 'USD';
+  currency: string;
   billing_cycle: 'yearly' | 'monthly';
   paid_by: RenewalPaidBy;
   status: RenewalStatus;
@@ -441,7 +441,7 @@ export interface OneTimeExpense {
   concept: string;
   category: string;
   amount: number;
-  currency: 'MXN' | 'USD';
+  currency: string;
   expense_date: string;
   scope: EntityScope;
   business_share_percent: number;
@@ -470,7 +470,7 @@ export interface InternalProject {
   repo_url?: string | null;
   tech_stack?: string | null;
   monthly_maintenance_cost: number;
-  currency: 'MXN' | 'USD';
+  currency: string;
   linked_platform_ids: string[];
   linked_domain_ids: string[];
   tags: TagItem[];
@@ -650,3 +650,56 @@ export interface WriteupDetail extends WriteupSummary {
   assets: WriteupAsset[];
   export_logs: WriteupExportLog[];
 }
+
+export interface RuntimeCurrencyOption {
+  code: string;
+  name: string;
+  symbol: string;
+  is_base?: boolean;
+}
+
+export interface RuntimeMapZone {
+  slug: string;
+  zone: string;
+  center: [number, number];
+  zoom: number;
+  bbox: { min_lat: number; min_lon: number; max_lat: number; max_lon: number };
+  colonias: string[];
+}
+
+export interface RuntimeMapSector {
+  id: string;
+  label: string;
+  stems: string[];
+  osm_tags: [string, string][];
+}
+
+export interface RuntimeConfig {
+  currencies: RuntimeCurrencyOption[];
+  currency_config: {
+    base_currency: string;
+    exchange_pair: { base: string; target: string };
+    locale: string;
+  };
+  map_defaults: {
+    default_city: string;
+    default_zone: string;
+    default_sector: string;
+    center: [number, number];
+    zoom: number;
+    max_search_area_deg: number;
+    full_bounds_zone_slug: string;
+    tile_url_template: string;
+    attribution: string;
+  };
+  map_zones: RuntimeMapZone[];
+  map_sectors: RuntimeMapSector[];
+  writeup_defaults: {
+    organization_name: string;
+    watermark_default: string;
+  };
+  service_types: Array<{ id: string; name: string; billing?: string; requires_quote?: boolean; requires_auth_doc?: boolean }>;
+  payment_methods: Array<{ id: string; name: string }>;
+  pipeline_stages: Array<{ id: string; label: string; is_terminal?: boolean; order?: number }>;
+}
+

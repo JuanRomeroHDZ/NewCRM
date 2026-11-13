@@ -21,7 +21,7 @@ class BudgetCreate(BaseModel):
     month: str = Field(..., pattern=r"^\d{4}-(0[1-9]|1[0-2])$")  # YYYY-MM
     category: str = Field(..., min_length=2, max_length=64)
     cap_amount: float = Field(..., gt=0, le=100000000, allow_inf_nan=False)
-    currency: str = Field(default_factory=lambda: app_settings.DEFAULT_CURRENCY, pattern="^(MXN|USD)$")
+    currency: str = Field(default_factory=lambda: app_settings.DEFAULT_CURRENCY, pattern=r"^[A-Z]{3,8}$")
 
     _valid_month = field_validator("month")(validate_year_month)
     _valid_category = field_validator("category")(validate_nonblank_input)
@@ -38,7 +38,7 @@ class DebtCreate(BaseModel):
     creditor: str = Field(..., min_length=2, max_length=128)
     original_amount: float = Field(..., gt=0, le=100000000, allow_inf_nan=False)
     current_balance: float = Field(..., ge=0, le=100000000, allow_inf_nan=False)
-    currency: str = Field(default_factory=lambda: app_settings.DEFAULT_CURRENCY, pattern="^(MXN|USD)$")
+    currency: str = Field(default_factory=lambda: app_settings.DEFAULT_CURRENCY, pattern=r"^[A-Z]{3,8}$")
     interest_rate: float = Field(0.0, ge=0, le=1000, allow_inf_nan=False)
     due_date: str | None = Field(default=None, max_length=32)
     payment_day_of_month: int | None = Field(None, ge=1, le=31)
@@ -69,7 +69,7 @@ class DebtResponse(BaseModel):
 
 class DebtPaymentCreate(BaseModel):
     amount: float = Field(..., gt=0, le=100000000, allow_inf_nan=False)
-    currency: str = Field(default_factory=lambda: app_settings.DEFAULT_CURRENCY, pattern="^(MXN|USD)$")
+    currency: str = Field(default_factory=lambda: app_settings.DEFAULT_CURRENCY, pattern=r"^[A-Z]{3,8}$")
     payment_date: str = Field(..., pattern=r"^\d{4}-\d{2}-\d{2}$")
     payment_method_id: str | None = Field(default=None, max_length=36)
     notes: str | None = Field(default=None, max_length=2000)

@@ -20,7 +20,8 @@ function toLocalDatetimeInputValue(isoStr?: string): string {
 export const ProspectModal: React.FC = () => {
   const { 
     isProspectModalOpen, closeProspectModal, editingProspectId, 
-    prospectModalDefaultEmailId, showToast, triggerDataReload, defaultEntityScope 
+    prospectModalDefaultEmailId, showToast, triggerDataReload, defaultEntityScope,
+    supportedCurrencies, baseCurrency, systemLocale
   } = useVault();
 
   const [emails, setEmails] = useState<EmailAccount[]>([]);
@@ -36,7 +37,7 @@ export const ProspectModal: React.FC = () => {
   const [status, setStatus] = useState<ProspectStatus>('demo_creada');
   const [demoUrl, setDemoUrl] = useState('');
   const [estimatedValue, setEstimatedValue] = useState<string>('0');
-  const [currency, setCurrency] = useState<'MXN' | 'USD'>('MXN');
+  const [currency, setCurrency] = useState<string>(baseCurrency || 'MXN');
   const [billingType, setBillingType] = useState<'one_time' | 'monthly_retainer'>('one_time');
   const [whatsapp, setWhatsapp] = useState('');
   const [phones, setPhones] = useState('');
@@ -63,71 +64,100 @@ export const ProspectModal: React.FC = () => {
 
   const [formError, setFormError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadingDetail, setLoadingDetail] = useState(false);
   const [showFollowupConfig, setShowFollowupConfig] = useState(false);
 
-  useEffect(() => {
-    if (isProspectModalOpen) {
-      setFormError(null);
-      setShowFollowupConfig(Boolean(editingProspectId));
-      api.getEmails().then((eList) => {
-        setEmails(eList);
-        if (prospectModalDefaultEmailId) {
-          setEmailId(prospectModalDefaultEmailId);
-        } else if (eList.length > 0 && !editingProspectId) {
-          setEmailId(eList[0].id);
-        }
-      }).catch(console.error);
+  const fallbackCurrency = baseCurrency || 'MXN';
+  const currencyOptions = supportedCurrencies.length > 0
+    ? (supportedCurrencies.some((c) => c.code === currency)
+        ? supportedCurrencies
+        : [...supportedCurrencies, { code: currency, name: currency, symbol: '' }])
+    : [{ code: fallbackCurrency, name: fallbackCurrency, symbol: '$' }];
 
-      if (editingProspectId) {
-        api.getProspectDetail(editingProspectId).then((p) => {
-          setScope(p.scope || 'business');
-          setCompanyName(p.company_name);
-          setContactName(p.contact_name || '');
-          setContactEmail(p.contact_email || '');
-          setEmailId(p.email_id || '');
-          setSpecificAlias(p.specific_alias || '');
-          setWorkflowType(p.workflow_type || 'demo_first');
-          setStatus(p.status || 'demo_creada');
-          setDemoUrl(p.demo_url || '');
-          setEstimatedValue(String(p.estimated_value ?? 0));
-          setCurrency(p.currency || 'MXN');
-          setBillingType(p.billing_type || 'one_time');
-          setWhatsapp(p.whatsapp || '');
-          setPhones(p.phones || '');
-          setMapsUrl(p.maps_url || '');
-          setSocialLinks(p.social_links || '');
-          setNotes(p.notes || '');
-          setStartedAtInput(toLocalDatetimeInputValue(p.started_at));
-          setSlaHours(String(p.sla_hours || 48));
-          setFollowupSlaHours(p.followup_sla_hours || 48);
-          setMaxFollowupAttempts(p.max_followup_attempts || 3);
-          setTags(p.tags || []);
-        }).catch((err) => showToast(err.message, 'error'));
-      } else {
-        setScope(defaultEntityScope);
-        setCompanyName('');
-        setContactName('');
-        setContactEmail('');
-        setSpecificAlias('');
-        setWorkflowType('demo_first');
-        setStatus('demo_creada');
-        setDemoUrl('');
-        setEstimatedValue('0');
-        setCurrency('MXN');
-        setBillingType('one_time');
-        setWhatsapp('');
-        setPhones('');
-        setMapsUrl('');
-        setSocialLinks('');
-        setNotes('');
-        setStartedAtInput(toLocalDatetimeInputValue());
-        setSlaHours('48');
-        setFollowupSlaHours(48);
-        setMaxFollowupAttempts(3);
-        setTags([]);
+  useEffect(() => {
+    if (!isProspectModalOpen) return;
+    setFormError(null);
+    setShowFollowupConfig(Boolean(editingProspectId));
+    api.getEmails().then((eList) => {
+      setEmails(eList);
+      if (prospectModalDefaultEmailId) {
+        setEmailId(prospectModalDefaultEmailId);
+      } else if (eList.length > 0 && !editingProspectId) {
+        setEmailId(eList[0].id);
       }
+    }).catch((err: any) => {
+      showToast(err?.message || 'No se pudieron cargar los correos disponibles.', 'warning');
+    });
+
+    if (editingProspectId) {
+      setLoadingDetail(true);
+      api.getProspectDetail(editingProspectId).then((p) => {
+        setScope(p.scope || 'business');
+        setCompanyName(p.company_name);
+        setContactName(p.contact_name || '');
+        setContactEmail(p.contact_email || '');
+        setEmailId(p.email_id || '');
+        setSpecificAlias(p.specific_alias || '');
+        setWorkflowType(p.workflow_type || 'demo_first');
+        setStatus(p.status || 'demo_creada');
+        setDemoUrl(p.demo_url || '');
+        setEstimatedValue(String(p.estimated_value ?? 0));
+        setCurrency(p.currency || fallbackCurrency);
+        setBillingType(p.billing_type || 'one_time');
+        setWhatsapp(p.whatsapp || '');
+        setPhones(p.phones || '');
+        setMapsUrl(p.maps_url || '');
+        setSocialLinks(p.social_links || '');
+        setNotes(p.notes || '');
+        setStartedAtInput(toLocalDatetimeInputValue(p.started_at));
+        setSlaHours(String(p.sla_hours || 48));
+        setFollowupSlaHours(p.followup_sla_hours || 48);
+        setMaxFollowupAttempts(p.max_followup_attempts || 3);
+        setTags(p.tags || []);
+      }).catch((err: any) => {
+        const msg = err?.message || 'Error al cargar la ficha del prospecto.';
+        setFormError(msg);
+        showToast(msg, 'error');
+      }).finally(() => {
+        setLoadingDetail(false);
+      });
+    } else {
+      setLoadingDetail(false);
+      setScope(defaultEntityScope);
+      setCompanyName('');
+      setContactName('');
+      setContactEmail('');
+      setSpecificAlias('');
+      setWorkflowType('demo_first');
+      setStatus('demo_creada');
+      setDemoUrl('');
+      setEstimatedValue('0');
+      setCurrency(fallbackCurrency);
+      setBillingType('one_time');
+      setWhatsapp('');
+      setPhones('');
+      setMapsUrl('');
+      setSocialLinks('');
+      setNotes('');
+      setStartedAtInput(toLocalDatetimeInputValue());
+      setSlaHours('48');
+      setFollowupSlaHours(48);
+      setMaxFollowupAttempts(3);
+      setTags([]);
     }
-  }, [isProspectModalOpen, editingProspectId, prospectModalDefaultEmailId, defaultEntityScope]);
+  }, [isProspectModalOpen, editingProspectId, prospectModalDefaultEmailId, defaultEntityScope, fallbackCurrency, showToast]);
+
+  useEffect(() => {
+    if (!isProspectModalOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        closeProspectModal();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isProspectModalOpen, closeProspectModal]);
 
   const handleQuickCreateEmail = async () => {
     const trimmed = newEmailAddress.trim();
@@ -172,7 +202,7 @@ export const ProspectModal: React.FC = () => {
 
     const numericValue = estimatedValue.trim() === '' ? 0 : Number(estimatedValue);
     if (!Number.isFinite(numericValue) || numericValue < 0 || numericValue > INPUT_LIMITS.ESTIMATED_VALUE) {
-      const msg = `Ingresa un valor entre 0 y ${INPUT_LIMITS.ESTIMATED_VALUE.toLocaleString('es-MX')}.`;
+      const msg = `Ingresa un valor entre 0 y ${INPUT_LIMITS.ESTIMATED_VALUE.toLocaleString(systemLocale || 'es-MX')}.`;
       setFormError(msg);
       showToast(msg, 'error');
       return;
@@ -302,7 +332,10 @@ export const ProspectModal: React.FC = () => {
   const numericSlaPreview = Number(slaHours) || 0;
 
   return (
-    <div className="responsive-overlay fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-2 sm:p-4 bg-black/75 backdrop-blur-md animate-fadeIn">
+    <div
+      className="responsive-overlay fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-2 sm:p-4 bg-black/75 backdrop-blur-md animate-fadeIn"
+      onClick={closeProspectModal}
+    >
       <div 
         role="dialog"
         aria-modal="true"
@@ -314,7 +347,7 @@ export const ProspectModal: React.FC = () => {
         <div className="flex items-center justify-between pb-4 border-b border-obsidian-border">
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="p-2 rounded-xl bg-indigo-500/10 text-indigo-400 flex-shrink-0">
-              <Rocket size={20} />
+              <Rocket size={20} aria-hidden="true" />
             </div>
             <div className="min-w-0">
               <h2 id="prospect-modal-title" className="text-base font-bold text-white tracking-tight truncate">
@@ -328,14 +361,20 @@ export const ProspectModal: React.FC = () => {
             aria-label="Cerrar formulario"
             className="p-1.5 text-obsidian-muted hover:text-white rounded-lg hover:bg-obsidian-surface flex-shrink-0"
           >
-            <X size={18} />
+            <X size={18} aria-hidden="true" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto py-4 space-y-4 text-xs pr-1">
+        <form onSubmit={handleSubmit} className="flex-1 min-h-0 flex flex-col overflow-hidden">
+          <div className="flex-1 overflow-y-auto py-4 space-y-4 text-xs pr-1">
+          {loadingDetail && (
+            <div className="p-3 rounded-xl bg-obsidian-surface border border-obsidian-border text-obsidian-muted text-xs" role="status">
+              Cargando ficha del prospecto...
+            </div>
+          )}
           {formError && (
-            <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 flex items-start gap-2 text-rose-300 text-xs">
-              <AlertCircle size={15} className="text-rose-400 flex-shrink-0 mt-0.5" />
+            <div role="alert" className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 flex items-start gap-2 text-rose-300 text-xs">
+              <AlertCircle size={15} className="text-rose-400 flex-shrink-0 mt-0.5" aria-hidden="true" />
               <span className="break-words">{formError}</span>
             </div>
           )}
@@ -576,12 +615,16 @@ export const ProspectModal: React.FC = () => {
               <div>
                 <label className="text-obsidian-muted block mb-1">Divisa</label>
                 <select
+                  aria-label="Divisa"
                   value={currency}
-                  onChange={(e) => setCurrency(e.target.value as 'MXN' | 'USD')}
+                  onChange={(e) => setCurrency(e.target.value)}
                   className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs focus:outline-none focus:border-indigo-500"
                 >
-                  <option value="MXN">MXN (Peso Mexicano)</option>
-                  <option value="USD">USD (Dólar Americano)</option>
+                  {currencyOptions.map((c) => (
+                    <option key={c.code} value={c.code}>
+                      {c.code}{c.name && c.name !== c.code ? ` (${c.name})` : ''}
+                    </option>
+                  ))}
                 </select>
               </div>
 
@@ -913,26 +956,26 @@ export const ProspectModal: React.FC = () => {
               />
             </div>
           </div>
-        </form>
+          </div>
 
-        {/* Footer */}
-        <div className="pt-3 border-t border-obsidian-border flex items-center justify-end gap-2.5">
-          <button
-            type="button"
-            onClick={closeProspectModal}
-            className="px-4 py-2 text-xs font-medium text-obsidian-muted hover:text-white"
-          >
-            Cancelar
-          </button>
-          <button
-            type="button"
-            onClick={handleSubmit}
-            disabled={loading}
-            className="inline-flex items-center gap-1.5 px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md shadow-indigo-600/20 disabled:opacity-50"
-          >
-            {loading ? 'Guardando...' : editingProspectId ? 'Guardar Cambios' : 'Registrar Prospecto'}
-          </button>
-        </div>
+          {/* Footer */}
+          <div className="pt-3 border-t border-obsidian-border flex items-center justify-end gap-2.5 flex-shrink-0">
+            <button
+              type="button"
+              onClick={closeProspectModal}
+              className="px-4 py-2 text-xs font-medium text-obsidian-muted hover:text-white"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={loading || loadingDetail}
+              className="inline-flex items-center gap-1.5 px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md shadow-indigo-600/20 disabled:opacity-50"
+            >
+              {loading ? 'Guardando...' : editingProspectId ? 'Guardar Cambios' : 'Registrar Prospecto'}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );

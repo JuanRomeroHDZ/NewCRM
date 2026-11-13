@@ -39,50 +39,72 @@ export const EmailModal: React.FC = () => {
   const [newAnswer, setNewAnswer] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadingDetail, setLoadingDetail] = useState(false);
 
   useEffect(() => {
-    if (isEmailModalOpen) {
-      setFormError(null);
-      api.getEmails().then(setExistingEmails).catch(() => {});
+    if (!isEmailModalOpen) return;
+    setFormError(null);
+    api.getEmails().then(setExistingEmails).catch((err: any) => {
+      showToast(err?.message || 'No se pudieron cargar los correos existentes.', 'warning');
+    });
 
-      if (editingEmailId) {
-        api.getEmailDetail(editingEmailId).then((e) => {
-          setAddress(e.address);
-          if (STANDARD_PROVIDERS.includes(e.provider)) {
-            setProvider(e.provider);
-            setCustomProvider('');
-          } else {
-            setProvider('__custom__');
-            setCustomProvider(e.provider || '');
-          }
-          setScope(e.scope || 'business');
-          setInboxUrl(e.inbox_url || '');
-          setPassword('');
-          setRecoveryEmailId(e.recovery_email_id || '');
-          setRecoveryPhone(e.recovery_phone || '');
-          setTwoFactorMethod(e.two_factor_method);
-          setNotes(e.notes || '');
-          setAliases(e.aliases || []);
-          setBackupCodes(e.backup_codes || []);
-          setSecurityQuestions(e.security_questions || []);
-        });
-      } else {
-        setAddress('');
-        setProvider('Google');
-        setCustomProvider('');
-        setScope(defaultEntityScope);
-        setInboxUrl(PROVIDER_DEFAULT_URLS.Google || '');
+    if (editingEmailId) {
+      setLoadingDetail(true);
+      api.getEmailDetail(editingEmailId).then((e) => {
+        setAddress(e.address);
+        if (STANDARD_PROVIDERS.includes(e.provider)) {
+          setProvider(e.provider);
+          setCustomProvider('');
+        } else {
+          setProvider('__custom__');
+          setCustomProvider(e.provider || '');
+        }
+        setScope(e.scope || 'business');
+        setInboxUrl(e.inbox_url || '');
         setPassword('');
-        setRecoveryEmailId('');
-        setRecoveryPhone('');
-        setTwoFactorMethod('authenticator');
-        setNotes('');
-        setAliases([]);
-        setBackupCodes([]);
-        setSecurityQuestions([]);
-      }
+        setRecoveryEmailId(e.recovery_email_id || '');
+        setRecoveryPhone(e.recovery_phone || '');
+        setTwoFactorMethod(e.two_factor_method);
+        setNotes(e.notes || '');
+        setAliases(e.aliases || []);
+        setBackupCodes(e.backup_codes || []);
+        setSecurityQuestions(e.security_questions || []);
+      }).catch((err: any) => {
+        const msg = err?.message || 'Error al cargar los detalles del correo.';
+        setFormError(msg);
+        showToast(msg, 'error');
+      }).finally(() => {
+        setLoadingDetail(false);
+      });
+    } else {
+      setLoadingDetail(false);
+      setAddress('');
+      setProvider('Google');
+      setCustomProvider('');
+      setScope(defaultEntityScope);
+      setInboxUrl(PROVIDER_DEFAULT_URLS.Google || '');
+      setPassword('');
+      setRecoveryEmailId('');
+      setRecoveryPhone('');
+      setTwoFactorMethod('authenticator');
+      setNotes('');
+      setAliases([]);
+      setBackupCodes([]);
+      setSecurityQuestions([]);
     }
-  }, [isEmailModalOpen, editingEmailId, defaultEntityScope]);
+  }, [isEmailModalOpen, editingEmailId, defaultEntityScope, showToast]);
+
+  useEffect(() => {
+    if (!isEmailModalOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        closeEmailModal();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isEmailModalOpen, closeEmailModal]);
 
   if (!isEmailModalOpen) return null;
 
@@ -186,18 +208,19 @@ export const EmailModal: React.FC = () => {
   return (
     <div 
       className="responsive-overlay fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-2 sm:p-4 bg-black/75 backdrop-blur-md animate-fadeIn"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="email-modal-title"
+      onClick={closeEmailModal}
     >
       <div 
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="email-modal-title"
         className="relative w-full max-w-2xl bg-obsidian-panel border border-obsidian-borderLight rounded-xl sm:rounded-2xl shadow-2xl p-4 sm:p-6 overflow-hidden max-h-[calc(100dvh-1rem)] sm:max-h-[90dvh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between pb-4 border-b border-obsidian-border">
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="p-2 rounded-xl bg-indigo-500/10 text-indigo-400 flex-shrink-0">
-              <Mail size={20} />
+              <Mail size={20} aria-hidden="true" />
             </div>
             <div className="min-w-0">
               <h2 id="email-modal-title" className="text-base font-bold text-white tracking-tight truncate">
@@ -208,16 +231,23 @@ export const EmailModal: React.FC = () => {
           <button
             type="button"
             onClick={closeEmailModal}
+            aria-label="Cerrar formulario"
             className="p-1.5 text-obsidian-muted hover:text-white rounded-lg hover:bg-obsidian-surface flex-shrink-0"
           >
-            <X size={18} />
+            <X size={18} aria-hidden="true" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto py-4 space-y-4 text-xs pr-1">
+        <form onSubmit={handleSubmit} className="flex-1 min-h-0 flex flex-col overflow-hidden">
+          <div className="flex-1 overflow-y-auto py-4 space-y-4 text-xs pr-1">
+          {loadingDetail && (
+            <div className="p-3 rounded-xl bg-obsidian-surface border border-obsidian-border text-obsidian-muted text-xs" role="status">
+              Cargando detalles del correo...
+            </div>
+          )}
           {formError && (
-            <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 flex items-start gap-2 text-rose-300 text-xs">
-              <AlertCircle size={15} className="text-rose-400 flex-shrink-0 mt-0.5" />
+            <div role="alert" className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 flex items-start gap-2 text-rose-300 text-xs">
+              <AlertCircle size={15} className="text-rose-400 flex-shrink-0 mt-0.5" aria-hidden="true" />
               <span className="break-words">{formError}</span>
             </div>
           )}
@@ -487,26 +517,27 @@ export const EmailModal: React.FC = () => {
               className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs focus:outline-none focus:border-indigo-500"
             />
           </div>
-        </form>
+          </div>
 
-        <div className="pt-3 border-t border-obsidian-border flex items-center justify-end gap-2.5">
-          <button
-            type="button"
-            onClick={closeEmailModal}
-            className="px-4 py-2 text-xs font-medium text-obsidian-muted hover:text-white"
-          >
-            Cancelar
-          </button>
-          <button
-            type="button"
-            onClick={handleSubmit}
-            disabled={loading}
-            className="inline-flex items-center gap-1.5 px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md shadow-indigo-600/20 disabled:opacity-50"
-          >
-            {loading ? 'Guardando...' : editingEmailId ? 'Guardar Cambios' : 'Guardar Correo Principal'}
-          </button>
-        </div>
+          <div className="pt-3 border-t border-obsidian-border flex items-center justify-end gap-2.5 shrink-0">
+            <button
+              type="button"
+              onClick={closeEmailModal}
+              className="px-4 py-2 text-xs font-medium text-obsidian-muted hover:text-white"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={loading || loadingDetail}
+              className="inline-flex items-center gap-1.5 px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md shadow-indigo-600/20 disabled:opacity-50"
+            >
+              {loading ? 'Guardando...' : editingEmailId ? 'Guardar Cambios' : 'Guardar Correo Principal'}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );
 };
+

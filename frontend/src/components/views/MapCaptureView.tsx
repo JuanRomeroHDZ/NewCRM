@@ -1,10 +1,25 @@
-import React, { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertCircle, ArrowUpRight, Building2, Check, ExternalLink, LoaderCircle, MapPin, Search, ShieldCheck } from 'lucide-react';
+import React, { FormEvent, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import {
+  AlertCircle,
+  ArrowUpRight,
+  Building2,
+  Check,
+  ExternalLink,
+  LoaderCircle,
+  MapPin,
+  Search,
+  ShieldCheck,
+} from 'lucide-react';
 import { useVault } from '../../context/VaultContext';
-import { api, OSMBounds, OSMLead, OSMZone } from '../../lib/api';
+import { api, OSMBounds, OSMLead, OSMMapConfig, OSMZone } from '../../lib/api';
+import { RuntimeMapSector } from '../../types';
+import { EmptyState } from '../common/EmptyState';
 
 type LeafletMap = any;
 type LeafletGlobal = Window & { L?: any };
+type CaptureMapConfig = OSMMapConfig & {
+  sectors?: RuntimeMapSector[];
+};
 
 let leafletScript: Promise<any> | null = null;
 
@@ -18,7 +33,8 @@ function loadLeaflet(): Promise<any> {
     const script = existing || document.createElement('script');
     script.dataset.leafletRuntime = 'true';
     script.src = '/vendor/leaflet/leaflet.js';
-    script.onload = () => leafletWindow.L ? resolve(leafletWindow.L) : reject(new Error('No se pudo cargar el mapa.'));
+    script.onload = () =>
+      leafletWindow.L ? resolve(leafletWindow.L) : reject(new Error('No se pudo cargar el mapa.'));
     script.onerror = () => reject(new Error('No se pudo cargar el mapa.'));
     if (!existing) document.head.appendChild(script);
   }).catch((error) => {
@@ -32,11 +48,26 @@ function loadLeaflet(): Promise<any> {
 function safeWebsite(value?: string | null): string | null {
   if (!value) return null;
   try {
-    const url = new URL(value.startsWith('http://') || value.startsWith('https://') ? value : `https://${value}`);
+    const url = new URL(
+      value.startsWith('http://') || value.startsWith('https://') ? value : `https://${value}`
+    );
     return url.protocol === 'https:' || url.protocol === 'http:' ? url.toString() : null;
   } catch {
     return null;
   }
+}
+
+function parseAttribution(raw?: string): { text: string; href?: string } {
+  if (!raw) {
+    return {
+      text: '© OpenStreetMap contributors',
+      href: 'https://www.openstreetmap.org/copyright',
+    };
+  }
+  const hrefMatch = raw.match(/href=["']([^"']+)["']/i);
+  const text = raw.replace(/<[^>]+>/g, '').trim() || '© OpenStreetMap contributors';
+  const href = hrefMatch?.[1] && /^https?:\/\//i.test(hrefMatch[1]) ? hrefMatch[1] : undefined;
+  return { text, href };
 }
 
 function popupContent(lead: OSMLead): HTMLElement {
@@ -71,15 +102,18 @@ function leadWebsite(lead: OSMLead): string | null {
 }
 
 export const MapCaptureView: React.FC = () => {
-  const { isUnlocked, openUnlockModal, showToast, triggerDataReload } = useVault();
+  const { isUnlocked, openUnlockModal, showToast, triggerDataReload, runtimeConfig } = useVault();
+  const sectorDatalistId = useId();
   const mapElementRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<LeafletMap | null>(null);
   const markerLayerRef = useRef<LeafletMap | null>(null);
   const markersRef = useRef<Map<string, LeafletMap>>(new Map());
 
   const [zones, setZones] = useState<OSMZone[]>([]);
+  const [mapSectors, setMapSectors] = useState<RuntimeMapSector[]>([]);
   const [selectedZone, setSelectedZone] = useState('');
   const [defaultCity, setDefaultCity] = useState('');
+  const [mapAttribution, setMapAttribution] = useState('');
   const [sector, setSector] = useState('');
   const [subsector, setSubsector] = useState('');
   const [mapReady, setMapReady] = useState(false);
@@ -89,8 +123,16 @@ export const MapCaptureView: React.FC = () => {
   const [resultSource, setResultSource] = useState<'cache' | 'openstreetmap' | null>(null);
   const [searchError, setSearchError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [savingId, setSavingId] = useState<string | null>(null);
+  const [savingOsmId, setSavingOsmId] = useState<string | null>(null);
   const [savedIds, setSavedIds] = useState<string[]>([]);
+  const [mobileTab, setMobileTab] = useState<'map' | 'results'>('map');
+
+  const sectors = useMemo(
+    () => (mapSectors.length > 0 ? mapSectors : runtimeConfig?.map_sectors || []),
+    [mapSectors, runtimeConfig?.map_sectors]
+  );
+
+  const parsedAttribution = useMemo(() => parseAttribution(mapAttribution), [mapAttribution]);
 
   const selectedZoneInfo = useMemo(
     () => zones.find((zone) => zone.slug === selectedZone) || null,
@@ -105,43 +147,54 @@ export const MapCaptureView: React.FC = () => {
     }
 
     let active = true;
-    let styleElement: HTMLLinkElement | null = null;
     setMapError('');
 
     const loadMap = async () => {
       try {
-        styleElement = document.createElement('link');
-        styleElement.rel = 'stylesheet';
-        styleElement.href = '/vendor/leaflet/leaflet.css';
-        styleElement.dataset.leafletStyles = 'true';
-        if (!document.querySelector('link[data-leaflet-styles]')) document.head.appendChild(styleElement);
+        if (!document.querySelector('link[data-leaflet-styles]')) {
+          const styleElement = document.createElement('link');
+          styleElement.rel = 'stylesheet';
+          styleElement.href = '/vendor/leaflet/leaflet.css';
+          styleElement.dataset.leafletStyles = 'true';
+          document.head.appendChild(styleElement);
+        }
 
-        const [config, zoneResponse, leaflet] = await Promise.all([
+        const [rawConfig, zoneResponse, leaflet] = await Promise.all([
           api.getCaptureMapConfig(),
           api.getCaptureZones(),
           loadLeaflet(),
         ]);
         if (!active || !mapElementRef.current) return;
 
+        const config = rawConfig as CaptureMapConfig;
         setZones(zoneResponse.zones);
-        setDefaultCity(config.default_city || '');
-        const initialZone = zoneResponse.zones.find((zone) => zone.slug === config.default_zone) || zoneResponse.zones[0];
+        setMapSectors(Array.isArray(config.sectors) ? config.sectors : []);
+        setDefaultCity(config.default_city || runtimeConfig?.map_defaults?.default_city || '');
+        setMapAttribution(config.attribution || runtimeConfig?.map_defaults?.attribution || '');
+
+        const initialZone =
+          zoneResponse.zones.find((zone) => zone.slug === config.default_zone) || zoneResponse.zones[0];
         if (initialZone) setSelectedZone(initialZone.slug);
         if (config.default_sector) {
           setSector((prev) => prev || config.default_sector || '');
         }
 
-        const map = leaflet.map(mapElementRef.current, {
-          zoomControl: true,
-          scrollWheelZoom: false,
-          tap: true,
-        }).setView(initialZone?.center || config.center, initialZone?.zoom || config.zoom);
-        leaflet.tileLayer(config.tile_url_template, {
-          maxZoom: 19,
-          attribution: config.attribution,
-          updateWhenIdle: true,
-          keepBuffer: 1,
-        }).addTo(map);
+        const map = leaflet
+          .map(mapElementRef.current, {
+            zoomControl: true,
+            scrollWheelZoom: false,
+          })
+          .setView(initialZone?.center || config.center, initialZone?.zoom || config.zoom);
+
+        leaflet
+          .tileLayer(config.tile_url_template, {
+            maxZoom: 19,
+            attribution: config.attribution,
+            updateWhenIdle: true,
+            keepBuffer: 1,
+          })
+          .addTo(map);
+
         const markerLayer = leaflet.layerGroup().addTo(map);
         mapRef.current = map;
         markerLayerRef.current = markerLayer;
@@ -159,7 +212,6 @@ export const MapCaptureView: React.FC = () => {
       markerLayerRef.current = null;
       markersRef.current.clear();
       setMapReady(false);
-      styleElement?.remove();
     };
   }, [isUnlocked, mapAttempt]);
 
@@ -167,6 +219,14 @@ export const MapCaptureView: React.FC = () => {
     if (!mapReady || !selectedZoneInfo || !mapRef.current) return;
     mapRef.current.flyTo(selectedZoneInfo.center, selectedZoneInfo.zoom, { duration: 0.35 });
   }, [mapReady, selectedZoneInfo]);
+
+  useEffect(() => {
+    if (mobileTab !== 'map' || !mapReady) return;
+    const raf = requestAnimationFrame(() => {
+      mapRef.current?.invalidateSize?.();
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [mobileTab, mapReady]);
 
   useEffect(() => {
     if (!mapReady || !markerLayerRef.current || !results) return;
@@ -189,30 +249,33 @@ export const MapCaptureView: React.FC = () => {
     });
   }, [mapReady, results]);
 
-  const runSearch = useCallback(async (bbox?: OSMBounds) => {
-    if (!sector.trim() || !selectedZone) {
-      setSearchError('Escribe un giro comercial y selecciona una zona.');
-      return;
-    }
-    setLoading(true);
-    setSearchError('');
-    setResults(null);
-    setResultSource(null);
-    try {
-      const response = await api.searchOSMLeads({
-        sector: sector.trim(),
-        subsector: subsector.trim() || undefined,
-        zone: selectedZone,
-        bbox,
-      });
-      setResults(response.results);
-      setResultSource(response.source);
-    } catch (error) {
-      setSearchError(error instanceof Error ? error.message : 'No se pudo completar la búsqueda.');
-    } finally {
-      setLoading(false);
-    }
-  }, [sector, subsector, selectedZone]);
+  const runSearch = useCallback(
+    async (bbox?: OSMBounds) => {
+      if (!sector.trim() || !selectedZone) {
+        setSearchError('Escribe un giro comercial y selecciona una zona.');
+        return;
+      }
+      setLoading(true);
+      setSearchError('');
+      setResults(null);
+      setResultSource(null);
+      try {
+        const response = await api.searchOSMLeads({
+          sector: sector.trim(),
+          subsector: subsector.trim() || undefined,
+          zone: selectedZone,
+          bbox,
+        });
+        setResults(response.results);
+        setResultSource(response.source);
+      } catch (error) {
+        setSearchError(error instanceof Error ? error.message : 'No se pudo completar la búsqueda.');
+      } finally {
+        setLoading(false);
+      }
+    },
+    [sector, subsector, selectedZone]
+  );
 
   const handleSearch = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -235,9 +298,19 @@ export const MapCaptureView: React.FC = () => {
     });
   };
 
+  const focusLeadOnMap = (lead: OSMLead) => {
+    setMobileTab('map');
+    requestAnimationFrame(() => {
+      mapRef.current?.invalidateSize?.();
+      mapRef.current?.panTo([lead.lat, lead.lon], { animate: true });
+      markersRef.current.get(lead.osm_id)?.openPopup();
+      mapElementRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
+  };
+
   const saveLead = async (lead: OSMLead) => {
-    if (!isUnlocked || savingId) return;
-    setSavingId(lead.osm_id);
+    if (!isUnlocked || savingOsmId === lead.osm_id || savedIds.includes(lead.osm_id)) return;
+    setSavingOsmId(lead.osm_id);
     try {
       const website = leadWebsite(lead);
       const sourceNote = [
@@ -247,7 +320,9 @@ export const MapCaptureView: React.FC = () => {
         lead.whatsapp ? `WhatsApp publicado explícitamente: ${lead.whatsapp}.` : '',
         lead.opening_hours ? `Horario publicado: ${lead.opening_hours}.` : '',
         website ? `Sitio web publicado: ${website}` : '',
-      ].filter(Boolean).join('\n');
+      ]
+        .filter(Boolean)
+        .join('\n');
       await api.createProspect({
         company_name: lead.name,
         workflow_type: 'direct_quote',
@@ -261,13 +336,13 @@ export const MapCaptureView: React.FC = () => {
         notes: sourceNote,
         tags: [{ name: `OSM: ${lead.category}` }],
       });
-      setSavedIds((current) => [...current, lead.osm_id]);
+      setSavedIds((current) => (current.includes(lead.osm_id) ? current : [...current, lead.osm_id]));
       triggerDataReload();
       showToast(`${lead.name} se guardó como prospecto nuevo.`, 'success');
     } catch (error) {
       showToast(error instanceof Error ? error.message : 'No se pudo guardar el prospecto.', 'error');
     } finally {
-      setSavingId(null);
+      setSavingOsmId((current) => (current === lead.osm_id ? null : current));
     }
   };
 
@@ -275,10 +350,16 @@ export const MapCaptureView: React.FC = () => {
     return (
       <div className="mx-auto flex max-w-3xl flex-col items-start gap-4 p-5 sm:p-8">
         <div className="rounded-2xl border border-obsidian-border bg-obsidian-card p-5 sm:p-7">
-          <ShieldCheck size={24} className="mb-3 text-indigo-300" />
+          <ShieldCheck size={24} className="mb-3 text-indigo-300" aria-hidden="true" />
           <h1 className="text-xl font-bold text-white">Captación en mapa</h1>
-          <p className="mt-2 max-w-prose text-sm leading-relaxed text-obsidian-muted">Desbloquea la bóveda para buscar negocios y guardarlos como prospectos.</p>
-          <button type="button" onClick={openUnlockModal} className="mt-5 min-h-11 rounded-xl bg-indigo-600 px-4 text-sm font-semibold text-white hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300">
+          <p className="mt-2 max-w-prose text-sm leading-relaxed text-obsidian-muted">
+            Desbloquea la bóveda para buscar negocios y guardarlos como prospectos.
+          </p>
+          <button
+            type="button"
+            onClick={openUnlockModal}
+            className="mt-5 min-h-11 rounded-xl bg-indigo-600 px-4 text-sm font-semibold text-white hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
+          >
             Desbloquear bóveda
           </button>
         </div>
@@ -290,105 +371,322 @@ export const MapCaptureView: React.FC = () => {
     <div className="mx-auto w-full max-w-7xl space-y-5 p-4 sm:p-6 lg:p-8">
       <header className="flex flex-col gap-4 rounded-2xl border border-obsidian-borderLight bg-gradient-to-r from-obsidian-card via-obsidian-panel to-obsidian-surface p-5 sm:flex-row sm:items-center sm:justify-between sm:p-7">
         <div className="flex min-w-0 items-start gap-3.5">
-          <span className="rounded-xl border border-indigo-500/25 bg-indigo-500/10 p-3 text-indigo-300">
+          <span className="rounded-xl border border-indigo-500/25 bg-indigo-500/10 p-3 text-indigo-300" aria-hidden="true">
             <MapPin size={22} />
           </span>
           <div className="min-w-0">
             <h1 className="text-xl font-bold tracking-tight text-white sm:text-2xl">Captación en mapa</h1>
             <p className="mt-1 max-w-2xl text-sm leading-relaxed text-obsidian-muted">
-              Busca negocios publicados en OpenStreetMap dentro de una zona{defaultCity ? ` de ${defaultCity}` : ''} y guarda únicamente los que quieras seguir.
+              Busca negocios publicados en OpenStreetMap dentro de una zona{defaultCity ? ` de ${defaultCity}` : ''} y
+              guarda únicamente los que quieras seguir.
             </p>
           </div>
         </div>
         <span className="inline-flex w-fit shrink-0 items-center gap-2 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-200">
-          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" /> OpenStreetMap
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" aria-hidden="true" /> OpenStreetMap
         </span>
       </header>
 
-      <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(19rem,0.75fr)] xl:items-start">
-        <section aria-label="Mapa de búsqueda" className="min-w-0 overflow-hidden rounded-2xl border border-obsidian-border bg-obsidian-card">
-          <form onSubmit={handleSearch} className="grid gap-3 border-b border-obsidian-border p-4 sm:grid-cols-[minmax(0,1fr)_minmax(11rem,0.7fr)_auto] sm:items-end">
+      {/* Mobile/Tablet (<lg) tab switch to avoid double-scroll traps */}
+      <div
+        className="flex items-center gap-1 rounded-xl border border-obsidian-border bg-obsidian-card p-1 lg:hidden"
+        role="tablist"
+        aria-label="Vista de captura en mapa"
+      >
+        <button
+          type="button"
+          role="tab"
+          aria-selected={mobileTab === 'map'}
+          onClick={() => setMobileTab('map')}
+          className={`min-h-[40px] flex-1 rounded-lg px-3 text-xs font-semibold transition-colors ${
+            mobileTab === 'map' ? 'bg-indigo-600 text-white' : 'text-obsidian-muted hover:text-white'
+          }`}
+        >
+          Mapa
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={mobileTab === 'results'}
+          onClick={() => setMobileTab('results')}
+          className={`min-h-[40px] flex-1 rounded-lg px-3 text-xs font-semibold transition-colors ${
+            mobileTab === 'results' ? 'bg-indigo-600 text-white' : 'text-obsidian-muted hover:text-white'
+          }`}
+        >
+          Resultados ({results ? results.length : 0})
+        </button>
+      </div>
+
+      <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1.25fr)_minmax(19rem,0.75fr)] lg:items-start">
+        <section
+          aria-label="Mapa de búsqueda"
+          className={`min-w-0 overflow-hidden rounded-2xl border border-obsidian-border bg-obsidian-card ${
+            mobileTab === 'map' ? 'block' : 'hidden lg:block'
+          }`}
+        >
+          <form
+            onSubmit={handleSearch}
+            className="grid gap-3 border-b border-obsidian-border p-4 sm:grid-cols-[minmax(0,1fr)_minmax(11rem,0.7fr)_auto] sm:items-end"
+          >
             <label className="min-w-0 text-xs font-medium text-obsidian-text">
               Giro o negocio
-              <input value={sector} onChange={(event) => setSector(event.target.value)} maxLength={64} required placeholder="Ej. dentistas" className="mt-1.5 min-h-11 w-full rounded-xl border border-obsidian-border bg-obsidian-bg px-3 text-sm text-white placeholder:text-obsidian-muted focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20" />
+              <input
+                list={sectors.length > 0 ? sectorDatalistId : undefined}
+                value={sector}
+                onChange={(event) => setSector(event.target.value)}
+                maxLength={64}
+                required
+                placeholder={sectors[0]?.label ? `Ej. ${sectors[0].label}` : 'Giro comercial'}
+                className="mt-1.5 min-h-11 w-full rounded-xl border border-obsidian-border bg-obsidian-bg px-3 text-sm text-white placeholder:text-obsidian-muted focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+              />
+              {sectors.length > 0 && (
+                <datalist id={sectorDatalistId}>
+                  {sectors.map((item) => (
+                    <option key={item.id} value={item.label} />
+                  ))}
+                </datalist>
+              )}
             </label>
             <label className="min-w-0 text-xs font-medium text-obsidian-text">
               Zona
-              <select value={selectedZone} onChange={(event) => { setSelectedZone(event.target.value); setResults(null); setResultSource(null); }} disabled={!zones.length} className="mt-1.5 min-h-11 w-full rounded-xl border border-obsidian-border bg-obsidian-bg px-3 text-sm text-white focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20">
-                {zones.map((zone) => <option key={zone.slug} value={zone.slug}>{zone.zone}</option>)}
+              <select
+                value={selectedZone}
+                onChange={(event) => {
+                  setSelectedZone(event.target.value);
+                  setResults(null);
+                  setResultSource(null);
+                }}
+                disabled={!zones.length}
+                className="mt-1.5 min-h-11 w-full rounded-xl border border-obsidian-border bg-obsidian-bg px-3 text-sm text-white focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+              >
+                {zones.map((zone) => (
+                  <option key={zone.slug} value={zone.slug}>
+                    {zone.zone}
+                  </option>
+                ))}
               </select>
             </label>
-            <button type="submit" disabled={loading || !mapReady} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 text-sm font-semibold text-white shadow-md shadow-indigo-950/30 transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-55 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300">
-              {loading ? <LoaderCircle size={16} className="animate-spin" /> : <Search size={16} />}
+            <button
+              type="submit"
+              disabled={loading || !mapReady}
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 text-sm font-semibold text-white shadow-md shadow-indigo-950/30 transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-55 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
+            >
+              {loading ? <LoaderCircle size={16} className="animate-spin" aria-hidden="true" /> : <Search size={16} aria-hidden="true" />}
               Buscar zona
             </button>
             <label className="min-w-0 text-xs font-medium text-obsidian-muted sm:col-span-2">
               Filtro opcional
-              <input value={subsector} onChange={(event) => setSubsector(event.target.value)} maxLength={64} placeholder="Especialidad, por ejemplo ortodoncia" className="mt-1.5 min-h-10 w-full rounded-xl border border-obsidian-border bg-obsidian-bg px-3 text-sm text-white placeholder:text-obsidian-muted focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20" />
+              <input
+                value={subsector}
+                onChange={(event) => setSubsector(event.target.value)}
+                maxLength={64}
+                placeholder="Especialidad o palabra clave opcional"
+                className="mt-1.5 min-h-10 w-full rounded-xl border border-obsidian-border bg-obsidian-bg px-3 text-sm text-white placeholder:text-obsidian-muted focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+              />
             </label>
-            <button type="button" onClick={searchMapArea} disabled={loading || !mapReady} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-obsidian-border bg-obsidian-surface px-3 text-xs font-medium text-obsidian-text hover:border-indigo-500/40 hover:text-white disabled:cursor-not-allowed disabled:opacity-55 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300">
-              <MapPin size={14} /> Buscar área visible
+            <button
+              type="button"
+              onClick={searchMapArea}
+              disabled={loading || !mapReady}
+              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-obsidian-border bg-obsidian-surface px-3 text-xs font-medium text-obsidian-text hover:border-indigo-500/40 hover:text-white disabled:cursor-not-allowed disabled:opacity-55 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
+            >
+              <MapPin size={14} aria-hidden="true" /> Buscar área visible
             </button>
+
+            {sectors.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5 sm:col-span-3" role="group" aria-label="Giros sugeridos">
+                <span className="text-[11px] text-obsidian-muted mr-1">Sugeridos:</span>
+                {sectors.map((item) => {
+                  const isActive = sector.trim().toLowerCase() === item.label.toLowerCase();
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => setSector(item.label)}
+                      aria-pressed={isActive}
+                      className={`min-h-[30px] rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400 ${
+                        isActive
+                          ? 'border-indigo-500/60 bg-indigo-500/20 text-indigo-200'
+                          : 'border-obsidian-border bg-obsidian-surface text-obsidian-muted hover:border-obsidian-borderLight hover:text-white'
+                      }`}
+                    >
+                      {item.label}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </form>
 
-          {searchError && <p role="alert" className="flex items-start gap-2 border-b border-rose-500/20 bg-rose-950/30 px-4 py-3 text-sm text-rose-200"><AlertCircle size={16} className="mt-0.5 shrink-0" />{searchError}</p>}
-          {mapError && <div role="alert" className="flex items-center justify-between gap-3 border-b border-rose-500/20 bg-rose-950/30 px-4 py-3 text-sm text-rose-200"><span>{mapError}</span><button type="button" onClick={() => { setMapError(''); setMapAttempt((value) => value + 1); }} className="min-h-9 shrink-0 underline underline-offset-4">Reintentar</button></div>}
+          {searchError && (
+            <p
+              role="alert"
+              className="flex items-start gap-2 border-b border-rose-500/20 bg-rose-950/30 px-4 py-3 text-sm text-rose-200"
+            >
+              <AlertCircle size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
+              {searchError}
+            </p>
+          )}
+          {mapError && (
+            <div className="p-4 border-b border-obsidian-border">
+              <EmptyState
+                icon={AlertCircle}
+                tone="error"
+                title="No se pudo inicializar el mapa"
+                description={mapError}
+                actionLabel="Reintentar"
+                onAction={() => {
+                  setMapError('');
+                  setMapAttempt((value) => value + 1);
+                }}
+              />
+            </div>
+          )}
 
-          <div ref={mapElementRef} role="region" aria-label={defaultCity ? `Mapa interactivo de ${defaultCity}` : 'Mapa interactivo'} className="relative z-0 h-[clamp(10rem,55dvh,20rem)] w-full bg-[#101827] sm:h-[clamp(10rem,55dvh,26.25rem)] xl:h-[clamp(10rem,60dvh,35rem)]" />
+          <div
+            ref={mapElementRef}
+            role="region"
+            aria-label={defaultCity ? `Mapa interactivo de ${defaultCity}` : 'Mapa interactivo'}
+            className="relative z-0 min-h-[300px] h-[clamp(300px,55dvh,420px)] w-full bg-[#101827] lg:h-[clamp(380px,62dvh,560px)]"
+          />
           <div className="flex flex-col gap-1.5 border-t border-obsidian-border px-4 py-3 text-[11px] leading-relaxed text-obsidian-muted sm:flex-row sm:items-center sm:justify-between">
             <span>Los datos de negocios dependen de lo publicado en OpenStreetMap.</span>
-            <a href="https://www.openstreetmap.org/fixthemap" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-indigo-300 underline-offset-4 hover:underline">Reportar un problema del mapa <ExternalLink size={11} /></a>
+            <a
+              href="https://www.openstreetmap.org/fixthemap"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-indigo-300 underline-offset-4 hover:underline"
+            >
+              Reportar un problema del mapa <ExternalLink size={11} aria-hidden="true" />
+            </a>
           </div>
         </section>
 
-        <section aria-labelledby="captura-resultados" className="min-w-0 overflow-hidden rounded-2xl border border-obsidian-border bg-obsidian-card xl:sticky xl:top-4">
+        <section
+          aria-labelledby="captura-resultados"
+          className={`min-w-0 overflow-hidden rounded-2xl border border-obsidian-border bg-obsidian-card lg:sticky lg:top-4 ${
+            mobileTab === 'results' ? 'block' : 'hidden lg:block'
+          }`}
+        >
           <div className="flex items-start justify-between gap-3 border-b border-obsidian-border p-4 sm:p-5">
             <div className="min-w-0">
-              <h2 id="captura-resultados" className="text-base font-semibold text-white">Resultados</h2>
-              <p className="mt-1 text-xs text-obsidian-muted">{results ? `${results.length} negocios encontrados` : 'Selecciona un giro y busca en el mapa.'}</p>
+              <h2 id="captura-resultados" className="text-base font-semibold text-white">
+                Resultados
+              </h2>
+              <p aria-live="polite" className="mt-1 text-xs text-obsidian-muted">
+                {results ? `${results.length} negocios encontrados` : 'Selecciona un giro y busca en el mapa.'}
+              </p>
             </div>
-            {resultSource && <span className="shrink-0 rounded-lg border border-obsidian-border bg-obsidian-surface px-2 py-1 text-[10px] font-medium text-obsidian-muted">{resultSource === 'cache' ? 'Caché' : 'Consulta reciente'}</span>}
+            {resultSource && (
+              <span className="shrink-0 rounded-lg border border-obsidian-border bg-obsidian-surface px-2 py-1 text-[10px] font-medium text-obsidian-muted">
+                {resultSource === 'cache' ? 'Caché' : 'Consulta reciente'}
+              </span>
+            )}
           </div>
 
           {loading ? (
-            <div role="status" className="flex min-h-48 flex-col items-center justify-center gap-3 p-6 text-sm text-obsidian-muted">
-              <LoaderCircle size={22} className="animate-spin text-indigo-300" /> Consultando OpenStreetMap…
+            <div
+              role="status"
+              className="flex min-h-48 flex-col items-center justify-center gap-3 p-6 text-sm text-obsidian-muted"
+            >
+              <LoaderCircle size={22} className="animate-spin text-indigo-300" aria-hidden="true" /> Consultando
+              OpenStreetMap…
             </div>
           ) : !results ? (
             <div className="flex min-h-48 flex-col items-center justify-center gap-2 p-6 text-center text-sm text-obsidian-muted">
-              <Building2 size={22} className="text-obsidian-muted/70" />
+              <Building2 size={22} className="text-obsidian-muted/70" aria-hidden="true" />
               <p>Los negocios aparecerán aquí después de una búsqueda.</p>
             </div>
           ) : results.length === 0 ? (
             <div className="flex min-h-48 flex-col items-center justify-center gap-2 p-6 text-center text-sm text-obsidian-muted">
-              <Search size={22} className="text-obsidian-muted/70" />
+              <Search size={22} className="text-obsidian-muted/70" aria-hidden="true" />
               <p>No encontramos negocios publicados en esta búsqueda. Prueba otro giro o una zona cercana.</p>
             </div>
           ) : (
-            <ul className="max-h-[min(620px,65dvh)] divide-y divide-obsidian-border overflow-y-auto">
+            <ul className="divide-y divide-obsidian-border lg:max-h-[min(620px,65dvh)] lg:overflow-y-auto">
               {results.map((lead) => {
                 const website = leadWebsite(lead);
                 const isSaved = savedIds.includes(lead.osm_id);
+                const isSavingThis = savingOsmId === lead.osm_id;
                 return (
                   <li key={lead.osm_id} className="p-4 transition-colors hover:bg-obsidian-surface/40 sm:p-5">
                     <div className="flex min-w-0 items-start justify-between gap-3">
-                      <button type="button" onClick={() => markersRef.current.get(lead.osm_id)?.openPopup()} className="min-w-0 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400">
+                      <button
+                        type="button"
+                        onClick={() => focusLeadOnMap(lead)}
+                        aria-label={`Centrar mapa en ${lead.name}`}
+                        className="min-w-0 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400"
+                      >
                         <span className="block break-words text-sm font-semibold text-white">{lead.name}</span>
-                        <span className="mt-1 block text-[11px] leading-relaxed text-obsidian-muted">{lead.category} · {lead.zone}</span>
+                        <span className="mt-1 block text-[11px] leading-relaxed text-obsidian-muted">
+                          {lead.category} · {lead.zone}
+                        </span>
                       </button>
-                      <button type="button" onClick={() => saveLead(lead)} disabled={isSaved || savingId !== null} className="inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-indigo-500/25 bg-indigo-500/10 px-2.5 text-[11px] font-semibold text-indigo-200 hover:bg-indigo-500/20 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300" aria-label={isSaved ? `${lead.name} ya está guardado` : `Guardar ${lead.name} como prospecto`}>
-                        {isSaved ? <Check size={14} /> : savingId === lead.osm_id ? <LoaderCircle size={14} className="animate-spin" /> : <ArrowUpRight size={14} />}
-                        <span>{isSaved ? 'Guardado' : 'Guardar'}</span>
+                      <button
+                        type="button"
+                        onClick={() => saveLead(lead)}
+                        disabled={isSaved || isSavingThis}
+                        className="inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-indigo-500/25 bg-indigo-500/10 px-2.5 text-[11px] font-semibold text-indigo-200 hover:bg-indigo-500/20 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
+                        aria-label={isSaved ? `${lead.name} ya está guardado` : `Guardar ${lead.name} como prospecto`}
+                      >
+                        {isSaved ? (
+                          <Check size={14} aria-hidden="true" />
+                        ) : isSavingThis ? (
+                          <LoaderCircle size={14} className="animate-spin" aria-hidden="true" />
+                        ) : (
+                          <ArrowUpRight size={14} aria-hidden="true" />
+                        )}
+                        <span>{isSaved ? 'Guardado' : isSavingThis ? 'Guardando…' : 'Guardar'}</span>
                       </button>
                     </div>
-                    {lead.address && <p className="mt-2 break-words text-xs leading-relaxed text-obsidian-muted">{lead.address}</p>}
-                    {lead.opening_hours && <p className="mt-1 break-words text-xs leading-relaxed text-obsidian-muted">Horario publicado: {lead.opening_hours}</p>}
+                    {lead.address && (
+                      <p className="mt-2 break-words text-xs leading-relaxed text-obsidian-muted">{lead.address}</p>
+                    )}
+                    {lead.opening_hours && (
+                      <p className="mt-1 break-words text-xs leading-relaxed text-obsidian-muted">
+                        Horario publicado: {lead.opening_hours}
+                      </p>
+                    )}
                     <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
-                      {lead.phone && <a href={`tel:${lead.phone.replace(/[^\d+]/g, '')}`} className="text-obsidian-text underline decoration-obsidian-border underline-offset-4 hover:text-white">{lead.phone}</a>}
-                      {lead.email && <a href={`mailto:${lead.email}`} className="max-w-full break-all text-obsidian-text underline decoration-obsidian-border underline-offset-4 hover:text-white">{lead.email}</a>}
-                      {lead.whatsapp && <span className="break-all text-emerald-300">WhatsApp publicado: {lead.whatsapp}</span>}
-                      {website && <a href={website} target="_blank" rel="noopener noreferrer" className="max-w-full break-all text-indigo-300 underline underline-offset-4 hover:text-indigo-200">Sitio web <ExternalLink size={11} className="inline" /></a>}
-                      <a href={lead.osm_url} target="_blank" rel="noopener noreferrer" className="text-obsidian-muted underline underline-offset-4 hover:text-white">OpenStreetMap <ExternalLink size={11} className="inline" /></a>
+                      {lead.phone && (
+                        <a
+                          href={`tel:${lead.phone.replace(/[^\d+]/g, '')}`}
+                          className="text-obsidian-text underline decoration-obsidian-border underline-offset-4 hover:text-white"
+                        >
+                          {lead.phone}
+                        </a>
+                      )}
+                      {lead.email && (
+                        <a
+                          href={`mailto:${lead.email}`}
+                          className="max-w-full break-all text-obsidian-text underline decoration-obsidian-border underline-offset-4 hover:text-white"
+                        >
+                          {lead.email}
+                        </a>
+                      )}
+                      {lead.whatsapp && (
+                        <span className="break-all text-emerald-300">WhatsApp publicado: {lead.whatsapp}</span>
+                      )}
+                      {website && (
+                        <a
+                          href={website}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          aria-label={`Abrir sitio web de ${lead.name}`}
+                          className="max-w-full break-all text-indigo-300 underline underline-offset-4 hover:text-indigo-200"
+                        >
+                          Sitio web <ExternalLink size={11} className="inline" aria-hidden="true" />
+                        </a>
+                      )}
+                      <a
+                        href={lead.osm_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label={`Ver ${lead.name} en OpenStreetMap`}
+                        className="text-obsidian-muted underline underline-offset-4 hover:text-white"
+                      >
+                        OpenStreetMap <ExternalLink size={11} className="inline" aria-hidden="true" />
+                      </a>
                     </div>
                   </li>
                 );
@@ -397,7 +695,28 @@ export const MapCaptureView: React.FC = () => {
           )}
 
           <div className="border-t border-obsidian-border px-4 py-3 text-[10px] leading-relaxed text-obsidian-muted sm:px-5">
-            © OpenStreetMap contributors · <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer" className="underline underline-offset-4 hover:text-white">ODbL</a>. Guarda cada prospecto manualmente después de revisar sus datos.
+            {parsedAttribution.href ? (
+              <a
+                href={parsedAttribution.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline underline-offset-4 hover:text-white"
+              >
+                {parsedAttribution.text}
+              </a>
+            ) : (
+              <span>{parsedAttribution.text}</span>
+            )}{' '}
+            ·{' '}
+            <a
+              href="https://www.openstreetmap.org/copyright"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline underline-offset-4 hover:text-white"
+            >
+              ODbL
+            </a>
+            . Guarda cada prospecto manualmente después de revisar sus datos.
           </div>
         </section>
       </div>

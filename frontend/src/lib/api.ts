@@ -5,7 +5,8 @@ import {
   OneTimeExpense, InternalProject, SecureResource,
   CoreUser, CoreLoginResponse, CoreUserCreateResponse, TotpSetupResponse, CoreUserRole,
   WriteupSummary, WriteupDetail, WriteupBoard, WriteupCitation, WriteupAsset,
-  WriteupRevision, WriteupExportFormat, WriteupStructuredFinding, WriteupStatus, WriteupSeverity
+  WriteupRevision, WriteupExportFormat, WriteupStructuredFinding, WriteupStatus, WriteupSeverity,
+  RuntimeConfig
 } from '../types';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api/v1';
@@ -636,6 +637,12 @@ export const api = {
     request<WriteupDetail>(`/writeups/${writeupId}/clone`, {
       method: 'POST',
       body: JSON.stringify(title ? { title } : {}),
+    }),
+  getRuntimeConfig: () => request<RuntimeConfig>('/settings/runtime-config'),
+  updateRuntimeConfig: (payload: Partial<RuntimeConfig>) =>
+    request<RuntimeConfig>('/settings/runtime-config', {
+      method: 'PUT',
+      body: JSON.stringify(payload),
     }),
 };
 

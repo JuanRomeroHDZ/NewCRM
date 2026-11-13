@@ -1,8 +1,20 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  Mail, Plus, ArrowRight, Smartphone, 
-  ExternalLink, Lock, Edit3, Trash2, Globe, Rocket,
-  Briefcase, User, Users
+import React, { useState, useEffect, useId } from 'react';
+import {
+  Mail,
+  Plus,
+  ArrowRight,
+  Smartphone,
+  ExternalLink,
+  Lock,
+  Edit3,
+  Trash2,
+  Globe,
+  Rocket,
+  Briefcase,
+  User,
+  Users,
+  AlertTriangle,
+  LoaderCircle,
 } from 'lucide-react';
 import { useVault } from '../../context/VaultContext';
 import { api } from '../../lib/api';
@@ -11,49 +23,80 @@ import { PlatformIcon } from '../common/PlatformIcon';
 import { CopyButton } from '../common/CopyButton';
 import { SecretField } from '../common/SecretField';
 import { InfoTooltip } from '../common/InfoTooltip';
+import { EmptyState } from '../common/EmptyState';
 import { INPUT_LIMITS } from '../../lib/validation';
 
 export const EmailsView: React.FC = () => {
-  const { 
-    openInspector, openEmailModal, openPlatformModal, openProspectModal,
-    openUnlockModal, isUnlocked, showToast, triggerDataReload, dataVersion,
-    matchesScope 
+  const {
+    openInspector,
+    openEmailModal,
+    openPlatformModal,
+    openProspectModal,
+    openUnlockModal,
+    isUnlocked,
+    showToast,
+    triggerDataReload,
+    dataVersion,
+    matchesScope,
+    confirm,
   } = useVault();
 
+  const searchInputId = useId();
   const [emails, setEmails] = useState<EmailAccount[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [attempt, setAttempt] = useState(0);
 
   const filteredEmails = emails.filter((email) => matchesScope(email.scope));
 
   useEffect(() => {
     if (!isUnlocked) {
       setEmails([]);
+      setError('');
       setLoading(false);
       return;
     }
     let active = true;
     setLoading(true);
-    api.getEmails(search || undefined)
-      .then((items) => { if (active) setEmails(items); })
-      .catch((error) => { if (active) showToast(error.message || 'No se pudieron cargar los correos.', 'error'); })
-      .finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
-  }, [search, isUnlocked, dataVersion, showToast]);
+    setError('');
+    api
+      .getEmails(search || undefined)
+      .then((items) => {
+        if (active) setEmails(items);
+      })
+      .catch((err) => {
+        if (active) {
+          setError(err instanceof Error ? err.message : 'No se pudieron cargar los correos.');
+        }
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [search, isUnlocked, dataVersion, attempt]);
 
-  const handleDeleteEmail = async (e: React.MouseEvent, email: EmailAccount) => {
-    e.stopPropagation();
+  const handleDeleteEmail = async (email: EmailAccount) => {
     if (!isUnlocked) {
       openUnlockModal();
       return;
     }
-    if (!window.confirm(`¿Enviar la cuenta de correo "${email.address}" a la papelera?`)) return;
+    const accepted = await confirm({
+      title: 'Enviar correo a la papelera',
+      message: `¿Enviar la cuenta de correo "${email.address}" a la papelera?`,
+      confirmLabel: 'Enviar a papelera',
+      tone: 'danger',
+    });
+    if (!accepted) return;
+
     try {
       await api.deleteEmail(email.id);
       showToast(`Correo "${email.address}" enviado a la papelera.`, 'info');
       triggerDataReload();
     } catch (err: any) {
-      showToast(err.message, 'error');
+      showToast(err.message || 'No se pudo eliminar el correo.', 'error');
     }
   };
 
@@ -61,9 +104,9 @@ export const EmailsView: React.FC = () => {
     <div className="mx-auto max-w-7xl min-w-0 space-y-4 p-3 sm:space-y-6 sm:p-8 animate-fadeIn">
       {/* Top Header & Search */}
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-2 min-w-0">
-          <Mail className="text-indigo-400 flex-shrink-0" size={18} />
-          <h2 className="text-base font-bold text-white tracking-tight truncate">
+        <div className="flex min-w-0 items-center gap-2">
+          <Mail className="flex-shrink-0 text-indigo-400" size={18} aria-hidden="true" />
+          <h2 aria-live="polite" className="truncate text-base font-bold tracking-tight text-white">
             Correos Principales ({filteredEmails.length})
           </h2>
           <InfoTooltip
@@ -73,12 +116,17 @@ export const EmailsView: React.FC = () => {
         </div>
 
         <div className="flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto">
+          <label htmlFor={searchInputId} className="sr-only">
+            Buscar correos por dirección o proveedor
+          </label>
           <input
-            type="text"
+            id={searchInputId}
+            type="search"
             maxLength={INPUT_LIMITS.SEARCH}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar por dirección o proveedor..."
+            aria-label="Buscar por dirección o proveedor"
             className="min-h-10 min-w-0 flex-1 rounded-lg border border-obsidian-border bg-obsidian-panel px-3 text-xs text-white placeholder-obsidian-muted/60 focus:border-indigo-500 focus:outline-none sm:w-64 sm:flex-none"
           />
           <button
@@ -90,9 +138,9 @@ export const EmailsView: React.FC = () => {
                 openEmailModal();
               }
             }}
-            className="inline-flex min-h-10 max-w-full items-center gap-1.5 rounded-lg bg-indigo-600 px-3 text-left text-xs font-semibold text-white transition-colors hover:bg-indigo-500"
+            className="inline-flex min-h-10 max-w-full items-center gap-1.5 rounded-lg bg-indigo-600 px-3 text-left text-xs font-semibold text-white transition-colors hover:bg-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
           >
-            <Plus size={14} />
+            <Plus size={14} aria-hidden="true" />
             <span>Nuevo correo</span>
           </button>
         </div>
@@ -100,81 +148,114 @@ export const EmailsView: React.FC = () => {
 
       {/* Level 2 Security Alert banner if locked */}
       {!isUnlocked && (
-        <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/25 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-3 text-xs text-amber-200 min-w-0">
-            <Lock size={16} className="text-amber-400 flex-shrink-0" />
-            <span className="truncate">
+        <div className="flex flex-col justify-between gap-3 rounded-2xl border border-amber-500/25 bg-amber-500/10 p-4 sm:flex-row sm:items-center">
+          <div className="flex min-w-0 items-start gap-3 text-xs text-amber-200 sm:items-center">
+            <Lock size={16} className="mt-0.5 flex-shrink-0 text-amber-400 sm:mt-0" aria-hidden="true" />
+            <span className="leading-relaxed">
               Bóveda bloqueada. Desbloquea con tu contraseña de acceso para crear, editar o revelar secretos.
             </span>
           </div>
           <button
+            type="button"
             onClick={openUnlockModal}
-            className="px-3.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold whitespace-nowrap self-end sm:self-auto flex-shrink-0"
+            className="min-h-[38px] flex-shrink-0 self-end rounded-lg bg-indigo-600 px-3.5 py-1.5 text-xs font-semibold text-white whitespace-nowrap hover:bg-indigo-500 sm:self-auto"
           >
             Desbloquear Bóveda
           </button>
         </div>
       )}
 
+      {/* Loading State */}
+      {loading && (
+        <div
+          role="status"
+          className="flex items-center justify-center gap-2.5 rounded-2xl border border-obsidian-border bg-obsidian-panel p-8 text-xs text-obsidian-muted"
+        >
+          <LoaderCircle size={18} className="animate-spin text-indigo-400" aria-hidden="true" />
+          <span>Cargando correos principales…</span>
+        </div>
+      )}
+
+      {/* Error State */}
+      {!loading && error && (
+        <EmptyState
+          icon={AlertTriangle}
+          tone="error"
+          title="No se pudieron cargar los correos"
+          description={error}
+          actionLabel="Reintentar"
+          onAction={() => setAttempt((value) => value + 1)}
+        />
+      )}
+
       {/* Emails Cards Grid */}
-      {filteredEmails.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {!loading && !error && filteredEmails.length > 0 && (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           {filteredEmails.map((email) => (
-            <div
+            <article
               key={email.id}
-              onClick={() => openInspector('email', email.id)}
-              className="group flex min-w-0 cursor-pointer flex-col justify-between gap-3 overflow-hidden rounded-xl border border-obsidian-border bg-obsidian-panel p-3 transition-colors hover:border-obsidian-borderLight sm:p-4"
+              className="group flex min-w-0 flex-col justify-between gap-3 overflow-hidden rounded-xl border border-obsidian-border bg-obsidian-panel p-3 transition-colors hover:border-obsidian-borderLight sm:p-4"
             >
               {/* Upper part */}
               <div className="min-w-0">
                 <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                  <button
+                    type="button"
+                    onClick={() => openInspector('email', email.id)}
+                    aria-label={`Ver detalles de ${email.address}`}
+                    className="flex min-w-0 flex-1 items-center gap-3 rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                  >
                     <PlatformIcon name={email.provider} size="md" />
                     <div className="min-w-0 flex-1">
                       <h3
-                        className="font-bold text-white text-sm group-hover:text-indigo-300 transition-colors truncate select-all"
+                        className="truncate text-sm font-bold text-white transition-colors group-hover:text-indigo-300"
                         title={email.address}
                       >
                         {email.address}
                       </h3>
-                      <div className="text-[11px] text-obsidian-muted flex flex-wrap items-center gap-2 mt-0.5">
+                      <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px] text-obsidian-muted">
                         <span className="truncate">{email.provider}</span>
-                        <span>•</span>
-                        <span className="text-indigo-400 font-semibold">{email.platform_count} plataforma(s)</span>
-                        <span>•</span>
-                        <span className="text-cyan-400 font-semibold">{email.prospect_count || 0} prospecto(s)</span>
-                        <span>•</span>
+                        <span aria-hidden="true">•</span>
+                        <span className="font-semibold text-indigo-400">{email.platform_count} plataforma(s)</span>
+                        <span aria-hidden="true">•</span>
+                        <span className="font-semibold text-cyan-400">{email.prospect_count || 0} prospecto(s)</span>
+                        <span aria-hidden="true">•</span>
                         {email.scope === 'personal' ? (
-                          <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                            <User size={9} />
+                          <span className="inline-flex items-center gap-1 rounded border border-emerald-500/20 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-400">
+                            <User size={9} aria-hidden="true" />
                             <span>Personal</span>
                           </span>
                         ) : email.scope === 'shared' ? (
-                          <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[10px] font-semibold bg-purple-500/10 text-purple-400 border border-purple-500/20">
-                            <Users size={9} />
+                          <span className="inline-flex items-center gap-1 rounded border border-purple-500/20 bg-purple-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-purple-400">
+                            <Users size={9} aria-hidden="true" />
                             <span>Compartido</span>
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[10px] font-semibold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-                            <Briefcase size={9} />
+                          <span className="inline-flex items-center gap-1 rounded border border-indigo-500/20 bg-indigo-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-400">
+                            <Briefcase size={9} aria-hidden="true" />
                             <span>Empresa</span>
                           </span>
                         )}
                       </div>
                     </div>
-                  </div>
+                  </button>
 
-                  <div className="flex items-center gap-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-                    <CopyButton value={email.address} label="Dirección de correo" />
+                  <div className="flex flex-shrink-0 items-center gap-1">
+                    <CopyButton
+                      value={email.address}
+                      label="Dirección de correo"
+                      className="min-h-[36px] min-w-[36px]"
+                    />
                     {email.inbox_url && (
                       <a
                         href={email.inbox_url}
                         target="_blank"
-                        rel="noreferrer"
+                        rel="noopener noreferrer"
                         title="Abrir bandeja de entrada (Webmail)"
-                        className="p-1.5 text-obsidian-muted hover:text-white rounded-lg hover:bg-obsidian-surface transition-colors"
+                        aria-label={`Abrir bandeja de entrada de ${email.address}`}
+                        className="inline-flex min-h-[36px] min-w-[36px] items-center justify-center rounded-lg text-obsidian-muted transition-colors hover:bg-obsidian-surface hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
                       >
-                        <ExternalLink size={14} />
+                        <ExternalLink size={14} aria-hidden="true" />
                       </a>
                     )}
                     <button
@@ -184,77 +265,75 @@ export const EmailsView: React.FC = () => {
                         else openEmailModal(email.id);
                       }}
                       title="Editar cuenta de correo"
-                      className="p-1.5 text-obsidian-muted hover:text-white rounded-lg hover:bg-obsidian-surface transition-colors"
+                      aria-label={`Editar ${email.address}`}
+                      className="inline-flex min-h-[36px] min-w-[36px] items-center justify-center rounded-lg text-obsidian-muted transition-colors hover:bg-obsidian-surface hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
                     >
-                      <Edit3 size={14} />
+                      <Edit3 size={14} aria-hidden="true" />
                     </button>
                     <button
                       type="button"
-                      onClick={(e) => handleDeleteEmail(e, email)}
+                      onClick={() => handleDeleteEmail(email)}
                       title="Eliminar cuenta de correo"
-                      className="p-1.5 text-obsidian-muted hover:text-rose-400 rounded-lg hover:bg-obsidian-surface transition-colors"
+                      aria-label={`Eliminar ${email.address}`}
+                      className="inline-flex min-h-[36px] min-w-[36px] items-center justify-center rounded-lg text-obsidian-muted transition-colors hover:bg-obsidian-surface hover:text-rose-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
                     >
-                      <Trash2 size={14} />
+                      <Trash2 size={14} aria-hidden="true" />
                     </button>
                   </div>
                 </div>
 
                 {/* Middle Credential / Password bar */}
                 <div className="mt-3 flex min-w-0 flex-wrap items-center justify-between gap-2 border-t border-obsidian-border/60 pt-3 text-xs">
-                  <span className="text-obsidian-muted flex-shrink-0">Contraseña:</span>
-                  <SecretField
-                    value={email.password_plain}
-                    masked={email.password_masked}
-                    label="Contraseña"
-                  />
+                  <span className="flex-shrink-0 text-obsidian-muted">Contraseña:</span>
+                  <SecretField value={email.password_plain} masked={email.password_masked} label="Contraseña" />
                 </div>
 
                 {/* Recovery chain & Quick Correlation Actions */}
-                <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-[11px] min-w-0">
-                  <div className="flex flex-wrap items-center gap-2 min-w-0 flex-1">
+                <div className="mt-3 flex min-w-0 flex-wrap items-center justify-between gap-2 text-[11px]">
+                  <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
                     {email.recovery_email_address ? (
                       <div
-                        className="flex max-w-full min-w-0 items-center gap-1.5 text-cyan-300"
+                        className="flex min-w-0 max-w-full items-center gap-1.5 text-cyan-300"
                         title={`Recupera a: ${email.recovery_email_address}`}
                       >
-                        <span className="text-obsidian-muted flex-shrink-0">Recupera:</span>
-                        <strong className="font-mono truncate">{email.recovery_email_address}</strong>
+                        <span className="flex-shrink-0 text-obsidian-muted">Recupera:</span>
+                        <strong className="truncate font-mono">{email.recovery_email_address}</strong>
                       </div>
                     ) : (
-                      <div className="text-obsidian-muted">
-                        Sin correo de respaldo
-                      </div>
+                      <div className="text-obsidian-muted">Sin correo de respaldo</div>
                     )}
 
                     {email.recovery_phone && (
                       <div className="flex min-w-0 max-w-full items-center gap-1 text-obsidian-text">
-                        <Smartphone size={12} className="text-obsidian-muted flex-shrink-0" />
-                        <span className="font-mono truncate">{email.recovery_phone}</span>
+                        <Smartphone size={12} className="flex-shrink-0 text-obsidian-muted" aria-hidden="true" />
+                        <span className="truncate font-mono">{email.recovery_phone}</span>
                       </div>
                     )}
                   </div>
 
                   {/* Quick link buttons */}
-                  <div className="flex max-w-full flex-wrap items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex max-w-full flex-wrap items-center gap-1.5">
                     <button
                       type="button"
                       onClick={() => {
                         if (!isUnlocked) openUnlockModal();
                         else openPlatformModal(email.id);
                       }}
-                      className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-obsidian-surface hover:bg-obsidian-border text-obsidian-text border border-obsidian-border text-[10px] font-medium"
+                      aria-label={`Vincular cuenta o servicio a ${email.address}`}
+                      className="inline-flex min-h-[34px] items-center gap-1 rounded-lg border border-obsidian-border bg-obsidian-surface px-2.5 py-1 text-[10px] font-medium text-obsidian-text hover:bg-obsidian-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
                       title="Vincular cuenta o servicio a este correo"
                     >
-                      <Globe size={11} className="text-indigo-400" />
+                      <Globe size={11} className="text-indigo-400" aria-hidden="true" />
                       <span>+ Cuenta</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => openProspectModal(email.id)}
-                      className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/25 text-[10px] font-medium"
+                      aria-label={`Vincular prospecto a ${email.address}`}
+                      className="inline-flex min-h-[34px] items-center gap-1 rounded-lg border border-indigo-500/25 bg-indigo-500/10 px-2.5 py-1 text-[10px] font-medium text-indigo-300 hover:bg-indigo-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
                       title="Vincular prospecto o página demo a este correo"
                     >
-                      <Rocket size={11} />
+                      <Rocket size={11} aria-hidden="true" />
                       <span>+ Prospecto</span>
                     </button>
                   </div>
@@ -264,12 +343,16 @@ export const EmailsView: React.FC = () => {
               {/* Bottom info footer */}
               <div className="flex flex-wrap items-center justify-between gap-2 border-t border-obsidian-border/60 pt-3 text-[11px] text-obsidian-muted">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className={`px-2 py-0.5 rounded text-[10px] font-semibold uppercase ${
-                    email.two_factor_method !== 'none'
-                      ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                      : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
-                  }`}>
-                    {email.two_factor_method === 'none' ? 'Sin verificación en dos pasos' : 'Verificación en dos pasos activa'}
+                  <span
+                    className={`rounded px-2 py-0.5 text-[10px] font-semibold uppercase ${
+                      email.two_factor_method !== 'none'
+                        ? 'border border-emerald-500/20 bg-emerald-500/10 text-emerald-400'
+                        : 'border border-rose-500/20 bg-rose-500/10 text-rose-400'
+                    }`}
+                  >
+                    {email.two_factor_method === 'none'
+                      ? 'Sin verificación en dos pasos'
+                      : 'Verificación en dos pasos activa'}
                   </span>
 
                   {email.backup_codes && email.backup_codes.length > 0 && (
@@ -277,39 +360,36 @@ export const EmailsView: React.FC = () => {
                   )}
                 </div>
 
-                <div className="flex items-center gap-1 text-obsidian-muted group-hover:text-white transition-colors flex-shrink-0">
+                <button
+                  type="button"
+                  onClick={() => openInspector('email', email.id)}
+                  aria-label={`Abrir detalles de ${email.address}`}
+                  className="inline-flex min-h-[32px] flex-shrink-0 items-center gap-1 rounded-lg px-2 text-obsidian-muted transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                >
                   <span>Ver detalles</span>
-                  <ArrowRight size={13} />
-                </div>
+                  <ArrowRight size={13} aria-hidden="true" />
+                </button>
               </div>
-            </div>
+            </article>
           ))}
         </div>
       )}
 
       {/* Clean Empty State */}
-      {filteredEmails.length === 0 && !loading && (
-        <div className="space-y-3 rounded-xl border border-obsidian-border bg-obsidian-panel px-4 py-8 text-center">
-          <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center mx-auto">
-            <Mail size={22} />
-          </div>
-          <h3 className="text-sm font-semibold text-white">
-            {search ? 'No se encontraron correos con esa búsqueda' : 'No hay correos principales registrados en este ámbito'}
-          </h3>
-          <div className="pt-1">
-            <button
-              type="button"
-              onClick={() => {
-                if (!isUnlocked) openUnlockModal();
-                else openEmailModal();
-              }}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md shadow-indigo-600/20"
-            >
-              <Plus size={14} />
-              <span>Nuevo correo</span>
-            </button>
-          </div>
-        </div>
+      {!loading && !error && filteredEmails.length === 0 && (
+        <EmptyState
+          icon={Mail}
+          title={
+            search
+              ? 'No se encontraron correos con esa búsqueda'
+              : 'No hay correos principales registrados en este ámbito'
+          }
+          actionLabel="Nuevo correo"
+          onAction={() => {
+            if (!isUnlocked) openUnlockModal();
+            else openEmailModal();
+          }}
+        />
       )}
     </div>
   );

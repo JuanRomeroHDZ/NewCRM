@@ -1,120 +1,172 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { 
-  Network, AlertTriangle, ZoomIn, ZoomOut, RotateCcw, 
-  ShieldAlert, Layers, Filter, Eye, Info, Plus 
+import {
+  Network,
+  AlertTriangle,
+  ZoomIn,
+  ZoomOut,
+  RotateCcw,
+  ShieldAlert,
+  LoaderCircle,
+  Plus,
 } from 'lucide-react';
 import { useVault } from '../../context/VaultContext';
 import { api } from '../../lib/api';
 import { GraphData, GraphNode, GraphLink } from '../../types';
+import { EmptyState } from '../common/EmptyState';
+
+type GraphFilterType = 'all' | 'email' | 'platform' | 'prospect' | 'payment';
+
+const FILTER_OPTIONS: { value: GraphFilterType; label: string }[] = [
+  { value: 'all', label: 'Todos' },
+  { value: 'email', label: 'Correos' },
+  { value: 'platform', label: 'Cuentas' },
+  { value: 'prospect', label: 'Prospectos' },
+  { value: 'payment', label: 'Pagos' },
+];
 
 const fitGraph = (width: number, height: number) => {
-  const scale = Math.max(0.1, Math.min(0.95, (width - 24) / 1000, (height - 24) / 700));
-  return { x: (width - 1000 * scale) / 2, y: (height - 700 * scale) / 2, scale };
+  const safeW = Math.max(200, width);
+  const safeH = Math.max(200, height);
+  const scale = Math.max(0.1, Math.min(0.95, (safeW - 24) / 1000, (safeH - 24) / 700));
+  return { x: (safeW - 1000 * scale) / 2, y: (safeH - 700 * scale) / 2, scale };
+};
+
+const isNodeVisible = (node: GraphNode, filter: GraphFilterType): boolean => {
+  return filter === 'all' || node.type === filter;
 };
 
 export const GraphView: React.FC = () => {
-  const { openInspector, openEmailModal, openProspectModal, dataVersion } = useVault();
+  const { openInspector, openEmailModal, openProspectModal, dataVersion, isUnlocked } = useVault();
 
   const [graphData, setGraphData] = useState<GraphData | null>(null);
-  const [filterType, setFilterType] = useState<'all' | 'emails' | 'platforms'>('all');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [attempt, setAttempt] = useState(0);
+  const [filterType, setFilterType] = useState<GraphFilterType>('all');
   const [highlightSPOF, setHighlightSPOF] = useState(true);
   const [hoveredNode, setHoveredNode] = useState<GraphNode | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const animFrameRef = useRef<number | null>(null);
 
   // Transform state: pan & zoom
   const transformRef = useRef({ x: 0, y: 0, scale: 1 });
   const isDraggingCanvasRef = useRef(false);
   const dragStartRef = useRef({ x: 0, y: 0 });
+  const pointerDownOriginRef = useRef<{ x: number; y: number } | null>(null);
+  const hasDraggedRef = useRef(false);
   const draggedNodeRef = useRef<GraphNode | null>(null);
+
+  // Active pointers for 2-finger pinch-to-zoom
+  const activePointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
+  const lastPinchDistRef = useRef<number | null>(null);
 
   // Simulation nodes state
   const simNodesRef = useRef<GraphNode[]>([]);
   const simLinksRef = useRef<GraphLink[]>([]);
 
   useEffect(() => {
-    api.getGraph().then((data) => {
-      setGraphData(data);
+    let active = true;
+    setLoading(true);
+    setError('');
 
-      // Initialize node positions in a radial / distributed layout
-      const width = 1000;
-      const height = 700;
-      const emailNodes = data.nodes.filter(n => n.type === 'email');
-      const platformNodes = data.nodes.filter(n => n.type === 'platform');
-      const prospectNodes = data.nodes.filter(n => n.type === 'prospect');
-      const paymentNodes = data.nodes.filter(n => n.type === 'payment');
+    api
+      .getGraph()
+      .then((data) => {
+        if (!active) return;
+        setGraphData(data);
 
-      // Place emails in central ring
-      emailNodes.forEach((node, i) => {
-        const angle = (i / Math.max(1, emailNodes.length)) * 2 * Math.PI;
-        const radius = 180;
-        node.x = width / 2 + Math.cos(angle) * radius;
-        node.y = height / 2 + Math.sin(angle) * radius;
-        node.vx = 0;
-        node.vy = 0;
-      });
+        // Initialize node positions in a radial / distributed layout
+        const width = 1000;
+        const height = 700;
+        const emailNodes = data.nodes.filter((n) => n.type === 'email');
+        const platformNodes = data.nodes.filter((n) => n.type === 'platform');
+        const prospectNodes = data.nodes.filter((n) => n.type === 'prospect');
+        const paymentNodes = data.nodes.filter((n) => n.type === 'payment');
 
-      // Place platforms radially around their parent email
-      const emailPosMap = new Map(emailNodes.map(e => [e.id, { x: e.x || 0, y: e.y || 0 }]));
-      const platformsPerEmail = new Map<string, number>();
+        // Place emails in central ring
+        emailNodes.forEach((node, i) => {
+          const angle = (i / Math.max(1, emailNodes.length)) * 2 * Math.PI;
+          const radius = 180;
+          node.x = width / 2 + Math.cos(angle) * radius;
+          node.y = height / 2 + Math.sin(angle) * radius;
+          node.vx = 0;
+          node.vy = 0;
+        });
 
-      platformNodes.forEach((pNode) => {
-        const parentLink = data.links.find(l => l.target === pNode.id && l.type === 'child');
-        const parentId = parentLink?.source || emailNodes[0]?.id;
-        const parentPos = emailPosMap.get(parentId) || { x: width / 2, y: height / 2 };
+        // Place platforms radially around their parent email
+        const emailPosMap = new Map(emailNodes.map((e) => [e.id, { x: e.x || 0, y: e.y || 0 }]));
+        const platformsPerEmail = new Map<string, number>();
 
-        const currentCount = platformsPerEmail.get(parentId) || 0;
-        platformsPerEmail.set(parentId, currentCount + 1);
+        platformNodes.forEach((pNode) => {
+          const parentLink = data.links.find((l) => l.target === pNode.id && l.type === 'child');
+          const parentId = parentLink?.source || emailNodes[0]?.id;
+          const parentPos = (parentId ? emailPosMap.get(parentId) : undefined) || {
+            x: width / 2,
+            y: height / 2,
+          };
 
-        const subAngle = (currentCount * 1.1) + Math.random() * 0.5;
-        const subDist = 120 + Math.random() * 40;
-        pNode.x = parentPos.x + Math.cos(subAngle) * subDist;
-        pNode.y = parentPos.y + Math.sin(subAngle) * subDist;
-        pNode.vx = 0;
-        pNode.vy = 0;
-      });
+          const currentCount = (parentId ? platformsPerEmail.get(parentId) : 0) || 0;
+          if (parentId) platformsPerEmail.set(parentId, currentCount + 1);
 
-      // Place prospects radially around their parent email (or on right side if unlinked)
-      const prospectsPerEmail = new Map<string, number>();
-      prospectNodes.forEach((prNode, idx) => {
-        const parentLink = data.links.find(l => l.target === prNode.id && l.type === 'prospect');
-        const parentId = parentLink?.source;
-        const parentPos = parentId ? emailPosMap.get(parentId) : undefined;
+          const subAngle = currentCount * 1.1 + Math.random() * 0.5;
+          const subDist = 120 + Math.random() * 40;
+          pNode.x = parentPos.x + Math.cos(subAngle) * subDist;
+          pNode.y = parentPos.y + Math.sin(subAngle) * subDist;
+          pNode.vx = 0;
+          pNode.vy = 0;
+        });
 
-        if (parentPos && parentId) {
-          const currentCount = prospectsPerEmail.get(parentId) || 0;
-          prospectsPerEmail.set(parentId, currentCount + 1);
-          const subAngle = Math.PI + (currentCount * 0.95) + 0.3;
-          const subDist = 145 + (currentCount % 2) * 30;
-          prNode.x = parentPos.x + Math.cos(subAngle) * subDist;
-          prNode.y = parentPos.y + Math.sin(subAngle) * subDist;
-        } else {
-          prNode.x = width - 140;
-          prNode.y = 140 + idx * 90;
+        // Place prospects radially around their parent email (or on right side if unlinked)
+        const prospectsPerEmail = new Map<string, number>();
+        prospectNodes.forEach((prNode, idx) => {
+          const parentLink = data.links.find((l) => l.target === prNode.id && l.type === 'prospect');
+          const parentId = parentLink?.source;
+          const parentPos = parentId ? emailPosMap.get(parentId) : undefined;
+
+          if (parentPos && parentId) {
+            const currentCount = prospectsPerEmail.get(parentId) || 0;
+            prospectsPerEmail.set(parentId, currentCount + 1);
+            const subAngle = Math.PI + currentCount * 0.95 + 0.3;
+            const subDist = 145 + (currentCount % 2) * 30;
+            prNode.x = parentPos.x + Math.cos(subAngle) * subDist;
+            prNode.y = parentPos.y + Math.sin(subAngle) * subDist;
+          } else {
+            prNode.x = width - 140;
+            prNode.y = 140 + idx * 90;
+          }
+          prNode.vx = 0;
+          prNode.vy = 0;
+        });
+
+        // Place payments
+        paymentNodes.forEach((payNode, i) => {
+          payNode.x = 120 + i * 140;
+          payNode.y = height - 100;
+          payNode.vx = 0;
+          payNode.vy = 0;
+        });
+
+        simNodesRef.current = data.nodes;
+        simLinksRef.current = data.links;
+
+        if (canvasRef.current) {
+          const rect = canvasRef.current.getBoundingClientRect();
+          transformRef.current = fitGraph(rect.width, rect.height);
         }
-        prNode.vx = 0;
-        prNode.vy = 0;
+      })
+      .catch((err) => {
+        if (active) {
+          setError(err instanceof Error ? err.message : 'No se pudo cargar el mapa de conexiones.');
+        }
+      })
+      .finally(() => {
+        if (active) setLoading(false);
       });
 
-      // Place payments
-      paymentNodes.forEach((payNode, i) => {
-        payNode.x = 120 + i * 140;
-        payNode.y = height - 100;
-        payNode.vx = 0;
-        payNode.vy = 0;
-      });
-
-      simNodesRef.current = data.nodes;
-      simLinksRef.current = data.links;
-
-      // Center initial canvas view
-      if (canvasRef.current) {
-        const rect = canvasRef.current.getBoundingClientRect();
-        transformRef.current = fitGraph(rect.width, rect.height);
-      }
-    });
-  }, [dataVersion]);
+    return () => {
+      active = false;
+    };
+  }, [dataVersion, isUnlocked, attempt]);
 
   // Main Render Loop for HTML5 Canvas
   const draw = useCallback(() => {
@@ -123,30 +175,34 @@ export const GraphView: React.FC = () => {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    const dpr = window.devicePixelRatio || 1;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.save();
+    ctx.scale(dpr, dpr);
 
-    // Pan & Zoom
+    // Pan & Zoom in CSS pixel space
     const { x, y, scale } = transformRef.current;
     ctx.translate(x, y);
     ctx.scale(scale, scale);
 
-    const nodes = simNodesRef.current;
+    const visibleNodes = simNodesRef.current.filter((n) => isNodeVisible(n, filterType));
+    const visibleNodeMap = new Map(visibleNodes.map((n) => [n.id, n]));
     const links = simLinksRef.current;
-    const nodeMap = new Map(nodes.map(n => [n.id, n]));
 
-    // 1. Draw Links
+    // 1. Draw Links (only between visible nodes)
     links.forEach((link) => {
-      const src = nodeMap.get(link.source);
-      const tgt = nodeMap.get(link.target);
-      if (!src || !tgt || src.x === undefined || tgt.x === undefined) return;
+      const src = visibleNodeMap.get(link.source);
+      const tgt = visibleNodeMap.get(link.target);
+      if (!src || !tgt || src.x === undefined || src.y === undefined || tgt.x === undefined || tgt.y === undefined) {
+        return;
+      }
 
       ctx.beginPath();
-      ctx.moveTo(src.x, src.y!);
-      ctx.lineTo(tgt.x, tgt.y!);
+      ctx.moveTo(src.x, src.y);
+      ctx.lineTo(tgt.x, tgt.y);
 
       if (link.type === 'recovery') {
-        // Dotted recovery chain link
         ctx.setLineDash([6, 6]);
         ctx.lineWidth = link.is_cycle ? 2.5 : 1.8;
         ctx.strokeStyle = link.is_cycle ? 'rgba(244, 63, 94, 0.85)' : 'rgba(6, 182, 212, 0.6)';
@@ -159,7 +215,6 @@ export const GraphView: React.FC = () => {
         ctx.lineWidth = 1.5;
         ctx.strokeStyle = 'rgba(245, 158, 11, 0.55)';
       } else {
-        // Solid child platform link
         ctx.setLineDash([]);
         ctx.lineWidth = 1.5;
         ctx.strokeStyle = 'rgba(99, 102, 241, 0.35)';
@@ -167,10 +222,9 @@ export const GraphView: React.FC = () => {
       ctx.stroke();
       ctx.setLineDash([]);
 
-      // Draw arrow on recovery link
       if (link.type === 'recovery') {
         const midX = (src.x + tgt.x) / 2;
-        const midY = (src.y! + tgt.y!) / 2;
+        const midY = (src.y + tgt.y) / 2;
         ctx.beginPath();
         ctx.arc(midX, midY, 3, 0, Math.PI * 2);
         ctx.fillStyle = link.is_cycle ? '#f43f5e' : '#06b6d4';
@@ -179,17 +233,15 @@ export const GraphView: React.FC = () => {
     });
 
     // 2. Draw Nodes
-    nodes.forEach((node) => {
-      if (!node.x || !node.y) return;
+    visibleNodes.forEach((node) => {
+      if (node.x === undefined || node.y === undefined) return;
 
       const isHovered = hoveredNode?.id === node.id;
       const isCritical = highlightSPOF && node.is_critical_failure_point;
 
       if (node.type === 'email') {
-        // Prominent Root Email Node
         const radius = isCritical ? 28 : 24;
 
-        // Outer glow if critical failure point
         if (isCritical) {
           ctx.beginPath();
           ctx.arc(node.x, node.y, radius + 8, 0, Math.PI * 2);
@@ -197,7 +249,6 @@ export const GraphView: React.FC = () => {
           ctx.fill();
         }
 
-        // Main circle
         ctx.beginPath();
         ctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
         ctx.fillStyle = isHovered ? '#262a33' : '#17191f';
@@ -206,13 +257,11 @@ export const GraphView: React.FC = () => {
         ctx.strokeStyle = isCritical ? '#f43f5e' : '#6366f1';
         ctx.stroke();
 
-        // Node Label
         ctx.font = '600 12px Inter, system-ui, sans-serif';
         ctx.fillStyle = '#ffffff';
         ctx.textAlign = 'center';
         ctx.fillText(node.label, node.x, node.y + radius + 16);
 
-        // Subtitle badge
         ctx.font = '500 10px JetBrains Mono, monospace';
         ctx.fillStyle = '#94a3b8';
         ctx.fillText(
@@ -221,13 +270,10 @@ export const GraphView: React.FC = () => {
           node.y + radius + 30
         );
 
-        // Inside icon letter
         ctx.font = 'bold 13px Inter, system-ui, sans-serif';
         ctx.fillStyle = isCritical ? '#f43f5e' : '#818cf8';
         ctx.fillText(node.label.slice(0, 2).toUpperCase(), node.x, node.y + 5);
-
       } else if (node.type === 'platform') {
-        // Child Platform Node
         const radius = 16;
         ctx.beginPath();
         ctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
@@ -237,49 +283,43 @@ export const GraphView: React.FC = () => {
         ctx.strokeStyle = node.status === 'free_trial' ? '#f59e0b' : '#38bdf8';
         ctx.stroke();
 
-        // Label
         ctx.font = '500 11px Inter, system-ui, sans-serif';
         ctx.fillStyle = '#e2e8f0';
         ctx.textAlign = 'center';
         ctx.fillText(node.label, node.x, node.y + radius + 14);
 
-        // Icon initial
         ctx.font = 'bold 10px Inter, system-ui, sans-serif';
         ctx.fillStyle = '#38bdf8';
         ctx.fillText(node.label.slice(0, 2).toUpperCase(), node.x, node.y + 4);
-
       } else if (node.type === 'prospect') {
-        // Prospect / Demo Node
         const radius = 15;
         ctx.beginPath();
         ctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
         ctx.fillStyle = isHovered ? '#262a33' : '#1b1815';
         ctx.fill();
         ctx.lineWidth = 1.8;
-        ctx.strokeStyle = node.status === 'respondido'
-          ? '#10b981'
-          : node.status === 'tiempo_agotado'
-          ? '#f43f5e'
-          : '#f59e0b';
+        ctx.strokeStyle =
+          node.status === 'respondido'
+            ? '#10b981'
+            : node.status === 'tiempo_agotado'
+            ? '#f43f5e'
+            : '#f59e0b';
         ctx.stroke();
 
-        // Label
         ctx.font = '500 10.5px Inter, system-ui, sans-serif';
         ctx.fillStyle = '#fde68a';
         ctx.textAlign = 'center';
         ctx.fillText(node.label, node.x, node.y + radius + 13);
 
-        // Icon initial
         ctx.font = 'bold 9.5px Inter, system-ui, sans-serif';
         ctx.fillStyle = node.status === 'respondido' ? '#10b981' : '#f59e0b';
         ctx.fillText(node.label.slice(0, 2).toUpperCase(), node.x, node.y + 3.5);
-
       } else {
         // Payment Node
         const radius = 14;
         ctx.beginPath();
         ctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
-        ctx.fillStyle = '#10b98115';
+        ctx.fillStyle = isHovered ? '#1a2e28' : '#10b98115';
         ctx.fill();
         ctx.lineWidth = 1.5;
         ctx.strokeStyle = '#10b981';
@@ -289,20 +329,29 @@ export const GraphView: React.FC = () => {
         ctx.fillStyle = '#10b981';
         ctx.textAlign = 'center';
         ctx.fillText(node.label, node.x, node.y + radius + 12);
+
+        ctx.font = 'bold 9px Inter, system-ui, sans-serif';
+        ctx.fillStyle = '#34d399';
+        ctx.fillText(node.label.slice(0, 2).toUpperCase(), node.x, node.y + 3.5);
       }
     });
 
     ctx.restore();
-  }, [hoveredNode, highlightSPOF]);
+  }, [hoveredNode, highlightSPOF, filterType]);
 
-  // Handle Resize & Canvas Loop
+  // Handle Resize with DPR support
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
     const resize = () => {
-      canvas.width = canvas.parentElement?.clientWidth || 800;
-      canvas.height = canvas.parentElement?.clientHeight || 600;
+      const dpr = window.devicePixelRatio || 1;
+      const cssWidth = canvas.parentElement?.clientWidth || 800;
+      const cssHeight = canvas.parentElement?.clientHeight || 600;
+      canvas.width = Math.floor(cssWidth * dpr);
+      canvas.height = Math.floor(cssHeight * dpr);
+      canvas.style.width = `${cssWidth}px`;
+      canvas.style.height = `${cssHeight}px`;
       draw();
     };
 
@@ -315,31 +364,70 @@ export const GraphView: React.FC = () => {
     draw();
   }, [draw]);
 
-  // Find node under mouse coords
-  const getNodeAtCoords = (clientX: number, clientY: number): GraphNode | null => {
-    const canvas = canvasRef.current;
-    if (!canvas) return null;
-    const rect = canvas.getBoundingClientRect();
-    const { x, y, scale } = transformRef.current;
+  // Find visible node under pointer coords
+  const getNodeAtCoords = useCallback(
+    (clientX: number, clientY: number): GraphNode | null => {
+      const canvas = canvasRef.current;
+      if (!canvas) return null;
+      const rect = canvas.getBoundingClientRect();
+      const { x, y, scale } = transformRef.current;
 
-    const mouseX = (clientX - rect.left - x) / scale;
-    const mouseY = (clientY - rect.top - y) / scale;
+      const mouseX = (clientX - rect.left - x) / scale;
+      const mouseY = (clientY - rect.top - y) / scale;
 
-    const nodes = simNodesRef.current;
-    for (let i = nodes.length - 1; i >= 0; i--) {
-      const n = nodes[i];
-      if (n.x === undefined || n.y === undefined) continue;
-      const hitRadius = n.type === 'email' ? 32 : 20;
-      const dist = Math.hypot(n.x - mouseX, n.y - mouseY);
-      if (dist <= hitRadius) {
-        return n;
+      const nodes = simNodesRef.current;
+      for (let i = nodes.length - 1; i >= 0; i--) {
+        const n = nodes[i];
+        if (!isNodeVisible(n, filterType)) continue;
+        if (n.x === undefined || n.y === undefined) continue;
+        const hitRadius = n.type === 'email' ? 32 : 20;
+        const dist = Math.hypot(n.x - mouseX, n.y - mouseY);
+        if (dist <= hitRadius) {
+          return n;
+        }
       }
-    }
-    return null;
-  };
+      return null;
+    },
+    [filterType]
+  );
 
-  // Mouse / Canvas Events
-  const handleMouseDown = (e: React.MouseEvent) => {
+  const zoomAtPoint = useCallback(
+    (factor: number, localX?: number, localY?: number) => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const rect = canvas.getBoundingClientRect();
+      const pivotX = localX ?? rect.width / 2;
+      const pivotY = localY ?? rect.height / 2;
+
+      const oldScale = transformRef.current.scale;
+      const newScale = Math.max(0.1, Math.min(2.5, oldScale * factor));
+
+      transformRef.current.x = pivotX - (pivotX - transformRef.current.x) * (newScale / oldScale);
+      transformRef.current.y = pivotY - (pivotY - transformRef.current.y) * (newScale / oldScale);
+      transformRef.current.scale = newScale;
+      draw();
+    },
+    [draw]
+  );
+
+  // Pointer & Touch Pinch Events
+  const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    e.currentTarget.setPointerCapture(e.pointerId);
+    activePointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    if (activePointersRef.current.size === 2) {
+      // Begin 2-pointer pinch
+      const pts = Array.from(activePointersRef.current.values());
+      lastPinchDistRef.current = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
+      draggedNodeRef.current = null;
+      isDraggingCanvasRef.current = false;
+      hasDraggedRef.current = true;
+      return;
+    }
+
+    pointerDownOriginRef.current = { x: e.clientX, y: e.clientY };
+    hasDraggedRef.current = false;
+
     const clickedNode = getNodeAtCoords(e.clientX, e.clientY);
     if (clickedNode) {
       draggedNodeRef.current = clickedNode;
@@ -349,7 +437,35 @@ export const GraphView: React.FC = () => {
     }
   };
 
-  const handleMouseMove = (e: React.MouseEvent) => {
+  const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (activePointersRef.current.has(e.pointerId)) {
+      activePointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    }
+
+    if (activePointersRef.current.size === 2) {
+      const pts = Array.from(activePointersRef.current.values());
+      const dist = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
+      const canvas = canvasRef.current;
+      if (canvas && lastPinchDistRef.current && lastPinchDistRef.current > 0) {
+        const rect = canvas.getBoundingClientRect();
+        const midX = (pts[0].x + pts[1].x) / 2 - rect.left;
+        const midY = (pts[0].y + pts[1].y) / 2 - rect.top;
+        zoomAtPoint(dist / lastPinchDistRef.current, midX, midY);
+      }
+      lastPinchDistRef.current = dist;
+      return;
+    }
+
+    if (pointerDownOriginRef.current) {
+      const moveDist = Math.hypot(
+        e.clientX - pointerDownOriginRef.current.x,
+        e.clientY - pointerDownOriginRef.current.y
+      );
+      if (moveDist > 5) {
+        hasDraggedRef.current = true;
+      }
+    }
+
     if (draggedNodeRef.current) {
       const canvas = canvasRef.current;
       if (!canvas) return;
@@ -368,44 +484,55 @@ export const GraphView: React.FC = () => {
       draw();
     } else {
       const node = getNodeAtCoords(e.clientX, e.clientY);
-      setHoveredNode(node);
-      draw();
+      if (node?.id !== hoveredNode?.id) {
+        setHoveredNode(node);
+      }
     }
   };
 
-  const handleMouseUp = (e: React.MouseEvent) => {
+  const handlePointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    activePointersRef.current.delete(e.pointerId);
+    if (activePointersRef.current.size < 2) {
+      lastPinchDistRef.current = null;
+    }
+
     if (draggedNodeRef.current) {
-      // If barely moved, treat as click to open inspector
       const n = draggedNodeRef.current;
       draggedNodeRef.current = null;
-      if (n.entity_id) {
-        openInspector(n.type as any, n.entity_id);
+      if (!hasDraggedRef.current && n.entity_id) {
+        openInspector(n.type, n.entity_id);
       }
     }
     isDraggingCanvasRef.current = false;
+    pointerDownOriginRef.current = null;
+    hasDraggedRef.current = false;
   };
 
-  const handleWheel = (e: React.WheelEvent) => {
-    e.preventDefault();
-    const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
-    const newScale = Math.max(0.1, Math.min(2.5, transformRef.current.scale * zoomFactor));
+  const handlePointerCancel = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    activePointersRef.current.delete(e.pointerId);
+    if (activePointersRef.current.size < 2) {
+      lastPinchDistRef.current = null;
+    }
+    draggedNodeRef.current = null;
+    isDraggingCanvasRef.current = false;
+    pointerDownOriginRef.current = null;
+    hasDraggedRef.current = false;
+  };
 
+  const handleWheel = (e: React.WheelEvent<HTMLCanvasElement>) => {
+    e.preventDefault();
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
-    const mouseY = e.clientY - rect.top;
-
-    transformRef.current.x = mouseX - (mouseX - transformRef.current.x) * (newScale / transformRef.current.scale);
-    transformRef.current.y = mouseY - (mouseY - transformRef.current.y) * (newScale / transformRef.current.scale);
-    transformRef.current.scale = newScale;
-    draw();
+    const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
+    zoomAtPoint(zoomFactor, e.clientX - rect.left, e.clientY - rect.top);
   };
 
   const handleResetZoom = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    transformRef.current = fitGraph(canvas.width, canvas.height);
+    const rect = canvas.getBoundingClientRect();
+    transformRef.current = fitGraph(rect.width, rect.height);
     draw();
   };
 
@@ -413,17 +540,43 @@ export const GraphView: React.FC = () => {
     <div className="relative h-[calc(100dvh-4rem)] min-h-0 w-full select-none overflow-hidden bg-obsidian-bg dot-grid-canvas">
       {/* Top Floating Controls */}
       <div className="absolute inset-x-2 top-2 z-10 flex flex-wrap items-start gap-2 sm:left-6 sm:right-6 sm:top-4">
-        <div className="flex items-center gap-1.5 p-1 rounded-xl bg-obsidian-panel/90 backdrop-blur-md border border-obsidian-border shadow-xl text-xs">
+        <div
+          role="group"
+          aria-label="Filtrar nodos del mapa"
+          className="flex flex-wrap items-center gap-1 rounded-xl border border-obsidian-border bg-obsidian-panel/90 p-1 text-xs shadow-xl backdrop-blur-md"
+        >
+          {FILTER_OPTIONS.map((opt) => {
+            const active = filterType === opt.value;
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                aria-pressed={active}
+                onClick={() => setFilterType(opt.value)}
+                className={`min-h-[34px] rounded-lg px-2.5 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
+                  active
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'text-obsidian-muted hover:bg-obsidian-surface hover:text-white'
+                }`}
+              >
+                {opt.label}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="flex items-center gap-1.5 rounded-xl border border-obsidian-border bg-obsidian-panel/90 p-1 text-xs shadow-xl backdrop-blur-md">
           <button
             type="button"
+            aria-pressed={highlightSPOF}
             onClick={() => setHighlightSPOF(!highlightSPOF)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium transition-all ${
+            className={`flex min-h-[34px] items-center gap-1.5 rounded-lg px-3 py-1 font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 ${
               highlightSPOF
-                ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                ? 'border border-rose-500/30 bg-rose-500/20 text-rose-300'
                 : 'text-obsidian-muted hover:text-white'
             }`}
           >
-            <ShieldAlert size={14} />
+            <ShieldAlert size={14} aria-hidden="true" />
             <span className="sm:hidden">Resaltar correos</span>
             <span className="hidden sm:inline">Resaltar Correos Indispensables</span>
           </button>
@@ -431,80 +584,117 @@ export const GraphView: React.FC = () => {
 
         {/* Cycles Alert Banner */}
         {graphData?.cycles_detected && graphData.cycles_detected.length > 0 && (
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs backdrop-blur-md">
-            <AlertTriangle size={14} className="text-amber-400" />
+          <div
+            role="status"
+            className="flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-300 backdrop-blur-md"
+          >
+            <AlertTriangle size={14} className="text-amber-400" aria-hidden="true" />
             <span>Correos de respaldo conectados en círculo</span>
           </div>
         )}
       </div>
 
       {/* Floating Zoom & Pan Controls */}
-      <div className="absolute bottom-2 right-2 z-10 flex flex-col gap-1.5 p-1.5 rounded-xl bg-obsidian-panel/90 backdrop-blur-md border border-obsidian-border shadow-xl text-obsidian-muted sm:bottom-6 sm:right-6">
+      <div
+        role="group"
+        aria-label="Controles de zoom del mapa"
+        className="absolute bottom-3 right-3 z-10 flex flex-col gap-1 rounded-xl border border-obsidian-border bg-obsidian-panel/90 p-1.5 text-obsidian-muted shadow-xl backdrop-blur-md sm:bottom-6 sm:right-6"
+      >
         <button
           type="button"
-          onClick={() => {
-            transformRef.current.scale = Math.min(2.5, transformRef.current.scale * 1.2);
-            draw();
-          }}
+          onClick={() => zoomAtPoint(1.2)}
+          aria-label="Acercar mapa"
           title="Acercar"
-          className="p-2 hover:text-white hover:bg-obsidian-surface rounded-lg transition-colors"
+          className="inline-flex min-h-[36px] min-w-[36px] items-center justify-center rounded-lg transition-colors hover:bg-obsidian-surface hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
         >
-          <ZoomIn size={16} />
+          <ZoomIn size={16} aria-hidden="true" />
         </button>
         <button
           type="button"
-          onClick={() => {
-            transformRef.current.scale = Math.max(0.1, transformRef.current.scale * 0.8);
-            draw();
-          }}
+          onClick={() => zoomAtPoint(0.8)}
+          aria-label="Alejar mapa"
           title="Alejar"
-          className="p-2 hover:text-white hover:bg-obsidian-surface rounded-lg transition-colors"
+          className="inline-flex min-h-[36px] min-w-[36px] items-center justify-center rounded-lg transition-colors hover:bg-obsidian-surface hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
         >
-          <ZoomOut size={16} />
+          <ZoomOut size={16} aria-hidden="true" />
         </button>
         <button
           type="button"
           onClick={handleResetZoom}
+          aria-label="Restablecer vista del mapa"
           title="Restablecer vista"
-          className="p-2 hover:text-white hover:bg-obsidian-surface rounded-lg transition-colors"
+          className="inline-flex min-h-[36px] min-w-[36px] items-center justify-center rounded-lg transition-colors hover:bg-obsidian-surface hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
         >
-          <RotateCcw size={16} />
+          <RotateCcw size={16} aria-hidden="true" />
         </button>
       </div>
 
-      {/* Legend Card */}
-      <details className="absolute bottom-2 left-2 z-10 max-h-[calc(100%-4rem)] max-w-[calc(100%-4rem)] overflow-y-auto rounded-xl border border-obsidian-border bg-obsidian-panel/95 p-3 text-[11px] text-obsidian-muted shadow-xl backdrop-blur-md sm:bottom-6 sm:left-6 sm:max-w-xs">
-        <summary className="cursor-pointer font-semibold text-white text-xs">Guía del mapa</summary>
+      {/* Legend Card positioned away from zoom controls on 375px */}
+      <details className="absolute bottom-3 left-3 z-10 max-h-[calc(100%-6rem)] max-w-[calc(100%-5.25rem)] overflow-y-auto rounded-xl border border-obsidian-border bg-obsidian-panel/95 p-3 text-[11px] text-obsidian-muted shadow-xl backdrop-blur-md sm:bottom-6 sm:left-6 sm:max-w-xs">
+        <summary className="cursor-pointer text-xs font-semibold text-white">Guía del mapa</summary>
         <div className="mt-2 space-y-1.5">
-        <div className="flex items-center gap-2">
-          <span className="w-3 h-3 rounded-full border-2 border-indigo-500 bg-obsidian-card" />
-          <span>Correo Principal</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="w-3 h-3 rounded-full border-2 border-cyan-400 bg-obsidian-card" />
-          <span>Cuenta o Servicio</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="w-3 h-3 rounded-full border-2 border-amber-400 bg-obsidian-card" />
-          <span>Prospecto / Demo</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="w-4 h-0.5 border-t border-dashed border-cyan-400" />
-          <span>Correo de Respaldo (A recupera a B)</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="w-3 h-3 rounded-full border-2 border-rose-500 bg-rose-500/20" />
-          <span>Correo Indispensable (muchas cuentas dependen de él)</span>
-        </div>
+          <div className="flex items-center gap-2">
+            <span className="h-3 w-3 shrink-0 rounded-full border-2 border-indigo-500 bg-obsidian-card" aria-hidden="true" />
+            <span>Correo Principal</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="h-3 w-3 shrink-0 rounded-full border-2 border-cyan-400 bg-obsidian-card" aria-hidden="true" />
+            <span>Cuenta o Servicio</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="h-3 w-3 shrink-0 rounded-full border-2 border-amber-400 bg-obsidian-card" aria-hidden="true" />
+            <span>Prospecto / Demo</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="h-3 w-3 shrink-0 rounded-full border-2 border-emerald-500 bg-emerald-500/20" aria-hidden="true" />
+            <span>Método de Pago</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="h-0.5 w-4 shrink-0 border-t border-dashed border-cyan-400" aria-hidden="true" />
+            <span>Correo de Respaldo (A recupera a B)</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="h-3 w-3 shrink-0 rounded-full border-2 border-rose-500 bg-rose-500/20" aria-hidden="true" />
+            <span>Correo Indispensable (muchas cuentas dependen de él)</span>
+          </div>
         </div>
       </details>
 
+      {/* Loading State Overlay */}
+      {loading && !graphData && (
+        <div
+          role="status"
+          className="absolute inset-0 z-20 flex items-center justify-center bg-obsidian-bg/80 p-4 backdrop-blur-sm"
+        >
+          <div className="flex flex-col items-center gap-3 rounded-2xl border border-obsidian-border bg-obsidian-panel px-6 py-5 text-xs text-obsidian-muted shadow-2xl">
+            <LoaderCircle size={22} className="animate-spin text-indigo-400" aria-hidden="true" />
+            <span>Cargando mapa de conexiones…</span>
+          </div>
+        </div>
+      )}
+
+      {/* Error State Overlay */}
+      {error && !loading && (
+        <div className="absolute inset-0 z-20 flex items-center justify-center bg-obsidian-bg/85 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md">
+            <EmptyState
+              icon={AlertTriangle}
+              tone="error"
+              title="No se pudo cargar el mapa de conexiones"
+              description={error}
+              actionLabel="Reintentar"
+              onAction={() => setAttempt((value) => value + 1)}
+            />
+          </div>
+        </div>
+      )}
+
       {/* Empty State Overlay when there are no nodes */}
-      {graphData && graphData.nodes.length === 0 && (
+      {!loading && !error && graphData && graphData.nodes.length === 0 && (
         <div className="absolute inset-0 z-20 flex items-start justify-center overflow-y-auto p-2 sm:items-center sm:p-6">
-          <div className="my-auto w-full max-w-md rounded-2xl border border-obsidian-border bg-obsidian-panel/95 p-4 text-center shadow-2xl backdrop-blur-md space-y-4 pointer-events-auto sm:p-8">
-            <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 mx-auto">
-              <Network size={22} />
+          <div className="pointer-events-auto my-auto w-full max-w-md space-y-4 rounded-2xl border border-obsidian-border bg-obsidian-panel/95 p-4 text-center shadow-2xl backdrop-blur-md sm:p-8">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl border border-indigo-500/20 bg-indigo-500/10 text-indigo-400">
+              <Network size={22} aria-hidden="true" />
             </div>
             <div>
               <h3 className="text-sm font-bold text-white">Mapa de Conexiones Vacío</h3>
@@ -513,17 +703,17 @@ export const GraphView: React.FC = () => {
               <button
                 type="button"
                 onClick={() => openEmailModal()}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition-all"
+                className="inline-flex min-h-[40px] items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white transition-all hover:bg-indigo-500"
               >
-                <Plus size={14} />
+                <Plus size={14} aria-hidden="true" />
                 <span>Agregar Correo Principal</span>
               </button>
               <button
                 type="button"
                 onClick={() => openProspectModal()}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-obsidian-surface hover:bg-obsidian-border border border-obsidian-border text-white text-xs font-semibold transition-all"
+                className="inline-flex min-h-[40px] items-center gap-1.5 rounded-xl border border-obsidian-border bg-obsidian-surface px-4 py-2 text-xs font-semibold text-white transition-all hover:bg-obsidian-border"
               >
-                <Plus size={14} className="text-amber-400" />
+                <Plus size={14} className="text-amber-400" aria-hidden="true" />
                 <span>Nuevo Prospecto</span>
               </button>
             </div>
@@ -534,19 +724,15 @@ export const GraphView: React.FC = () => {
       {/* The HTML5 Canvas */}
       <canvas
         ref={canvasRef}
-        onPointerDown={(event) => {
-          event.currentTarget.setPointerCapture(event.pointerId);
-          handleMouseDown(event);
-        }}
-        onPointerMove={handleMouseMove}
-        onPointerUp={handleMouseUp}
-        onPointerCancel={() => {
-          draggedNodeRef.current = null;
-          isDraggingCanvasRef.current = false;
-        }}
+        role="img"
+        aria-label="Mapa interactivo de conexiones entre correos, plataformas, prospectos y métodos de pago"
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerCancel}
         onWheel={handleWheel}
         style={{ touchAction: 'none' }}
-        className="w-full h-full cursor-grab active:cursor-grabbing"
+        className="h-full w-full touch-none cursor-grab active:cursor-grabbing"
       />
     </div>
   );
