@@ -17,6 +17,7 @@ import { api } from '../../lib/api';
 import { getSlaBadgeMeta, getStatusMeta, PROSPECT_STATUS_OPTIONS } from '../../lib/prospectUtils';
 import { INPUT_LIMITS } from '../../lib/validation';
 import { EmptyState } from '../common/EmptyState';
+import { InlineErrorNotice } from '../common/InlineErrorNotice';
 import type { Prospect } from '../../types';
 
 export const ProspectsView: React.FC = () => {
@@ -66,12 +67,8 @@ export const ProspectsView: React.FC = () => {
     }
     let active = true;
     const version = ++requestVersion.current;
-    nextOffset.current = 0;
     setLoading(true);
     setLoadingMore(false);
-    setProspects([]);
-    setTotal(0);
-    setHasMore(false);
     setLoadMoreError('');
     setError('');
     api
@@ -236,17 +233,17 @@ export const ProspectsView: React.FC = () => {
               Desbloquear
             </button>
           </div>
-        ) : loading ? (
+        ) : loading && visibleProspects.length === 0 ? (
           <div role="status" className="flex items-center gap-2.5 p-6 text-sm text-obsidian-muted">
             <LoaderCircle size={18} className="animate-spin text-indigo-300" aria-hidden="true" />
             <span>Cargando prospectos…</span>
           </div>
-        ) : error ? (
+        ) : error && visibleProspects.length === 0 ? (
           <div className="p-4 sm:p-5">
             <EmptyState
               icon={AlertTriangle}
               tone="error"
-              title="Error al cargar prospectos"
+              title="No se pudieron cargar los prospectos"
               description={error}
               actionLabel="Reintentar"
               onAction={() => setAttempt((value) => value + 1)}
@@ -274,7 +271,23 @@ export const ProspectsView: React.FC = () => {
             )}
           </div>
         ) : (
-          <ul className="divide-y divide-obsidian-border" aria-label="Lista de prospectos">
+          <>
+            {loading && visibleProspects.length > 0 && (
+              <p role="status" className="border-b border-obsidian-border px-4 py-2 text-xs text-obsidian-muted">
+                Actualizando. Se conserva la última lista cargada; puede no corresponder a los filtros actuales.
+              </p>
+            )}
+            {!loading && error && visibleProspects.length > 0 && (
+              <div className="p-3 sm:p-4">
+                <InlineErrorNotice
+                  title="No se pudieron actualizar los prospectos"
+                  description={`${error} La lista visible puede corresponder a filtros anteriores.`}
+                  actionLabel="Reintentar"
+                  onAction={() => setAttempt((value) => value + 1)}
+                />
+              </div>
+            )}
+            <ul className="divide-y divide-obsidian-border" aria-label="Lista de prospectos">
             {visibleProspects.map((prospect) => {
               const statusMeta = getStatusMeta(prospect.status);
               const slaMeta = getSlaBadgeMeta(prospect.sla_status);
@@ -340,7 +353,8 @@ export const ProspectsView: React.FC = () => {
                 </li>
               );
             })}
-          </ul>
+            </ul>
+          </>
         )}
 
         {isUnlocked && !loading && !error && hasMore && (

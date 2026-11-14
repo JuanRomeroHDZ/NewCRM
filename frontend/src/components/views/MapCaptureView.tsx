@@ -70,6 +70,8 @@ export const MapCaptureView: React.FC = () => {
   const [mapError, setMapError] = useState('');
   const [mapAttempt, setMapAttempt] = useState(0);
   const [results, setResults] = useState<OSMLead[] | null>(null);
+  const [resultsStale, setResultsStale] = useState(false);
+  const [resultCriteria, setResultCriteria] = useState<{ sector: string; zone: string; subsector: string; visibleArea: boolean } | null>(null);
   const [resultSource, setResultSource] = useState<'cache' | 'openstreetmap' | null>(null);
   const [searchError, setSearchError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -98,6 +100,8 @@ export const MapCaptureView: React.FC = () => {
       searchTimeoutRef.current = null;
       setMapReady(false);
       setResults(null);
+      setResultsStale(false);
+      setResultCriteria(null);
       setResultSource(null);
       setSearchError('');
       setLoading(false);
@@ -243,8 +247,7 @@ export const MapCaptureView: React.FC = () => {
       searchTimeoutRef.current = timeoutId;
       setLoading(true);
       setSearchError('');
-      setResults(null);
-      setResultSource(null);
+      setResultsStale(results !== null);
       try {
         const response = await api.searchOSMLeads({
           sector: sector.trim(),
@@ -254,10 +257,18 @@ export const MapCaptureView: React.FC = () => {
         }, { signal: controller.signal });
         if (requestId !== searchRequestIdRef.current) return;
         setResults(response.results);
+        setResultsStale(false);
+        setResultCriteria({
+          sector: sector.trim(),
+          zone: selectedZone,
+          subsector: subsector.trim(),
+          visibleArea: Boolean(bbox),
+        });
         setResultSource(response.source);
         if (window.matchMedia('(max-width: 1023px)').matches) setMobileTab('results');
       } catch (error) {
         if (requestId === searchRequestIdRef.current) {
+          setResultsStale(results !== null);
           setSearchError(
             timedOut
               ? 'La búsqueda tardó demasiado. Revisa tu conexión e inténtalo de nuevo.'
@@ -277,7 +288,7 @@ export const MapCaptureView: React.FC = () => {
         }
       }
     },
-    [sector, subsector, selectedZone]
+    [sector, subsector, selectedZone, results]
   );
 
   const cancelSearch = () => {
@@ -321,6 +332,10 @@ export const MapCaptureView: React.FC = () => {
       mapElementRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     });
   };
+
+  const resultCriteriaLabel = resultCriteria
+    ? `${resultCriteria.sector} · ${resultCriteria.zone}${resultCriteria.subsector ? ` · ${resultCriteria.subsector}` : ''}${resultCriteria.visibleArea ? ' · área visible' : ''}`
+    : '';
 
   const saveLead = async (lead: OSMLead) => {
     if (!isUnlocked || savingOsmIdsRef.current.has(lead.osm_id) || savedIds.includes(lead.osm_id)) return;
@@ -425,8 +440,7 @@ export const MapCaptureView: React.FC = () => {
                 value={sector}
                 onChange={(event) => {
                   setSector(event.target.value);
-                  setResults(null);
-                  setResultSource(null);
+                  setResultsStale(results !== null);
                   setSearchError('');
                 }}
                 disabled={loading}
@@ -449,8 +463,7 @@ export const MapCaptureView: React.FC = () => {
                 value={selectedZone}
                 onChange={(event) => {
                   setSelectedZone(event.target.value);
-                  setResults(null);
-                  setResultSource(null);
+                  setResultsStale(results !== null);
                   setSearchError('');
                 }}
                 disabled={!zones.length || loading}
@@ -472,8 +485,7 @@ export const MapCaptureView: React.FC = () => {
                 value={subsector}
                 onChange={(event) => {
                   setSubsector(event.target.value);
-                  setResults(null);
-                  setResultSource(null);
+                  setResultsStale(results !== null);
                   setSearchError('');
                 }}
                 disabled={loading}
@@ -519,7 +531,10 @@ export const MapCaptureView: React.FC = () => {
               className="flex items-start gap-2 border-b border-rose-500/20 bg-rose-950/30 px-4 py-3 text-sm text-rose-200"
             >
               <AlertCircle size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
-              {searchError}
+              <span className="min-w-0">
+                {searchError}
+                {results !== null && ` Los resultados visibles corresponden a: ${resultCriteriaLabel || 'una búsqueda anterior'}.`}
+              </span>
             </p>
           )}
           {mapError && (
@@ -579,7 +594,14 @@ export const MapCaptureView: React.FC = () => {
             )}
           </div>
 
-          {loading ? (
+          {results !== null && (loading || (resultsStale && !searchError)) && (
+            <p role="status" className="border-b border-obsidian-border px-4 py-2 text-xs text-obsidian-muted">
+              {loading
+                ? `Actualizando. Se muestran resultados anteriores: ${resultCriteriaLabel}.`
+                : `Estos resultados son de: ${resultCriteriaLabel}. Actualiza la búsqueda antes de guardarlos.`}
+            </p>
+          )}
+          {loading && results === null ? (
             <div
               role="status"
               className="flex min-h-48 flex-1 flex-col items-center justify-center gap-3 p-6 text-sm text-obsidian-muted"
@@ -604,6 +626,18 @@ export const MapCaptureView: React.FC = () => {
               ) : !searchError ? (
                 <p>Los negocios aparecerán aquí después de una búsqueda.</p>
               ) : null}
+            </div>
+          ) : results.length === 0 && searchError ? (
+            <div className="flex min-h-32 flex-col items-center justify-center gap-2 p-5 text-center text-sm text-obsidian-muted">
+              <AlertCircle size={20} className="text-rose-300" aria-hidden="true" />
+              <p>No se completó la búsqueda y no hay resultados anteriores.</p>
+              <button
+                type="button"
+                onClick={() => void runSearch()}
+                className="min-h-10 rounded-lg border border-obsidian-border px-3 text-xs font-semibold text-white hover:bg-obsidian-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
+              >
+                Reintentar búsqueda
+              </button>
             </div>
           ) : results.length === 0 ? (
             <div className="flex min-h-48 flex-1 flex-col items-center justify-center gap-2 p-6 text-center text-sm text-obsidian-muted">
@@ -633,7 +667,7 @@ export const MapCaptureView: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => saveLead(lead)}
-                        disabled={isSaved || isSavingThis}
+                        disabled={isSaved || isSavingThis || resultsStale || loading || Boolean(searchError)}
                         className="inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-indigo-500/25 bg-indigo-500/10 px-2.5 text-[11px] font-semibold text-indigo-200 hover:bg-indigo-500/20 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
                         aria-label={isSaved ? `${lead.name} ya está guardado` : `Guardar ${lead.name} como prospecto`}
                       >

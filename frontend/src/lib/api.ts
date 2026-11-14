@@ -8,6 +8,7 @@ import {
   WriteupRevision, WriteupExportFormat, WriteupStructuredFinding, WriteupStatus, WriteupSeverity,
   RuntimeConfig
 } from '../types';
+import { createHttpApiError, normalizeResponseReadError, normalizeTransportError } from './apiErrors';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api/v1';
 
@@ -179,25 +180,28 @@ async function handleApiErrorResponse(endpoint: string, response: Response): Pro
       window.dispatchEvent(new CustomEvent('vault_locked'));
     }
   }
-  let errorDetail = 'Error en la petición al servidor';
+  throw createHttpApiError(response.status, endpoint, coreEndpoint);
+}
+
+async function fetchApiResponse(url: string, options: RequestInit): Promise<Response> {
   try {
-    const err = await response.json();
-    if (typeof err.detail === 'string') {
-      errorDetail = err.detail;
-    } else if (Array.isArray(err.detail)) {
-      errorDetail = 'Revisa los datos ingresados: algún campo tiene un formato incorrecto o supera el límite permitido.';
-    } else if (typeof err.message === 'string') {
-      errorDetail = err.message;
-    }
-  } catch (_) {
-    // ignore
+    return await fetch(url, options);
+  } catch (error) {
+    throw normalizeTransportError(error);
   }
-  throw new Error(errorDetail);
+}
+
+async function readApiJson<T>(response: Response): Promise<T> {
+  try {
+    return await response.json() as T;
+  } catch (error) {
+    throw normalizeResponseReadError(error, response.status);
+  }
 }
 
 async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const headers = buildAuthHeaders(options.headers as Record<string, string> | undefined, true);
-  const response = await fetch(`${API_BASE}${endpoint}`, {
+  const response = await fetchApiResponse(`${API_BASE}${endpoint}`, {
     ...options,
     headers,
   });
@@ -208,16 +212,16 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
   if (response.status === 204) {
     return undefined as T;
   }
-  return response.json();
+  return readApiJson<T>(response);
 }
 
 async function requestPage<T>(endpoint: string, offset: number, limit: number): Promise<ApiPage<T>> {
   const headers = buildAuthHeaders(undefined, true);
-  const response = await fetch(`${API_BASE}${endpoint}`, { headers });
+  const response = await fetchApiResponse(`${API_BASE}${endpoint}`, { headers });
   if (!response.ok) {
     await handleApiErrorResponse(endpoint, response);
   }
-  const items = await response.json() as T[];
+  const items = await readApiJson<T[]>(response);
   const totalValue = response.headers.get('X-Total-Count');
   const totalHeader = totalValue === null ? Number.NaN : Number(totalValue);
   const total = Number.isSafeInteger(totalHeader) && totalHeader >= 0
@@ -233,7 +237,7 @@ async function requestPage<T>(endpoint: string, offset: number, limit: number): 
 async function requestBlobResponse(endpoint: string, options: RequestInit = {}): Promise<{ blob: Blob; filename: string; sha256?: string }> {
   const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
   const headers = buildAuthHeaders(options.headers as Record<string, string> | undefined, !isFormData);
-  const response = await fetch(`${API_BASE}${endpoint}`, {
+  const response = await fetchApiResponse(`${API_BASE}${endpoint}`, {
     ...options,
     headers,
   });
@@ -243,7 +247,9 @@ async function requestBlobResponse(endpoint: string, options: RequestInit = {}):
   const disposition = response.headers.get('Content-Disposition') || '';
   const nameMatch = disposition.match(/filename="([^"]+)"/);
   return {
-    blob: await response.blob(),
+    blob: await response.blob().catch((error) => {
+      throw normalizeResponseReadError(error, response.status);
+    }),
     filename: nameMatch ? nameMatch[1] : 'export',
     sha256: response.headers.get('X-Export-SHA256') || undefined,
   };
@@ -644,15 +650,16 @@ export const api = {
     if (caption) form.append('caption', caption);
     if (convertToGif) form.append('convert_to_gif', 'true');
     const headers = buildAuthHeaders(undefined, false);
-    const response = await fetch(`${API_BASE}/writeups/${writeupId}/assets`, {
+    const endpoint = `/writeups/${writeupId}/assets`;
+    const response = await fetchApiResponse(`${API_BASE}${endpoint}`, {
       method: 'POST',
       headers,
       body: form,
     });
     if (!response.ok) {
-      await handleApiErrorResponse(`/writeups/${writeupId}/assets`, response);
+      await handleApiErrorResponse(endpoint, response);
     }
-    return response.json();
+    return readApiJson<WriteupAsset>(response);
   },
   convertWriteupVideoToGif: (
     writeupId: string,

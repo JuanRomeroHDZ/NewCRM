@@ -8,6 +8,7 @@ import { api } from '../../lib/api';
 import { AuditLogItem } from '../../types';
 import { InfoTooltip } from '../common/InfoTooltip';
 import { EmptyState } from '../common/EmptyState';
+import { InlineErrorNotice } from '../common/InlineErrorNotice';
 import { INPUT_LIMITS } from '../../lib/validation';
 
 const PAGE_SIZE = 25;
@@ -93,7 +94,6 @@ export const AuditLogsView: React.FC = () => {
       if (generation !== loadGeneration.current) return;
       const msg = err?.message || 'Error cargando auditoría';
       setLoadError(msg);
-      showToast(msg, 'error');
     } finally {
       if (generation === loadGeneration.current) setLoading(false);
     }
@@ -222,7 +222,7 @@ export const AuditLogsView: React.FC = () => {
           <button
             type="button"
             onClick={exportLogsAsJson}
-            disabled={loading || searchPending || logs.length === 0}
+            disabled={loading || searchPending || Boolean(loadError) || logs.length === 0}
             className="px-3.5 py-2 rounded-xl bg-obsidian-surface border border-obsidian-border hover:border-obsidian-borderLight text-white text-xs font-medium flex items-center gap-2 transition-all hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Download className="w-4 h-4 text-white/60" aria-hidden="true" /> Descargar página
@@ -282,7 +282,20 @@ export const AuditLogsView: React.FC = () => {
         </label>
       </div>
 
-      {loadError && !loading ? (
+      {(loading || searchPending) && logs.length > 0 && (
+        <p role="status" className="rounded-lg border border-obsidian-border bg-obsidian-panel px-3 py-2 text-xs text-obsidian-muted">
+          Actualizando el historial. Se conservan los últimos registros cargados; pueden no corresponder a los filtros actuales.
+        </p>
+      )}
+      {loadError && !loading && logs.length > 0 && (
+        <InlineErrorNotice
+          title="No se pudo actualizar el historial"
+          description={`${loadError} Los registros visibles pueden corresponder a filtros anteriores.`}
+          actionLabel="Reintentar"
+          onAction={() => void fetchLogs()}
+        />
+      )}
+      {loadError && !loading && logs.length === 0 ? (
         <EmptyState
           icon={AlertTriangle}
           tone="error"
@@ -294,7 +307,7 @@ export const AuditLogsView: React.FC = () => {
       ) : (
         <div className="rounded-2xl border border-obsidian-border bg-obsidian-surface/60 overflow-hidden backdrop-blur-md">
           <div className="divide-y divide-obsidian-border md:hidden">
-            {loading || searchPending ? (
+            {(loading || searchPending) && logs.length === 0 ? (
               <p className="p-4 text-xs text-white/50" role="status">
                 Cargando actividad...
               </p>
@@ -345,7 +358,7 @@ export const AuditLogsView: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-obsidian-border text-xs font-mono">
-                {loading || searchPending ? (
+                {(loading || searchPending) && logs.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="py-12 text-center text-white/40">
                       <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 opacity-50" aria-hidden="true" />

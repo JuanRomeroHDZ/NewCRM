@@ -24,6 +24,7 @@ import { CopyButton } from '../common/CopyButton';
 import { SecretField } from '../common/SecretField';
 import { InfoTooltip } from '../common/InfoTooltip';
 import { EmptyState } from '../common/EmptyState';
+import { InlineErrorNotice } from '../common/InlineErrorNotice';
 import { INPUT_LIMITS } from '../../lib/validation';
 
 export const EmailsView: React.FC = () => {
@@ -69,11 +70,8 @@ export const EmailsView: React.FC = () => {
     }
     let active = true;
     const version = ++requestVersion.current;
-    nextOffset.current = 0;
     setLoading(true);
     setLoadingMore(false);
-    setEmails([]);
-    setHasMore(false);
     setLoadMoreError('');
     setError('');
     api
@@ -209,7 +207,7 @@ export const EmailsView: React.FC = () => {
       )}
 
       {/* Loading State */}
-      {loading && (
+      {loading && filteredEmails.length === 0 && (
         <div
           role="status"
           className="flex items-center justify-center gap-2.5 rounded-2xl border border-obsidian-border bg-obsidian-panel p-8 text-xs text-obsidian-muted"
@@ -220,7 +218,7 @@ export const EmailsView: React.FC = () => {
       )}
 
       {/* Error State */}
-      {!loading && error && (
+      {!loading && error && filteredEmails.length === 0 && (
         <EmptyState
           icon={AlertTriangle}
           tone="error"
@@ -232,7 +230,22 @@ export const EmailsView: React.FC = () => {
       )}
 
       {/* Emails Cards Grid */}
-      {!loading && !error && filteredEmails.length > 0 && (
+      {loading && filteredEmails.length > 0 && (
+        <p role="status" className="rounded-lg border border-obsidian-border bg-obsidian-panel px-3 py-2 text-xs text-obsidian-muted">
+          Actualizando. Se conserva la última lista cargada; puede no corresponder a la búsqueda actual.
+        </p>
+      )}
+
+      {!loading && error && filteredEmails.length > 0 && (
+        <InlineErrorNotice
+          title="No se pudieron actualizar los correos"
+          description={`${error} La lista visible puede corresponder a una búsqueda anterior.`}
+          actionLabel="Reintentar"
+          onAction={() => setAttempt((value) => value + 1)}
+        />
+      )}
+
+      {filteredEmails.length > 0 && (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           {filteredEmails.map((email) => (
             <article

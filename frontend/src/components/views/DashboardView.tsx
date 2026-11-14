@@ -13,6 +13,7 @@ import type {
   VaultStatus,
 } from '../../types';
 import { EmptyState } from '../common/EmptyState';
+import { InlineErrorNotice } from '../common/InlineErrorNotice';
 import { InfoTooltip } from '../common/InfoTooltip';
 import {
   buildFollowUpMessage,
@@ -75,6 +76,7 @@ export const DashboardView: React.FC = () => {
   });
   // Evita que una respuesta antigua reemplace datos tras bloquear o recargar el panel.
   const loadGeneration = useRef(0);
+  const hasLoadedDashboard = useRef(false);
 
   // El panel solo presenta monedas con conversión implementada.
   const pipelineCurrencyOptions = useMemo(() => {
@@ -110,6 +112,7 @@ export const DashboardView: React.FC = () => {
       setRenewals([]);
       setExpenses([]);
       setVaultSettings(null);
+      hasLoadedDashboard.current = false;
       setLoadError(null);
       setPartialDataWarning(null);
       setLoading(false);
@@ -128,10 +131,6 @@ export const DashboardView: React.FC = () => {
 
       const [emailList, platformList, paymentList, prospectList] = requiredData;
       const [incomeResult, renewalResult, expenseResult, settingsResult] = optionalData;
-      const incomeList = incomeResult.status === 'fulfilled' ? incomeResult.value : [];
-      const renewalList = renewalResult.status === 'fulfilled' ? renewalResult.value : [];
-      const expenseList = expenseResult.status === 'fulfilled' ? expenseResult.value : [];
-      const vaultStatus = settingsResult.status === 'fulfilled' ? settingsResult.value : null;
       const unavailableSections = [
         incomeResult.status === 'rejected' ? 'ingresos' : null,
         renewalResult.status === 'rejected' ? 'vencimientos' : null,
@@ -143,24 +142,24 @@ export const DashboardView: React.FC = () => {
       setPlatforms(platformList);
       setPayments(paymentList);
       setProspects(prospectList);
-      setIncomes(incomeList);
-      setRenewals(renewalList);
-      setExpenses(expenseList);
-      setVaultSettings(vaultStatus);
+      if (incomeResult.status === 'fulfilled') setIncomes(incomeResult.value);
+      if (renewalResult.status === 'fulfilled') setRenewals(renewalResult.value);
+      if (expenseResult.status === 'fulfilled') setExpenses(expenseResult.value);
+      if (settingsResult.status === 'fulfilled') setVaultSettings(settingsResult.value);
+      hasLoadedDashboard.current = true;
       setPartialDataWarning(
         unavailableSections.length > 0
-          ? `No se pudieron cargar ${unavailableSections.join(', ')}. Algunos totales pueden estar incompletos.`
+          ? `No se pudieron actualizar ${unavailableSections.join(', ')}. Los importes pueden estar incompletos o desactualizados.`
           : null
       );
     } catch (error) {
       if (generation !== loadGeneration.current) return;
       const message = error instanceof Error ? error.message : 'No se pudo cargar el resumen del panel.';
       setLoadError(message);
-      showToast(message, 'error');
     } finally {
       if (generation === loadGeneration.current) setLoading(false);
     }
-  }, [isUnlocked, showToast]);
+  }, [isUnlocked]);
 
   useEffect(() => {
     void loadDashboardData();
@@ -310,7 +309,7 @@ export const DashboardView: React.FC = () => {
     );
   }
 
-  if (loading) {
+  if (loading && !hasLoadedDashboard.current) {
     return (
       <div role="status" aria-label="Cargando panel de control" className="mx-auto max-w-7xl min-w-0 space-y-5 p-3 sm:space-y-7 sm:p-8 animate-fadeIn">
         <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 lg:grid-cols-4">
@@ -325,7 +324,7 @@ export const DashboardView: React.FC = () => {
     );
   }
 
-  if (loadError) {
+  if (loadError && !hasLoadedDashboard.current) {
     return (
       <div className="mx-auto max-w-3xl p-4 sm:p-8 animate-fadeIn">
         <EmptyState tone="error" icon={AlertTriangle} title="No se pudo cargar el panel" description={loadError} actionLabel="Reintentar" onAction={loadDashboardData} />
@@ -339,6 +338,19 @@ export const DashboardView: React.FC = () => {
 
   return (
     <div className="mx-auto max-w-7xl min-w-0 space-y-6 p-3 sm:space-y-8 sm:p-8 animate-fadeIn">
+      {loading && hasLoadedDashboard.current && (
+        <p role="status" className="text-xs text-obsidian-muted">
+          Actualizando el resumen. Se mantienen visibles los últimos datos cargados.
+        </p>
+      )}
+      {loadError && hasLoadedDashboard.current && (
+        <InlineErrorNotice
+          title="No se pudo actualizar el resumen"
+          description={`${loadError} Se muestran los últimos datos cargados.`}
+          actionLabel="Reintentar"
+          onAction={() => void loadDashboardData()}
+        />
+      )}
       {showRateNotice && (
         <div role="status" className="flex min-w-0 items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-2 text-xs text-amber-200 sm:px-3">
           <AlertTriangle size={14} className="shrink-0" aria-hidden="true" />
