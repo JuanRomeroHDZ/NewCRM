@@ -483,8 +483,8 @@ class SettingsUpdate(BaseModel):
     clipboard_clear_seconds: int | None = Field(default=None, ge=0, le=3600)
     allow_reveal_passwords: bool | None = None
     search_hotkey: str | None = Field(default=None, max_length=32)
-    accent_color: str | None = Field(default=None, max_length=32)
-    canvas_style: str | None = Field(default=None, max_length=32)
+    accent_color: str | None = Field(default=None, pattern=r"^#[0-9A-Fa-f]{6}$")
+    canvas_style: Literal["dot-grid", "subtle-grid", "plain"] | None = None
     budget_cap_amount: float | None = Field(default=None, ge=0, le=100000000, allow_inf_nan=False)
     budget_cap_currency: SupportedCurrency | None = None
     password_rotation_days_root: int | None = Field(default=None, ge=1, le=3650)
@@ -513,7 +513,7 @@ class PasswordReuseGroup(BaseModel):
     entities: list[dict[str, str]]  # [{"id": "...", "name": "...", "type": "email|platform"}]
 
 class SecurityAuditResponse(BaseModel):
-    health_score: int  # 0 to 100
+    health_score: int | None  # Null means there are no accounts to audit.
     total_accounts: int
     vulnerable_accounts_count: int
     reused_passwords_count: int

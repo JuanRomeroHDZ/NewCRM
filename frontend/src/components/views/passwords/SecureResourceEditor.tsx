@@ -75,7 +75,7 @@ export const SecureResourceEditor: React.FC<SecureResourceEditorProps> = ({ reso
     }
     const cleanTitle = title.trim();
     if (!cleanTitle) {
-      showToast('Ingresa un título para el recurso seguro.', 'error');
+      showToast('Ingresa un título para el recurso.', 'error');
       return;
     }
     const tagNames = tags.split(',').map((tag) => tag.trim()).filter(Boolean);
@@ -133,7 +133,7 @@ export const SecureResourceEditor: React.FC<SecureResourceEditorProps> = ({ reso
             </span>
             <div className="min-w-0">
               <h3 id="resource-modal-title" className="truncate text-sm font-semibold text-white">
-                {resource ? 'Editar recurso seguro' : 'Nuevo recurso seguro'}
+                {resource ? 'Editar recurso' : 'Nuevo recurso'}
               </h3>
               <p className="text-[11px] text-obsidian-muted">Los datos se protegen en esta bóveda</p>
             </div>

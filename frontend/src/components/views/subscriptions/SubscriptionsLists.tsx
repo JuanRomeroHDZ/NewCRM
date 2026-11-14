@@ -220,14 +220,6 @@ export const SubscriptionsLists: React.FC<SubscriptionsListsProps> = ({
             <p className="text-xs text-obsidian-muted">
               Aún no has registrado pagos recibidos de clientes (anticipos, liquidaciones o igualas mensuales).
             </p>
-            <button
-              type="button"
-              onClick={openNewIncomeModal}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/30 text-emerald-300 text-xs font-semibold"
-            >
-              <Plus size={13} aria-hidden="true" />
-              <span>Registrar Primer Pago de Cliente</span>
-            </button>
           </div>
         )}
       </div>
@@ -392,14 +384,6 @@ export const SubscriptionsLists: React.FC<SubscriptionsListsProps> = ({
             <p className="text-xs text-obsidian-muted">
               No hay dominios ni hostings de clientes registrados en el monitor de vencimientos.
             </p>
-            <button
-              type="button"
-              onClick={openNewRenewalModal}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/30 text-indigo-300 text-xs font-semibold"
-            >
-              <Plus size={13} aria-hidden="true" />
-              <span>Registrar Primer Dominio o Hosting</span>
-            </button>
           </div>
         )}
       </div>
@@ -504,14 +488,6 @@ export const SubscriptionsLists: React.FC<SubscriptionsListsProps> = ({
             <p className="text-xs text-obsidian-muted">
               No hay compras ni gastos únicos variables registrados (hardware, licencias vitalicias, insumos, etc.).
             </p>
-            <button
-              type="button"
-              onClick={openNewExpenseModal}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/30 text-purple-300 text-xs font-semibold"
-            >
-              <Plus size={13} aria-hidden="true" />
-              <span>Registrar Primer Gasto Único</span>
-            </button>
           </div>
         )}
       </div>

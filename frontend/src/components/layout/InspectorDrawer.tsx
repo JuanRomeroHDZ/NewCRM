@@ -36,6 +36,7 @@ import { PlatformCredentialsTab } from './inspector/PlatformCredentialsTab';
 export const InspectorDrawer: React.FC = () => {
   const {
     selectedEntity,
+    activeSection,
     openInspector,
     closeInspector,
     isUnlocked,
@@ -56,6 +57,7 @@ export const InspectorDrawer: React.FC = () => {
   const drawerRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const wasOpenRef = useRef(false);
+  const previousSectionRef = useRef(activeSection);
 
   const [activeTab, setActiveTab] = useState<'general' | 'credentials' | 'api_keys' | 'subscription' | 'history'>('general');
   const [emailData, setEmailData] = useState<EmailAccount | null>(null);
@@ -108,6 +110,13 @@ export const InspectorDrawer: React.FC = () => {
   }, [selectedEntity?.id, selectedEntity?.type]);
 
   useEffect(() => {
+    if (selectedEntity?.type === 'prospect' && previousSectionRef.current !== activeSection) {
+      closeInspector();
+    }
+    previousSectionRef.current = activeSection;
+  }, [activeSection, selectedEntity?.type, closeInspector]);
+
+  useEffect(() => {
     if (selectedEntity?.type !== 'prospect') return;
     const timer = setInterval(() => setNowMs(Date.now()), 1000);
     return () => clearInterval(timer);
@@ -128,6 +137,12 @@ export const InspectorDrawer: React.FC = () => {
     let active = true;
     setLoading(true);
     setFetchError('');
+
+    if (selectedEntity.type === 'prospect') {
+      setProspectData(null);
+      setClientIncomes([]);
+      setClientRenewals([]);
+    }
 
     if (selectedEntity.type === 'email') {
       api
@@ -206,8 +221,11 @@ export const InspectorDrawer: React.FC = () => {
             .getIncomes()
             .then((allInc) => {
               if (!active) return;
+              const companyName = res.company_name.trim().toLocaleLowerCase();
               const filtered = allInc.filter(
-                (i) => i.prospect_id === res.id || i.client_name.toLowerCase() === res.company_name.toLowerCase()
+                (item) => item.prospect_id
+                  ? item.prospect_id === res.id
+                  : (item.client_name || '').trim().toLocaleLowerCase() === companyName
               );
               setClientIncomes(filtered);
             })
@@ -219,8 +237,11 @@ export const InspectorDrawer: React.FC = () => {
             .getRenewals()
             .then((allRen) => {
               if (!active) return;
+              const companyName = res.company_name.trim().toLocaleLowerCase();
               const filtered = allRen.filter(
-                (r) => r.prospect_id === res.id || r.client_name.toLowerCase() === res.company_name.toLowerCase()
+                (item) => item.prospect_id
+                  ? item.prospect_id === res.id
+                  : (item.client_name || '').trim().toLocaleLowerCase() === companyName
               );
               setClientRenewals(filtered);
             })
@@ -625,7 +646,9 @@ export const InspectorDrawer: React.FC = () => {
                     nowMs={nowMs}
                     clientIncomes={clientIncomes}
                     clientRenewals={clientRenewals}
-                    onProspectUpdated={setProspectData}
+                    onProspectUpdated={(updated) => {
+                      setProspectData((current) => current?.id === updated.id ? updated : current);
+                    }}
                     onIncomeCreated={(created) => setClientIncomes((prev) => [created, ...prev])}
                     onRenewalCreated={(created) => setClientRenewals((prev) => [...prev, created])}
                     onRenewalUpdated={(updated) =>

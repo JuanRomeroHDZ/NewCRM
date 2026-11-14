@@ -201,7 +201,7 @@ async def get_security_health_audit(db: AsyncSession = Depends(get_db)):
     penalty += min(15, expiring_api_keys_count * 5)
     penalty += min(20, len(stale_accounts) * 4)
 
-    health_score = max(5, 100 - penalty)
+    health_score = max(5, 100 - penalty) if total_accounts else None
     vulnerable_accounts = len(set(
         [item["id"] for rg in reuse_groups for item in rg.entities] +
         [w["id"] for w in weak_accounts] +

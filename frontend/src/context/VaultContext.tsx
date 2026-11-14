@@ -282,6 +282,8 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       setClipboardClearSeconds(status.clipboard_clear_seconds);
       setAllowRevealPasswords(status.allow_reveal_passwords);
       setSearchHotkey(status.search_hotkey || 'ctrl+k');
+      setAccentColor(/^#[\da-f]{6}$/i.test(status.accent_color) ? status.accent_color : '#6366f1');
+      setCanvasStyle(['dot-grid', 'subtle-grid', 'plain'].includes(status.canvas_style) ? status.canvas_style : 'dot-grid');
 
       if (!status.is_unlocked && getApiVaultToken()) {
         setApiVaultToken(null);

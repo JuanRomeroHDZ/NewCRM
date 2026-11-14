@@ -172,7 +172,7 @@ export interface ApiKeyAlertItem {
 }
 
 export interface SecurityAuditResponse {
-  health_score: number;
+  health_score: number | null;
   total_accounts: number;
   vulnerable_accounts_count: number;
   reused_passwords_count: number;

@@ -143,9 +143,13 @@ export const SecurityAuditView: React.FC = () => {
     );
   }
 
-  const score = audit?.health_score ?? 0;
-  const scoreColor = score >= 80 ? '#10b981' : score >= 60 ? '#f59e0b' : '#f43f5e';
-  const scoreLabel = score >= 80 ? 'Muy Seguro' : score >= 60 ? 'Por Mejorar' : 'Riesgo Alto';
+  const totalAuditedAccounts = audit?.total_accounts ?? 0;
+  const rawScore = Number(audit?.health_score);
+  const score = totalAuditedAccounts > 0 && Number.isFinite(rawScore)
+    ? Math.max(0, Math.min(100, rawScore))
+    : null;
+  const scoreColor = score === null ? '#64748b' : score >= 80 ? '#10b981' : score >= 60 ? '#f59e0b' : '#f43f5e';
+  const scoreLabel = score === null ? 'Sin datos' : score >= 80 ? 'Muy Seguro' : score >= 60 ? 'Por Mejorar' : 'Riesgo Alto';
   const urgentApiCount =
     (audit?.expired_api_keys_count || 0) +
     (audit?.expiring_api_keys_count ?? audit?.expiring_soon_api_keys_count ?? 0);
@@ -205,7 +209,7 @@ export const SecurityAuditView: React.FC = () => {
       </div>
 
       {/* Main Score Hero Card */}
-      <div className="flex min-w-0 flex-col items-stretch justify-between gap-4 rounded-xl border border-obsidian-border bg-obsidian-panel p-3 sm:p-5 xl:flex-row xl:items-center">
+      <div className="flex min-w-0 flex-col items-stretch justify-between gap-3 rounded-xl border border-obsidian-border bg-obsidian-panel p-3 sm:p-4 xl:flex-row xl:items-center">
         <div className="flex min-w-0 flex-1 items-center gap-3 sm:gap-5">
           {/* Radial Score Gauge */}
           <div className="relative flex h-16 w-16 shrink-0 items-center justify-center sm:h-24 sm:w-24">
@@ -218,22 +222,24 @@ export const SecurityAuditView: React.FC = () => {
                 strokeWidth="8"
                 fill="transparent"
               />
-              <circle
-                cx="50"
-                cy="50"
-                r="40"
-                stroke={scoreColor}
-                strokeWidth="8"
-                fill="transparent"
-                strokeDasharray="251.2"
-                strokeDashoffset={251.2 - (251.2 * score) / 100}
-                strokeLinecap="round"
-                className="transition-all duration-1000 ease-out"
-              />
+              {score !== null && (
+                <circle
+                  cx="50"
+                  cy="50"
+                  r="40"
+                  stroke={scoreColor}
+                  strokeWidth="8"
+                  fill="transparent"
+                  strokeDasharray="251.2"
+                  strokeDashoffset={251.2 - (251.2 * score) / 100}
+                  strokeLinecap="round"
+                  className="transition-all duration-1000 ease-out"
+                />
+              )}
             </svg>
             <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-              <span className="text-2xl font-bold font-mono text-white tracking-tight">{score}</span>
-              <span className="text-[10px] text-obsidian-muted -mt-1">/100</span>
+              <span className="text-2xl font-bold font-mono text-white tracking-tight">{score ?? '—'}</span>
+              {score !== null && <span className="text-[10px] text-obsidian-muted -mt-1">/100</span>}
             </div>
           </div>
 
@@ -252,7 +258,9 @@ export const SecurityAuditView: React.FC = () => {
               />
             </div>
             <p className="text-xs text-obsidian-muted mt-1">
-              {audit?.total_accounts || 0} cuentas revisadas · {audit?.vulnerable_accounts_count || 0} por mejorar
+              {score === null
+                ? 'Agrega un correo o servicio para revisar la seguridad.'
+                : `${totalAuditedAccounts} cuentas revisadas · ${audit?.vulnerable_accounts_count || 0} por mejorar`}
             </p>
           </div>
         </div>
@@ -293,7 +301,7 @@ export const SecurityAuditView: React.FC = () => {
       </div>
 
       {/* Quick Filter across Findings */}
-      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-obsidian-border bg-obsidian-panel p-3">
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-obsidian-border bg-obsidian-panel p-2.5 sm:p-3">
         <div className="relative min-w-0 flex-1">
           <Search size={14} className="absolute left-3 top-2.5 text-obsidian-muted" aria-hidden="true" />
           <input
@@ -319,9 +327,9 @@ export const SecurityAuditView: React.FC = () => {
       </div>
 
       {/* LLAVES POR VENCER & CONTRASEÑAS ANTIGUAS */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-2 sm:gap-4">
         {/* Llaves API por Vencer */}
-        <div className="p-5 sm:p-6 rounded-2xl bg-obsidian-panel border border-obsidian-border space-y-3.5 min-w-0">
+        <div className="min-w-0 space-y-3 rounded-xl border border-obsidian-border bg-obsidian-panel p-3 sm:p-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2 min-w-0">
               <Code size={16} className="text-rose-400 shrink-0" aria-hidden="true" />
@@ -397,7 +405,7 @@ export const SecurityAuditView: React.FC = () => {
         </div>
 
         {/* Contraseñas Antiguas */}
-        <div className="p-5 sm:p-6 rounded-2xl bg-obsidian-panel border border-obsidian-border space-y-3.5 min-w-0">
+        <div className="min-w-0 space-y-3 rounded-xl border border-obsidian-border bg-obsidian-panel p-3 sm:p-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2 min-w-0">
               <Clock size={16} className="text-indigo-400 shrink-0" aria-hidden="true" />
@@ -458,7 +466,7 @@ export const SecurityAuditView: React.FC = () => {
       {/* DETAILED AUDIT SECTIONS */}
 
       {/* 1. Cuentas con la misma contraseña */}
-      <div className="p-5 sm:p-6 rounded-2xl bg-obsidian-panel border border-obsidian-border space-y-4">
+      <div className="min-w-0 space-y-3 rounded-xl border border-obsidian-border bg-obsidian-panel p-3 sm:p-4">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
             <AlertTriangle size={16} className="text-rose-400 shrink-0" aria-hidden="true" />
@@ -518,11 +526,11 @@ export const SecurityAuditView: React.FC = () => {
             ))}
           </div>
         ) : (audit?.reuse_groups?.length || 0) > 0 && normalizedQuery ? (
-          <div className="p-5 rounded-xl bg-obsidian-surface/40 border border-obsidian-border text-center text-xs text-obsidian-muted">
+          <div className="rounded-lg border border-obsidian-border bg-obsidian-surface/40 p-3 text-center text-xs text-obsidian-muted">
             Sin coincidencias en contraseñas repetidas para "{searchQuery}".
           </div>
         ) : (
-          <div className="p-5 rounded-xl bg-obsidian-surface/40 border border-obsidian-border text-center text-xs text-emerald-400 flex items-center justify-center gap-2">
+          <div className="flex items-center justify-center gap-2 rounded-lg border border-obsidian-border bg-obsidian-surface/40 p-3 text-center text-xs text-emerald-400">
             <CheckCircle2 size={16} className="shrink-0" aria-hidden="true" />
             <span>Excelente: No tienes ninguna contraseña repetida entre tus cuentas.</span>
           </div>
@@ -530,9 +538,9 @@ export const SecurityAuditView: React.FC = () => {
       </div>
 
       {/* 2. Contraseñas fáciles de adivinar & Correos principales sin 2 pasos */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-2 sm:gap-4">
         {/* Weak Passwords */}
-        <div className="p-5 sm:p-6 rounded-2xl bg-obsidian-panel border border-obsidian-border space-y-3 min-w-0">
+        <div className="min-w-0 space-y-3 rounded-xl border border-obsidian-border bg-obsidian-panel p-3 sm:p-4">
           <div className="flex items-center gap-2 min-w-0">
             <Key size={16} className="text-amber-400 shrink-0" aria-hidden="true" />
             <h3 className="text-sm font-bold text-white break-words">
@@ -576,7 +584,7 @@ export const SecurityAuditView: React.FC = () => {
         </div>
 
         {/* Emails without 2FA */}
-        <div className="p-5 sm:p-6 rounded-2xl bg-obsidian-panel border border-obsidian-border space-y-3 min-w-0">
+        <div className="min-w-0 space-y-3 rounded-xl border border-obsidian-border bg-obsidian-panel p-3 sm:p-4">
           <div className="flex items-center gap-2 min-w-0">
             <ShieldAlert size={16} className="text-cyan-400 shrink-0" aria-hidden="true" />
             <h3 className="text-sm font-bold text-white break-words">

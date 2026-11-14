@@ -321,10 +321,11 @@ export const api = {
     }),
 
   // Dedicated Audit Trail
-  getAuditTrail: (limit = 50, offset = 0, action?: string, entityType?: string) => {
+  getAuditTrail: (limit = 25, offset = 0, action?: string, entityType?: string, search?: string) => {
     const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
     if (action) params.append('action', action);
     if (entityType) params.append('entity_type', entityType);
+    if (search?.trim()) params.append('search', search.trim());
     return request<any>(`/audit/logs?${params.toString()}`);
   },
 

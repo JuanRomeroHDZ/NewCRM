@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertTriangle, Edit3, Eye, EyeOff, FolderLock, Plus, Search, Trash2 } from 'lucide-react';
+import { AlertTriangle, Edit3, Eye, EyeOff, FolderLock, Search, Trash2 } from 'lucide-react';
 import type { SecureResource, SecureResourceType } from '../../../types';
 import { CopyButton } from '../../common/CopyButton';
 import { EmptyState } from '../../common/EmptyState';
@@ -27,7 +27,6 @@ interface SecureResourceCollectionProps {
   onTypeChange: (value: string) => void;
   revealedResourceIds: Set<string>;
   onToggleReveal: (id: string) => void;
-  onCreate: () => void;
   onEdit: (resource: SecureResource) => void;
   onDelete: (resource: SecureResource) => void;
   onClearFilters: () => void;
@@ -45,15 +44,14 @@ export const SecureResourceCollection: React.FC<SecureResourceCollectionProps> =
   onTypeChange,
   revealedResourceIds,
   onToggleReveal,
-  onCreate,
   onEdit,
   onDelete,
   onClearFilters,
 }) => (
-  <section aria-label="Recursos seguros" className="space-y-4">
+  <section aria-label="Recursos y notas" className="space-y-4">
     <div className="flex min-w-0 flex-wrap items-center gap-3 rounded-xl border border-obsidian-border bg-obsidian-panel p-3 sm:p-4">
       <label className="relative min-w-0 w-full flex-1 sm:min-w-[220px]">
-        <span className="sr-only">Buscar recursos seguros por título, etiquetas o notas</span>
+        <span className="sr-only">Buscar por título, etiquetas o notas</span>
         <Search size={14} className="absolute left-3 top-2.5 text-obsidian-muted" aria-hidden="true" />
         <input
           type="search"
@@ -94,7 +92,7 @@ export const SecureResourceCollection: React.FC<SecureResourceCollectionProps> =
     </div>
 
     {loading && (
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3" role="status" aria-label="Cargando recursos seguros">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3" role="status" aria-label="Cargando recursos">
         <div className="h-44 rounded-xl border border-obsidian-border bg-obsidian-panel animate-pulse" />
         <div className="h-44 rounded-xl border border-obsidian-border bg-obsidian-panel animate-pulse" />
         <div className="h-44 rounded-xl border border-obsidian-border bg-obsidian-panel animate-pulse" />
@@ -102,7 +100,7 @@ export const SecureResourceCollection: React.FC<SecureResourceCollectionProps> =
     )}
 
     {error && !loading && (
-      <EmptyState icon={AlertTriangle} tone="error" title="No se pudieron cargar los recursos seguros" description={error} actionLabel="Reintentar" onAction={onRetry} />
+      <EmptyState icon={AlertTriangle} tone="error" title="No se pudieron cargar los recursos" description={error} actionLabel="Reintentar" onAction={onRetry} />
     )}
 
     {!loading && !error && filteredResources.length > 0 && (
@@ -188,9 +186,6 @@ export const SecureResourceCollection: React.FC<SecureResourceCollectionProps> =
           <>
             <p className="text-sm font-semibold text-white">No hay recursos para mostrar</p>
             <p className="mx-auto max-w-md text-xs text-obsidian-muted">Guarda códigos de recuperación, licencias o notas privadas.</p>
-            <button type="button" onClick={onCreate} className="inline-flex min-h-10 items-center gap-1.5 rounded-lg bg-indigo-600 px-3 text-xs font-semibold text-white hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300">
-              <Plus size={14} aria-hidden="true" />Crear recurso
-            </button>
           </>
         ) : (
           <div className="space-y-3">

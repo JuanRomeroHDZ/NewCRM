@@ -578,12 +578,47 @@ export const GraphView: React.FC = () => {
 
   return (
     <div className="relative h-[calc(100dvh-4rem)] min-h-0 w-full select-none overflow-hidden bg-obsidian-bg dot-grid-canvas">
-      {/* Top Floating Controls */}
+      {/* Keep mobile controls compact so the map remains visible. */}
       <div className="absolute inset-x-2 top-2 z-10 flex flex-wrap items-start gap-2 sm:left-6 sm:right-6 sm:top-4">
+        <details className="relative max-w-[calc(100vw-1rem)] rounded-xl border border-obsidian-border bg-obsidian-panel/95 p-1 text-xs shadow-xl backdrop-blur-md sm:hidden">
+          <summary className="flex min-h-[34px] cursor-pointer list-none items-center gap-2 rounded-lg px-2.5 font-medium text-white [&::-webkit-details-marker]:hidden">
+            <span>Filtros: {FILTER_OPTIONS.find((option) => option.value === filterType)?.label}</span>
+          </summary>
+          <div className="absolute left-0 top-full mt-1 flex min-w-40 flex-col gap-1 rounded-xl border border-obsidian-border bg-obsidian-panel p-1.5 shadow-xl">
+            <div role="group" aria-label="Filtrar nodos del mapa" className="flex flex-col gap-1">
+              {FILTER_OPTIONS.map((opt) => {
+                const active = filterType === opt.value;
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => setFilterType(opt.value)}
+                    className={`min-h-[36px] rounded-lg px-2.5 text-left text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
+                      active ? 'bg-indigo-600 text-white' : 'text-obsidian-muted hover:bg-obsidian-surface hover:text-white'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+            <button
+              type="button"
+              aria-pressed={highlightSPOF}
+              onClick={() => setHighlightSPOF(!highlightSPOF)}
+              className="flex min-h-[36px] items-center gap-2 rounded-lg border-t border-obsidian-border px-2.5 pt-1 text-left text-xs text-obsidian-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
+            >
+              <ShieldAlert size={14} aria-hidden="true" />
+              <span>Resaltar correos clave</span>
+            </button>
+          </div>
+        </details>
+
         <div
           role="group"
           aria-label="Filtrar nodos del mapa"
-          className="flex flex-wrap items-center gap-1 rounded-xl border border-obsidian-border bg-obsidian-panel/90 p-1 text-xs shadow-xl backdrop-blur-md"
+          className="hidden flex-wrap items-center gap-1 rounded-xl border border-obsidian-border bg-obsidian-panel/90 p-1 text-xs shadow-xl backdrop-blur-md sm:flex"
         >
           {FILTER_OPTIONS.map((opt) => {
             const active = filterType === opt.value;
@@ -605,7 +640,7 @@ export const GraphView: React.FC = () => {
           })}
         </div>
 
-        <div className="flex items-center gap-1.5 rounded-xl border border-obsidian-border bg-obsidian-panel/90 p-1 text-xs shadow-xl backdrop-blur-md">
+        <div className="hidden items-center gap-1.5 rounded-xl border border-obsidian-border bg-obsidian-panel/90 p-1 text-xs shadow-xl backdrop-blur-md sm:flex">
           <button
             type="button"
             aria-pressed={highlightSPOF}
@@ -617,8 +652,7 @@ export const GraphView: React.FC = () => {
             }`}
           >
             <ShieldAlert size={14} aria-hidden="true" />
-            <span className="sm:hidden">Resaltar correos</span>
-            <span className="hidden sm:inline">Resaltar Correos Indispensables</span>
+            <span>Resaltar correos clave</span>
           </button>
         </div>
 
@@ -629,7 +663,7 @@ export const GraphView: React.FC = () => {
             className="flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-300 backdrop-blur-md"
           >
             <AlertTriangle size={14} className="text-amber-400" aria-hidden="true" />
-            <span>Correos de respaldo conectados en círculo</span>
+            <span>{graphData.cycles_detected.length} conexiones circulares</span>
           </div>
         )}
       </div>

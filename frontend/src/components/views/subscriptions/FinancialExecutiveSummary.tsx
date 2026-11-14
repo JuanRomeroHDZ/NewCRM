@@ -79,7 +79,7 @@ export const FinancialExecutiveSummary: React.FC<FinancialExecutiveSummaryProps>
         <div className="flex items-center gap-2 min-w-0">
           <BarChart3 size={16} className="text-indigo-400 flex-shrink-0" aria-hidden="true" />
           <h3 className="text-sm font-bold text-white tracking-tight truncate">
-            Resumen de Gastos, Ingresos y Ganancia Neta Real
+            Resumen financiero
           </h3>
           <InfoTooltip
             title="Cómo se calcula este resumen"
@@ -192,7 +192,7 @@ export const FinancialExecutiveSummary: React.FC<FinancialExecutiveSummaryProps>
         <div className="min-w-0 space-y-1 border-b border-obsidian-border pb-3 min-[380px]:border-b-0 min-[380px]:pb-0 min-[380px]:even:border-l min-[380px]:even:pl-3 lg:border-l lg:pl-3 lg:first:border-l-0 lg:first:pl-0">
           <div className="flex items-center justify-between gap-2">
             <span className="text-[11px] font-semibold text-obsidian-muted uppercase tracking-wider truncate">
-              Gasto Semanal Total
+              Gasto semanal
             </span>
             <span className="text-[10px] font-mono text-cyan-400 bg-cyan-500/10 px-1.5 py-0.5 rounded border border-cyan-500/20">
               7 Días
@@ -213,7 +213,7 @@ export const FinancialExecutiveSummary: React.FC<FinancialExecutiveSummaryProps>
         <div className="min-w-0 space-y-1 border-b border-obsidian-border pb-3 min-[380px]:border-b-0 min-[380px]:pb-0 min-[380px]:even:border-l min-[380px]:even:border-indigo-500/30 min-[380px]:even:pl-3 lg:border-l lg:border-indigo-500/30 lg:pl-3">
           <div className="flex items-center justify-between gap-2">
             <span className="text-[11px] font-semibold text-indigo-300 uppercase tracking-wider truncate">
-              Gasto Mensual Total
+              Gasto mensual
             </span>
             <span className="text-[10px] font-mono text-indigo-300 bg-indigo-500/10 px-1.5 py-0.5 rounded border border-indigo-500/25">
               Mensual
@@ -234,7 +234,7 @@ export const FinancialExecutiveSummary: React.FC<FinancialExecutiveSummaryProps>
         <div className="min-w-0 space-y-1 border-b border-obsidian-border pb-3 min-[380px]:border-b-0 min-[380px]:pb-0 min-[380px]:even:border-l min-[380px]:even:pl-3 lg:border-l lg:pl-3">
           <div className="flex items-center justify-between gap-2">
             <span className="text-[11px] font-semibold text-obsidian-muted uppercase tracking-wider truncate">
-              Gasto Anual Estimado
+              Gasto anual
             </span>
             <span className="text-[10px] font-mono text-purple-300 bg-purple-500/10 px-1.5 py-0.5 rounded border border-purple-500/20">
               12 Meses
@@ -255,7 +255,7 @@ export const FinancialExecutiveSummary: React.FC<FinancialExecutiveSummaryProps>
         <div className="min-w-0 space-y-1 min-[380px]:even:border-l min-[380px]:even:border-emerald-500/25 min-[380px]:even:pl-3 lg:border-l lg:border-emerald-500/25 lg:pl-3">
           <div className="flex items-center justify-between gap-2">
             <span className="text-[11px] font-semibold text-emerald-300 uppercase tracking-wider truncate">
-              Promedio por Cuenta y Ahorro
+              Promedio y ahorro
             </span>
             <PiggyBank size={14} className="text-emerald-400 flex-shrink-0" aria-hidden="true" />
           </div>

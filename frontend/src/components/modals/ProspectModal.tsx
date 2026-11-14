@@ -17,6 +17,15 @@ function toLocalDatetimeInputValue(isoStr?: string): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+function normalizeDecimalInput(value: string, maxDecimals = 2): string {
+  const cleaned = value.replace(/[^\d.]/g, '');
+  const separator = cleaned.indexOf('.');
+  if (separator < 0) return cleaned;
+  const whole = cleaned.slice(0, separator);
+  const fraction = cleaned.slice(separator + 1).replace(/\./g, '').slice(0, maxDecimals);
+  return `${whole}.${fraction}`;
+}
+
 export const ProspectModal: React.FC = () => {
   const { 
     isProspectModalOpen, closeProspectModal, editingProspectId, 
@@ -76,9 +85,14 @@ export const ProspectModal: React.FC = () => {
 
   useEffect(() => {
     if (!isProspectModalOpen) return;
+    let active = true;
     setFormError(null);
     setShowFollowupConfig(Boolean(editingProspectId));
+    setShowInlineEmailCreate(false);
+    setNewEmailAddress('');
+    setNewTagName('');
     api.getEmails().then((eList) => {
+      if (!active) return;
       setEmails(eList);
       if (prospectModalDefaultEmailId) {
         setEmailId(prospectModalDefaultEmailId);
@@ -86,12 +100,13 @@ export const ProspectModal: React.FC = () => {
         setEmailId(eList[0].id);
       }
     }).catch((err: any) => {
-      showToast(err?.message || 'No se pudieron cargar los correos disponibles.', 'warning');
+      if (active) showToast(err?.message || 'No se pudieron cargar los correos disponibles.', 'warning');
     });
 
     if (editingProspectId) {
       setLoadingDetail(true);
       api.getProspectDetail(editingProspectId).then((p) => {
+        if (!active) return;
         setScope(p.scope || 'business');
         setCompanyName(p.company_name);
         setContactName(p.contact_name || '');
@@ -115,11 +130,12 @@ export const ProspectModal: React.FC = () => {
         setMaxFollowupAttempts(p.max_followup_attempts || 3);
         setTags(p.tags || []);
       }).catch((err: any) => {
+        if (!active) return;
         const msg = err?.message || 'Error al cargar la ficha del prospecto.';
         setFormError(msg);
         showToast(msg, 'error');
       }).finally(() => {
-        setLoadingDetail(false);
+        if (active) setLoadingDetail(false);
       });
     } else {
       setLoadingDetail(false);
@@ -145,6 +161,10 @@ export const ProspectModal: React.FC = () => {
       setMaxFollowupAttempts(3);
       setTags([]);
     }
+
+    return () => {
+      active = false;
+    };
   }, [isProspectModalOpen, editingProspectId, prospectModalDefaultEmailId, defaultEntityScope, fallbackCurrency, showToast]);
 
   useEffect(() => {
@@ -316,8 +336,17 @@ export const ProspectModal: React.FC = () => {
   };
 
   const addTag = () => {
-    if (!newTagName.trim()) return;
-    setTags([...tags, { name: newTagName.trim(), color: newTagColor }]);
+    const name = newTagName.trim();
+    if (!name) return;
+    if (tags.some((tag) => tag.name.trim().toLocaleLowerCase() === name.toLocaleLowerCase())) {
+      showToast('Esa etiqueta ya está agregada.', 'warning');
+      return;
+    }
+    if (tags.length >= 100) {
+      showToast('Un prospecto puede tener hasta 100 etiquetas.', 'warning');
+      return;
+    }
+    setTags((current) => [...current, { name, color: newTagColor }]);
     setNewTagName('');
   };
 
@@ -329,7 +358,8 @@ export const ProspectModal: React.FC = () => {
     { label: '7 días (168h)', hours: 168 }
   ];
 
-  const numericSlaPreview = Number(slaHours) || 0;
+  const numericSlaPreview = Number(slaHours);
+  const hasValidSlaPreview = slaHours.trim() !== '' && Number.isFinite(numericSlaPreview);
 
   return (
     <div
@@ -606,7 +636,7 @@ export const ProspectModal: React.FC = () => {
                   inputMode="decimal"
                   maxLength={12}
                   value={estimatedValue}
-                  onChange={(e) => setEstimatedValue(e.target.value.replace(/[^0-9.]/g, ''))}
+                  onChange={(e) => setEstimatedValue(normalizeDecimalInput(e.target.value))}
                   placeholder="0.00"
                   className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-indigo-500"
                 />
@@ -799,11 +829,11 @@ export const ProspectModal: React.FC = () => {
                     inputMode="decimal"
                     maxLength={10}
                     value={slaHours}
-                    onChange={(e) => setSlaHours(e.target.value.replace(/[^0-9.]/g, ''))}
+                    onChange={(e) => setSlaHours(normalizeDecimalInput(e.target.value))}
                     className="w-20 shrink-0 px-2 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-indigo-500 sm:w-28 sm:px-3"
                   />
                   <span className="min-w-0 text-obsidian-muted text-[11px]">
-                    horas ({numericSlaPreview > 0 ? (numericSlaPreview / 24).toFixed(1).replace(/\.0$/, '') : '0'} días)
+                    horas ({hasValidSlaPreview ? (numericSlaPreview / 24).toFixed(1).replace(/\.0$/, '') : '—'} días)
                   </span>
                 </div>
               </div>

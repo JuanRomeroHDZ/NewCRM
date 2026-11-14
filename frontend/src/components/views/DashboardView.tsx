@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, Key, Lock } from 'lucide-react';
+import { AlertTriangle, Key, Lock, X } from 'lucide-react';
 import { useVault } from '../../context/VaultContext';
 import { api } from '../../lib/api';
 import type {
@@ -27,6 +27,7 @@ import {
   computeRealProfitAndRenewalsSummary,
   evaluateBudgetCap,
 } from '../../lib/financeUtils';
+import { needsExchangeRateReview } from '../../lib/exchangeRateReview';
 import { DashboardAccountsSection } from './dashboard/DashboardAccountsSection';
 import { DashboardFinanceSection } from './dashboard/DashboardFinanceSection';
 import { DashboardMapLink } from './dashboard/DashboardMapLink';
@@ -65,6 +66,13 @@ export const DashboardView: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [partialDataWarning, setPartialDataWarning] = useState<string | null>(null);
+  const [dismissedRateNotice, setDismissedRateNotice] = useState(() => {
+    try {
+      return window.sessionStorage.getItem('newcrm.dashboard.exchange-rate-notice') || '';
+    } catch {
+      return '';
+    }
+  });
   // Evita que una respuesta antigua reemplace datos tras bloquear o recargar el panel.
   const loadGeneration = useRef(0);
 
@@ -242,6 +250,30 @@ export const DashboardView: React.FC = () => {
     [filteredProspects, fin.usdRate, fin.monthlyMXN]
   );
 
+  const rateUpdatedAt = exchangeRate?.updated_at;
+  const parsedRateUpdatedAt = rateUpdatedAt
+    ? Date.parse(/(?:Z|[+-]\d{2}:?\d{2})$/i.test(rateUpdatedAt) ? rateUpdatedAt : `${rateUpdatedAt}Z`)
+    : Number.NaN;
+  const exchangeRateNeedsReview = needsExchangeRateReview(exchangeRate);
+  const rateNoticeSignature = exchangeRate
+    ? `${exchangeRate.is_manual}:${exchangeRate.updated_at}:${exchangeRate.rate}`
+    : 'missing';
+  const showRateNotice = exchangeRateNeedsReview && dismissedRateNotice !== rateNoticeSignature;
+  const rateNoticeHelp = !exchangeRate
+    ? 'No hay una cotización disponible. Actualízala antes de usar los totales convertidos.'
+    : Number.isFinite(parsedRateUpdatedAt)
+      ? 'La última actualización tiene más de 24 horas. Revísalo antes de usar los totales convertidos.'
+      : 'No se pudo comprobar la fecha de actualización. Revisa el tipo de cambio antes de usar los totales convertidos.';
+
+  const dismissRateNotice = () => {
+    setDismissedRateNotice(rateNoticeSignature);
+    try {
+      window.sessionStorage.setItem('newcrm.dashboard.exchange-rate-notice', rateNoticeSignature);
+    } catch {
+      // El aviso sigue oculto durante esta sesión aunque el navegador no permita guardar preferencias.
+    }
+  };
+
   const ssoCount = filteredPlatforms.filter((platform) => platform.access_type === 'sso').length;
   const ownPasswordCount = filteredPlatforms.filter((platform) => platform.access_type === 'own_password').length;
   const ssoPercentage = filteredPlatforms.length ? Math.round((ssoCount / filteredPlatforms.length) * 100) : 0;
@@ -307,11 +339,14 @@ export const DashboardView: React.FC = () => {
 
   return (
     <div className="mx-auto max-w-7xl min-w-0 space-y-6 p-3 sm:space-y-8 sm:p-8 animate-fadeIn">
-      {(!exchangeRate || !exchangeRate.is_manual) && (
-        <div role="status" className="flex min-w-0 flex-wrap items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
-          <AlertTriangle size={14} aria-hidden="true" />
-          <span>Tipo de cambio por verificar</span>
-          <InfoTooltip title="Tipo de cambio" content="El valor puede estar desactualizado. Revísalo antes de usar los totales convertidos." position="bottom" />
+      {showRateNotice && (
+        <div role="status" className="flex min-w-0 items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-2 text-xs text-amber-200 sm:px-3">
+          <AlertTriangle size={14} className="shrink-0" aria-hidden="true" />
+          <span className="min-w-0 flex-1">El tipo de cambio necesita revisión.</span>
+          <InfoTooltip title="Tipo de cambio" content={rateNoticeHelp} position="bottom" />
+          <button type="button" onClick={dismissRateNotice} aria-label="Ocultar aviso de tipo de cambio" className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-amber-200/80 hover:bg-amber-500/15 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300">
+            <X size={14} aria-hidden="true" />
+          </button>
         </div>
       )}
       {partialDataWarning && (

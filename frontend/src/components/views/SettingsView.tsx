@@ -233,7 +233,7 @@ export const SettingsView: React.FC = () => {
         </div>
       )}
 
-      <form onSubmit={handleSavePreferences} className="space-y-6">
+      <form onSubmit={handleSavePreferences} className="space-y-4 sm:space-y-5">
         {/* Visual Customization (Notion & Obsidian aesthetics) */}
         <div className="min-w-0 space-y-4 rounded-xl border border-obsidian-border bg-obsidian-panel p-3 sm:p-5">
           <h3 className="text-sm font-bold text-white flex items-center gap-2">
@@ -287,7 +287,7 @@ export const SettingsView: React.FC = () => {
         </div>
 
         {/* Security Parameters */}
-        <div className="min-w-0 space-y-5 rounded-xl border border-obsidian-border bg-obsidian-panel p-3 sm:p-5">
+        <div className="min-w-0 space-y-4 rounded-xl border border-obsidian-border bg-obsidian-panel p-3 sm:p-4">
           <div className="flex items-center gap-2">
             <Shield size={16} className="text-indigo-400" aria-hidden="true" />
             <h3 className="text-sm font-bold text-white">Sesión y Portapapeles</h3>
@@ -371,9 +371,9 @@ export const SettingsView: React.FC = () => {
           <div className="flex items-center gap-2">
             <Clock size={16} className="text-indigo-400" aria-hidden="true" />
             <h3 className="text-sm font-bold text-white">
-              Cambio de Contraseñas, Papelera y Presupuesto
+              Recordatorios y límites
             </h3>
-            <InfoTooltip content="Define cada cuántos días te avisamos para renovar contraseñas, cuándo vaciar la papelera, el límite de intentos a prospectos y tu presupuesto mensual." />
+            <InfoTooltip content="Define los avisos de cambio de contraseña, los intentos de seguimiento y el gasto mensual máximo en suscripciones." />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
@@ -428,10 +428,11 @@ export const SettingsView: React.FC = () => {
             </div>
 
             {/* Monthly Budget Cap */}
-            <div className="space-y-1.5 md:col-span-2">
+            <div className="min-w-0 max-w-md space-y-1.5">
               <label htmlFor="budget-cap-amount" className="text-obsidian-text font-medium flex items-center gap-1.5">
-                <Target size={13} className="text-indigo-400" aria-hidden="true" />
-                <span>Presupuesto Mensual Máximo en Suscripciones (0 = Sin límite)</span>
+                <Target size={13} className="text-indigo-400 shrink-0" aria-hidden="true" />
+                <span>Límite mensual</span>
+                <InfoTooltip content="Máximo para el gasto en suscripciones. Usa 0 para dejarlo sin límite." />
               </label>
               <div className="flex items-center gap-2">
                 <input

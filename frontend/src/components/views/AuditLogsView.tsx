@@ -10,7 +10,28 @@ import { InfoTooltip } from '../common/InfoTooltip';
 import { EmptyState } from '../common/EmptyState';
 import { INPUT_LIMITS } from '../../lib/validation';
 
-const PAGE_SIZE = 100;
+const PAGE_SIZE = 25;
+const ENTITY_LABELS: Record<string, string> = {
+  email: 'Correo principal',
+  email_account: 'Correo principal',
+  platform: 'Servicio',
+  platform_account: 'Servicio',
+  prospect: 'Prospecto',
+  payment: 'Método de pago',
+  payment_method: 'Método de pago',
+  client_income: 'Ingreso',
+  domain_renewal: 'Vencimiento',
+  one_time_expense: 'Gasto',
+  secure_resource: 'Recurso',
+  vault: 'Acceso',
+  settings: 'Ajustes',
+  runtime_config: 'Configuración',
+};
+
+const getEntityTypeLabel = (entityType?: string | null) => {
+  if (!entityType) return '—';
+  return ENTITY_LABELS[entityType] || entityType.replace(/[_-]+/g, ' ');
+};
 
 export const AuditLogsView: React.FC = () => {
   const { isUnlocked, openUnlockModal, showToast, systemLocale, dataVersion } = useVault();
@@ -21,7 +42,13 @@ export const AuditLogsView: React.FC = () => {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [selectedAction, setSelectedAction] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const loadGeneration = useRef(0);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedSearch(searchTerm.trim()), 250);
+    return () => window.clearTimeout(timer);
+  }, [searchTerm]);
 
   const fetchLogs = useCallback(async () => {
     const generation = ++loadGeneration.current;
@@ -39,7 +66,7 @@ export const AuditLogsView: React.FC = () => {
     setLoadError(null);
     try {
       const act = selectedAction === 'all' ? undefined : selectedAction;
-      const res = await api.getAuditTrail(PAGE_SIZE, offset, act);
+      const res = await api.getAuditTrail(PAGE_SIZE, offset, act, undefined, debouncedSearch);
       if (generation !== loadGeneration.current) return;
       setLogs(res.items || []);
       setTotal(res.total || 0);
@@ -51,7 +78,7 @@ export const AuditLogsView: React.FC = () => {
     } finally {
       if (generation === loadGeneration.current) setLoading(false);
     }
-  }, [isUnlocked, selectedAction, offset, showToast]);
+  }, [isUnlocked, selectedAction, offset, debouncedSearch, showToast]);
 
   useEffect(() => {
     void fetchLogs();
@@ -65,26 +92,17 @@ export const AuditLogsView: React.FC = () => {
     setSelectedAction(nextAction);
   };
 
-  const filteredLogs = logs.filter((log) => {
-    if (!searchTerm) return true;
-    const term = searchTerm.toLowerCase();
-    return (
-      (log.action && log.action.toLowerCase().includes(term)) ||
-      (log.entity_name && log.entity_name.toLowerCase().includes(term)) ||
-      (log.details && log.details.toLowerCase().includes(term)) ||
-      (log.entity_type && log.entity_type.toLowerCase().includes(term))
-    );
-  });
-
   const exportLogsAsJson = () => {
-    const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(filteredLogs, null, 2));
+    const blob = new Blob([JSON.stringify(logs, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
     const downloadAnchor = document.createElement('a');
-    downloadAnchor.setAttribute('href', dataStr);
+    downloadAnchor.setAttribute('href', url);
     downloadAnchor.setAttribute('download', `contact-lessso-historial-${new Date().toISOString().split('T')[0]}.json`);
     document.body.appendChild(downloadAnchor);
     downloadAnchor.click();
     downloadAnchor.remove();
-    showToast(`Exportados ${filteredLogs.length} eventos en JSON`, 'success');
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    showToast(`Descargados ${logs.length} eventos de esta página.`, 'success');
   };
 
   const getActionBadge = (action: string) => {
@@ -102,7 +120,7 @@ export const AuditLogsView: React.FC = () => {
       case 'delete':
         return <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-rose-500/10 text-rose-400 border border-rose-500/20">Eliminación</span>;
       case 'copy_secret':
-        return <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-purple-500/10 text-purple-400 border border-purple-500/20">Copia Secreto</span>;
+        return <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-purple-500/10 text-purple-400 border border-purple-500/20">Copia de acceso</span>;
       case 'update_2fa':
         return <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-blue-500/10 text-blue-400 border border-blue-500/20">Verificación en dos pasos</span>;
       case 'contact_followup':
@@ -111,16 +129,17 @@ export const AuditLogsView: React.FC = () => {
       case 'billing_renewal':
         return <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">Renovación</span>;
       case 'auto_archive':
-        return <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-slate-500/10 text-slate-300 border border-slate-500/20">Archivo Frío</span>;
+        return <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-slate-500/10 text-slate-300 border border-slate-500/20">Archivado</span>;
       case 'reactivate':
         return <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-cyan-500/10 text-cyan-300 border border-cyan-500/20">Reactivación</span>;
       case 'recycle_demo':
-        return <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">Demo Reciclada</span>;
+        return <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">Demo reutilizada</span>;
       case 'auto_purge':
+        return <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-rose-500/10 text-rose-300 border border-rose-500/20">Limpieza automática</span>;
       case 'permanent_delete':
-        return <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-rose-500/10 text-rose-300 border border-rose-500/20">Auto-Purga / Purga</span>;
+        return <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-rose-500/10 text-rose-300 border border-rose-500/20">Eliminación permanente</span>;
       default:
-        return <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-white/5 text-white/60 border border-white/10">{action}</span>;
+        return <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-white/5 text-white/60 border border-white/10">Otro cambio</span>;
     }
   };
 
@@ -153,6 +172,7 @@ export const AuditLogsView: React.FC = () => {
   const endItem = Math.min(offset + logs.length, total);
   const canPrev = offset > 0;
   const canNext = offset + PAGE_SIZE < total;
+  const searchPending = searchTerm.trim() !== debouncedSearch;
 
   return (
     <div className="mx-auto max-w-7xl min-w-0 space-y-4 p-3 sm:space-y-6 sm:p-8">
@@ -183,9 +203,10 @@ export const AuditLogsView: React.FC = () => {
           <button
             type="button"
             onClick={exportLogsAsJson}
-            className="px-3.5 py-2 rounded-xl bg-obsidian-surface border border-obsidian-border hover:border-obsidian-borderLight text-white text-xs font-medium flex items-center gap-2 transition-all hover:bg-white/5"
+            disabled={loading || searchPending || logs.length === 0}
+            className="px-3.5 py-2 rounded-xl bg-obsidian-surface border border-obsidian-border hover:border-obsidian-borderLight text-white text-xs font-medium flex items-center gap-2 transition-all hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <Download className="w-4 h-4 text-white/60" aria-hidden="true" /> Descargar historial
+            <Download className="w-4 h-4 text-white/60" aria-hidden="true" /> Descargar página
           </button>
         </div>
       </div>
@@ -198,9 +219,12 @@ export const AuditLogsView: React.FC = () => {
             type="text"
             maxLength={INPUT_LIMITS.SEARCH}
             aria-label="Buscar en historial por entidad, acción o detalle"
-            placeholder="Buscar por entidad, acción o detalle..."
+            placeholder="Buscar por nombre o tipo..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => {
+              setSearchTerm(e.target.value);
+              setOffset(0);
+            }}
             className="w-full pl-10 pr-4 py-2 rounded-xl bg-obsidian-surface border border-obsidian-border text-xs text-white placeholder-white/30 focus:outline-none focus:border-indigo-500/50"
           />
         </div>
@@ -215,17 +239,17 @@ export const AuditLogsView: React.FC = () => {
             {[
               ['all', 'Todas'],
               ['vault_unlock', 'Desbloqueo'],
-              ['copy_secret', 'Copia Secreto'],
+              ['copy_secret', 'Copia de acceso'],
               ['create', 'Creación'],
               ['update', 'Actualización'],
               ['restore', 'Restauración'],
               ['contact_followup', 'Seguimiento'],
               ['contact_attempt', 'Intento de contacto'],
               ['billing_renewal', 'Renovación'],
-              ['auto_archive', 'Archivo Frío'],
+              ['auto_archive', 'Archivado'],
               ['reactivate', 'Reactivación'],
-              ['recycle_demo', 'Reciclar demo'],
-              ['auto_purge', 'Eliminación automática'],
+              ['recycle_demo', 'Demo reutilizada'],
+              ['auto_purge', 'Limpieza automática'],
               ['permanent_delete', 'Eliminación permanente'],
               ['update_2fa', 'Verificación en dos pasos'],
               ['export', 'Exportación'],
@@ -251,11 +275,11 @@ export const AuditLogsView: React.FC = () => {
       ) : (
         <div className="rounded-2xl border border-obsidian-border bg-obsidian-surface/60 overflow-hidden backdrop-blur-md">
           <div className="divide-y divide-obsidian-border xl:hidden">
-            {loading ? (
+            {loading || searchPending ? (
               <p className="p-4 text-xs text-white/50" role="status">
                 Cargando actividad...
               </p>
-            ) : filteredLogs.length === 0 ? (
+            ) : logs.length === 0 ? (
               <div className="p-4 space-y-2 text-xs text-white/50">
                 <p>No se encontraron eventos.</p>
                 {(searchTerm || selectedAction !== 'all') && (
@@ -272,7 +296,7 @@ export const AuditLogsView: React.FC = () => {
                 )}
               </div>
             ) : (
-              filteredLogs.map((log) => (
+              logs.map((log) => (
                 <div key={log.id} className="min-w-0 space-y-2 p-3 text-xs">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     {getActionBadge(log.action)}
@@ -281,7 +305,7 @@ export const AuditLogsView: React.FC = () => {
                     </time>
                   </div>
                   <p className="break-words font-medium text-white">
-                    {log.entity_name || log.entity_id || log.entity_type || '—'}
+                    {log.entity_name || log.entity_id || getEntityTypeLabel(log.entity_type)}
                   </p>
                   {log.details && <p className="break-words text-white/70">{log.details}</p>}
                   <p className="break-words text-white/40">{log.ip_address || 'Registro local'}</p>
@@ -295,21 +319,21 @@ export const AuditLogsView: React.FC = () => {
                 <tr className="border-b border-obsidian-border bg-black/20 text-[11px] font-mono uppercase tracking-wider text-white/40">
                   <th className="py-3 px-2 xl:px-3 2xl:px-4">Fecha & Hora (Local)</th>
                   <th className="py-3 px-2 xl:px-3 2xl:px-4">Acción</th>
-                  <th className="py-3 px-2 xl:px-3 2xl:px-4">Tipo Entidad</th>
+                  <th className="py-3 px-2 xl:px-3 2xl:px-4">Tipo</th>
                   <th className="py-3 px-2 xl:px-3 2xl:px-4">Elemento Afectado</th>
                   <th className="py-3 px-2 xl:px-3 2xl:px-4">Detalles</th>
                   <th className="py-3 px-2 xl:px-3 2xl:px-4">IP / Origen</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-obsidian-border text-xs font-mono">
-                {loading ? (
+                {loading || searchPending ? (
                   <tr>
                     <td colSpan={6} className="py-12 text-center text-white/40">
                       <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 opacity-50" aria-hidden="true" />
                       Cargando eventos de auditoría...
                     </td>
                   </tr>
-                ) : filteredLogs.length === 0 ? (
+                ) : logs.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="py-12 text-center text-white/40 space-y-2">
                       <div>No se encontraron eventos coincidentes.</div>
@@ -328,7 +352,7 @@ export const AuditLogsView: React.FC = () => {
                     </td>
                   </tr>
                 ) : (
-                  filteredLogs.map((log) => (
+                  logs.map((log) => (
                     <tr key={log.id} className="hover:bg-white/[0.02] transition-colors">
                       <td className="py-3 px-2 text-white/50 whitespace-nowrap xl:px-3 2xl:px-4">
                         {new Date(log.timestamp).toLocaleString(locale)}
@@ -337,7 +361,7 @@ export const AuditLogsView: React.FC = () => {
                         {getActionBadge(log.action)}
                       </td>
                       <td className="py-3 px-2 text-white/70 capitalize whitespace-nowrap xl:px-3 2xl:px-4">
-                        {log.entity_type || '—'}
+                        {getEntityTypeLabel(log.entity_type)}
                       </td>
                       <td className="py-3 px-2 text-white font-medium max-w-[200px] truncate xl:px-3 2xl:px-4" title={log.entity_name || log.entity_id || ''}>
                         {log.entity_name || log.entity_id ? (
@@ -370,7 +394,7 @@ export const AuditLogsView: React.FC = () => {
           <div className="flex items-center gap-2">
             <button
               type="button"
-              disabled={!canPrev || loading}
+              disabled={!canPrev || loading || searchPending}
               onClick={() => setOffset((prev) => Math.max(0, prev - PAGE_SIZE))}
               className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-obsidian-surface border border-obsidian-border text-white hover:bg-obsidian-border disabled:opacity-40 disabled:cursor-not-allowed"
             >
@@ -379,7 +403,7 @@ export const AuditLogsView: React.FC = () => {
             </button>
             <button
               type="button"
-              disabled={!canNext || loading}
+              disabled={!canNext || loading || searchPending}
               onClick={() => setOffset((prev) => prev + PAGE_SIZE)}
               className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-obsidian-surface border border-obsidian-border text-white hover:bg-obsidian-border disabled:opacity-40 disabled:cursor-not-allowed"
             >

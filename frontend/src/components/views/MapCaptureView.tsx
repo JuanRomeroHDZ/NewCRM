@@ -193,6 +193,16 @@ export const MapCaptureView: React.FC = () => {
   }, [mobileTab, mapReady]);
 
   useEffect(() => {
+    const element = mapElementRef.current;
+    if (!mapReady || !element || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(() => {
+      requestAnimationFrame(() => mapRef.current?.invalidateSize?.({ pan: false }));
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [mapReady]);
+
+  useEffect(() => {
     if (!mapReady || !markerLayerRef.current) return;
     const layer = markerLayerRef.current;
     layer.clearLayers();
@@ -245,6 +255,7 @@ export const MapCaptureView: React.FC = () => {
         if (requestId !== searchRequestIdRef.current) return;
         setResults(response.results);
         setResultSource(response.source);
+        if (window.matchMedia('(max-width: 1023px)').matches) setMobileTab('results');
       } catch (error) {
         if (requestId === searchRequestIdRef.current) {
           setSearchError(
@@ -374,20 +385,20 @@ export const MapCaptureView: React.FC = () => {
 
   return (
     <div className="mx-auto w-full max-w-7xl space-y-5 p-4 sm:p-6 lg:p-8">
-      <header className="flex flex-col gap-4 rounded-2xl border border-obsidian-borderLight bg-gradient-to-r from-obsidian-card via-obsidian-panel to-obsidian-surface p-5 sm:flex-row sm:items-center sm:justify-between sm:p-7">
-        <div className="flex min-w-0 items-start gap-3.5">
-          <span className="rounded-xl border border-indigo-500/25 bg-indigo-500/10 p-3 text-indigo-300" aria-hidden="true">
-            <MapPin size={22} />
+      <header className="flex min-w-0 flex-col gap-3 rounded-2xl border border-obsidian-borderLight bg-gradient-to-r from-obsidian-card via-obsidian-panel to-obsidian-surface p-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:p-5 lg:p-7">
+        <div className="flex min-w-0 items-start gap-2.5 sm:gap-3.5">
+          <span className="shrink-0 rounded-xl border border-indigo-500/25 bg-indigo-500/10 p-2 text-indigo-300 sm:p-3" aria-hidden="true">
+            <MapPin size={19} className="sm:h-[22px] sm:w-[22px]" />
           </span>
           <div className="min-w-0">
-            <h1 className="text-xl font-bold tracking-tight text-white sm:text-2xl">Captación en mapa</h1>
-            <p className="mt-1 max-w-2xl text-sm leading-relaxed text-obsidian-muted">
+            <h1 id="capture-map-heading" className="text-base font-bold tracking-tight text-white sm:text-2xl">Captación en mapa</h1>
+            <p className="mt-1 max-w-2xl text-xs leading-relaxed text-obsidian-muted sm:text-sm">
               Busca negocios publicados en OpenStreetMap dentro de una zona{defaultCity ? ` de ${defaultCity}` : ''} y
               guarda únicamente los que quieras seguir.
             </p>
           </div>
         </div>
-        <span className="inline-flex w-fit shrink-0 items-center gap-2 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-200">
+          <span className="inline-flex w-fit shrink-0 items-center gap-1.5 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-medium text-emerald-200 sm:gap-2 sm:px-3 sm:py-1.5 sm:text-xs">
           <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" aria-hidden="true" /> OpenStreetMap
         </span>
       </header>
@@ -570,7 +581,7 @@ export const MapCaptureView: React.FC = () => {
             ref={mapElementRef}
             role="region"
             aria-label={defaultCity ? `Mapa interactivo de ${defaultCity}` : 'Mapa interactivo'}
-            className="relative z-0 min-h-[300px] h-[clamp(300px,55dvh,420px)] w-full bg-[#101827] lg:h-[clamp(380px,62dvh,560px)]"
+            className="relative z-0 min-h-[220px] h-[clamp(220px,45dvh,320px)] w-full bg-[#101827] sm:min-h-[300px] sm:h-[clamp(300px,55dvh,420px)] lg:h-[clamp(380px,62dvh,560px)]"
           />
           <div className="flex flex-col gap-1.5 border-t border-obsidian-border px-4 py-3 text-[11px] leading-relaxed text-obsidian-muted sm:flex-row sm:items-center sm:justify-between">
             <span>Los datos de negocios dependen de lo publicado en OpenStreetMap.</span>
@@ -639,7 +650,7 @@ export const MapCaptureView: React.FC = () => {
               <p>No encontramos negocios publicados en esta búsqueda. Prueba otro giro o una zona cercana.</p>
             </div>
           ) : (
-            <ul className="divide-y divide-obsidian-border lg:max-h-[min(620px,65dvh)] lg:overflow-y-auto">
+            <ul className="max-h-[min(55dvh,520px)] divide-y divide-obsidian-border overflow-y-auto lg:max-h-[min(620px,65dvh)]">
               {results.map((lead) => {
                 const website = leadWebsite(lead);
                 const isSaved = savedIds.includes(lead.osm_id);

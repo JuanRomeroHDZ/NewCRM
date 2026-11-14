@@ -1,6 +1,16 @@
 import pytest
+from pydantic import ValidationError
+from app.schemas import SettingsUpdate
 from app.security.pwned import check_pwned_password
 from app.config import settings
+
+
+def test_settings_reject_unsafe_color_and_background_values():
+    assert SettingsUpdate(accent_color="#f43f5e", canvas_style="plain")
+    with pytest.raises(ValidationError):
+        SettingsUpdate(accent_color="red; background:url(https://example.invalid)")
+    with pytest.raises(ValidationError):
+        SettingsUpdate(canvas_style="unlisted-background")
 
 @pytest.mark.asyncio
 async def test_settings_master_password_change_requires_verification(client, auth_token):

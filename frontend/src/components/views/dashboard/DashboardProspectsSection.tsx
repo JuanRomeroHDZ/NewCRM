@@ -72,9 +72,6 @@ export const DashboardProspectsSection: React.FC<DashboardProspectsSectionProps>
     ) : (
       <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 border-y border-obsidian-border py-4 text-xs text-obsidian-muted">
         <p>No hay prospectos ni páginas demo registrados.</p>
-        <button type="button" onClick={onCreateProspect} className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 font-semibold text-white hover:bg-indigo-500">
-          <Plus size={13} aria-hidden="true" /> Registrar prospecto
-        </button>
       </div>
     )}
   </section>

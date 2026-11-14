@@ -56,6 +56,34 @@ async def test_activity_and_trash_restore_preserve_existing_record(client, auth_
 
 
 @pytest.mark.asyncio
+async def test_activity_history_filters_and_paginates_on_server(client, auth_token):
+    headers = {"X-Vault-Token": auth_token}
+    for name in ("Prospecto Alfa", "Prospecto Beta", "Prospecto Gamma"):
+        response = await client.post(
+            "/api/v1/prospects",
+            headers=headers,
+            json={"company_name": name},
+        )
+        assert response.status_code == 200
+
+    page = await client.get("/api/v1/audit/logs?limit=1&action=create&entity_type=prospect", headers=headers)
+    assert page.status_code == 200
+    assert page.json()["total"] == 3
+    assert len(page.json()["items"]) == 1
+
+    filtered = await client.get(
+        "/api/v1/audit/logs?limit=25&action=create&entity_type=prospect&search=Prospecto%20Beta",
+        headers=headers,
+    )
+    assert filtered.status_code == 200
+    assert filtered.json()["total"] == 1
+    assert filtered.json()["items"][0]["entity_name"] == "Prospecto Beta"
+
+    oversized = await client.get("/api/v1/audit/logs?limit=101", headers=headers)
+    assert oversized.status_code == 422
+
+
+@pytest.mark.asyncio
 async def test_purge_only_removes_records_already_in_trash(client, auth_token):
     headers = {"X-Vault-Token": auth_token}
     created = await client.post("/api/v1/prospects", headers=headers, json={"company_name": "Empresa ficticia"})

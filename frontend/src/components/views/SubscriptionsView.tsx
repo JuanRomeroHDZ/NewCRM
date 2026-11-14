@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
-  CreditCard, Plus, DollarSign, RefreshCw, Edit2,
-  Globe, Receipt, Lock, AlertTriangle
+  CreditCard, DollarSign, RefreshCw, Edit2, Lock, AlertTriangle, X
 } from 'lucide-react';
 import { useVault } from '../../context/VaultContext';
 import { api } from '../../lib/api';
@@ -18,6 +17,7 @@ import {
 } from '../../lib/financeUtils';
 import { computeCommercialPipelineSummary } from '../../lib/prospectUtils';
 import { INPUT_LIMITS } from '../../lib/validation';
+import { needsExchangeRateReview } from '../../lib/exchangeRateReview';
 import { FinancialExecutiveSummary } from './subscriptions/FinancialExecutiveSummary';
 import { SubscriptionsLists } from './subscriptions/SubscriptionsLists';
 import { SubscriptionsModals, EXPENSE_CATEGORIES } from './subscriptions/SubscriptionsModals';
@@ -42,6 +42,26 @@ export const SubscriptionsView: React.FC = () => {
   const [manualRateInput, setManualRateInput] = useState<string>('');
   const [isEditingRate, setIsEditingRate] = useState(false);
   const [isSyncingRate, setIsSyncingRate] = useState(false);
+  const rateNoticeSignature = exchangeRate
+    ? `${exchangeRate.is_manual}:${exchangeRate.updated_at}:${exchangeRate.rate}`
+    : 'missing';
+  const [dismissedRateNotice, setDismissedRateNotice] = useState(() => {
+    try {
+      return window.sessionStorage.getItem('newcrm.finances.exchange-rate-notice') || '';
+    } catch {
+      return '';
+    }
+  });
+  const showRateNotice = needsExchangeRateReview(exchangeRate) && dismissedRateNotice !== rateNoticeSignature;
+
+  const dismissRateNotice = () => {
+    setDismissedRateNotice(rateNoticeSignature);
+    try {
+      window.sessionStorage.setItem('newcrm.finances.exchange-rate-notice', rateNoticeSignature);
+    } catch {
+      // La sesión puede no permitir almacenamiento local.
+    }
+  };
 
   const secondaryCurrency = useMemo(() => {
     const other = supportedCurrencies.find((c) => c.code !== baseCurrency)?.code;
@@ -903,15 +923,20 @@ export const SubscriptionsView: React.FC = () => {
           </button>
         </div>
       )}
-      {(!exchangeRate || !exchangeRate.is_manual) && (
+      {showRateNotice && (
         <div role="status" className="flex min-w-0 flex-wrap items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
           <AlertTriangle size={14} aria-hidden="true" />
-          <span>Tipo de cambio por verificar</span>
+          <span className="min-w-0 flex-1">El tipo de cambio requiere revisión.</span>
           <InfoTooltip
             title="Tipo de cambio"
-            content="El valor disponible puede ser de referencia o estar desactualizado. Revísalo antes de usar los totales convertidos."
+            content={!exchangeRate
+              ? 'No hay una cotización disponible. Actualízala antes de usar los totales convertidos.'
+              : 'La última actualización supera las 24 horas. Actualízala antes de usar los totales convertidos.'}
             position="bottom"
           />
+          <button type="button" onClick={dismissRateNotice} aria-label="Ocultar aviso de tipo de cambio" className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-amber-200/80 hover:bg-amber-500/15 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300">
+            <X size={14} aria-hidden="true" />
+          </button>
         </div>
       )}
 
@@ -920,7 +945,7 @@ export const SubscriptionsView: React.FC = () => {
         <div className="flex items-center gap-2 min-w-0">
           <CreditCard className="text-indigo-400 flex-shrink-0" size={18} aria-hidden="true" />
           <h2 className="text-base font-bold text-white tracking-tight truncate">
-            Finanzas, Ingresos de Clientes y Vencimientos
+            Finanzas
           </h2>
           <InfoTooltip
             title="Control Financiero Completo"
@@ -973,7 +998,7 @@ export const SubscriptionsView: React.FC = () => {
                       : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
                   }`}
                 >
-                  {exchangeRate?.is_manual ? 'Manual' : 'Actualizado'}
+                  {exchangeRate?.is_manual ? 'Manual' : 'Automático'}
                 </span>
                 <button
                   type="button"
@@ -998,41 +1023,6 @@ export const SubscriptionsView: React.FC = () => {
             )}
           </div>
 
-          <button
-            type="button"
-            onClick={openNewIncomeModal}
-            className="inline-flex max-w-full items-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 text-left text-xs font-semibold text-white shadow-md shadow-emerald-600/20 transition-all hover:bg-emerald-500"
-          >
-            <Plus size={14} aria-hidden="true" />
-            <span>Registrar Pago Recibido</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={openNewRenewalModal}
-            className="inline-flex max-w-full items-center gap-1.5 rounded-xl border border-obsidian-border bg-obsidian-surface px-3 py-2 text-left text-xs font-semibold text-white transition-all hover:bg-obsidian-border"
-          >
-            <Globe size={14} className="text-cyan-400" aria-hidden="true" />
-            <span>Nuevo Dominio / Hosting</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={openNewExpenseModal}
-            className="inline-flex max-w-full items-center gap-1.5 rounded-xl border border-purple-500/30 bg-purple-600/20 px-3 py-2 text-left text-xs font-semibold text-purple-200 transition-all hover:bg-purple-600/30"
-          >
-            <Receipt size={14} className="text-purple-300" aria-hidden="true" />
-            <span>Nuevo Gasto Único</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => openPaymentModal()}
-            className="inline-flex max-w-full items-center gap-1.5 rounded-xl bg-indigo-600 px-3 py-2 text-left text-xs font-semibold text-white shadow-md shadow-indigo-600/20 transition-all hover:bg-indigo-500"
-          >
-            <Plus size={14} aria-hidden="true" />
-            <span>Nueva Tarjeta</span>
-          </button>
         </div>
       </div>
 

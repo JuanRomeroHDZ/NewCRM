@@ -24,6 +24,25 @@ import { InfoTooltip } from '../common/InfoTooltip';
 import { EmptyState } from '../common/EmptyState';
 import { INPUT_LIMITS } from '../../lib/validation';
 
+const getSafeLoginUrl = (value?: string | null): string | null => {
+  const raw = value?.trim();
+  if (!raw) return null;
+
+  const candidate = /^https?:\/\//i.test(raw)
+    ? raw
+    : /^[a-z][a-z\d+.-]*:/i.test(raw)
+      ? raw
+      : `https://${raw}`;
+
+  try {
+    const url = new URL(candidate);
+    if (!['http:', 'https:'].includes(url.protocol) || !url.hostname || url.username || url.password) return null;
+    return url.toString();
+  } catch {
+    return null;
+  }
+};
+
 export const PlatformsView: React.FC = () => {
   const {
     openInspector,
@@ -166,20 +185,16 @@ export const PlatformsView: React.FC = () => {
           />
         </div>
 
-        <button
-          type="button"
-          onClick={() => {
-            if (!isUnlocked) {
-              openUnlockModal();
-            } else {
-              openPlatformModal();
-            }
-          }}
-          className="inline-flex min-h-10 max-w-full items-center gap-1.5 rounded-lg bg-indigo-600 px-3 text-left text-xs font-semibold text-white transition-colors hover:bg-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
-        >
-          <Plus size={14} aria-hidden="true" />
-          <span>Nueva cuenta o servicio</span>
-        </button>
+        {isUnlocked && filteredPlatforms.length > 0 && (
+          <button
+            type="button"
+            onClick={() => openPlatformModal()}
+            className="inline-flex min-h-10 max-w-full items-center gap-1.5 rounded-lg bg-indigo-600 px-3 text-left text-xs font-semibold text-white transition-colors hover:bg-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+          >
+            <Plus size={14} aria-hidden="true" />
+            <span>Nueva cuenta o servicio</span>
+          </button>
+        )}
       </div>
 
       {/* Locked Banner */}
@@ -354,7 +369,9 @@ export const PlatformsView: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-obsidian-border">
-                {filteredPlatforms.map((p) => (
+                {filteredPlatforms.map((p) => {
+                  const loginUrl = getSafeLoginUrl(p.login_url);
+                  return (
                   <tr key={p.id} className="group transition-colors hover:bg-obsidian-surface/50">
                     <td className="max-w-[210px] px-4 py-3">
                       <button
@@ -371,12 +388,12 @@ export const PlatformsView: React.FC = () => {
                           >
                             {p.name}
                           </span>
-                          {p.login_url && (
+                          {loginUrl && (
                             <span
                               className="block max-w-[140px] truncate font-mono text-[10px] text-obsidian-muted"
                               title={p.login_url}
                             >
-                              {p.login_url.replace(/^https?:\/\//, '')}
+                              {loginUrl.replace(/^https?:\/\//, '')}
                             </span>
                           )}
                         </div>
@@ -469,9 +486,9 @@ export const PlatformsView: React.FC = () => {
 
                     <td className="px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-1 text-obsidian-muted">
-                        {p.login_url && (
+                        {loginUrl && (
                           <a
-                            href={p.login_url}
+                            href={loginUrl}
                             target="_blank"
                             rel="noopener noreferrer"
                             title="Abrir sitio oficial"
@@ -505,7 +522,8 @@ export const PlatformsView: React.FC = () => {
                       </div>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -519,11 +537,13 @@ export const PlatformsView: React.FC = () => {
             viewMode === 'table' ? 'md:hidden' : ''
           }`}
         >
-          {filteredPlatforms.map((p) => (
-            <article
-              key={p.id}
-              className="group min-w-0 space-y-3 overflow-hidden rounded-xl border border-obsidian-border bg-obsidian-panel p-3 transition-colors hover:border-obsidian-borderLight sm:p-4"
-            >
+          {filteredPlatforms.map((p) => {
+            const loginUrl = getSafeLoginUrl(p.login_url);
+            return (
+              <article
+                key={p.id}
+                className="group min-w-0 space-y-3 overflow-hidden rounded-xl border border-obsidian-border bg-obsidian-panel p-3 transition-colors hover:border-obsidian-borderLight sm:p-4"
+              >
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <button
                   type="button"
@@ -549,9 +569,9 @@ export const PlatformsView: React.FC = () => {
                 </button>
 
                 <div className="flex flex-shrink-0 items-center gap-1">
-                  {p.login_url && (
+                  {loginUrl && (
                     <a
-                      href={p.login_url}
+                      href={loginUrl}
                       target="_blank"
                       rel="noopener noreferrer"
                       title="Abrir enlace"
@@ -623,8 +643,9 @@ export const PlatformsView: React.FC = () => {
                   </span>
                 )}
               </div>
-            </article>
-          ))}
+              </article>
+            );
+          })}
         </div>
       )}
 

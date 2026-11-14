@@ -129,20 +129,16 @@ export const EmailsView: React.FC = () => {
             aria-label="Buscar por dirección o proveedor"
             className="min-h-10 min-w-0 flex-1 rounded-lg border border-obsidian-border bg-obsidian-panel px-3 text-xs text-white placeholder-obsidian-muted/60 focus:border-indigo-500 focus:outline-none sm:w-64 sm:flex-none"
           />
-          <button
-            type="button"
-            onClick={() => {
-              if (!isUnlocked) {
-                openUnlockModal();
-              } else {
-                openEmailModal();
-              }
-            }}
-            className="inline-flex min-h-10 max-w-full items-center gap-1.5 rounded-lg bg-indigo-600 px-3 text-left text-xs font-semibold text-white transition-colors hover:bg-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
-          >
-            <Plus size={14} aria-hidden="true" />
-            <span>Nuevo correo</span>
-          </button>
+          {isUnlocked && (
+            <button
+              type="button"
+              onClick={() => openEmailModal()}
+              className="inline-flex min-h-10 max-w-full items-center gap-1.5 rounded-lg bg-indigo-600 px-3 text-left text-xs font-semibold text-white transition-colors hover:bg-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+            >
+              <Plus size={14} aria-hidden="true" />
+              <span>Nuevo correo</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -311,32 +307,36 @@ export const EmailsView: React.FC = () => {
                     )}
                   </div>
 
-                  {/* Quick link buttons */}
-                  <div className="flex max-w-full flex-wrap items-center gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (!isUnlocked) openUnlockModal();
-                        else openPlatformModal(email.id);
-                      }}
-                      aria-label={`Vincular cuenta o servicio a ${email.address}`}
-                      className="inline-flex min-h-[34px] items-center gap-1 rounded-lg border border-obsidian-border bg-obsidian-surface px-2.5 py-1 text-[10px] font-medium text-obsidian-text hover:bg-obsidian-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
-                      title="Vincular cuenta o servicio a este correo"
-                    >
-                      <Globe size={11} className="text-indigo-400" aria-hidden="true" />
-                      <span>+ Cuenta</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => openProspectModal(email.id)}
-                      aria-label={`Vincular prospecto a ${email.address}`}
-                      className="inline-flex min-h-[34px] items-center gap-1 rounded-lg border border-indigo-500/25 bg-indigo-500/10 px-2.5 py-1 text-[10px] font-medium text-indigo-300 hover:bg-indigo-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
-                      title="Vincular prospecto o página demo a este correo"
-                    >
-                      <Rocket size={11} aria-hidden="true" />
-                      <span>+ Prospecto</span>
-                    </button>
-                  </div>
+                  <details className="min-w-0 shrink-0">
+                    <summary className="flex min-h-[34px] cursor-pointer list-none items-center gap-1.5 rounded-lg border border-obsidian-border bg-obsidian-surface px-2.5 py-1 text-[10px] font-medium text-obsidian-text hover:bg-obsidian-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 [&::-webkit-details-marker]:hidden">
+                      <Plus size={12} aria-hidden="true" />
+                      <span>Vincular</span>
+                    </summary>
+                    <div className="mt-1 flex max-w-full flex-wrap gap-1.5 border-t border-obsidian-border/60 pt-1.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!isUnlocked) openUnlockModal();
+                          else openPlatformModal(email.id);
+                        }}
+                        className="inline-flex min-h-[36px] items-center gap-2 rounded-md px-2 text-left text-xs text-obsidian-text hover:bg-obsidian-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                      >
+                        <Globe size={13} className="text-indigo-400" aria-hidden="true" />
+                        <span>Cuenta o servicio</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!isUnlocked) openUnlockModal();
+                          else openProspectModal(email.id);
+                        }}
+                        className="inline-flex min-h-[36px] items-center gap-2 rounded-md px-2 text-left text-xs text-obsidian-text hover:bg-obsidian-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                      >
+                        <Rocket size={13} className="text-indigo-400" aria-hidden="true" />
+                        <span>Prospecto</span>
+                      </button>
+                    </div>
+                  </details>
                 </div>
               </div>
 
@@ -376,7 +376,7 @@ export const EmailsView: React.FC = () => {
       )}
 
       {/* Clean Empty State */}
-      {!loading && !error && filteredEmails.length === 0 && (
+      {!loading && !error && isUnlocked && filteredEmails.length === 0 && (
         <EmptyState
           icon={Mail}
           title={
@@ -384,11 +384,6 @@ export const EmailsView: React.FC = () => {
               ? 'No se encontraron correos con esa búsqueda'
               : 'No hay correos principales para esta selección'
           }
-          actionLabel="Nuevo correo"
-          onAction={() => {
-            if (!isUnlocked) openUnlockModal();
-            else openEmailModal();
-          }}
         />
       )}
     </div>

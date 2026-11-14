@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { 
-  Plus, RefreshCw, DollarSign, ShieldAlert, Rocket, Edit2, Check, X,
+  RefreshCw, DollarSign, ShieldAlert, Edit2, Check, X,
   Briefcase, User, Layers, Menu
 } from 'lucide-react';
 import { useVault } from '../../context/VaultContext';
@@ -16,7 +16,6 @@ interface TopbarProps {
 export const Topbar: React.FC<TopbarProps> = ({ onMenuClick, menuTriggerRef, isMenuOpen }) => {
   const { 
     activeSection, exchangeRate, refreshExchangeRate, triggerDataReload,
-    openEmailModal, openPlatformModal, openProspectModal, openUnlockModal, isUnlocked,
     panicLock, showToast, activeScope, setActiveScope,
     supportedCurrencies, baseCurrency, systemLocale,
   } = useVault();
@@ -60,7 +59,7 @@ export const Topbar: React.FC<TopbarProps> = ({ onMenuClick, menuTriggerRef, isM
     platforms: { title: 'Servicios vinculados', compactTitle: 'Servicios', tooltip: 'Páginas, aplicaciones y herramientas vinculadas a tus correos principales.' },
     capture: { title: 'Captación en mapa', compactTitle: 'Mapa', tooltip: 'Busca negocios publicados en OpenStreetMap y elige cuáles guardar como prospectos.' },
     prospects: { title: 'Prospectos', compactTitle: 'Prospectos', tooltip: 'Oportunidades comerciales y su seguimiento.' },
-    passwords: { title: 'Contraseñas y Notas Seguras', compactTitle: 'Claves', tooltip: 'Consulta y copia rápidamente tus contraseñas, PIN, llaves de acceso y notas seguras.' },
+    passwords: { title: 'Contraseñas y notas', compactTitle: 'Claves', tooltip: 'Consulta tus contraseñas, PIN, llaves de acceso y notas privadas.' },
     graph: { title: 'Mapa de Conexiones', compactTitle: 'Conexiones', tooltip: 'Diagrama visual que muestra qué servicios y clientes dependen de cada correo y tarjeta.' },
     writeups: { title: 'Informes de seguridad', compactTitle: 'Informes', tooltip: 'Documenta revisiones de seguridad, dibuja esquemas y exporta informes.' },
     subscriptions: { title: 'Finanzas, Ingresos y Vencimientos', compactTitle: 'Finanzas', tooltip: 'Control de suscripciones, gastos únicos, pagos recibidos de clientes y vencimientos de dominios o hosting.' },
@@ -197,7 +196,7 @@ export const Topbar: React.FC<TopbarProps> = ({ onMenuClick, menuTriggerRef, isM
         <select
           value={activeScope}
           onChange={(event) => setActiveScope(event.target.value as typeof activeScope)}
-          className="min-h-11 w-full rounded-xl border border-obsidian-border bg-obsidian-surface px-3 text-sm font-medium text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
+          className="min-h-9 w-full rounded-xl border border-obsidian-border bg-obsidian-surface px-3 text-xs font-medium text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 sm:min-h-11 sm:text-sm"
         >
           {scopeOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
         </select>
@@ -308,37 +307,6 @@ export const Topbar: React.FC<TopbarProps> = ({ onMenuClick, menuTriggerRef, isM
           <span className="hidden md:inline">Bloquear Todo</span>
         </button>
 
-        {/* Action Buttons */}
-        <button
-          type="button"
-          onClick={() => isUnlocked ? openProspectModal() : openUnlockModal()}
-          aria-label="Nuevo prospecto"
-          className="inline-flex min-h-10 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl border border-obsidian-border bg-obsidian-surface px-2.5 py-1.5 text-xs font-medium text-obsidian-text transition-colors hover:bg-obsidian-border hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
-          title="Registrar nuevo prospecto o página demo"
-        >
-          <Rocket size={13} className="text-indigo-400 shrink-0" aria-hidden="true" />
-          <span className="hidden sm:inline">Nuevo prospecto</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => openEmailModal()}
-          className="hidden min-h-10 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl border border-obsidian-border bg-obsidian-surface px-2.5 py-1.5 text-xs font-medium text-obsidian-text transition-colors hover:bg-obsidian-border hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 md:inline-flex"
-          title="Registrar nuevo correo principal"
-        >
-          <Plus size={14} className="text-indigo-400 shrink-0" aria-hidden="true" />
-          <span className="hidden lg:inline">Nuevo Correo</span>
-          <span className="lg:hidden">Correo</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => openPlatformModal()}
-          className="hidden min-h-10 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-md shadow-indigo-600/20 transition-colors hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 2xl:inline-flex"
-        >
-          <Plus size={14} className="shrink-0" aria-hidden="true" />
-          <span>Agregar Cuenta</span>
-        </button>
       </div>
     </header>
   );

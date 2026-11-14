@@ -46,6 +46,37 @@
   background-size: 32px 32px;
 }
 
+.brand-theme [class~="bg-indigo-600"] {
+  background-color: var(--brand-accent) !important;
+  color: var(--brand-accent-contrast) !important;
+}
+
+.brand-theme [class~="bg-indigo-600"] [class~="text-white"] {
+  color: var(--brand-accent-contrast) !important;
+}
+
+.brand-theme [class~="hover:bg-indigo-500"]:hover {
+  background-color: color-mix(in srgb, var(--brand-accent) 88%, #000) !important;
+}
+
+.brand-theme [class~="text-indigo-400"],
+.brand-theme [class~="text-indigo-300"] {
+  color: var(--brand-accent) !important;
+}
+
+.brand-theme [class~="border-indigo-500"],
+.brand-theme [class~="focus:border-indigo-500"]:focus {
+  border-color: var(--brand-accent) !important;
+}
+
+.brand-theme [class~="border-indigo-500/20"] {
+  border-color: color-mix(in srgb, var(--brand-accent) 20%, transparent) !important;
+}
+
+.brand-theme [class~="border-indigo-500/30"] {
+  border-color: color-mix(in srgb, var(--brand-accent) 30%, transparent) !important;
+}
+
 .topbar-title-compact,
 .topbar-scope-compact {
   display: none;

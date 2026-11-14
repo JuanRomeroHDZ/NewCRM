@@ -2,38 +2,60 @@
 
 Corte: 2026-11-13
 
-## Estado comprobado
+## Estado actual
 
-- Interfaz disponible en http://127.0.0.1:3001/; la API Docker seguía saludable en la última revisión operativa.
-- La API se reinició para cargar cambios y su chequeo quedó saludable, con PostgreSQL conectado. Puede pedir desbloquear la bóveda otra vez.
-- TypeScript compila, las cuatro pruebas frontend pasan y Vite genera el build de producción.
-- Impeccable detect no encontró observaciones en las vistas principales revisadas.
-- El build conserva una advertencia: el módulo ELK ocupa aproximadamente 1.52 MB sin comprimir.
-- La revisión previa recorrió las 13 vistas en 250×250, 375×812, 768×1024, 1024×768 y 1440×900.
-- En el mapa comprobé seis resultados de caché, atribución de OpenStreetMap y apertura del marcador. No guardé prospectos.
-- Contraseñas, Ajustes, Papelera, Dashboard y navegación fueron revisados visualmente; la estructura del menú conserva categorías y subapartados.
-- La Papelera exige sesión de bóveda y usuario. Ventas y solo lectura pueden restaurar; borrar definitivamente exige Propietario o Administrador.
-- La conservación de la Papelera solo controla cuánto tiempo se muestran los elementos. No los borra; los elementos ocultos vuelven con «Sin límite».
-- Cambiar la conservación ahora requiere rol Propietario o Administrador y deja registro de auditoría.
-- Los folios se asignan con UPSERT y el cierre de ventas rechaza referencias ya cerradas. La concurrencia real aún requiere prueba de integración.
-- El backend recoge 173 pruebas. La ejecución completa y la suite de Papelera excedieron el límite de 45–60 segundos antes de mostrar resultados; no se cuentan como aprobadas.
-- La pestaña actual no tiene sesión de usuario normal. La app dirige a Ajustes para iniciar sesión antes de mostrar la Papelera.
-- No se inspeccionaron ni modificaron secretos reales de `.env.local` o `.env.runtime`.
-- No se obtuvo una puntuación Lighthouse/Google DevTools; no se afirma un 100.
+- Interfaz disponible en http://127.0.0.1:3001/; devuelve HTTP 200. La ruta de estado de la API también responde HTTP 200.
+- El contenedor `newcrm-api` quedó saludable después del reinicio.
+- TypeScript compila, las cuatro pruebas frontend pasan y el build de producción termina.
+- La prueba backend del diagnóstico sin cuentas pasa dentro de Docker: 1/1.
+- El build mantiene una advertencia: el módulo ELK ocupa aproximadamente 1.52 MB minificado.
+- La revisión visual de esta vuelta se hizo en 487 × 901. Se recorrieron resumen, mapa, prospectos, correos, servicios, conexiones, finanzas, contraseñas y recursos, informes, auditoría, historial, ajustes y Papelera.
+- No se modificaron registros del usuario. Los listados están vacíos; no se pudieron revisar detalles de prospectos, correos o servicios con datos reales.
+- La paginación del historial muestra 25 registros por página; se comprobó la segunda página de 33.
+- La Papelera requiere iniciar sesión con una cuenta del equipo, además de desbloquear la bóveda. Esa sesión no está iniciada en la pestaña de revisión.
+- La revisión anterior reportó navegación de 13 vistas en 250 × 250, 375 × 812, 768 × 1024, 1024 × 768 y 1440 × 900. No se repitieron todos esos tamaños después de los últimos cambios.
+- La revisión anterior comprobó seis resultados de mapa en caché y la apertura de un marcador; no se guardaron prospectos.
+- No se obtuvo puntuación Lighthouse/Google DevTools. No se afirma un resultado de 100.
+- No se inspeccionaron secretos reales de `.env.local` o `.env.runtime`.
+
+## Cambios de esta revisión
+
+- El aviso de tipo de cambio aparece solo si falta la cotización o supera 24 horas; puede ocultarse hasta que cambie el dato. El estado automático ya no dice «Actualizado» sin comprobar vigencia.
+- Sin cuentas, la auditoría de seguridad devuelve `health_score: null` y muestra «Sin datos» en lugar de 100/100.
+- Se quitó la acción global de alta que duplicaba los botones de prospectos y correos. Se retiraron llamadas repetidas en estados vacíos cuando ya existe una acción visible.
+- En recursos y finanzas, los estados vacíos conservan el mensaje y dejan la acción en el encabezado de su sección.
+- El título de contraseñas se acortó y el historial traduce nombres internos como `settings` y `vault` a etiquetas comprensibles.
+- Las etiquetas de gasto en finanzas se acortaron para evitar cortes en pantallas estrechas.
+- Se actualizó este archivo con lo revisado y lo que sigue pendiente.
+
+## Verificación y limitaciones
+
+- `tsc --noEmit`: aprobado.
+- Pruebas frontend: 4/4 aprobadas.
+- Build de Vite: aprobado, con la advertencia de tamaño de ELK indicada arriba.
+- Prueba backend nueva de auditoría sin cuentas: 1/1 aprobada en el contenedor.
+- `git diff --check` y `py_compile` de los archivos backend modificados: aprobados.
+- Dos pruebas backend aisladas de la revisión anterior pasaron con SQLite en memoria. La suite completa no terminó dentro de los límites previos de ejecución.
+- El shell actual no recibió el grupo `docker`; el contenedor se administró mediante permisos elevados. Para acceso directo a Docker desde una terminal nueva, cierra sesión y vuelve a entrar después de agregar el grupo.
+- El certificado HTTPS local se generó, pero su CA aún no está instalada como confiable en el sistema. Esta sesión usa HTTP de loopback; la llave privada sigue protegida y fuera de Git.
 
 ## Pendientes prioritarios
 
-1. Probar Papelera, permisos, conservación y ventas en una base de pruebas funcional; la conexión SQLite de pruebas se queda bloqueada en este entorno.
-2. Iniciar sesión con una cuenta normal desde Ajustes para revisar visualmente la Papelera por rol. No se ingresaron contraseñas por chat.
-3. Preparar el alta inicial de una cuenta ordinaria en instalaciones nuevas y documentar el acceso desde otra PC sin compartir secretos.
-4. Revisar notas heredadas que pudieran estar sin cifrar; hacer respaldo y plan de migración antes de tocar la base real.
-5. Mostrar errores de inicialización y migración del esquema en el arranque; `main.py` aún suprime algunos errores.
-6. Diseñar y probar con respaldo la migración de SQLite a PostgreSQL/Redis; SQLite sigue siendo la base de esta instalación.
-7. Añadir paginación a listados grandes y limitar cargas antes de que el middleware escriba archivos temporales.
-8. Reducir la carga diferida de ELK y probar su comportamiento en redes lentas.
-9. Recorrer todas las acciones de cada vista con datos de prueba y completar teclado, lector de pantalla y validación de errores.
-10. Repetir DevTools/Lighthouse si la integración se habilita; este resultado no incluye ese análisis.
+1. Iniciar sesión con una cuenta ordinaria desde Ajustes y revisar Papelera, permisos y acciones destructivas por rol.
+2. Repetir la revisión visual en 250 × 250 tras estos cambios y comprobar teclado, lector de pantalla y validaciones de formularios.
+3. Crear datos de prueba desechables para comprobar detalle de prospectos, correos y servicios, además de ingresos, gastos, restauración y cierre de ventas.
+4. Probar atomicidad de ventas, conservación de Papelera y concurrencia contra una base de pruebas temporal; no usar la base real.
+5. Completar y documentar el alta inicial de una cuenta ordinaria para instalaciones en otra PC, sin compartir secretos.
+6. Revisar notas heredadas posiblemente sin cifrar; definir respaldo y migración antes de tocar datos reales.
+7. Mostrar errores de inicialización y migración del esquema; `main.py` todavía suprime algunos errores.
+8. Diseñar y probar con respaldo una migración de SQLite a PostgreSQL/Redis.
+9. Añadir paginación a listados grandes y limitar cargas antes de que el middleware escriba archivos temporales.
+10. Reducir la carga diferida de ELK y comprobar redes lentas.
+11. Repetir Lighthouse/Google DevTools cuando la integración esté disponible; el 100 aún no está verificado.
+12. Si se requiere HTTPS confiable local, instalar la CA pública del proyecto y reiniciar Vite:
+    - `sudo install -m 0644 nginx/certs/local/ca.crt /usr/local/share/ca-certificates/lessso-local.crt`
+    - `sudo update-ca-certificates`
 
 ## Uso de Codex
 
-Lectura al cierre: 46% usado en cinco horas y 37% semanal.
+Lectura al cierre: 53% de la ventana de cinco horas y 39% semanal.

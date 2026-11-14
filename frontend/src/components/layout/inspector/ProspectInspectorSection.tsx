@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Archive,
   CheckCircle2,
@@ -11,6 +11,7 @@ import {
   MapPin,
   MessageCircle,
   Phone,
+  PhoneCall,
   RefreshCw,
   RotateCcw,
   Timer,
@@ -80,6 +81,18 @@ export const ProspectInspectorSection: React.FC<ProspectInspectorSectionProps> =
   const [contactChannel, setContactChannel] = useState<'' | 'whatsapp' | 'email' | 'phone' | 'template'>('');
   const [recordingContact, setRecordingContact] = useState(false);
 
+  useEffect(() => {
+    setFollowupWindowHours(
+      prospectData.followup_sla_hours === 24 ||
+      prospectData.followup_sla_hours === 48 ||
+      prospectData.followup_sla_hours === 72
+        ? prospectData.followup_sla_hours
+        : 48
+    );
+    setContactChannel('');
+    setRecordingContact(false);
+  }, [prospectData.id]);
+
   const prospectLive = computeLiveSla(prospectData, nowMs);
   const prospectFollowupLive = computeLiveFollowUpSla(prospectData, nowMs);
   const prospectWaUrl = buildWhatsAppUrl(
@@ -87,6 +100,11 @@ export const ProspectInspectorSection: React.FC<ProspectInspectorSectionProps> =
     prospectData.company_name,
     prospectData.demo_url
   );
+  const firstPhone = prospectData.phones?.split(/[,;\n]+/)[0]?.trim() || '';
+  const firstPhoneDigits = firstPhone.replace(/\D/g, '');
+  const prospectPhoneUrl = firstPhoneDigits.length >= 7 && firstPhoneDigits.length <= 15
+    ? `tel:${firstPhone.startsWith('+') ? '+' : ''}${firstPhoneDigits}`
+    : null;
 
   const estimatedCurrency = prospectData.currency || baseCurrency;
   const estimatedSymbol =
@@ -145,7 +163,10 @@ export const ProspectInspectorSection: React.FC<ProspectInspectorSectionProps> =
             </span>
             <span className="font-mono text-xs font-bold text-emerald-300">
               {estimatedSymbol}
-              {Number(prospectData.estimated_value).toLocaleString(systemLocale)} {estimatedCurrency}{' '}
+              {Number(prospectData.estimated_value).toLocaleString(systemLocale, {
+                maximumFractionDigits: 2,
+              })}{' '}
+              {estimatedCurrency}{' '}
               <span className="font-sans text-[10px] font-normal text-obsidian-muted">
                 ({prospectData.billing_type === 'monthly_retainer' ? 'Iguala Mensual' : 'Pago Único'})
               </span>
@@ -393,7 +414,7 @@ export const ProspectInspectorSection: React.FC<ProspectInspectorSectionProps> =
             <span className="font-mono text-[10px] text-obsidian-muted">
               Int:{' '}
               <strong className="text-white">
-                {prospectData.followup_count || 0}/{prospectData.max_followup_attempts || 3}
+                {prospectData.followup_count ?? 0}/{prospectData.max_followup_attempts ?? 3}
               </strong>
             </span>
           </div>
@@ -413,6 +434,20 @@ export const ProspectInspectorSection: React.FC<ProspectInspectorSectionProps> =
               <MessageCircle size={13} aria-hidden="true" />
               <span>WhatsApp</span>
             </button>
+          )}
+
+          {prospectPhoneUrl && (
+            <a
+              href={prospectPhoneUrl}
+              onClick={() => {
+                setContactChannel('phone');
+                showToast('Llamada preparada. Registra el contacto después de realizarla.', 'info');
+              }}
+              className="inline-flex min-h-[38px] items-center justify-center gap-1.5 rounded-xl border border-cyan-500/30 bg-cyan-500/15 px-2.5 py-2 text-[11px] font-semibold text-cyan-300 transition-all hover:bg-cyan-500/25"
+            >
+              <PhoneCall size={13} aria-hidden="true" />
+              <span>Llamar</span>
+            </a>
           )}
 
           {prospectData.contact_email && (

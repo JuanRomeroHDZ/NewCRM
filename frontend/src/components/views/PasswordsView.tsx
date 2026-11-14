@@ -89,7 +89,7 @@ export const PasswordsView: React.FC = () => {
       if (generation === resourceGeneration.current) setResources(data);
     } catch (error) {
       if (generation === resourceGeneration.current) {
-        setResourcesError(error instanceof Error ? error.message : 'No se pudieron cargar los recursos seguros.');
+      setResourcesError(error instanceof Error ? error.message : 'No se pudieron cargar los recursos.');
       }
     } finally {
       if (generation === resourceGeneration.current) setResourcesLoading(false);
@@ -202,8 +202,8 @@ export const PasswordsView: React.FC = () => {
           <Key size={24} aria-hidden="true" />
         </div>
         <div className="flex items-center justify-center gap-2">
-          <h2 className="text-lg font-semibold text-white">Contraseñas y recursos seguros</h2>
-          <InfoTooltip title="Protección con contraseña de acceso" content="Desbloquea tu espacio para consultar contraseñas y notas privadas." />
+          <h2 className="text-lg font-semibold text-white">Contraseñas y recursos</h2>
+          <InfoTooltip title="Acceso protegido" content="Desbloquea el espacio para consultar contraseñas y notas privadas." />
         </div>
         <p className="mx-auto max-w-md text-sm text-obsidian-muted">Desbloquea la bóveda para consultar o guardar información privada.</p>
         <div className="flex flex-wrap justify-center gap-2">
@@ -223,8 +223,8 @@ export const PasswordsView: React.FC = () => {
             {activeTab === 'passwords' ? `Contraseñas y llaves (${filteredCredentials.length})` : `Recursos y notas (${filteredResources.length})`}
           </h2>
           <InfoTooltip
-            title={activeTab === 'passwords' ? 'Contraseñas y llaves' : 'Recursos seguros'}
-            content={activeTab === 'passwords' ? 'Consulta y copia credenciales protegidas.' : 'Guarda códigos, licencias y notas privadas.'}
+            title={activeTab === 'passwords' ? 'Contraseñas y llaves' : 'Recursos y notas'}
+            content={activeTab === 'passwords' ? 'Consulta y copia tus contraseñas.' : 'Guarda códigos, licencias y notas.'}
           />
         </div>
         {activeTab === 'passwords' ? (
@@ -234,7 +234,7 @@ export const PasswordsView: React.FC = () => {
         )}
       </header>
 
-      <div role="tablist" aria-label="Contenido seguro" className="flex min-w-0 gap-1 border-b border-obsidian-border">
+      <div role="tablist" aria-label="Colecciones" className="flex min-w-0 gap-1 border-b border-obsidian-border">
         <button type="button" role="tab" id="passwords-tab" aria-controls="passwords-panel" aria-selected={activeTab === 'passwords'} onClick={() => selectTab('passwords')} className={`inline-flex min-h-10 min-w-0 flex-1 items-center justify-center gap-1.5 border-b-2 px-2 text-xs font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 sm:flex-initial sm:gap-2 sm:px-3 ${activeTab === 'passwords' ? 'border-indigo-400 text-white' : 'border-transparent text-obsidian-muted hover:text-white'}`}>
           <Key size={14} className="shrink-0" aria-hidden="true" /><span className="truncate">Contraseñas</span><span className="shrink-0 rounded bg-white/10 px-1.5 py-0.5 text-[10px]">{filteredCredentials.length}</span>
         </button>
@@ -275,7 +275,6 @@ export const PasswordsView: React.FC = () => {
             onTypeChange={setResourceTypeFilter}
             revealedResourceIds={revealedResourceIds}
             onToggleReveal={toggleRevealResource}
-            onCreate={openCreateResource}
             onEdit={openEditResource}
             onDelete={deleteResource}
             onClearFilters={() => { setResourceSearch(''); setResourceTypeFilter('all'); }}
