@@ -13,3 +13,5 @@
 Revisión posterior: se restauró Vite en el puerto 3001; la API seguía saludable y el proxy respondió. Se rediseñó el mapa, se recuperó la tabla del historial en tamaños medianos y se movieron las herramientas a Ajustes. `.gitignore` ahora cubre variantes `.env.*`; no se encontraron claves ni bases rastreadas. Queda pendiente confirmar la persistencia del servidor y revisar visualmente todos los apartados y las acciones trasladadas.
 
 Última comprobación: las secciones principales abren sin error de carga. El bloqueo de SQLite local se reprodujo solo bajo aislamiento; la misma consulta funciona fuera y las 191 pruebas backend aprobaron en Docker. Se eliminó la caché temporal de pytest. Se omitió la prueba con lector de pantalla conforme a la indicación del usuario.
+
+Revisión del 14 de noviembre: pasaron las seis pruebas actuales del frontend y la compilación. Se corrigió la alineación de las iniciales y se retiró el control duplicado del encabezado; falta confirmar visualmente el mapa con distintos datos. No se encontraron archivos temporales rastreados ni claves o bases rastreadas.

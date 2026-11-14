@@ -3,16 +3,27 @@ import {
   Settings, Lock, Key, Shield, Download, Upload, Check, Save,
   Palette, Clock, Target
 } from 'lucide-react';
-import { useVault } from '../../context/VaultContext';
+import { SectionType, useVault } from '../../context/VaultContext';
 import { api } from '../../lib/api';
 import { InfoTooltip } from '../common/InfoTooltip';
 import { INPUT_LIMITS } from '../../lib/validation';
 import { OperatorAuthSection } from '../settings/OperatorAuthSection';
 import { RuntimeConfigSection } from '../settings/RuntimeConfigSection';
 
+const sectionTargets: Partial<Record<SectionType, string>> = {
+  settings_appearance: 'settings-appearance',
+  settings_session: 'settings-session',
+  settings_limits: 'settings-limits',
+  settings_access: 'settings-access',
+  settings_network: 'settings-network',
+  settings_tools: 'settings-tools',
+  settings_backup: 'settings-backup',
+  settings_team: 'settings-team',
+};
+
 export const SettingsView: React.FC = () => {
   const {
-    isUnlocked, openUnlockModal, timeoutMinutes,
+    activeSection, setActiveSection, isUnlocked, openUnlockModal, timeoutMinutes,
     clipboardClearSeconds, allowRevealPasswords, searchHotkey,
     accentColor, setAccentColor, canvasStyle, setCanvasStyle,
     openImportModal, openEnvExport, openEmergencyKit, openPasswordGen, refreshVaultStatus, showToast, triggerDataReload, systemLocale,
@@ -40,6 +51,42 @@ export const SettingsView: React.FC = () => {
   const [vaultSettingsLoading, setVaultSettingsLoading] = useState(true);
   const [vaultSettingsError, setVaultSettingsError] = useState<string | null>(null);
   const vaultSettingsGeneration = useRef(0);
+
+  const scrollSelection = useRef(false);
+  const navigationUntil = useRef(0);
+
+  useEffect(() => {
+    if (scrollSelection.current) { scrollSelection.current = false; return; }
+    const targetId = sectionTargets[activeSection];
+    if (!targetId) return;
+    navigationUntil.current = Date.now() + 1000;
+    window.requestAnimationFrame(() => {
+      const target = document.getElementById(targetId);
+      if (!target) return;
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      target.focus({ preventScroll: true });
+    });
+  }, [activeSection, isUnlocked]);
+
+  useEffect(() => {
+    if (!isUnlocked) return;
+    const main = document.getElementById('settings-appearance')?.closest('main');
+    if (!main) return;
+    const update = () => {
+      if (Date.now() < navigationUntil.current) return;
+      const threshold = main.getBoundingClientRect().top + 80;
+      const entries = Object.entries(sectionTargets) as [SectionType, string][];
+      let current: SectionType = 'settings_appearance';
+      for (const [section, id] of entries) {
+        const element = document.getElementById(id);
+        if (element && element.getBoundingClientRect().top <= threshold) current = section;
+      }
+      if (main.scrollTop + main.clientHeight >= main.scrollHeight - 4) current = 'settings_team';
+      if (current !== activeSection) { scrollSelection.current = true; setActiveSection(current); }
+    };
+    main.addEventListener('scroll', update, { passive: true });
+    return () => main.removeEventListener('scroll', update);
+  }, [activeSection, isUnlocked, setActiveSection]);
 
   useEffect(() => {
     setLocalTimeout(timeoutMinutes);
@@ -199,9 +246,9 @@ export const SettingsView: React.FC = () => {
     { name: 'Índigo', color: '#6366f1' },
     { name: 'Violeta', color: '#8b5cf6' },
     { name: 'Cian', color: '#06b6d4' },
-    { name: 'Esmeralda', color: '#10b981' },
-    { name: 'Rosa Neón', color: '#f43f5e' },
-    { name: 'Ámbar', color: '#f59e0b' },
+    { name: 'Azul', color: '#3b82f6' },
+    { name: 'Celeste', color: '#0ea5e9' },
+    { name: 'Pizarra', color: '#64748b' },
   ];
 
   const currencySelectOptions = ['MXN', 'USD'];
@@ -235,7 +282,7 @@ export const SettingsView: React.FC = () => {
 
       <form onSubmit={handleSavePreferences} className="space-y-4 sm:space-y-5">
         {/* Visual Customization (Notion & Obsidian aesthetics) */}
-        <div className="min-w-0 space-y-4 rounded-xl border border-obsidian-border bg-obsidian-panel p-3 sm:p-5">
+        <div id="settings-appearance" tabIndex={-1} style={{ outline: activeSection === 'settings_appearance' ? '2px solid var(--accent-color, #818cf8)' : undefined, outlineOffset: '2px' }} className="min-w-0 scroll-mt-4 space-y-4 rounded-xl border border-obsidian-border bg-obsidian-panel p-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 sm:p-5">
           <h3 className="text-sm font-bold text-white flex items-center gap-2">
             <Palette size={16} className="text-indigo-400" aria-hidden="true" />
             <span>Apariencia</span>
@@ -287,7 +334,7 @@ export const SettingsView: React.FC = () => {
         </div>
 
         {/* Security Parameters */}
-        <div className="min-w-0 space-y-4 rounded-xl border border-obsidian-border bg-obsidian-panel p-3 sm:p-4">
+        <div id="settings-session" tabIndex={-1} style={{ outline: activeSection === 'settings_session' ? '2px solid var(--accent-color, #818cf8)' : undefined, outlineOffset: '2px' }} className="min-w-0 scroll-mt-4 space-y-4 rounded-xl border border-obsidian-border bg-obsidian-panel p-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 sm:p-4">
           <div className="flex items-center gap-2">
             <Shield size={16} className="text-indigo-400" aria-hidden="true" />
             <h3 className="text-sm font-bold text-white">Sesión y Portapapeles</h3>
@@ -375,7 +422,7 @@ export const SettingsView: React.FC = () => {
         </div>
 
         {/* Reglas de Rotación, Papelera Híbrida, Presupuesto y Seguimiento */}
-        <div className="min-w-0 space-y-5 rounded-xl border border-obsidian-border bg-obsidian-panel p-3 sm:p-5">
+        <div id="settings-limits" tabIndex={-1} style={{ outline: activeSection === 'settings_limits' ? '2px solid var(--accent-color, #818cf8)' : undefined, outlineOffset: '2px' }} className="min-w-0 scroll-mt-4 space-y-5 rounded-xl border border-obsidian-border bg-obsidian-panel p-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 sm:p-5">
           <div className="flex items-center gap-2">
             <Clock size={16} className="text-indigo-400" aria-hidden="true" />
             <h3 className="text-sm font-bold text-white">
@@ -478,7 +525,7 @@ export const SettingsView: React.FC = () => {
         </div>
 
         {/* Change Master Password */}
-        <div className="min-w-0 space-y-4 rounded-xl border border-obsidian-border bg-obsidian-panel p-3 sm:p-5">
+        <div id="settings-access" tabIndex={-1} style={{ outline: activeSection === 'settings_access' ? '2px solid var(--accent-color, #818cf8)' : undefined, outlineOffset: '2px' }} className="min-w-0 scroll-mt-4 space-y-4 rounded-xl border border-obsidian-border bg-obsidian-panel p-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 sm:p-5">
           <div className="flex items-center gap-2">
             <Key size={16} className="text-indigo-400" aria-hidden="true" />
             <h3 className="text-sm font-bold text-white">Cambiar contraseña de acceso</h3>
@@ -553,9 +600,11 @@ export const SettingsView: React.FC = () => {
         </div>
       </form>
 
-      <RuntimeConfigSection />
+      <section id="settings-network" tabIndex={-1} style={{ outline: activeSection === 'settings_network' ? '2px solid var(--accent-color, #818cf8)' : undefined, outlineOffset: '2px' }} className="scroll-mt-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300">
+        <RuntimeConfigSection />
+      </section>
 
-      <section aria-labelledby="settings-tools-heading" className="rounded-xl border border-obsidian-border bg-obsidian-panel p-4">
+      <section id="settings-tools" tabIndex={-1} style={{ outline: activeSection === 'settings_tools' ? '2px solid var(--accent-color, #818cf8)' : undefined, outlineOffset: '2px' }} aria-labelledby="settings-tools-heading" className="scroll-mt-4 rounded-xl border border-obsidian-border bg-obsidian-panel p-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300">
         <h3 id="settings-tools-heading" className="text-sm font-bold text-white">Herramientas</h3>
         <div className="mt-3 flex flex-wrap gap-2">
           <button type="button" onClick={openEnvExport} className="min-h-10 rounded-lg border border-obsidian-border bg-obsidian-surface px-3 text-xs font-medium text-white hover:bg-obsidian-border">Exportar configuración</button>
@@ -565,7 +614,7 @@ export const SettingsView: React.FC = () => {
       </section>
 
       {/* Backup & Import/Export Section */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div id="settings-backup" tabIndex={-1} style={{ outline: activeSection === 'settings_backup' ? '2px solid var(--accent-color, #818cf8)' : undefined, outlineOffset: '2px' }} className="grid scroll-mt-4 grid-cols-1 gap-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 md:grid-cols-2">
         {/* Import */}
         <div className="flex min-w-0 flex-col justify-between gap-3 rounded-xl border border-obsidian-border bg-obsidian-panel p-3 sm:p-5">
           <div className="flex items-center gap-2">
@@ -601,7 +650,9 @@ export const SettingsView: React.FC = () => {
         </div>
       </div>
 
-      <OperatorAuthSection />
+      <section id="settings-team" tabIndex={-1} style={{ outline: activeSection === 'settings_team' ? '2px solid var(--accent-color, #818cf8)' : undefined, outlineOffset: '2px' }} className="scroll-mt-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300">
+        <OperatorAuthSection />
+      </section>
     </div>
   );
 };

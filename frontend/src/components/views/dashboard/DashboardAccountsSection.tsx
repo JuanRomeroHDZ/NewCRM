@@ -33,11 +33,11 @@ export const DashboardAccountsSection: React.FC<DashboardAccountsSectionProps> =
           <span className="text-xs text-obsidian-muted">{emails.length}</span>
         </div>
         <div className="flex shrink-0 items-center gap-1">
-          <button type="button" onClick={onOpenEmails} className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-indigo-400 hover:text-indigo-300">
-            Ver todas <ArrowRight size={12} aria-hidden="true" />
-          </button>
-          <button type="button" onClick={onCreateEmail} aria-label="Agregar correo principal" className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-obsidian-muted hover:text-white">
+          <button type="button" onClick={onCreateEmail} aria-label="Agregar correo principal" className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-obsidian-border bg-obsidian-surface px-3 text-xs font-medium text-white hover:bg-obsidian-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400">
             <Mail size={13} aria-hidden="true" /> Agregar
+          </button>
+          <button type="button" onClick={onOpenEmails} className="inline-flex min-h-9 items-center gap-1 rounded-lg px-2 text-xs text-indigo-400 hover:text-indigo-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400">
+            Ver todos <ArrowRight size={12} aria-hidden="true" />
           </button>
         </div>
       </div>
@@ -53,7 +53,7 @@ export const DashboardAccountsSection: React.FC<DashboardAccountsSectionProps> =
                 <div className="flex min-w-0 items-center gap-3">
                   <PlatformIcon name={email.provider} size="sm" />
                   <div className="min-w-0">
-                    <h3 className="truncate text-xs font-semibold text-white group-hover:text-indigo-300" title={email.address}>{email.address}</h3>
+                    <h3 className="truncate text-xs font-semibold text-white group-hover:text-white/80" title={email.address}>{email.address}</h3>
                     <p className="truncate text-[11px] text-obsidian-muted">
                       {email.provider} · Verificación: {email.two_factor_method === 'none' ? 'sin activar' : email.two_factor_method}
                     </p>

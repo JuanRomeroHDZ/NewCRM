@@ -10,9 +10,6 @@ import {
   Trash2,
   Globe,
   Rocket,
-  Briefcase,
-  User,
-  Users,
   AlertTriangle,
   LoaderCircle,
 } from 'lucide-react';
@@ -271,27 +268,7 @@ export const EmailsView: React.FC = () => {
                       </h3>
                       <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px] text-obsidian-muted">
                         <span className="truncate">{email.provider}</span>
-                        <span aria-hidden="true">•</span>
-                        <span className="font-semibold text-indigo-400">{email.platform_count} plataforma(s)</span>
-                        <span aria-hidden="true">•</span>
-                        <span className="font-semibold text-cyan-400">{email.prospect_count || 0} prospecto(s)</span>
-                        <span aria-hidden="true">•</span>
-                        {email.scope === 'personal' ? (
-                          <span className="inline-flex items-center gap-1 rounded border border-emerald-500/20 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-400">
-                            <User size={9} aria-hidden="true" />
-                            <span>Personal</span>
-                          </span>
-                        ) : email.scope === 'shared' ? (
-                          <span className="inline-flex items-center gap-1 rounded border border-purple-500/20 bg-purple-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-purple-400">
-                            <Users size={9} aria-hidden="true" />
-                            <span>Compartido</span>
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 rounded border border-indigo-500/20 bg-indigo-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-400">
-                            <Briefcase size={9} aria-hidden="true" />
-                            <span>Empresa</span>
-                          </span>
-                        )}
+
                       </div>
                     </div>
                   </button>
@@ -401,24 +378,7 @@ export const EmailsView: React.FC = () => {
               </div>
 
               {/* Bottom info footer */}
-              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-obsidian-border/60 pt-3 text-[11px] text-obsidian-muted">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span
-                    className={`rounded px-2 py-0.5 text-[10px] font-semibold uppercase ${
-                      email.two_factor_method !== 'none'
-                        ? 'border border-emerald-500/20 bg-emerald-500/10 text-emerald-400'
-                        : 'border border-rose-500/20 bg-rose-500/10 text-rose-400'
-                    }`}
-                  >
-                    {email.two_factor_method === 'none'
-                      ? 'Sin verificación en dos pasos'
-                      : 'Verificación en dos pasos activa'}
-                  </span>
-
-                  {email.backup_codes && email.backup_codes.length > 0 && (
-                    <span>{email.backup_codes.length} Códigos de Respaldo</span>
-                  )}
-                </div>
+              <div className="flex flex-wrap items-center justify-end gap-2 border-t border-obsidian-border/60 pt-3 text-[11px] text-obsidian-muted">
 
                 <button
                   type="button"

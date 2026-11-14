@@ -16,6 +16,14 @@ export type SectionType =
   | 'subscriptions'
   | 'trash'
   | 'settings'
+  | 'settings_appearance'
+  | 'settings_session'
+  | 'settings_limits'
+  | 'settings_access'
+  | 'settings_network'
+  | 'settings_tools'
+  | 'settings_backup'
+  | 'settings_team'
   | 'security_audit'
   | 'audit_logs';
 
@@ -53,7 +61,7 @@ interface VaultContextType {
   lockVault: () => Promise<void>;
   panicLock: () => Promise<void>;
   setupMasterPassword: (password: string) => Promise<void>;
-  copyToClipboard: (text: string, label?: string) => Promise<void>;
+  copyToClipboard: (text: string, label?: string) => Promise<boolean>;
   refreshVaultStatus: () => Promise<void>;
 
   // Navigation & Inspector
@@ -513,8 +521,10 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           // Ignore read clipboard permissions failure
         }
       }, clipboardClearSeconds * 1000);
+      return true;
     } catch (err) {
       showToast('Error al copiar al portapapeles.', 'error');
+      return false;
     }
   };
 

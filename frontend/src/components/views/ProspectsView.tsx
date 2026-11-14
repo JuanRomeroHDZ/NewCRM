@@ -160,14 +160,14 @@ export const ProspectsView: React.FC = () => {
           <button
             type="button"
             onClick={() => setActiveSection('capture')}
-            className="inline-flex min-h-10 max-w-full items-center justify-center gap-2 rounded-lg border border-obsidian-border bg-obsidian-surface px-3 text-xs font-semibold text-obsidian-text transition-colors hover:border-indigo-500/40 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
+            className="inline-flex min-h-10 w-44 max-w-full items-center justify-center gap-2 rounded-lg border border-obsidian-border bg-obsidian-surface px-3 text-xs font-semibold text-obsidian-text transition-colors hover:border-indigo-500/40 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
           >
             <MapPinned size={15} className="text-indigo-300" aria-hidden="true" /> Captar en mapa
           </button>
           <button
             type="button"
             onClick={() => (isUnlocked ? openProspectModal() : openUnlockModal())}
-            className="inline-flex min-h-10 max-w-full items-center justify-center gap-2 rounded-lg bg-indigo-600 px-3 text-xs font-semibold text-white transition-colors hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
+            className="inline-flex min-h-10 w-44 max-w-full items-center justify-center gap-2 rounded-lg bg-indigo-600 px-3 text-xs font-semibold text-white transition-colors hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
           >
             <Plus size={15} aria-hidden="true" /> Nuevo prospecto
           </button>

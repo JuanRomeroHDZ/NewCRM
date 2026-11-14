@@ -1,6 +1,8 @@
 import React, { lazy, Suspense } from 'react';
 import { SectionType, useVault } from '../../context/VaultContext';
 
+const SettingsView = lazy(() => import('../views/SettingsView').then((module) => ({ default: module.SettingsView })));
+
 const sectionViews: Record<SectionType, React.LazyExoticComponent<React.ComponentType>> = {
   dashboard: lazy(() => import('../views/DashboardView').then((module) => ({ default: module.DashboardView }))),
   emails: lazy(() => import('../views/EmailsView').then((module) => ({ default: module.EmailsView }))),
@@ -12,7 +14,15 @@ const sectionViews: Record<SectionType, React.LazyExoticComponent<React.Componen
   writeups: lazy(() => import('../writeups/WriteupsView').then((module) => ({ default: module.WriteupsView }))),
   subscriptions: lazy(() => import('../views/SubscriptionsView').then((module) => ({ default: module.SubscriptionsView }))),
   trash: lazy(() => import('../views/TrashView').then((module) => ({ default: module.TrashView }))),
-  settings: lazy(() => import('../views/SettingsView').then((module) => ({ default: module.SettingsView }))),
+  settings: SettingsView,
+  settings_appearance: SettingsView,
+  settings_session: SettingsView,
+  settings_limits: SettingsView,
+  settings_access: SettingsView,
+  settings_network: SettingsView,
+  settings_tools: SettingsView,
+  settings_backup: SettingsView,
+  settings_team: SettingsView,
   security_audit: lazy(() => import('../views/SecurityAuditView').then((module) => ({ default: module.SecurityAuditView }))),
   audit_logs: lazy(() => import('../views/AuditLogsView').then((module) => ({ default: module.AuditLogsView }))),
 };

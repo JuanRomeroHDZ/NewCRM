@@ -268,6 +268,11 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ master_password })
     }),
+  verifyVaultPassword: (master_password: string) =>
+    request<{ verified: boolean }>('/auth/verify-password', {
+      method: 'POST',
+      body: JSON.stringify({ master_password })
+    }),
   lockVault: () => request<{ message: string }>('/auth/lock', { method: 'POST' }),
 
   // Emails

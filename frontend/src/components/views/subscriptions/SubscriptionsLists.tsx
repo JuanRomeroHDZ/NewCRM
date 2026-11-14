@@ -1,7 +1,7 @@
 import React from 'react';
 import {
   Wallet, Plus, Repeat, Edit3, Trash2, Server, RefreshCw,
-  Receipt, CreditCard, Calendar, Mail, History, CheckCircle2
+  Receipt, CreditCard, Calendar, Mail, History, CheckCircle2, ChevronDown
 } from 'lucide-react';
 import {
   ClientIncome, DomainRenewal, OneTimeExpense, PaymentMethod,
@@ -224,170 +224,128 @@ export const SubscriptionsLists: React.FC<SubscriptionsListsProps> = ({
         )}
       </div>
 
-      {/* MÓDULO 2: MONITOR DE VENCIMIENTOS (DOMINIOS Y HOSTING DE CLIENTES) */}
-      <div className="p-4 sm:p-6 rounded-2xl bg-obsidian-panel border border-obsidian-border space-y-4 shadow-xl">
-        <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-obsidian-border/70">
-          <div className="flex items-center gap-2 min-w-0">
-            <Server size={16} className="text-cyan-400 shrink-0" aria-hidden="true" />
-            <h3 className="text-sm font-bold text-white tracking-tight truncate">
-              Monitor de Vencimientos: Dominios y Hosting ({filteredRenewals.length})
+      <section className="space-y-3 rounded-2xl border border-obsidian-border bg-obsidian-panel p-3 sm:p-4" aria-labelledby="renewal-monitor-title">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-obsidian-border/70 pb-3">
+          <div className="flex min-w-0 items-center gap-2">
+            <Server size={16} className="shrink-0 text-cyan-400" aria-hidden="true" />
+            <h3 id="renewal-monitor-title" className="truncate text-sm font-bold text-white">
+              Servicios y vencimientos ({filteredRenewals.length})
             </h3>
-            <InfoTooltip content="Controla cuándo vence el dominio o alojamiento de cada página web creada, cuánto cuesta renovarlo y si el pago corre por tu cuenta o por cuenta del cliente." />
+            <InfoTooltip content="Controla servicios contratados y sus próximas fechas de renovación." />
           </div>
-            <button
-              type="button"
-              onClick={openNewRenewalModal}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-sm transition-all shrink-0"
-            >
-              <Plus size={13} aria-hidden="true" />
-              <span>Agregar Dominio / Hosting</span>
-            </button>
-          <div className="flex w-full flex-wrap items-center gap-2">
-            <span className="text-[11px] font-mono text-obsidian-muted">
-              Por mi cuenta: <strong className="text-rose-300">${formatAmount(realProfit.myRenewalsYearlyMXN)} {baseCurrency}/año</strong>
-            </span>
-            <span className="text-obsidian-muted">•</span>
-            <span className="text-[11px] font-mono text-obsidian-muted">
-              Paga el cliente: <strong className="text-emerald-300">${formatAmount(realProfit.clientRenewalsYearlyMXN)} {baseCurrency}/año</strong>
-            </span>
-
-          </div>
+          <button
+            type="button"
+            onClick={openNewRenewalModal}
+            className="inline-flex min-h-10 items-center gap-1.5 rounded-lg bg-indigo-600 px-3 text-xs font-semibold text-white transition-colors hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
+          >
+            <Plus size={13} aria-hidden="true" />
+            <span>Agregar servicio</span>
+          </button>
+          <details className="group basis-full border-t border-obsidian-border/50 pt-2 text-[11px]">
+            <summary className="inline-flex min-h-8 cursor-pointer list-none items-center gap-2 text-obsidian-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400 [&::-webkit-details-marker]:hidden">
+              <span>Costos anuales estimados</span>
+              <span className="text-[10px]">Opcional</span>
+            </summary>
+            <div className="flex flex-wrap gap-x-4 gap-y-1 pb-1 font-mono">
+              <span className="text-obsidian-muted">
+                Por mi cuenta: <strong className="text-rose-300">${formatAmount(realProfit.myRenewalsYearlyMXN)} MXN/año</strong>
+              </span>
+              <span className="text-obsidian-muted">
+                Por cuenta del cliente: <strong className="text-emerald-300">${formatAmount(realProfit.clientRenewalsYearlyMXN)} MXN/año</strong>
+              </span>
+            </div>
+          </details>
         </div>
 
         {filteredRenewals.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3.5">
+          <div className="divide-y divide-obsidian-border/70">
             {filteredRenewals.map((ren) => {
-              const srvMeta = RENEWAL_SERVICE_TYPES.find((s) => s.value === ren.service_type) || RENEWAL_SERVICE_TYPES[0];
+              const serviceLabel = RENEWAL_SERVICE_TYPES.find((service) => service.value === ren.service_type)?.label ?? 'Servicio';
               const isUrgent = ren.expiry_semaphore === 'urgente' || ren.expiry_semaphore === 'vencido';
               const isSoon = ren.expiry_semaphore === 'proximo';
               const paidByMe = ren.paid_by === 'me';
-
-              const daysText =
-                ren.days_remaining < 0
-                  ? `Venció hace ${Math.abs(ren.days_remaining)} día(s)`
-                  : ren.days_remaining === 0
-                  ? 'Vence HOY'
-                  : `Vence en ${ren.days_remaining} día(s)`;
+              const daysText = ren.days_remaining < 0
+                ? `Venció hace ${Math.abs(ren.days_remaining)} ${Math.abs(ren.days_remaining) === 1 ? 'día' : 'días'}`
+                : ren.days_remaining === 0
+                ? 'Vence hoy'
+                : `Vence en ${ren.days_remaining} ${ren.days_remaining === 1 ? 'día' : 'días'}`;
 
               return (
-                <div
-                  key={ren.id}
-                  className={`p-4 rounded-xl border transition-all space-y-2.5 min-w-0 flex flex-col justify-between ${
-                    isUrgent
-                      ? 'bg-rose-500/5 border-rose-500/30'
-                      : isSoon
-                      ? 'bg-amber-500/5 border-amber-500/30'
-                      : 'bg-obsidian-surface/60 border-obsidian-border hover:border-obsidian-borderLight'
-                  }`}
-                >
-                  <div className="space-y-2 min-w-0">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <span className="font-bold text-white text-xs block truncate" title={ren.domain_or_service}>
+                <article key={ren.id} className="min-w-0 py-3 first:pt-1 last:pb-1">
+                  <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                        <h4 className="max-w-full truncate text-xs font-semibold text-white" title={ren.domain_or_service}>
                           {ren.domain_or_service}
-                        </span>
-                        <span className="text-[11px] text-obsidian-muted block truncate" title={ren.client_name}>
-                          Cliente: <strong className="text-white/80">{ren.client_name}</strong>
-                          {ren.provider ? ` • ${ren.provider}` : ''}
-                        </span>
+                        </h4>
+                        <span className="text-[10px] text-obsidian-muted">{serviceLabel}</span>
                       </div>
-                      <div className="text-right font-mono shrink-0">
-                        <span className="text-xs font-bold text-white block">
-                          ${formatAmount(ren.renewal_cost)} {ren.currency}
-                        </span>
-                        <span className="text-[10px] text-obsidian-muted block">
-                          {ren.billing_cycle === 'monthly' ? 'Mensual' : 'Anual'}
-                        </span>
-                      </div>
+                      <p className="truncate text-[11px] text-obsidian-muted" title={ren.client_name}>
+                        {ren.scope === 'personal' ? 'Personal' : ren.client_name}
+                      </p>
                     </div>
-
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-obsidian-panel border border-obsidian-border text-obsidian-text">
-                        {srvMeta.label}
-                      </span>
-                      <span
-                        className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${
-                          paidByMe
-                            ? 'bg-rose-500/15 text-rose-300 border-rose-500/30'
-                            : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
-                        }`}
-                      >
-                        {paidByMe ? 'Pago por mi cuenta' : 'Pago por cuenta del cliente'}
-                      </span>
-                      {ren.client_charge_amount && ren.client_charge_amount > 0 && (
-                        <span className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">
-                          Cobro al cliente: ${formatAmount(ren.client_charge_amount)}
-                        </span>
-                      )}
-                      <span
-                        className={`px-2 py-0.5 rounded text-[10px] font-mono font-semibold border ${
-                          isUrgent
-                            ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
-                            : isSoon
-                            ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-                            : 'bg-cyan-500/10 text-cyan-300 border-cyan-500/20'
-                        }`}
-                      >
+                    <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+                      <span className={`rounded-md px-2 py-1 text-[10px] font-semibold ${
+                        isUrgent ? 'bg-rose-500/15 text-rose-300' : isSoon ? 'bg-amber-500/15 text-amber-300' : 'bg-obsidian-surface text-obsidian-muted'
+                      }`}>
                         {daysText}
                       </span>
-                      {ren.scope && ren.scope !== 'business' && (
-                        <span className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-purple-500/10 text-purple-300 border border-purple-500/20 capitalize">
-                          {ren.scope === 'personal' ? 'Personal' : 'Compartido'}
-                        </span>
-                      )}
-                    </div>
-
-                    {ren.notes && (
-                      <p className="text-[11px] text-obsidian-muted line-clamp-2 break-words" title={ren.notes}>
-                        {ren.notes}
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="pt-2 border-t border-obsidian-border/50 flex flex-wrap items-center justify-between gap-2 text-[10px] text-obsidian-muted font-mono">
-                    <span className="truncate">Fecha: {ren.renewal_date}</span>
-                    <div className="flex items-center gap-1 shrink-0">
                       <button
                         type="button"
                         onClick={() => handleOpenAdvanceRenewalModal(ren)}
-                        className="px-2 py-0.5 rounded bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 text-[10px] font-sans font-semibold inline-flex items-center gap-1"
-                        title="Marcar como renovado y registrar cobro en ingresos si aplica"
+                        className="inline-flex min-h-8 items-center gap-1 rounded-lg border border-emerald-500/30 px-2 text-[10px] font-semibold text-emerald-300 transition-colors hover:bg-emerald-500/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-300"
+                        title="Registrar renovación y avanzar la próxima fecha"
                       >
-                        <RefreshCw size={10} aria-hidden="true" />
-                        <span>Renovar +1 ciclo</span>
+                        <RefreshCw size={11} aria-hidden="true" />
+                        <span>Renovar</span>
                       </button>
                       <button
                         type="button"
                         onClick={() => openEditRenewalModal(ren)}
-                        className="p-1 text-obsidian-muted hover:text-white rounded hover:bg-obsidian-panel"
-                        title="Editar vencimiento"
-                        aria-label={`Editar vencimiento ${ren.domain_or_service}`}
+                        className="inline-flex min-h-8 min-w-8 items-center justify-center rounded-lg text-obsidian-muted hover:bg-obsidian-surface hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400"
+                        title="Editar servicio"
+                        aria-label={`Editar servicio ${ren.domain_or_service}`}
                       >
-                        <Edit3 size={12} aria-hidden="true" />
+                        <Edit3 size={13} aria-hidden="true" />
                       </button>
                       <button
                         type="button"
                         onClick={() => handleDeleteRenewal(ren)}
-                        className="p-1 text-obsidian-muted hover:text-rose-400 rounded hover:bg-obsidian-panel"
+                        className="inline-flex min-h-8 min-w-8 items-center justify-center rounded-lg text-obsidian-muted hover:bg-obsidian-surface hover:text-rose-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-rose-400"
                         title="Enviar a la papelera"
-                        aria-label={`Eliminar vencimiento ${ren.domain_or_service}`}
+                        aria-label={`Eliminar servicio ${ren.domain_or_service}`}
                       >
-                        <Trash2 size={12} aria-hidden="true" />
+                        <Trash2 size={13} aria-hidden="true" />
                       </button>
                     </div>
                   </div>
-                </div>
+                  <details className="group mt-1.5">
+                    <summary className="inline-flex min-h-8 cursor-pointer list-none items-center gap-1.5 text-[10px] text-indigo-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400 [&::-webkit-details-marker]:hidden">
+                      <span>Ver detalles</span>
+                      <ChevronDown size={12} aria-hidden="true" className="transition-transform group-open:rotate-180" />
+                    </summary>
+                    <div className="grid grid-cols-1 gap-x-5 gap-y-1 border-t border-obsidian-border/50 pt-2 text-[11px] sm:grid-cols-2">
+                      <span className="text-obsidian-muted">Proveedor: <strong className="font-medium text-obsidian-text">{ren.provider || 'Sin indicar'}</strong></span>
+                      <span className="text-obsidian-muted">Próxima fecha: <strong className="font-mono font-medium text-obsidian-text">{ren.renewal_date}</strong></span>
+                      <span className="text-obsidian-muted">Costo: <strong className="font-mono font-medium text-obsidian-text">${formatAmount(ren.renewal_cost)} {ren.currency} · {ren.billing_cycle === 'monthly' ? 'mensual' : 'anual'}</strong></span>
+                      <span className="text-obsidian-muted">Pago: <strong className="font-medium text-obsidian-text">{paidByMe ? 'Por mi cuenta' : 'Por cuenta del cliente'}</strong></span>
+                      {(ren.client_charge_amount ?? 0) > 0 && (
+                        <span className="text-obsidian-muted">Cobro al cliente: <strong className="font-mono font-medium text-obsidian-text">${formatAmount(ren.client_charge_amount)} {ren.currency}</strong></span>
+                      )}
+                      {ren.scope === 'shared' && <span className="text-obsidian-muted">Ámbito: <strong className="font-medium text-obsidian-text">Compartido</strong></span>}
+                      {ren.notes && <p className="break-words text-obsidian-muted sm:col-span-2">{ren.notes}</p>}
+                    </div>
+                  </details>
+                </article>
               );
             })}
           </div>
         ) : (
-          <div className="py-8 px-4 rounded-xl bg-obsidian-bg/50 border border-obsidian-border text-center space-y-2">
-            <p className="text-xs text-obsidian-muted">
-              No hay dominios ni hostings de clientes registrados en el monitor de vencimientos.
-            </p>
-          </div>
+          <p className="py-5 text-center text-xs text-obsidian-muted">
+            Aún no hay servicios con fecha de renovación.
+          </p>
         )}
-      </div>
+      </section>
 
       {/* MÓDULO 3: GASTOS ÚNICOS Y COMPRAS VARIABLES (NO RECURRENTES) */}
       <div className="p-4 sm:p-6 rounded-2xl bg-obsidian-panel border border-obsidian-border space-y-4 shadow-xl">

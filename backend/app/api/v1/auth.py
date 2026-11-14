@@ -92,9 +92,12 @@ async def _initial_account_is_available(db: AsyncSession) -> bool:
     )
 
 
-def reset_vault_lockout() -> None:
-    """Clears in-memory failed vault unlock tracking (used on success or tests)."""
-    _VAULT_FAILED_ATTEMPTS.clear()
+def reset_vault_lockout(client_key: str | None = None) -> None:
+    """Clears failed attempts for one client, or all attempts during setup."""
+    if client_key is None:
+        _VAULT_FAILED_ATTEMPTS.clear()
+    else:
+        _VAULT_FAILED_ATTEMPTS.pop(client_key, None)
 
 
 def _client_key(request: Request) -> str:
@@ -204,7 +207,7 @@ async def unlock_vault(
             detail="Contraseña de acceso incorrecta."
         )
 
-    reset_vault_lockout()
+    reset_vault_lockout(client_key)
 
     # If vault_salt was missing from a legacy DB migration, generate and save it
     vault_salt = getattr(settings, "vault_salt", None)
@@ -225,6 +228,35 @@ async def unlock_vault(
         "timeout_minutes": settings.vault_timeout_minutes,
         "remaining_seconds": settings.vault_timeout_minutes * 60
     }
+
+
+@router.post("/verify-password")
+async def verify_vault_password(
+    payload: VaultUnlockRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Rechecks the vault password for a sensitive action without opening a session."""
+    client_key = _client_key(request)
+    if _is_vault_locked_out(client_key):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Demasiados intentos fallidos. Espera unos minutos antes de intentar de nuevo."
+        )
+
+    settings = await db.scalar(select(UserSettings).limit(1))
+    if not settings:
+        raise HTTPException(status_code=400, detail="La bóveda aún no está configurada.")
+
+    if not verify_master_password(settings.master_password_hash, payload.master_password):
+        _VAULT_FAILED_ATTEMPTS.setdefault(client_key, []).append(datetime.now(timezone.utc))
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Contraseña de acceso incorrecta."
+        )
+
+    reset_vault_lockout(client_key)
+    return {"verified": True}
 
 @router.post("/lock")
 async def lock_vault(x_vault_token: str | None = Header(None)):

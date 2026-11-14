@@ -7,6 +7,7 @@ import {
 } from '../../../types';
 import { INPUT_LIMITS } from '../../../lib/validation';
 import { INCOME_CATEGORIES, RENEWAL_SERVICE_TYPES } from './SubscriptionsLists';
+import { InfoTooltip } from '../../common/InfoTooltip';
 
 export const EXPENSE_CATEGORIES = [
   'Hardware / Equipos',
@@ -311,9 +312,7 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                   <h3 id={incomeTitleId} className="text-sm font-bold text-white truncate">
                     {editingIncome ? 'Editar Pago de Cliente' : 'Registrar Pago Recibido de Cliente'}
                   </h3>
-                  <p className="text-[11px] text-obsidian-muted truncate">
-                    Anticipos, liquidaciones de sitios web e igualas mensuales
-                  </p>
+                  <p className="text-[11px] text-obsidian-muted truncate">Pagos, anticipos e igualas.</p>
                 </div>
               </div>
               <button
@@ -327,10 +326,10 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
             </div>
 
             <form onSubmit={handleSaveIncome} className="space-y-4 pt-4 text-xs">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
+              <div className={`grid grid-cols-1 gap-3 ${incScope === 'personal' ? '' : 'sm:grid-cols-2'}`}>
+                {incScope !== 'personal' && <div>
                   <label htmlFor={`${uid}-inc-prospect`} className="block text-obsidian-text font-medium mb-1">
-                    Vincular con Prospecto / Cliente (Opcional)
+                    Vincular cliente (opcional)
                   </label>
                   {!showQuickClientInInc ? (
                     <select
@@ -392,11 +391,11 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                       </button>
                     </div>
                   )}
-                </div>
+                </div>}
 
                 <div>
                   <label htmlFor={`${uid}-inc-client`} className="block text-obsidian-text font-medium mb-1">
-                    Nombre del Cliente o Negocio *
+                    {incScope === 'personal' ? 'Origen personal *' : incScope === 'shared' ? 'Cliente o gasto compartido *' : 'Cliente o negocio *'}
                   </label>
                   <input
                     id={`${uid}-inc-client`}
@@ -405,21 +404,29 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                     maxLength={INPUT_LIMITS.COMPANY_NAME}
                     value={incClientName}
                     onChange={(e) => setIncClientName(e.target.value)}
-                    placeholder="Ej. Mueblería Central"
+                    placeholder={incScope === 'personal' ? 'Ej. Reembolso' : 'Ej. Mueblería Central'}
                     className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white focus:outline-none focus:border-indigo-500"
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
                   <label htmlFor={`${uid}-inc-scope`} className="block text-obsidian-text font-medium mb-1">
-                    Ámbito (Personal vs Empresa) *
+                    Ámbito *
                   </label>
                   <select
                     id={`${uid}-inc-scope`}
                     value={incScope}
-                    onChange={(e) => setIncScope(e.target.value as EntityScope)}
+                    onChange={(e) => {
+                      const scope = e.target.value as EntityScope;
+                      setIncScope(scope);
+                      if (scope === 'personal') {
+                        if (incProspectId) setIncClientName('');
+                        setIncProspectId('');
+                        setShowQuickClientInInc(false);
+                      }
+                    }}
                     className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white focus:outline-none focus:border-indigo-500"
                   >
                     <option value="business">Empresa / Negocio</option>
@@ -541,7 +548,8 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                 </div>
               </div>
 
-              <label htmlFor={`${uid}-inc-recurring`} className="flex items-center gap-2 cursor-pointer text-obsidian-text">
+              <div className="flex items-center gap-2 text-obsidian-text">
+                <label htmlFor={`${uid}-inc-recurring`} className="inline-flex min-h-9 cursor-pointer items-center gap-2">
                 <input
                   id={`${uid}-inc-recurring`}
                   type="checkbox"
@@ -549,36 +557,39 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                   onChange={(e) => setIncRecurring(e.target.checked)}
                   className="rounded bg-obsidian-bg border-obsidian-border text-emerald-500 focus:ring-0"
                 />
-                <span>Es una iguala mensual fija (mantenimiento recurrente cada mes)</span>
-              </label>
-
-              <div>
-                <label htmlFor={`${uid}-inc-notes`} className="block text-obsidian-text font-medium mb-1">
-                  Notas Privadas (Se guardan encriptadas)
+                  <span>Iguala mensual</span>
                 </label>
+                <span className="-ml-1 self-start"><InfoTooltip content="Activa esta opción si el cliente paga la misma cantidad cada mes por mantenimiento." /></span>
+              </div>
+
+              <details className="group rounded-lg border border-obsidian-border px-3">
+                <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-2 text-xs text-obsidian-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400 [&::-webkit-details-marker]:hidden">
+                  <span>Notas privadas</span>
+                  <span className="text-[10px]">Opcional</span>
+                </summary>
                 <textarea
                   id={`${uid}-inc-notes`}
                   rows={2}
                   maxLength={INPUT_LIMITS.NOTES}
                   value={incNotes}
                   onChange={(e) => setIncNotes(e.target.value)}
-                  placeholder="Detalles adicionales del acuerdo o comprobante..."
-                  className="w-full p-2.5 rounded-xl bg-obsidian-bg border border-obsidian-border text-white focus:outline-none focus:border-indigo-500 resize-none"
+                  placeholder="Acuerdo o comprobante"
+                  className="mb-3 w-full resize-none rounded-xl border border-obsidian-border bg-obsidian-bg p-2.5 text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400"
                 />
-              </div>
+              </details>
 
               <div className="pt-3 border-t border-obsidian-border flex items-center justify-end gap-2.5">
                 <button
                   type="button"
                   onClick={() => setIsIncomeModalOpen(false)}
-                  className="px-4 py-2 text-obsidian-muted hover:text-white font-medium"
+                  className="inline-flex min-h-10 items-center justify-center rounded-lg px-4 py-2 text-sm font-medium text-obsidian-muted transition-colors hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={savingIncome}
-                  className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold shadow-md shadow-emerald-600/20 disabled:opacity-50"
+                  className="inline-flex min-h-10 items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-300"
                 >
                   {savingIncome ? 'Guardando...' : editingIncome ? 'Guardar Cambios' : 'Registrar Pago'}
                 </button>
@@ -609,11 +620,9 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                 </div>
                 <div className="min-w-0">
                   <h3 id={renewalTitleId} className="text-sm font-bold text-white truncate">
-                    {editingRenewal ? 'Editar Dominio o Hosting' : 'Registrar Vencimiento de Dominio o Hosting'}
+                    {editingRenewal ? 'Editar servicio' : 'Agregar servicio y vencimiento'}
                   </h3>
-                  <p className="text-[11px] text-obsidian-muted truncate">
-                    Controla fechas de renovación y quién cubre el costo
-                  </p>
+                  <p className="text-[11px] text-obsidian-muted truncate">Dominio, alojamiento u otro servicio.</p>
                 </div>
               </div>
               <button
@@ -627,10 +636,10 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
             </div>
 
             <form onSubmit={handleSaveRenewal} className="space-y-4 pt-4 text-xs">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
+              <div className={`grid grid-cols-1 gap-3 ${renScope === 'personal' ? '' : 'sm:grid-cols-2'}`}>
+                {renScope !== 'personal' && <div>
                   <label htmlFor={`${uid}-ren-prospect`} className="block text-obsidian-text font-medium mb-1">
-                    Vincular con Prospecto / Cliente (Opcional)
+                    Vincular cliente (opcional)
                   </label>
                   {!showQuickClientInRen ? (
                     <select
@@ -695,11 +704,11 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                       </button>
                     </div>
                   )}
-                </div>
+                </div>}
 
                 <div>
                   <label htmlFor={`${uid}-ren-client`} className="block text-obsidian-text font-medium mb-1">
-                    Cliente o Proyecto *
+                    {renScope === 'personal' ? 'Cuenta personal *' : renScope === 'shared' ? 'Cliente o cuenta compartida *' : 'Cliente o proyecto *'}
                   </label>
                   <input
                     id={`${uid}-ren-client`}
@@ -708,7 +717,7 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                     maxLength={INPUT_LIMITS.COMPANY_NAME}
                     value={renClientName}
                     onChange={(e) => setRenClientName(e.target.value)}
-                    placeholder="Ej. Clínica Dental Sonrisa"
+                    placeholder={renScope === 'personal' ? 'Ej. Dominio personal' : 'Ej. Clínica Dental Sonrisa'}
                     className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white focus:outline-none focus:border-indigo-500"
                   />
                 </div>
@@ -723,7 +732,7 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                     id={`${uid}-ren-domain`}
                     type="text"
                     required
-                    maxLength={INPUT_LIMITS.URL}
+                    maxLength={255}
                     value={renDomainOrService}
                     onChange={(e) => setRenDomainOrService(e.target.value)}
                     placeholder="Ej. clinicasonrisa.com.mx"
@@ -733,12 +742,22 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
 
                 <div>
                   <label htmlFor={`${uid}-ren-scope`} className="block text-obsidian-text font-medium mb-1">
-                    Ámbito (Personal vs Empresa) *
+                    Ámbito *
                   </label>
                   <select
                     id={`${uid}-ren-scope`}
                     value={renScope}
-                    onChange={(e) => setRenScope(e.target.value as EntityScope)}
+                    onChange={(e) => {
+                      const scope = e.target.value as EntityScope;
+                      setRenScope(scope);
+                      if (scope === 'personal') {
+                        if (renProspectId) setRenClientName('');
+                        setRenProspectId('');
+                        setShowQuickClientInRen(false);
+                        setRenPaidBy('me');
+                        setRenClientCharge('');
+                      }
+                    }}
                     className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white focus:outline-none focus:border-indigo-500"
                   >
                     <option value="business">Empresa / Negocio</option>
@@ -767,20 +786,6 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                   </select>
                 </div>
 
-                <div>
-                  <label htmlFor={`${uid}-ren-provider`} className="block text-obsidian-text font-medium mb-1">
-                    Proveedor (Dónde está contratado)
-                  </label>
-                  <input
-                    id={`${uid}-ren-provider`}
-                    type="text"
-                    maxLength={INPUT_LIMITS.PLATFORM_NAME}
-                    value={renProvider}
-                    onChange={(e) => setRenProvider(e.target.value)}
-                    placeholder="Hostinger, Namecheap, Cloudflare..."
-                    className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white focus:outline-none focus:border-indigo-500"
-                  />
-                </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -831,7 +836,7 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                 </div>
               </div>
 
-              <div>
+              {renScope !== 'personal' && <div>
                 <span className="block text-obsidian-text font-medium mb-1.5">
                   ¿Quién cubre el pago de la renovación? *
                 </span>
@@ -850,9 +855,6 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                       <Check size={13} className={renPaidBy === 'client' ? 'text-emerald-400' : 'opacity-0'} aria-hidden="true" />
                       <span>Por cuenta del cliente</span>
                     </div>
-                    <span className="text-[10px] text-obsidian-muted block mt-0.5">
-                      El cliente lo paga o se lo cobro
-                    </span>
                   </button>
 
                   <button
@@ -869,17 +871,14 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                       <Check size={13} className={renPaidBy === 'me' ? 'text-rose-400' : 'opacity-0'} aria-hidden="true" />
                       <span>Por mi cuenta</span>
                     </div>
-                    <span className="text-[10px] text-obsidian-muted block mt-0.5">
-                      Sale de mi bolsillo (gasto propio)
-                    </span>
                   </button>
                 </div>
-              </div>
+              </div>}
 
-              {renPaidBy === 'client' && (
+              {renScope !== 'personal' && renPaidBy === 'client' && (
                 <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 space-y-1.5">
                   <label htmlFor={`${uid}-ren-client-charge`} className="block text-emerald-300 font-semibold text-[11px]">
-                    Monto cobrado al cliente (si se lo revendes o cobras comisión)
+                    Cobro al cliente
                   </label>
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-white/60 font-mono">$</span>
@@ -904,33 +903,55 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                 </div>
               )}
 
-              <div>
-                <label htmlFor={`${uid}-ren-notes`} className="block text-obsidian-text font-medium mb-1">
-                  Notas Privadas (Se guardan encriptadas)
-                </label>
-                <textarea
-                  id={`${uid}-ren-notes`}
-                  rows={2}
-                  maxLength={INPUT_LIMITS.NOTES}
-                  value={renNotes}
-                  onChange={(e) => setRenNotes(e.target.value)}
-                  placeholder="Con qué correo está registrado, DNS, recordatorio de cobro..."
-                  className="w-full p-2.5 rounded-xl bg-obsidian-bg border border-obsidian-border text-white focus:outline-none focus:border-indigo-500 resize-none"
-                />
-              </div>
+              <details className="group rounded-lg border border-obsidian-border px-3">
+                <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-2 text-xs text-obsidian-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400 [&::-webkit-details-marker]:hidden">
+                  <span>Datos adicionales</span>
+                  <span className="text-[10px]">Proveedor y notas</span>
+                </summary>
+                <div className="space-y-3 pb-3">
+                  <div>
+                    <label htmlFor={`${uid}-ren-provider`} className="mb-1 block font-medium text-obsidian-text">
+                      Proveedor
+                    </label>
+                    <input
+                      id={`${uid}-ren-provider`}
+                      type="text"
+                      maxLength={INPUT_LIMITS.PLATFORM_NAME}
+                      value={renProvider}
+                      onChange={(e) => setRenProvider(e.target.value)}
+                      placeholder="Ej. Hostinger"
+                      className="w-full rounded-xl border border-obsidian-border bg-obsidian-bg px-3 py-2 text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor={`${uid}-ren-notes`} className="mb-1 block font-medium text-obsidian-text">
+                      Notas privadas
+                    </label>
+                    <textarea
+                      id={`${uid}-ren-notes`}
+                      rows={2}
+                      maxLength={INPUT_LIMITS.NOTES}
+                      value={renNotes}
+                      onChange={(e) => setRenNotes(e.target.value)}
+                      placeholder="Cuenta, DNS o recordatorio"
+                      className="w-full resize-none rounded-xl border border-obsidian-border bg-obsidian-bg p-2.5 text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400"
+                    />
+                  </div>
+                </div>
+              </details>
 
               <div className="pt-3 border-t border-obsidian-border flex items-center justify-end gap-2.5">
                 <button
                   type="button"
                   onClick={() => setIsRenewalModalOpen(false)}
-                  className="px-4 py-2 text-obsidian-muted hover:text-white font-medium"
+                  className="inline-flex min-h-10 items-center justify-center rounded-lg px-4 py-2 text-sm font-medium text-obsidian-muted transition-colors hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={savingRenewal}
-                  className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold shadow-md shadow-indigo-600/20 disabled:opacity-50"
+                  className="inline-flex min-h-10 items-center justify-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
                 >
                   {savingRenewal ? 'Guardando...' : editingRenewal ? 'Guardar Cambios' : 'Registrar Vencimiento'}
                 </button>
@@ -977,7 +998,7 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
             <div className="space-y-3 text-xs">
               <div className="p-3 rounded-xl bg-obsidian-bg/80 border border-obsidian-border space-y-1">
                 <div className="flex justify-between gap-2">
-                  <span className="text-obsidian-muted">Cliente:</span>
+                  <span className="text-obsidian-muted">{advanceRenewalTarget.scope === 'personal' ? 'Cuenta:' : 'Cliente:'}</span>
                   <strong className="text-white truncate">{advanceRenewalTarget.client_name}</strong>
                 </div>
                 <div className="flex justify-between gap-2">
@@ -990,7 +1011,7 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                 </div>
               </div>
 
-              <label htmlFor={`${uid}-adv-create-inc`} className="flex items-start gap-2.5 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/25 cursor-pointer">
+              {advanceRenewalTarget.scope !== 'personal' && <label htmlFor={`${uid}-adv-create-inc`} className="flex items-start gap-2.5 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/25 cursor-pointer">
                 <input
                   id={`${uid}-adv-create-inc`}
                   type="checkbox"
@@ -1001,10 +1022,10 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                 <div className="min-w-0">
                   <span className="text-emerald-200 font-semibold block">Generar registro automático en Ingresos</span>
                   <span className="text-[10px] text-obsidian-muted block mt-0.5">
-                    Crea atómicamente el cobro cobrado a este cliente y calcula tu ganancia neta.
+                    Registra el cobro en Ingresos y suma la ganancia del servicio.
                   </span>
                 </div>
-              </label>
+              </label>}
 
               {advanceCreateIncome && (
                 <div className="space-y-2">
@@ -1045,7 +1066,7 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
               <button
                 type="button"
                 onClick={() => setAdvanceRenewalTarget(null)}
-                className="px-4 py-2 text-obsidian-muted hover:text-white"
+                className="inline-flex min-h-10 items-center justify-center rounded-lg px-4 py-2 text-sm font-medium text-obsidian-muted transition-colors hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400"
               >
                 Cancelar
               </button>
@@ -1053,7 +1074,7 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                 type="button"
                 disabled={advancingRenewal}
                 onClick={handleConfirmAdvanceRenewal}
-                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold shadow-md shadow-emerald-600/20 disabled:opacity-50"
+                className="inline-flex min-h-10 items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-300"
               >
                 {advancingRenewal ? 'Renovando...' : 'Confirmar y Renovar'}
               </button>
@@ -1083,11 +1104,9 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                 </div>
                 <div className="min-w-0">
                   <h3 id={expenseTitleId} className="text-sm font-bold text-white truncate">
-                    {editingExpense ? 'Editar Gasto Único' : 'Registrar Gasto Único / Compra Variable'}
+                    {editingExpense ? 'Editar gasto' : 'Registrar gasto'}
                   </h3>
-                  <p className="text-[11px] text-obsidian-muted truncate">
-                    Compras de una sola vez: hardware, licencias, cursos o insumos
-                  </p>
+                  <p className="text-[11px] text-obsidian-muted truncate">Compra no recurrente.</p>
                 </div>
               </div>
               <button
@@ -1137,7 +1156,7 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
 
                 <div>
                   <label htmlFor={`${uid}-exp-scope`} className="block text-obsidian-text font-medium mb-1">
-                    Ámbito (Personal vs Empresa) *
+                    Ámbito *
                   </label>
                   <select
                     id={`${uid}-exp-scope`}
@@ -1236,33 +1255,34 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                 </div>
               </div>
 
-              <div>
-                <label htmlFor={`${uid}-exp-notes`} className="block text-obsidian-text font-medium mb-1">
-                  Notas Privadas (Se guardan encriptadas)
-                </label>
+              <details className="group rounded-lg border border-obsidian-border px-3">
+                <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-2 text-xs text-obsidian-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400 [&::-webkit-details-marker]:hidden">
+                  <span>Notas privadas</span>
+                  <span className="text-[10px]">Opcional</span>
+                </summary>
                 <textarea
                   id={`${uid}-exp-notes`}
                   rows={2}
                   maxLength={INPUT_LIMITS.NOTES}
                   value={expNotes}
                   onChange={(e) => setExpNotes(e.target.value)}
-                  placeholder="Número de factura, proveedor, garantía..."
-                  className="w-full p-2.5 rounded-xl bg-obsidian-bg border border-obsidian-border text-white focus:outline-none focus:border-indigo-500 resize-none"
+                  placeholder="Factura, proveedor o garantía"
+                  className="mb-3 w-full resize-none rounded-xl border border-obsidian-border bg-obsidian-bg p-2.5 text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400"
                 />
-              </div>
+              </details>
 
               <div className="pt-3 border-t border-obsidian-border flex items-center justify-end gap-2.5">
                 <button
                   type="button"
                   onClick={() => setIsExpenseModalOpen(false)}
-                  className="px-4 py-2 text-obsidian-muted hover:text-white font-medium"
+                  className="inline-flex min-h-10 items-center justify-center rounded-lg px-4 py-2 text-sm font-medium text-obsidian-muted transition-colors hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={savingExpense}
-                  className="px-5 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-semibold shadow-md shadow-purple-600/20 disabled:opacity-50"
+                  className="inline-flex min-h-10 items-center justify-center rounded-lg bg-purple-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-purple-500 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-purple-300"
                 >
                   {savingExpense ? 'Guardando...' : editingExpense ? 'Guardar Cambios' : 'Registrar Gasto'}
                 </button>

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useId, useCallback } from 'react';
 import {
+  ArrowRight,
   Globe,
   Plus,
   Search,
@@ -185,16 +186,6 @@ export const PlatformsView: React.FC = () => {
           />
         </div>
 
-        {isUnlocked && filteredPlatforms.length > 0 && (
-          <button
-            type="button"
-            onClick={() => openPlatformModal()}
-            className="inline-flex min-h-10 max-w-full items-center gap-1.5 rounded-lg bg-indigo-600 px-3 text-left text-xs font-semibold text-white transition-colors hover:bg-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
-          >
-            <Plus size={14} aria-hidden="true" />
-            <span>Nueva cuenta o servicio</span>
-          </button>
-        )}
       </div>
 
       {/* Locked Banner */}
@@ -217,10 +208,10 @@ export const PlatformsView: React.FC = () => {
       )}
 
       {/* Filter Toolbar */}
-      <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 border-y border-obsidian-border py-3 text-xs max-[480px]:flex-col max-[480px]:items-stretch">
-        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 max-[480px]:w-full max-[480px]:flex-col max-[480px]:items-stretch">
+      <div className="flex min-w-0 flex-wrap items-center gap-2 border-y border-obsidian-border py-2.5 text-xs">
+        <div className="flex min-w-0 flex-[1_1_24rem] flex-wrap items-center gap-2">
           {/* Search box */}
-          <div className="relative min-w-0 w-full flex-1 sm:min-w-[180px]">
+          <div className="relative min-w-[min(100%,12rem)] flex-[1_1_10rem] max-w-[14rem]">
             <label htmlFor={searchInputId} className="sr-only">
               Buscar cuentas o servicios
             </label>
@@ -233,7 +224,7 @@ export const PlatformsView: React.FC = () => {
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Buscar servicio o usuario..."
               aria-label="Buscar por nombre de servicio o usuario"
-              className="min-h-[38px] w-full rounded-xl border border-obsidian-border bg-obsidian-bg pl-8 pr-3 py-1.5 text-xs text-white placeholder-obsidian-muted/60 focus:border-indigo-500 focus:outline-none"
+              className="min-h-10 w-full rounded-lg border border-obsidian-border bg-obsidian-bg py-1.5 pl-8 pr-3 text-xs text-white placeholder-obsidian-muted/60 focus:border-indigo-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
             />
           </div>
 
@@ -246,9 +237,9 @@ export const PlatformsView: React.FC = () => {
             aria-label="Filtrar por correo principal"
             value={selectedEmail}
             onChange={(e) => setSelectedEmail(e.target.value)}
-            className="min-h-[38px] max-w-full min-w-0 rounded-lg border border-obsidian-border bg-obsidian-bg px-3 py-2 text-obsidian-text focus:border-indigo-500 focus:outline-none sm:max-w-[220px] max-[480px]:w-full"
+            className="min-h-10 max-w-full min-w-[min(100%,7rem)] flex-[1_1_7rem] rounded-lg border border-obsidian-border bg-obsidian-bg px-2.5 text-obsidian-text focus:border-indigo-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 sm:max-w-[220px]"
           >
-            <option value="">Todos los Correos Principales</option>
+            <option value="">Correos</option>
             {filteredEmails.map((e) => (
               <option key={e.id} value={e.id}>
                 {e.address}
@@ -265,9 +256,9 @@ export const PlatformsView: React.FC = () => {
             aria-label="Filtrar por estado de suscripción"
             value={selectedStatus}
             onChange={(e) => setSelectedStatus(e.target.value)}
-            className="min-h-[38px] max-w-full min-w-0 rounded-lg border border-obsidian-border bg-obsidian-bg px-3 py-2 text-obsidian-text focus:border-indigo-500 focus:outline-none max-[480px]:w-full"
+            className="min-h-10 max-w-full min-w-[min(100%,7rem)] flex-[1_1_7rem] rounded-lg border border-obsidian-border bg-obsidian-bg px-2.5 text-obsidian-text focus:border-indigo-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 sm:max-w-[180px]"
           >
-            <option value="">Todos los Estados</option>
+            <option value="">Estados</option>
             <option value="active">Activa (Con cobro)</option>
             <option value="free_trial">Prueba Gratuita</option>
             <option value="free">Gratis / Sin cobro</option>
@@ -286,7 +277,7 @@ export const PlatformsView: React.FC = () => {
                 aria-label="Filtrar por etiqueta"
                 value={selectedTag}
                 onChange={(e) => setSelectedTag(e.target.value)}
-                className="min-h-[38px] max-w-full min-w-0 rounded-lg border border-obsidian-border bg-obsidian-bg px-3 py-2 text-obsidian-text focus:border-indigo-500 focus:outline-none max-[480px]:w-full"
+                className="min-h-10 max-w-full min-w-[min(100%,8rem)] flex-[1_1_9rem] rounded-lg border border-obsidian-border bg-obsidian-bg px-2.5 text-obsidian-text focus:border-indigo-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 sm:max-w-[160px]"
               >
                 <option value="">Todas las Etiquetas</option>
                 {allTags.map((t) => (
@@ -300,31 +291,43 @@ export const PlatformsView: React.FC = () => {
         </div>
 
         {/* View Toggle */}
-        <div
-          role="group"
-          aria-label="Modo de visualización"
-          className="hidden shrink-0 items-center rounded-xl border border-obsidian-border bg-obsidian-bg p-1 md:flex"
-        >
-          <button
-            type="button"
-            aria-pressed={viewMode === 'table'}
-            onClick={() => setViewMode('table')}
-            className={`min-h-[32px] rounded-lg px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
-              viewMode === 'table' ? 'bg-obsidian-surface text-white' : 'text-obsidian-muted hover:text-white'
-            }`}
+        <div className="ml-auto flex max-w-full flex-wrap items-center justify-end gap-2">
+          <div
+            role="group"
+            aria-label="Modo de visualización"
+            className="hidden shrink-0 items-center rounded-lg border border-obsidian-border bg-obsidian-bg p-1 md:flex"
           >
-            Tabla
-          </button>
-          <button
-            type="button"
-            aria-pressed={viewMode === 'grid'}
-            onClick={() => setViewMode('grid')}
-            className={`min-h-[32px] rounded-lg px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
-              viewMode === 'grid' ? 'bg-obsidian-surface text-white' : 'text-obsidian-muted hover:text-white'
-            }`}
-          >
-            Tarjetas
-          </button>
+            <button
+              type="button"
+              aria-pressed={viewMode === 'table'}
+              onClick={() => setViewMode('table')}
+              className={`min-h-[32px] rounded-lg px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
+                viewMode === 'table' ? 'bg-obsidian-surface text-white' : 'text-obsidian-muted hover:text-white'
+              }`}
+            >
+              Tabla
+            </button>
+            <button
+              type="button"
+              aria-pressed={viewMode === 'grid'}
+              onClick={() => setViewMode('grid')}
+              className={`min-h-[32px] rounded-lg px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
+                viewMode === 'grid' ? 'bg-obsidian-surface text-white' : 'text-obsidian-muted hover:text-white'
+              }`}
+            >
+              Tarjetas
+            </button>
+          </div>
+          {isUnlocked && (
+            <button
+              type="button"
+              onClick={() => openPlatformModal()}
+              className="inline-flex min-h-10 max-w-full shrink-0 items-center justify-center gap-1.5 rounded-lg bg-indigo-600 px-3 text-xs font-semibold text-white transition-colors hover:bg-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+            >
+              <Plus size={14} aria-hidden="true" />
+              <span>Nuevo servicio</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -539,110 +542,85 @@ export const PlatformsView: React.FC = () => {
         >
           {filteredPlatforms.map((p) => {
             const loginUrl = getSafeLoginUrl(p.login_url);
+            const scopeLabel = p.scope === 'personal' ? 'Personal' : p.scope === 'shared' ? 'Compartido' : 'Empresa';
+            const statusLabel = p.subscription_status === 'active'
+              ? `${formatCost(p.subscription_cost, p.currency)} ${p.currency}`
+              : p.subscription_status === 'free_trial'
+                ? 'Prueba'
+                : p.subscription_status === 'free'
+                  ? 'Gratis'
+                  : p.subscription_status === 'paused'
+                    ? 'Pausada'
+                    : p.subscription_status === 'cancelled'
+                      ? 'Cancelada'
+                      : 'Sin suscripción';
             return (
               <article
                 key={p.id}
-                className="group min-w-0 space-y-3 overflow-hidden rounded-xl border border-obsidian-border bg-obsidian-panel p-3 transition-colors hover:border-obsidian-borderLight sm:p-4"
+                className="group min-w-0 space-y-2 overflow-hidden rounded-xl border border-obsidian-border bg-obsidian-panel p-3 transition-colors hover:border-obsidian-borderLight"
               >
-              <div className="flex flex-wrap items-start justify-between gap-2">
-                <button
-                  type="button"
-                  onClick={() => openInspector('platform', p.id)}
-                  aria-label={`Ver detalles de ${p.name}`}
-                  className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
-                >
-                  <PlatformIcon name={p.name} iconUrl={p.icon_url} size="md" />
-                  <div className="min-w-0 flex-1">
-                    <h3
-                      className="truncate text-sm font-bold text-white transition-colors group-hover:text-indigo-300"
-                      title={p.name}
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <button
+                    type="button"
+                    onClick={() => openInspector('platform', p.id)}
+                    aria-label={`Ver detalles de ${p.name}`}
+                    className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                  >
+                    <PlatformIcon name={p.name} iconUrl={p.icon_url} size="sm" />
+                    <div className="min-w-0 flex-1">
+                      <h3
+                        className="truncate text-xs font-bold text-white transition-colors group-hover:text-indigo-300"
+                        title={p.name}
+                      >
+                        {p.name}
+                      </h3>
+                    </div>
+                    <ArrowRight size={13} className="shrink-0 text-obsidian-muted" aria-hidden="true" />
+                  </button>
+
+                  <div className="flex flex-shrink-0 items-center gap-1">
+                    {loginUrl && (
+                      <a
+                        href={loginUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title="Abrir enlace"
+                        aria-label={`Abrir enlace de ${p.name}`}
+                        className="inline-flex min-h-9 min-w-9 items-center justify-center rounded-lg text-obsidian-muted hover:bg-obsidian-surface hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                      >
+                        <ExternalLink size={14} aria-hidden="true" />
+                      </a>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!isUnlocked) openUnlockModal();
+                        else openPlatformModal(undefined, p.id);
+                      }}
+                      title="Editar plataforma"
+                      aria-label={`Editar ${p.name}`}
+                      className="inline-flex min-h-9 min-w-9 items-center justify-center rounded-lg text-obsidian-muted hover:bg-obsidian-surface hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
                     >
-                      {p.name}
-                    </h3>
-                    <p
-                      className="truncate font-mono text-[11px] text-obsidian-muted"
-                      title={p.specific_alias || p.email_address || ''}
+                      <Edit3 size={14} aria-hidden="true" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeletePlatform(p)}
+                      title="Eliminar plataforma"
+                      aria-label={`Eliminar ${p.name}`}
+                      className="inline-flex min-h-9 min-w-9 items-center justify-center rounded-lg text-obsidian-muted hover:bg-obsidian-surface hover:text-rose-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
                     >
-                      {p.specific_alias || p.email_address}
-                    </p>
+                      <Trash2 size={14} aria-hidden="true" />
+                    </button>
                   </div>
-                </button>
-
-                <div className="flex flex-shrink-0 items-center gap-1">
-                  {loginUrl && (
-                    <a
-                      href={loginUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      title="Abrir enlace"
-                      aria-label={`Abrir enlace de ${p.name}`}
-                      className="inline-flex min-h-[36px] min-w-[36px] items-center justify-center rounded-lg text-obsidian-muted hover:bg-obsidian-surface hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
-                    >
-                      <ExternalLink size={14} aria-hidden="true" />
-                    </a>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!isUnlocked) openUnlockModal();
-                      else openPlatformModal(undefined, p.id);
-                    }}
-                    title="Editar plataforma"
-                    aria-label={`Editar ${p.name}`}
-                    className="inline-flex min-h-[36px] min-w-[36px] items-center justify-center rounded-lg text-obsidian-muted hover:bg-obsidian-surface hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
-                  >
-                    <Edit3 size={14} aria-hidden="true" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleDeletePlatform(p)}
-                    title="Eliminar plataforma"
-                    aria-label={`Eliminar ${p.name}`}
-                    className="inline-flex min-h-[36px] min-w-[36px] items-center justify-center rounded-lg text-obsidian-muted hover:bg-obsidian-surface hover:text-rose-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
-                  >
-                    <Trash2 size={14} aria-hidden="true" />
-                  </button>
                 </div>
-              </div>
 
-              <div className="flex min-w-0 flex-wrap items-center justify-between gap-2 border-t border-obsidian-border/60 pt-3 text-xs">
-                <span
-                  className="truncate font-mono text-[11px] text-obsidian-muted"
-                  title={p.username || p.specific_alias || 'Sin usuario'}
-                >
-                  {p.username || p.specific_alias || 'Sin usuario'}
-                </span>
-                <SecretField value={p.password_plain} masked={p.password_masked} label="Clave" />
-              </div>
-
-              <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-                <div className="flex min-w-0 flex-wrap items-center gap-1">
-                  {p.scope === 'personal' ? (
-                    <span className="inline-flex items-center gap-1 rounded border border-emerald-500/20 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-400">
-                      <User size={9} aria-hidden="true" />
-                      <span>Personal</span>
-                    </span>
-                  ) : p.scope === 'shared' ? (
-                    <span className="inline-flex items-center gap-1 rounded border border-purple-500/20 bg-purple-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-purple-400">
-                      <Users size={9} aria-hidden="true" />
-                      <span>Compartido</span>
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 rounded border border-indigo-500/20 bg-indigo-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-400">
-                      <Briefcase size={9} aria-hidden="true" />
-                      <span>Empresa</span>
-                    </span>
-                  )}
-                  {p.tags?.map((t, idx) => (
-                    <TagBadge key={idx} name={t.name} color={t.color} />
-                  ))}
-                </div>
-                {p.subscription_status === 'active' && (
-                  <span className="flex-shrink-0 font-mono text-xs font-bold text-emerald-400">
-                    {formatCost(p.subscription_cost, p.currency)} {p.currency}
+                <div className="flex min-w-0 items-center justify-between gap-2 border-t border-obsidian-border/60 pt-2 text-[10px]">
+                  <span className="truncate text-obsidian-muted">{scopeLabel}</span>
+                  <span className={`shrink-0 truncate font-medium ${p.subscription_status === 'active' ? 'text-emerald-300' : 'text-obsidian-muted'}`}>
+                    {statusLabel}
                   </span>
-                )}
-              </div>
+                </div>
               </article>
             );
           })}

@@ -149,7 +149,7 @@ export const SecureResourceCollection: React.FC<SecureResourceCollectionProps> =
                         {isRevealed ? <EyeOff size={12} aria-hidden="true" /> : <Eye size={12} aria-hidden="true" />}
                         <span>{isRevealed ? 'Ocultar' : 'Revelar'}</span>
                       </button>
-                      <CopyButton value={resource.content || ''} label={resource.title} size="sm" />
+                      <CopyButton value={resource.content || ''} label={resource.title} size="sm" requireVaultPassword />
                     </div>
                   </div>
                   {isRevealed ? (

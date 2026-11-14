@@ -2,10 +2,13 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Network,
   AlertTriangle,
+  ListFilter,
   ZoomIn,
   ZoomOut,
   RotateCcw,
   ShieldAlert,
+  Eye,
+  EyeOff,
   LoaderCircle,
   Plus,
 } from 'lucide-react';
@@ -15,6 +18,50 @@ import { GraphData, GraphNode, GraphLink } from '../../types';
 import { EmptyState } from '../common/EmptyState';
 
 type GraphFilterType = 'all' | 'email' | 'platform' | 'prospect' | 'payment';
+type GraphFixtureMode = 'demo' | 'worst' | 'empty' | 'one' | 'thousand';
+
+const GRAPH_FIXTURE_MODES: { value: GraphFixtureMode; label: string; title: string }[] = [
+  { value: 'demo', label: 'Demo', title: 'Datos actuales de LESSSO' },
+  { value: 'worst', label: 'Extremo', title: 'Datos límite: nombres largos, campos vacíos y ciclos' },
+  { value: 'empty', label: 'Vacío', title: 'Sin nodos ni conexiones' },
+  { value: 'one', label: 'Uno', title: 'Un nodo y ninguna conexión' },
+  { value: 'thousand', label: '1,000', title: '1,000 nodos y muchas conexiones' },
+];
+
+const readGraphFixtureMode = (): GraphFixtureMode => {
+  if (!import.meta.env.DEV) return 'demo';
+  const requested = new URLSearchParams(window.location.search).get('graphData');
+  return GRAPH_FIXTURE_MODES.some((option) => option.value === requested)
+    ? (requested as GraphFixtureMode)
+    : 'demo';
+};
+
+const formatGraphCount = (count: number): string => new Intl.NumberFormat('es-MX').format(count);
+
+const getNodeTypeLabel = (type: GraphNode['type']): string => {
+  if (type === 'email') return 'Correo';
+  if (type === 'platform') return 'Cuenta';
+  if (type === 'prospect') return 'Prospecto';
+  return 'Método de pago';
+};
+
+const getNodeMonogram = (label: string): string => {
+  const monogram = Array.from(label.trim()).slice(0, 2).join('').trim().toLocaleUpperCase();
+  return monogram || '·';
+};
+
+const truncateCanvasText = (context: CanvasRenderingContext2D, value: string, maxWidth: number): string => {
+  const text = value.trim() || 'Sin nombre';
+  if (context.measureText(text).width <= maxWidth) return text;
+
+  const characters = Array.from(text);
+  while (characters.length > 1) {
+    characters.pop();
+    const candidate = `${characters.join('').trimEnd()}…`;
+    if (context.measureText(candidate).width <= maxWidth) return candidate;
+  }
+  return '…';
+};
 
 const FILTER_OPTIONS: { value: GraphFilterType; label: string }[] = [
   { value: 'all', label: 'Todos' },
@@ -24,11 +71,23 @@ const FILTER_OPTIONS: { value: GraphFilterType; label: string }[] = [
   { value: 'payment', label: 'Pagos' },
 ];
 
-const fitGraph = (width: number, height: number) => {
-  const safeW = Math.max(200, width);
-  const safeH = Math.max(200, height);
-  const scale = Math.max(0.1, Math.min(0.95, (safeW - 24) / 1000, (safeH - 24) / 700));
-  return { x: (safeW - 1000 * scale) / 2, y: (safeH - 700 * scale) / 2, scale };
+const fitGraph = (width: number, height: number, nodes: GraphNode[]) => {
+  const positioned = nodes.filter((node) => node.x !== undefined && node.y !== undefined);
+  const safeWidth = Math.max(200, width);
+  const safeHeight = Math.max(200, height);
+  if (!positioned.length) return { x: safeWidth / 2, y: safeHeight / 2, scale: 1 };
+  const xs = positioned.map((node) => node.x!);
+  const ys = positioned.map((node) => node.y!);
+  const minX = Math.min(...xs) - 110;
+  const maxX = Math.max(...xs) + 110;
+  const minY = Math.min(...ys) - 100;
+  const maxY = Math.max(...ys) + 120;
+  const scale = Math.max(0.02, Math.min(0.95, (safeWidth - 32) / (maxX - minX), (safeHeight - 32) / (maxY - minY)));
+  return {
+    x: safeWidth / 2 - (minX + maxX) * scale / 2,
+    y: safeHeight / 2 - (minY + maxY) * scale / 2,
+    scale,
+  };
 };
 
 const isNodeVisible = (node: GraphNode, filter: GraphFilterType): boolean => {
@@ -38,17 +97,20 @@ const isNodeVisible = (node: GraphNode, filter: GraphFilterType): boolean => {
 export const GraphView: React.FC = () => {
   const { openInspector, openEmailModal, openProspectModal, openUnlockModal, dataVersion, isUnlocked } = useVault();
 
+  const [fixtureMode, setFixtureMode] = useState<GraphFixtureMode>(readGraphFixtureMode);
+  const isFixturePreview = import.meta.env.DEV && fixtureMode !== 'demo';
   const [graphData, setGraphData] = useState<GraphData | null>(null);
   const [loading, setLoading] = useState(isUnlocked);
   const [error, setError] = useState('');
   const [attempt, setAttempt] = useState(0);
   const [filterType, setFilterType] = useState<GraphFilterType>('all');
-  const [highlightSPOF, setHighlightSPOF] = useState(true);
-  const [hoveredNode, setHoveredNode] = useState<GraphNode | null>(null);
-  const [isLegendOpen, setIsLegendOpen] = useState(false);
   const [nodeSearch, setNodeSearch] = useState('');
+  const [highlightSPOF, setHighlightSPOF] = useState(true);
+  const [hideEmailAddresses, setHideEmailAddresses] = useState(true);
+  const [hoveredNode, setHoveredNode] = useState<GraphNode | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const canvasSizeRef = useRef({ width: 0, height: 0 });
 
   // Transform state: pan & zoom
   const transformRef = useRef({ x: 0, y: 0, scale: 1 });
@@ -65,48 +127,65 @@ export const GraphView: React.FC = () => {
   // Simulation nodes state
   const simNodesRef = useRef<GraphNode[]>([]);
   const simLinksRef = useRef<GraphLink[]>([]);
+  const visibleGraphNodes = (graphData?.nodes || []).filter((node) => isNodeVisible(node, filterType));
+  const searchTerm = nodeSearch.trim().toLocaleLowerCase();
+  const searchedGraphNodes = visibleGraphNodes.filter((node) => node.label.toLocaleLowerCase().includes(searchTerm));
 
   useEffect(() => {
     if (!isUnlocked) {
-      setGraphData(null);
-      setLoading(false);
-      setError('');
-      setHoveredNode(null);
-      simNodesRef.current = [];
-      simLinksRef.current = [];
-      return;
+      if (!isFixturePreview) {
+        setGraphData(null);
+        setLoading(false);
+        setError('');
+        setHoveredNode(null);
+        simNodesRef.current = [];
+        simLinksRef.current = [];
+        return;
+      }
     }
 
     let active = true;
     setLoading(true);
     setError('');
 
-    api
-      .getGraph()
+    const graphRequest = isFixturePreview
+      ? import('./graphStressFixtures').then(({ createGraphStressFixture }) => createGraphStressFixture(fixtureMode))
+      : api.getGraph();
+
+    graphRequest
       .then((data) => {
         if (!active) return;
         setGraphData(data);
 
-        // Initialize node positions in a radial / distributed layout
+        // Keep the familiar radial layout for small maps and distribute larger maps into readable clusters.
         const width = 1000;
         const height = 700;
+        const useCompactLayout = data.nodes.length > 80;
         const emailNodes = data.nodes.filter((n) => n.type === 'email');
         const platformNodes = data.nodes.filter((n) => n.type === 'platform');
         const prospectNodes = data.nodes.filter((n) => n.type === 'prospect');
         const paymentNodes = data.nodes.filter((n) => n.type === 'payment');
 
-        // Place emails in central ring
+        // Place emails in a ring for small maps and a grid for dense maps.
+        const emailColumns = Math.max(1, Math.ceil(Math.sqrt(emailNodes.length)));
         emailNodes.forEach((node, i) => {
-          const angle = (i / Math.max(1, emailNodes.length)) * 2 * Math.PI;
-          const radius = 180;
-          node.x = width / 2 + Math.cos(angle) * radius;
-          node.y = height / 2 + Math.sin(angle) * radius;
+          if (useCompactLayout) {
+            const column = i % emailColumns;
+            const row = Math.floor(i / emailColumns);
+            node.x = 260 + column * 420;
+            node.y = 220 + row * 420;
+          } else {
+            const angle = (i / Math.max(1, emailNodes.length)) * 2 * Math.PI;
+            const radius = 180;
+            node.x = width / 2 + Math.cos(angle) * radius;
+            node.y = height / 2 + Math.sin(angle) * radius;
+          }
           node.vx = 0;
           node.vy = 0;
         });
 
         // Place platforms radially around their parent email
-        const emailPosMap = new Map(emailNodes.map((e) => [e.id, { x: e.x || 0, y: e.y || 0 }]));
+        const emailPosMap = new Map(emailNodes.map((e) => [e.id, { x: e.x ?? width / 2, y: e.y ?? height / 2 }]));
         const platformsPerEmail = new Map<string, number>();
         const platformParents = new Map<string, string>();
         const prospectParents = new Map<string, string>();
@@ -119,27 +198,35 @@ export const GraphView: React.FC = () => {
           }
         });
 
+        const detachedPlatformColumns = Math.max(1, Math.ceil(Math.sqrt(platformNodes.length)));
+        let detachedPlatformIndex = 0;
         platformNodes.forEach((pNode) => {
-          const parentId = platformParents.get(pNode.id) || emailNodes[0]?.id;
-          const parentPos = (parentId ? emailPosMap.get(parentId) : undefined) || {
-            x: width / 2,
-            y: height / 2,
-          };
+          const parentId = platformParents.get(pNode.id);
+          const parentPos = parentId ? emailPosMap.get(parentId) : undefined;
 
-          const currentCount = (parentId ? platformsPerEmail.get(parentId) : 0) || 0;
-          if (parentId) platformsPerEmail.set(parentId, currentCount + 1);
-
-          const subAngle = currentCount * 2.39996323;
-          const subDist = 126 + (currentCount % 4) * 12;
-          pNode.x = parentPos.x + Math.cos(subAngle) * subDist;
-          pNode.y = parentPos.y + Math.sin(subAngle) * subDist;
+          if (parentId && parentPos) {
+            const currentCount = platformsPerEmail.get(parentId) || 0;
+            platformsPerEmail.set(parentId, currentCount + 1);
+            const subAngle = currentCount * 2.39996323;
+            const subDist = useCompactLayout ? 112 + Math.sqrt(currentCount) * 24 : 126 + (currentCount % 4) * 12;
+            pNode.x = parentPos.x + Math.cos(subAngle) * subDist;
+            pNode.y = parentPos.y + Math.sin(subAngle) * subDist;
+          } else {
+            const column = detachedPlatformIndex % detachedPlatformColumns;
+            const row = Math.floor(detachedPlatformIndex / detachedPlatformColumns);
+            pNode.x = width / 2 - (detachedPlatformColumns - 1) * 80 + column * 160;
+            pNode.y = height + 160 + row * 150;
+            detachedPlatformIndex += 1;
+          }
           pNode.vx = 0;
           pNode.vy = 0;
         });
 
-        // Place prospects radially around their parent email (or on right side if unlinked)
+        // Place prospects radially around their parent email, with a grid for unlinked records.
         const prospectsPerEmail = new Map<string, number>();
-        prospectNodes.forEach((prNode, idx) => {
+        const detachedProspectColumns = Math.max(1, Math.ceil(Math.sqrt(prospectNodes.length)));
+        let detachedProspectIndex = 0;
+        prospectNodes.forEach((prNode) => {
           const parentId = prospectParents.get(prNode.id);
           const parentPos = parentId ? emailPosMap.get(parentId) : undefined;
 
@@ -151,17 +238,42 @@ export const GraphView: React.FC = () => {
             prNode.x = parentPos.x + Math.cos(subAngle) * subDist;
             prNode.y = parentPos.y + Math.sin(subAngle) * subDist;
           } else {
-            prNode.x = width - 140;
-            prNode.y = 140 + idx * 90;
+            const column = detachedProspectIndex % detachedProspectColumns;
+            const row = Math.floor(detachedProspectIndex / detachedProspectColumns);
+            prNode.x = width / 2 - (detachedProspectColumns - 1) * 80 + column * 160;
+            prNode.y = -140 - row * 150;
+            detachedProspectIndex += 1;
           }
           prNode.vx = 0;
           prNode.vy = 0;
         });
 
-        // Place payments
-        paymentNodes.forEach((payNode, i) => {
-          payNode.x = 120 + i * 140;
-          payNode.y = height - 100;
+        // Place payment methods beside linked accounts, or in a compact grid when unlinked.
+        const platformParentsById = new Map(platformNodes.map((platform) => [platform.id, platformParents.get(platform.id)]));
+        const paymentPlatforms = new Map<string, string>();
+        data.links.forEach((link) => {
+          if (link.type === 'payment') paymentPlatforms.set(link.source, link.target);
+        });
+        const paymentsPerEmail = new Map<string, number>();
+        const detachedPaymentColumns = Math.max(1, Math.ceil(Math.sqrt(paymentNodes.length)));
+        let detachedPaymentIndex = 0;
+        paymentNodes.forEach((payNode) => {
+          const platformId = paymentPlatforms.get(payNode.id);
+          const parentEmailId = platformId ? platformParentsById.get(platformId) : undefined;
+          const parentPos = parentEmailId ? emailPosMap.get(parentEmailId) : undefined;
+
+          if (parentEmailId && parentPos) {
+            const currentCount = paymentsPerEmail.get(parentEmailId) || 0;
+            paymentsPerEmail.set(parentEmailId, currentCount + 1);
+            payNode.x = parentPos.x + 190;
+            payNode.y = parentPos.y + (currentCount - 0.5) * 52;
+          } else {
+            const column = detachedPaymentIndex % detachedPaymentColumns;
+            const row = Math.floor(detachedPaymentIndex / detachedPaymentColumns);
+            payNode.x = width + 140 + column * 160;
+            payNode.y = height / 2 + row * 150;
+            detachedPaymentIndex += 1;
+          }
           payNode.vx = 0;
           payNode.vy = 0;
         });
@@ -171,7 +283,7 @@ export const GraphView: React.FC = () => {
 
         if (canvasRef.current) {
           const rect = canvasRef.current.getBoundingClientRect();
-          transformRef.current = fitGraph(rect.width, rect.height);
+          transformRef.current = fitGraph(rect.width, rect.height, simNodesRef.current);
         }
       })
       .catch((err) => {
@@ -186,7 +298,7 @@ export const GraphView: React.FC = () => {
     return () => {
       active = false;
     };
-  }, [dataVersion, isUnlocked, attempt]);
+  }, [dataVersion, isUnlocked, attempt, fixtureMode, isFixturePreview]);
 
   // Main Render Loop for HTML5 Canvas
   const draw = useCallback(() => {
@@ -207,6 +319,8 @@ export const GraphView: React.FC = () => {
     ctx.scale(scale, scale);
 
     const visibleNodes = simNodesRef.current.filter((n) => isNodeVisible(n, filterType));
+    const showLabels = visibleNodes.length <= 16 && scale >= 0.65;
+    const maxLabelWidth = Math.min(180, 120 / Math.max(scale, 0.1));
     const visibleNodeMap = new Map(visibleNodes.map((n) => [n.id, n]));
     const links = simLinksRef.current;
 
@@ -256,6 +370,7 @@ export const GraphView: React.FC = () => {
     visibleNodes.forEach((node) => {
       if (node.x === undefined || node.y === undefined) return;
 
+      ctx.textAlign = 'center';
       const isHovered = hoveredNode?.id === node.id;
       const isCritical = highlightSPOF && node.is_critical_failure_point;
 
@@ -277,22 +392,23 @@ export const GraphView: React.FC = () => {
         ctx.strokeStyle = isCritical ? '#f43f5e' : '#6366f1';
         ctx.stroke();
 
-        ctx.font = '600 12px Inter, system-ui, sans-serif';
-        ctx.fillStyle = '#ffffff';
-        ctx.textAlign = 'center';
-        ctx.fillText(node.label, node.x, node.y + radius + 16);
+        if (!hideEmailAddresses && (showLabels || isHovered)) {
+          ctx.font = '600 12px Inter, system-ui, sans-serif';
+          ctx.fillStyle = '#ffffff';
+          ctx.textAlign = 'center';
+          ctx.fillText(truncateCanvasText(ctx, node.label, maxLabelWidth), node.x, node.y + radius + 16);
 
-        ctx.font = '500 10px JetBrains Mono, monospace';
-        ctx.fillStyle = '#94a3b8';
-        ctx.fillText(
-          `${node.metrics.platforms_count || 0} hijos • ${node.sub_type}`,
-          node.x,
-          node.y + radius + 30
-        );
+          ctx.font = '500 10px JetBrains Mono, monospace';
+          ctx.fillStyle = '#94a3b8';
+          const platformCount = Number(node.metrics.platforms_count);
+          const formattedPlatformCount = formatGraphCount(Number.isFinite(platformCount) ? platformCount : 0);
+          const detail = `${formattedPlatformCount} hijos • ${node.sub_type || 'Sin proveedor'}`;
+          ctx.fillText(truncateCanvasText(ctx, detail, maxLabelWidth), node.x, node.y + radius + 30);
+        }
 
         ctx.font = 'bold 13px Inter, system-ui, sans-serif';
         ctx.fillStyle = isCritical ? '#f43f5e' : '#818cf8';
-        ctx.fillText(node.label.slice(0, 2).toUpperCase(), node.x, node.y + 5);
+        ctx.fillText(getNodeMonogram(node.label), node.x, node.y + 5);
       } else if (node.type === 'platform') {
         const radius = 16;
         ctx.beginPath();
@@ -303,14 +419,16 @@ export const GraphView: React.FC = () => {
         ctx.strokeStyle = node.status === 'free_trial' ? '#f59e0b' : '#38bdf8';
         ctx.stroke();
 
-        ctx.font = '500 11px Inter, system-ui, sans-serif';
-        ctx.fillStyle = '#e2e8f0';
-        ctx.textAlign = 'center';
-        ctx.fillText(node.label, node.x, node.y + radius + 14);
+        if (showLabels || isHovered) {
+          ctx.font = '500 11px Inter, system-ui, sans-serif';
+          ctx.fillStyle = '#e2e8f0';
+          ctx.textAlign = 'center';
+          ctx.fillText(truncateCanvasText(ctx, node.label, maxLabelWidth), node.x, node.y + radius + 14);
+        }
 
         ctx.font = 'bold 10px Inter, system-ui, sans-serif';
         ctx.fillStyle = '#38bdf8';
-        ctx.fillText(node.label.slice(0, 2).toUpperCase(), node.x, node.y + 4);
+        ctx.fillText(getNodeMonogram(node.label), node.x, node.y + 4);
       } else if (node.type === 'prospect') {
         const radius = 15;
         ctx.beginPath();
@@ -326,14 +444,16 @@ export const GraphView: React.FC = () => {
             : '#f59e0b';
         ctx.stroke();
 
-        ctx.font = '500 10.5px Inter, system-ui, sans-serif';
-        ctx.fillStyle = '#fde68a';
-        ctx.textAlign = 'center';
-        ctx.fillText(node.label, node.x, node.y + radius + 13);
+        if (showLabels || isHovered) {
+          ctx.font = '500 10.5px Inter, system-ui, sans-serif';
+          ctx.fillStyle = '#fde68a';
+          ctx.textAlign = 'center';
+          ctx.fillText(truncateCanvasText(ctx, node.label, maxLabelWidth), node.x, node.y + radius + 13);
+        }
 
         ctx.font = 'bold 9.5px Inter, system-ui, sans-serif';
         ctx.fillStyle = node.status === 'respondido' ? '#10b981' : '#f59e0b';
-        ctx.fillText(node.label.slice(0, 2).toUpperCase(), node.x, node.y + 3.5);
+        ctx.fillText(getNodeMonogram(node.label), node.x, node.y + 3.5);
       } else {
         // Payment Node
         const radius = 14;
@@ -345,19 +465,21 @@ export const GraphView: React.FC = () => {
         ctx.strokeStyle = '#10b981';
         ctx.stroke();
 
-        ctx.font = '500 10px Inter, system-ui, sans-serif';
-        ctx.fillStyle = '#10b981';
-        ctx.textAlign = 'center';
-        ctx.fillText(node.label, node.x, node.y + radius + 12);
+        if (showLabels || isHovered) {
+          ctx.font = '500 10px Inter, system-ui, sans-serif';
+          ctx.fillStyle = '#10b981';
+          ctx.textAlign = 'center';
+          ctx.fillText(truncateCanvasText(ctx, node.label, maxLabelWidth), node.x, node.y + radius + 12);
+        }
 
         ctx.font = 'bold 9px Inter, system-ui, sans-serif';
         ctx.fillStyle = '#34d399';
-        ctx.fillText(node.label.slice(0, 2).toUpperCase(), node.x, node.y + 3.5);
+        ctx.fillText(getNodeMonogram(node.label), node.x, node.y + 3.5);
       }
     });
 
     ctx.restore();
-  }, [hoveredNode, highlightSPOF, filterType]);
+  }, [hoveredNode, highlightSPOF, filterType, hideEmailAddresses]);
 
   // Handle Resize with DPR support
   useEffect(() => {
@@ -368,16 +490,28 @@ export const GraphView: React.FC = () => {
       const dpr = window.devicePixelRatio || 1;
       const cssWidth = canvas.parentElement?.clientWidth || 800;
       const cssHeight = canvas.parentElement?.clientHeight || 600;
+      const sizeChanged = cssWidth !== canvasSizeRef.current.width || cssHeight !== canvasSizeRef.current.height;
       canvas.width = Math.floor(cssWidth * dpr);
       canvas.height = Math.floor(cssHeight * dpr);
       canvas.style.width = `${cssWidth}px`;
       canvas.style.height = `${cssHeight}px`;
+      if (sizeChanged && simNodesRef.current.length > 0) {
+        transformRef.current = fitGraph(cssWidth, cssHeight, simNodesRef.current);
+      }
+      canvasSizeRef.current = { width: cssWidth, height: cssHeight };
       draw();
     };
 
     resize();
+    const observer = canvas.parentElement && typeof ResizeObserver !== 'undefined'
+      ? new ResizeObserver(resize)
+      : null;
+    if (observer && canvas.parentElement) observer.observe(canvas.parentElement);
     window.addEventListener('resize', resize);
-    return () => window.removeEventListener('resize', resize);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('resize', resize);
+    };
   }, [draw]);
 
   useEffect(() => {
@@ -450,6 +584,7 @@ export const GraphView: React.FC = () => {
 
     const clickedNode = getNodeAtCoords(e.clientX, e.clientY);
     if (clickedNode) {
+      setHoveredNode(clickedNode);
       draggedNodeRef.current = clickedNode;
     } else {
       isDraggingCanvasRef.current = true;
@@ -519,9 +654,7 @@ export const GraphView: React.FC = () => {
     if (draggedNodeRef.current) {
       const n = draggedNodeRef.current;
       draggedNodeRef.current = null;
-      if (!hasDraggedRef.current && n.entity_id) {
-        openInspector(n.type, n.entity_id);
-      }
+      if (!hasDraggedRef.current && !isFixturePreview && n.entity_id) openInspector(n.type, n.entity_id);
     }
     isDraggingCanvasRef.current = false;
     pointerDownOriginRef.current = null;
@@ -552,11 +685,53 @@ export const GraphView: React.FC = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
-    transformRef.current = fitGraph(rect.width, rect.height);
+    transformRef.current = fitGraph(rect.width, rect.height, simNodesRef.current);
     draw();
   };
 
-  if (!isUnlocked) {
+  const selectFixtureMode = (mode: GraphFixtureMode) => {
+    setFixtureMode(mode);
+    setFilterType('all');
+    setNodeSearch('');
+    setHoveredNode(null);
+    if (!import.meta.env.DEV) return;
+    const nextUrl = new URL(window.location.href);
+    if (mode === 'demo') nextUrl.searchParams.delete('graphData');
+    else nextUrl.searchParams.set('graphData', mode);
+    window.history.replaceState(window.history.state, '', `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`);
+  };
+
+  const selectGraphNode = (node: GraphNode) => {
+    setHoveredNode(node);
+    if (!isFixturePreview && node.entity_id) openInspector(node.type, node.entity_id);
+  };
+
+  const mapOverlayBottomClass = import.meta.env.DEV ? 'bottom-16 sm:bottom-20' : 'bottom-3 sm:bottom-6';
+  const graphFixtureSwitcher = import.meta.env.DEV ? (
+    <div
+      role="group"
+      aria-label="Datos de prueba del mapa"
+      className="fixed bottom-2 left-1/2 z-50 flex max-w-[calc(100vw-1rem)] -translate-x-1/2 gap-0.5 overflow-x-auto rounded-lg border border-slate-300 bg-slate-100 p-1 font-sans text-[11px] text-slate-700 shadow-lg"
+    >
+      {GRAPH_FIXTURE_MODES.map((option) => (
+        <button
+          key={option.value}
+          type="button"
+          aria-pressed={fixtureMode === option.value}
+          title={option.title}
+          onClick={() => selectFixtureMode(option.value)}
+          className={`min-h-11 shrink-0 touch-manipulation rounded-md px-2 font-medium ${
+            fixtureMode === option.value ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-600 hover:text-slate-950'
+          }`}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  ) : null;
+
+
+  if (!isUnlocked && !isFixturePreview) {
     return (
       <div className="mx-auto flex min-h-[calc(100dvh-4rem)] w-full max-w-3xl items-start p-4 sm:items-center sm:p-8">
         <section className="w-full rounded-2xl border border-obsidian-border bg-obsidian-card p-5 sm:p-7" aria-labelledby="graph-locked-title">
@@ -568,24 +743,66 @@ export const GraphView: React.FC = () => {
           <button
             type="button"
             onClick={openUnlockModal}
-            className="mt-5 min-h-11 rounded-xl bg-indigo-600 px-4 text-sm font-semibold text-white hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
+            className="mt-5 min-h-11 touch-manipulation rounded-xl bg-indigo-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-indigo-500 active:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
           >
             Desbloquear bóveda
           </button>
         </section>
+        {graphFixtureSwitcher}
       </div>
     );
   }
 
   return (
-    <div className="relative h-[calc(100dvh-4rem)] min-h-0 w-full select-none overflow-hidden bg-obsidian-bg dot-grid-canvas">
-      {/* Keep mobile controls compact so the map remains visible. */}
-      <div className="absolute inset-x-2 top-2 z-10 flex flex-wrap items-start gap-2 sm:left-6 sm:right-6 sm:top-4">
-        <details className="relative max-w-[calc(100vw-1rem)] rounded-xl border border-obsidian-border bg-obsidian-panel/95 p-1 text-xs shadow-xl backdrop-blur-md">
-          <summary className="flex min-h-[34px] cursor-pointer list-none items-center gap-2 rounded-lg px-2.5 font-medium text-white [&::-webkit-details-marker]:hidden">
-            <span>Filtros: {FILTER_OPTIONS.find((option) => option.value === filterType)?.label}</span>
+    <div
+      className="graph-view-map relative h-[calc(100dvh-4rem)] min-h-0 w-full overflow-hidden bg-obsidian-bg dot-grid-canvas"
+      style={{ WebkitTapHighlightColor: 'transparent' }}
+    >
+      {graphData?.cycles_detected && graphData.cycles_detected.length > 0 && (
+        <div className="absolute left-3 right-3 top-3 z-10 flex justify-start">
+          <div
+            role="status"
+            className="flex max-w-full items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300 shadow-lg backdrop-blur-md"
+          >
+            <AlertTriangle size={14} className="mt-0.5 shrink-0 text-amber-400" aria-hidden="true" />
+            <span className="break-words">
+              {formatGraphCount(graphData.cycles_detected.length)}{' '}
+              {graphData.cycles_detected.length === 1 ? 'conexión circular' : 'conexiones circulares'}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {!loading && !error && graphData && graphData.nodes.length > 0 && graphData.links.length === 0 && (
+        <div className="absolute left-3 right-3 top-3 z-10 flex justify-center">
+          <div role="status" className="rounded-xl border border-obsidian-border bg-obsidian-panel/95 px-3 py-2 text-center text-xs text-obsidian-muted shadow-lg">
+            {formatGraphCount(graphData.nodes.length)} {graphData.nodes.length === 1 ? 'elemento' : 'elementos'} sin conexiones todavía.
+          </div>
+        </div>
+      )}
+
+      {hoveredNode && !loading && !error && (
+        <div
+          aria-live="polite"
+          className="pointer-events-none absolute left-3 right-3 top-14 z-10 mx-auto max-w-sm rounded-xl border border-obsidian-border bg-obsidian-panel/95 px-3 py-2 shadow-xl"
+        >
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-obsidian-muted">{getNodeTypeLabel(hoveredNode.type)}</span>
+          <p className="break-words text-sm font-medium leading-relaxed text-white">{hoveredNode.label}</p>
+          {hoveredNode.sub_type && <p className="mt-0.5 break-words text-xs text-obsidian-muted">{hoveredNode.sub_type}</p>}
+        </div>
+      )}
+
+      {/* Floating Zoom & Pan Controls */}
+      <div
+        role="group"
+        aria-label="Controles de zoom del mapa"
+        className={`absolute ${mapOverlayBottomClass} right-3 z-10 flex flex-col gap-1 rounded-xl border border-obsidian-border bg-obsidian-panel/90 p-1.5 text-obsidian-muted shadow-xl backdrop-blur-md sm:right-6`}
+      >
+        <details className="relative text-xs">
+          <summary aria-label="Filtros y nodos del mapa" className="flex min-h-11 min-w-11 touch-manipulation cursor-pointer list-none items-center justify-center rounded-lg active:bg-obsidian-surface hover:bg-obsidian-surface hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400 sm:min-h-9 sm:min-w-9 [&::-webkit-details-marker]:hidden">
+            <ListFilter size={16} aria-hidden="true" /><span className="sr-only">Filtros y nodos del mapa</span>
           </summary>
-          <div className="absolute left-0 top-full mt-1 flex min-w-40 flex-col gap-1 rounded-xl border border-obsidian-border bg-obsidian-panel p-1.5 shadow-xl">
+          <div className="absolute bottom-0 right-full mr-2 flex w-[min(13rem,calc(100vw-5.5rem))] max-h-[min(70dvh,32rem)] flex-col gap-1 overflow-y-auto rounded-xl border border-obsidian-border bg-obsidian-panel p-1.5 shadow-xl">
             <div role="group" aria-label="Filtrar nodos del mapa" className="flex flex-col gap-1">
               {FILTER_OPTIONS.map((opt) => {
                 const active = filterType === opt.value;
@@ -593,9 +810,10 @@ export const GraphView: React.FC = () => {
                   <button
                     key={opt.value}
                     type="button"
+                    aria-label={`Filtrar nodos: ${opt.label}`}
                     aria-pressed={active}
                     onClick={() => setFilterType(opt.value)}
-                    className={`min-h-[36px] rounded-lg px-2.5 text-left text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
+                    className={`min-h-11 touch-manipulation rounded-lg px-2.5 text-left text-xs font-medium active:bg-obsidian-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 sm:min-h-9 ${
                       active ? 'bg-indigo-600 text-white' : 'text-obsidian-muted hover:bg-obsidian-surface hover:text-white'
                     }`}
                   >
@@ -608,38 +826,76 @@ export const GraphView: React.FC = () => {
               type="button"
               aria-pressed={highlightSPOF}
               onClick={() => setHighlightSPOF(!highlightSPOF)}
-              className="flex min-h-[36px] items-center gap-2 rounded-lg border-t border-obsidian-border px-2.5 pt-1 text-left text-xs text-obsidian-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
+              className="flex min-h-11 touch-manipulation items-center gap-2 rounded-lg border-t border-obsidian-border px-2.5 pt-1 text-left text-xs text-obsidian-text active:bg-obsidian-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 sm:min-h-9"
             >
               <ShieldAlert size={14} aria-hidden="true" />
               <span>Resaltar correos clave</span>
             </button>
+            <button
+              type="button"
+              aria-pressed={hideEmailAddresses}
+              onClick={() => setHideEmailAddresses((hidden) => !hidden)}
+              className="flex min-h-11 touch-manipulation items-center gap-2 rounded-lg border-t border-obsidian-border px-2.5 pt-1 text-left text-xs text-obsidian-text active:bg-obsidian-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 sm:min-h-9"
+            >
+              {hideEmailAddresses ? <EyeOff size={14} aria-hidden="true" /> : <Eye size={14} aria-hidden="true" />}
+              <span>Ocultar correos completos</span>
+            </button>
+
+            <div className="border-t border-obsidian-border pt-2">
+              <label className="block text-xs font-medium text-obsidian-text">
+                Buscar elemento
+                <input
+                  type="search"
+                  value={nodeSearch}
+                  onChange={(event) => setNodeSearch(event.target.value)}
+                  maxLength={255}
+                  autoComplete="off"
+                  className="mt-1 min-h-11 w-full rounded-lg border border-obsidian-border bg-obsidian-bg px-2 text-base text-white placeholder:text-obsidian-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 sm:min-h-9 sm:text-sm"
+                  placeholder="Nombre del nodo"
+                />
+              </label>
+              <p className="mt-1 text-[10px] text-obsidian-muted">
+                {formatGraphCount(visibleGraphNodes.length)} {visibleGraphNodes.length === 1 ? 'elemento' : 'elementos'} en el filtro
+              </p>
+              <ul className="mt-1 max-h-48 space-y-1 overflow-y-auto" aria-label="Elementos disponibles en el mapa">
+                {searchedGraphNodes.length === 0 ? (
+                  <li className="px-2 py-2 text-xs text-obsidian-muted">
+                    {visibleGraphNodes.length === 0 ? 'No hay elementos de este tipo.' : 'No hay coincidencias para esta búsqueda.'}
+                  </li>
+                ) : (
+                  searchedGraphNodes.slice(0, 40).map((node) => (
+                    <li key={node.id}>
+                      {node.entity_id || isFixturePreview ? (
+                        <button
+                          type="button"
+                          onClick={() => selectGraphNode(node)}
+                          className="min-h-11 w-full touch-manipulation break-words rounded-md px-2 py-1 text-left text-xs text-obsidian-text active:bg-obsidian-surface hover:bg-obsidian-surface hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300"
+                        >
+                          <span className="block text-[10px] text-obsidian-muted">{getNodeTypeLabel(node.type)}</span>
+                          <span>{node.label}</span>
+                        </button>
+                      ) : (
+                        <span className="block break-words rounded-md px-2 py-1 text-xs text-obsidian-muted">
+                          <span className="block text-[10px]">{getNodeTypeLabel(node.type)}</span>
+                          {node.label}
+                        </span>
+                      )}
+                    </li>
+                  ))
+                )}
+              </ul>
+              {searchedGraphNodes.length > 40 && (
+                <p className="mt-1 text-[10px] text-obsidian-muted">Mostrando 40 de {formatGraphCount(searchedGraphNodes.length)}. Busca para acotar la lista.</p>
+              )}
+            </div>
           </div>
         </details>
-
-        {/* Cycles Alert Banner */}
-        {graphData?.cycles_detected && graphData.cycles_detected.length > 0 && (
-          <div
-            role="status"
-            className="flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-300 backdrop-blur-md"
-          >
-            <AlertTriangle size={14} className="text-amber-400" aria-hidden="true" />
-            <span>{graphData.cycles_detected.length} conexiones circulares</span>
-          </div>
-        )}
-      </div>
-
-      {/* Floating Zoom & Pan Controls */}
-      <div
-        role="group"
-        aria-label="Controles de zoom del mapa"
-        className="absolute bottom-3 right-3 z-10 flex flex-col gap-1 rounded-xl border border-obsidian-border bg-obsidian-panel/90 p-1.5 text-obsidian-muted shadow-xl backdrop-blur-md sm:bottom-6 sm:right-6"
-      >
         <button
           type="button"
           onClick={() => zoomAtPoint(1.2)}
           aria-label="Acercar mapa"
           title="Acercar"
-          className="inline-flex min-h-[36px] min-w-[36px] items-center justify-center rounded-lg transition-colors hover:bg-obsidian-surface hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+          className="inline-flex min-h-11 min-w-11 touch-manipulation items-center justify-center rounded-lg transition-colors active:bg-obsidian-surface hover:bg-obsidian-surface hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 sm:min-h-9 sm:min-w-9"
         >
           <ZoomIn size={16} aria-hidden="true" />
         </button>
@@ -648,7 +904,7 @@ export const GraphView: React.FC = () => {
           onClick={() => zoomAtPoint(0.8)}
           aria-label="Alejar mapa"
           title="Alejar"
-          className="inline-flex min-h-[36px] min-w-[36px] items-center justify-center rounded-lg transition-colors hover:bg-obsidian-surface hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+          className="inline-flex min-h-11 min-w-11 touch-manipulation items-center justify-center rounded-lg transition-colors active:bg-obsidian-surface hover:bg-obsidian-surface hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 sm:min-h-9 sm:min-w-9"
         >
           <ZoomOut size={16} aria-hidden="true" />
         </button>
@@ -657,83 +913,40 @@ export const GraphView: React.FC = () => {
           onClick={handleResetZoom}
           aria-label="Restablecer vista del mapa"
           title="Restablecer vista"
-          className="inline-flex min-h-[36px] min-w-[36px] items-center justify-center rounded-lg transition-colors hover:bg-obsidian-surface hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+          className="inline-flex min-h-11 min-w-11 touch-manipulation items-center justify-center rounded-lg transition-colors active:bg-obsidian-surface hover:bg-obsidian-surface hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 sm:min-h-9 sm:min-w-9"
         >
           <RotateCcw size={16} aria-hidden="true" />
         </button>
       </div>
 
-      {/* Legend Card positioned away from zoom controls on 375px */}
-      <details
-        onToggle={(event) => setIsLegendOpen(event.currentTarget.open)}
-        className="absolute bottom-3 left-3 z-10 max-h-[calc(100%-6rem)] max-w-[calc(100%-5.25rem)] overflow-y-auto rounded-xl border border-obsidian-border bg-obsidian-panel/95 p-3 text-[11px] text-obsidian-muted shadow-xl backdrop-blur-md sm:bottom-6 sm:left-6 sm:max-w-xs"
-      >
-        <summary className="cursor-pointer text-xs font-semibold text-white">Guía y elementos</summary>
-        <div className="mt-2 space-y-1.5">
-          <div className="flex items-center gap-2">
-            <span className="h-3 w-3 shrink-0 rounded-full border-2 border-indigo-500 bg-obsidian-card" aria-hidden="true" />
-            <span>Correo Principal</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="h-3 w-3 shrink-0 rounded-full border-2 border-cyan-400 bg-obsidian-card" aria-hidden="true" />
-            <span>Cuenta o Servicio</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="h-3 w-3 shrink-0 rounded-full border-2 border-amber-400 bg-obsidian-card" aria-hidden="true" />
-            <span>Prospecto / Demo</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="h-3 w-3 shrink-0 rounded-full border-2 border-emerald-500 bg-emerald-500/20" aria-hidden="true" />
-            <span>Método de Pago</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="h-0.5 w-4 shrink-0 border-t border-dashed border-cyan-400" aria-hidden="true" />
-            <span>Correo de Respaldo (A recupera a B)</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="h-3 w-3 shrink-0 rounded-full border-2 border-rose-500 bg-rose-500/20" aria-hidden="true" />
-            <span>Correo Indispensable (muchas cuentas dependen de él)</span>
-          </div>
-          {isLegendOpen && graphData?.nodes.length ? (
-            <div className="mt-3 border-t border-obsidian-border pt-3">
-              <h2 className="text-xs font-semibold text-white">Elementos del mapa</h2>
-              <label className="mt-2 block text-xs text-obsidian-muted">
-                Buscar elemento
-                <input value={nodeSearch} onChange={(event) => setNodeSearch(event.target.value)} maxLength={100} className="mt-1 min-h-10 w-full rounded-lg border border-obsidian-border bg-obsidian-bg px-2 text-sm text-white" />
-              </label>
-              <ul className="mt-1.5 max-h-40 space-y-1 overflow-y-auto" aria-label="Elementos disponibles en el mapa">
-                {graphData.nodes.filter((node) => isNodeVisible(node, filterType) && node.label.toLocaleLowerCase().includes(nodeSearch.trim().toLocaleLowerCase())).map((node) => {
-                  const typeLabel = node.type === 'email'
-                    ? 'Correo'
-                    : node.type === 'platform'
-                    ? 'Cuenta'
-                    : node.type === 'prospect'
-                    ? 'Prospecto'
-                    : 'Método de pago';
-                  const entityId = node.entity_id;
-                  return (
-                    <li key={node.id}>
-                      {entityId ? (
-                        <button
-                          type="button"
-                          onClick={() => openInspector(node.type, entityId)}
-                          className="min-h-10 w-full break-words rounded-md px-2 py-1 text-left text-xs text-obsidian-text hover:bg-obsidian-surface hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
-                        >
-                          {typeLabel}: {node.label}
-                        </button>
-                      ) : (
-                        <span className="block break-words px-2 py-1 text-xs text-obsidian-muted">
-                          {typeLabel}: {node.label}
-                        </span>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
+      <aside aria-label="Guía del mapa" className={`absolute ${mapOverlayBottomClass} left-3 z-10 max-h-[min(40vh,15rem)] max-w-[min(18rem,calc(100%-7rem))] overflow-y-auto rounded-xl border border-obsidian-border bg-obsidian-panel/95 p-3 text-[11px] text-obsidian-muted shadow-xl sm:left-6`}>
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-2">
+              <span className="h-3 w-3 shrink-0 rounded-full border-2 border-indigo-500 bg-obsidian-card" aria-hidden="true" />
+              <span>Correo Principal</span>
             </div>
-          ) : null}
-        </div>
-      </details>
+            <div className="flex items-center gap-2">
+              <span className="h-3 w-3 shrink-0 rounded-full border-2 border-cyan-400 bg-obsidian-card" aria-hidden="true" />
+              <span>Cuenta o Servicio</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="h-3 w-3 shrink-0 rounded-full border-2 border-amber-400 bg-obsidian-card" aria-hidden="true" />
+              <span>Prospecto / Demo</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="h-3 w-3 shrink-0 rounded-full border-2 border-emerald-500 bg-emerald-500/20" aria-hidden="true" />
+              <span>Método de Pago</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="h-0.5 w-4 shrink-0 border-t border-dashed border-cyan-400" aria-hidden="true" />
+              <span>Correo de Respaldo (A recupera a B)</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="h-3 w-3 shrink-0 rounded-full border-2 border-rose-500 bg-rose-500/20" aria-hidden="true" />
+              <span>Correo Indispensable (muchas cuentas dependen de él)</span>
+            </div>
+          </div>
+      </aside>
 
       {/* Loading State Overlay */}
       {loading && !graphData && (
@@ -773,12 +986,15 @@ export const GraphView: React.FC = () => {
             </div>
             <div>
               <h3 className="text-sm font-bold text-white">Mapa de Conexiones Vacío</h3>
+              <p className="mt-1 text-xs leading-relaxed text-obsidian-muted">
+                Agrega un correo principal o un prospecto. Al vincular cuentas y pagos, aparecerán aquí.
+              </p>
             </div>
             <div className="flex flex-wrap items-center justify-center gap-2.5 pt-1">
               <button
                 type="button"
                 onClick={() => openEmailModal()}
-                className="inline-flex min-h-[40px] items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white transition-all hover:bg-indigo-500"
+                className="inline-flex min-h-11 touch-manipulation items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white transition-all active:bg-indigo-500 hover:bg-indigo-500"
               >
                 <Plus size={14} aria-hidden="true" />
                 <span>Agregar Correo Principal</span>
@@ -786,7 +1002,7 @@ export const GraphView: React.FC = () => {
               <button
                 type="button"
                 onClick={() => openProspectModal()}
-                className="inline-flex min-h-[40px] items-center gap-1.5 rounded-xl border border-obsidian-border bg-obsidian-surface px-4 py-2 text-xs font-semibold text-white transition-all hover:bg-obsidian-border"
+                className="inline-flex min-h-11 touch-manipulation items-center gap-1.5 rounded-xl border border-obsidian-border bg-obsidian-surface px-4 py-2 text-xs font-semibold text-white transition-all active:bg-obsidian-border hover:bg-obsidian-border"
               >
                 <Plus size={14} className="text-amber-400" aria-hidden="true" />
                 <span>Nuevo Prospecto</span>
@@ -796,11 +1012,31 @@ export const GraphView: React.FC = () => {
         </div>
       )}
 
+      {!loading && !error && graphData && graphData.nodes.length > 0 && visibleGraphNodes.length === 0 && (
+        <div className="absolute inset-0 z-[5] flex items-center justify-center p-4">
+          <div role="status" className="w-full max-w-sm rounded-2xl border border-obsidian-border bg-obsidian-panel/95 p-5 text-center shadow-2xl backdrop-blur-md">
+            <h3 className="text-sm font-bold text-white">No hay elementos en este filtro</h3>
+            <p className="mt-1 text-xs leading-relaxed text-obsidian-muted">
+              Prueba otro tipo o vuelve a mostrar todos los nodos del mapa.
+            </p>
+            <button
+              type="button"
+              onClick={() => { setFilterType('all'); setNodeSearch(''); }}
+              className="mt-4 min-h-11 touch-manipulation rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white active:bg-indigo-500 hover:bg-indigo-500"
+            >
+              Mostrar todos
+            </button>
+          </div>
+        </div>
+      )}
+
+      {graphFixtureSwitcher}
+
       {/* The HTML5 Canvas */}
       <canvas
         ref={canvasRef}
         role="img"
-        aria-label="Mapa interactivo de conexiones entre correos, plataformas, prospectos y métodos de pago"
+        aria-label={`Mapa de conexiones con ${formatGraphCount(visibleGraphNodes.length)} elementos visibles. Para buscar o seleccionar nodos, abre Filtros y nodos del mapa.`}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}

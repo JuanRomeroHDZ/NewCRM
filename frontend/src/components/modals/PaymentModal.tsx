@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { X, CreditCard, AlertCircle, ShieldCheck } from 'lucide-react';
+import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
+import { X, CreditCard, AlertCircle, ShieldCheck, Eye, EyeOff } from 'lucide-react';
 import { useVault } from '../../context/VaultContext';
 import { api } from '../../lib/api';
 import { isValidLastFour, isValidExpiryMonth, isValidExpiryYear, validateCardFields, INPUT_LIMITS } from '../../lib/validation';
@@ -11,6 +11,9 @@ export const PaymentModal: React.FC = () => {
   const [alias, setAlias] = useState('');
   const [lastFour, setLastFour] = useState('');
   const [cardNumber, setCardNumber] = useState('');
+  const [showCardNumber, setShowCardNumber] = useState(false);
+  const cardNumberInputRef = useRef<HTMLInputElement>(null);
+  const cardCaretDigits = useRef<number | null>(null);
   const [expiryMonth, setExpiryMonth] = useState('');
   const [expiryYear, setExpiryYear] = useState('');
   const [billingNotes, setBillingNotes] = useState('');
@@ -20,6 +23,7 @@ export const PaymentModal: React.FC = () => {
   useEffect(() => {
     if (isPaymentModalOpen) {
       setFormError(null);
+      setShowCardNumber(false);
       if (editingPayment) {
         setIssuer(editingPayment.issuer || 'MasterCard');
         setAlias(editingPayment.alias || '');
@@ -39,6 +43,15 @@ export const PaymentModal: React.FC = () => {
       }
     }
   }, [isPaymentModalOpen, editingPayment]);
+
+  useLayoutEffect(() => {
+    const input = cardNumberInputRef.current;
+    const digitsBeforeCaret = cardCaretDigits.current;
+    if (!input || digitsBeforeCaret === null) return;
+    const caretPosition = digitsBeforeCaret + Math.max(0, Math.ceil(digitsBeforeCaret / 4) - 1);
+    input.setSelectionRange(caretPosition, caretPosition);
+    cardCaretDigits.current = null;
+  }, [cardNumber]);
 
   useEffect(() => {
     if (!isPaymentModalOpen) return;
@@ -169,7 +182,7 @@ export const PaymentModal: React.FC = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label htmlFor="payment-issuer" className="text-obsidian-text font-medium block mb-1">
-                Emisor / Entidad Financiera *
+                Entidad financiera *
               </label>
               <select
                 id="payment-issuer"
@@ -190,7 +203,7 @@ export const PaymentModal: React.FC = () => {
 
             <div>
               <label htmlFor="payment-alias" className="text-obsidian-text font-medium block mb-1">
-                Nombre o Alias Identificador *
+                Alias *
               </label>
               <input
                 id="payment-alias"
@@ -266,15 +279,38 @@ export const PaymentModal: React.FC = () => {
               <label htmlFor="payment-card-number" className="text-obsidian-muted block mb-1">
                 Número de tarjeta (opcional)
               </label>
-              <input
-                id="payment-card-number"
-                type="password"
-                maxLength={INPUT_LIMITS.CARD_NUMBER}
-                value={cardNumber}
-                onChange={(e) => setCardNumber(e.target.value)}
-                placeholder="•••• •••• •••• ••••"
-                className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-indigo-500"
-              />
+              <div className="relative min-w-0">
+                <input
+                  ref={cardNumberInputRef}
+                  id="payment-card-number"
+                  type={showCardNumber ? 'text' : 'password'}
+                  inputMode="numeric"
+                  autoComplete="off"
+                  spellCheck={false}
+                  maxLength={INPUT_LIMITS.CARD_NUMBER + Math.floor((INPUT_LIMITS.CARD_NUMBER - 1) / 4)}
+                  value={cardNumber.replace(/\D/g, '').replace(/(\d{4})(?=\d)/g, '$1 ')}
+                  onChange={(event) => {
+                    const caret = event.currentTarget.selectionStart ?? event.currentTarget.value.length;
+                    cardCaretDigits.current = event.currentTarget.value.slice(0, caret).replace(/\D/g, '').length;
+                    setCardNumber(event.currentTarget.value.replace(/\D/g, '').slice(0, INPUT_LIMITS.CARD_NUMBER));
+                  }}
+                  placeholder="•••• •••• •••• ••••"
+                  aria-describedby="payment-card-number-help"
+                  className="w-full min-w-0 rounded-xl border border-obsidian-border bg-obsidian-bg py-2 pl-3 pr-12 font-mono text-xs text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400"
+                />
+                <button
+                  type="button"
+                  aria-label={showCardNumber ? 'Ocultar número de tarjeta' : 'Mostrar número de tarjeta'}
+                  aria-pressed={showCardNumber}
+                  onClick={() => setShowCardNumber((visible) => !visible)}
+                  className="absolute inset-y-0 right-0 inline-flex min-w-10 items-center justify-center rounded-lg text-obsidian-muted hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400"
+                >
+                  {showCardNumber ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}
+                </button>
+              </div>
+              <p id="payment-card-number-help" className="mt-1 text-[10px] text-obsidian-muted">
+                Se oculta al abrir el formulario y se guarda cifrado.
+              </p>
             </div>
           </div>
 
@@ -301,14 +337,14 @@ export const PaymentModal: React.FC = () => {
               type="button"
               onClick={closePaymentModal}
               disabled={loading}
-              className="px-4 py-2 rounded-xl border border-obsidian-border hover:bg-obsidian-surface text-obsidian-muted hover:text-white transition-colors"
+              className="inline-flex min-h-10 items-center justify-center rounded-lg px-4 py-2 text-sm font-medium text-obsidian-muted transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-medium shadow-lg shadow-emerald-600/20 transition-all flex items-center gap-1.5"
+              className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-300"
             >
               {loading ? (
                 <>

@@ -4,11 +4,17 @@ import { useVault } from '../../context/VaultContext';
 import { api } from '../../lib/api';
 import type { EntityScope, SecureResource, VaultCredentialItem } from '../../types';
 import { InfoTooltip } from '../common/InfoTooltip';
-import { CredentialCollection } from './passwords/CredentialCollection';
+import { CredentialCollection, CredentialFilters } from './passwords/CredentialCollection';
 import { SecureResourceCollection } from './passwords/SecureResourceCollection';
 import { SecureResourceEditor } from './passwords/SecureResourceEditor';
+import { VaultPasswordConfirmModal } from '../common/VaultPasswordConfirmModal';
 
 type CollectionTab = 'passwords' | 'resources';
+
+interface PendingProtectedCopy {
+  value: string;
+  resolve: (value: string | null) => void;
+}
 
 export const PasswordsView: React.FC = () => {
   const {
@@ -40,8 +46,44 @@ export const PasswordsView: React.FC = () => {
   const [revealedResourceIds, setRevealedResourceIds] = useState<Set<string>>(new Set());
   const [isResourceEditorOpen, setIsResourceEditorOpen] = useState(false);
   const [editingResource, setEditingResource] = useState<SecureResource | null>(null);
+  const [isCopyConfirmationOpen, setIsCopyConfirmationOpen] = useState(false);
+  const pendingProtectedCopy = useRef<PendingProtectedCopy | null>(null);
   const credentialGeneration = useRef(0);
   const resourceGeneration = useRef(0);
+
+  const requestProtectedCopy = useCallback((value: string) => new Promise<string | null>((resolve) => {
+    if (!value) {
+      resolve(null);
+      return;
+    }
+    pendingProtectedCopy.current?.resolve(null);
+    pendingProtectedCopy.current = { value, resolve };
+    setIsCopyConfirmationOpen(true);
+  }), []);
+
+  const cancelProtectedCopy = useCallback(() => {
+    pendingProtectedCopy.current?.resolve(null);
+    pendingProtectedCopy.current = null;
+    setIsCopyConfirmationOpen(false);
+  }, []);
+
+  const confirmProtectedCopy = useCallback(async (password: string) => {
+    const result = await api.verifyVaultPassword(password);
+    if (!result.verified) throw new Error('No se pudo verificar la contraseña.');
+    const pending = pendingProtectedCopy.current;
+    pendingProtectedCopy.current = null;
+    setIsCopyConfirmationOpen(false);
+    pending?.resolve(pending.value);
+  }, []);
+
+  useEffect(() => {
+    if (!isUnlocked) cancelProtectedCopy();
+  }, [cancelProtectedCopy, isUnlocked]);
+
+  useEffect(() => () => {
+    pendingProtectedCopy.current?.resolve(null);
+    pendingProtectedCopy.current = null;
+  }, []);
 
   const loadCredentials = useCallback(async () => {
     const generation = ++credentialGeneration.current;
@@ -216,21 +258,39 @@ export const PasswordsView: React.FC = () => {
 
   return (
     <div className="mx-auto w-full max-w-7xl space-y-5 p-3 sm:p-5 lg:p-6">
-      <header className="flex min-w-0 flex-wrap items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-2">
-          {activeTab === 'passwords' ? <Key className="shrink-0 text-indigo-300" size={18} aria-hidden="true" /> : <FolderLock className="shrink-0 text-indigo-300" size={18} aria-hidden="true" />}
-          <h2 className="truncate text-base font-semibold text-white">
-            {activeTab === 'passwords' ? `Claves (${filteredCredentials.length})` : `Recursos (${filteredResources.length})`}
-          </h2>
-          <InfoTooltip
-            title={activeTab === 'passwords' ? 'Contraseñas y llaves' : 'Recursos y notas'}
-            content={activeTab === 'passwords' ? 'Consulta y copia tus contraseñas.' : 'Guarda códigos, licencias y notas.'}
-          />
+      <header className="space-y-3">
+        <div className="flex min-w-0 items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-2">
+            {activeTab === 'passwords' ? <Key className="shrink-0 text-indigo-300" size={18} aria-hidden="true" /> : <FolderLock className="shrink-0 text-indigo-300" size={18} aria-hidden="true" />}
+            <h2 className="truncate text-base font-semibold text-white">
+              {activeTab === 'passwords' ? `Claves (${filteredCredentials.length})` : `Recursos (${filteredResources.length})`}
+            </h2>
+            <InfoTooltip
+              title={activeTab === 'passwords' ? 'Contraseñas y llaves' : 'Recursos y notas'}
+              content={activeTab === 'passwords' ? 'Consulta y copia tus contraseñas.' : 'Guarda códigos, licencias y notas.'}
+            />
+          </div>
+          {activeTab === 'resources' && (
+            <button type="button" onClick={openCreateResource} className="min-h-10 shrink-0 rounded-lg bg-indigo-600 px-3 text-xs font-semibold text-white hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300">Nuevo recurso</button>
+          )}
         </div>
-        {activeTab === 'passwords' ? (
-          <button type="button" onClick={openPasswordGen} className="min-h-10 rounded-lg border border-obsidian-border bg-obsidian-panel px-3 text-xs font-semibold text-white hover:bg-obsidian-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300">Generar contraseña</button>
-        ) : (
-          <button type="button" onClick={openCreateResource} className="min-h-10 rounded-lg bg-indigo-600 px-3 text-xs font-semibold text-white hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300">Nuevo recurso</button>
+        {activeTab === 'passwords' && (
+          <div className="flex min-w-0 items-center gap-2">
+            <CredentialFilters
+              search={credentialSearch}
+              onSearchChange={setCredentialSearch}
+              categoryFilter={categoryFilter}
+              onCategoryChange={setCategoryFilter}
+            />
+            <button
+              type="button"
+              onClick={openPasswordGen}
+              className="min-h-10 shrink-0 rounded-lg border border-obsidian-border bg-obsidian-panel px-3 text-xs font-semibold text-white hover:bg-obsidian-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
+            >
+              <span className="hidden sm:inline">Generar contraseña</span>
+              <span className="sm:hidden">Generar</span>
+            </button>
+          </div>
         )}
       </header>
 
@@ -252,12 +312,10 @@ export const PasswordsView: React.FC = () => {
             error={credentialsError}
             onRetry={loadCredentials}
             search={credentialSearch}
-            onSearchChange={setCredentialSearch}
-            categoryFilter={categoryFilter}
-            onCategoryChange={setCategoryFilter}
             onOpenEmailModal={() => openEmailModal()}
             onOpenPlatformModal={() => openPlatformModal()}
             onOpenInspector={openCredentialInspector}
+            onRequestProtectedCopy={requestProtectedCopy}
             onClearFilters={() => { setCredentialSearch(''); setCategoryFilter('all'); }}
           />
         </div>
@@ -288,6 +346,13 @@ export const PasswordsView: React.FC = () => {
           defaultScope={defaultEntityScope as EntityScope}
           onClose={closeResourceEditor}
           onSaved={triggerDataReload}
+        />
+      )}
+
+      {isCopyConfirmationOpen && (
+        <VaultPasswordConfirmModal
+          onCancel={cancelProtectedCopy}
+          onConfirm={confirmProtectedCopy}
         />
       )}
     </div>

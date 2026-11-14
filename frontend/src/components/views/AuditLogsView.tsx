@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  Shield, Download, RefreshCw,
+  Shield, Download, RefreshCw, Eye, EyeOff,
   Search, Lock, AlertTriangle, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import { useVault } from '../../context/VaultContext';
@@ -14,18 +14,47 @@ import { INPUT_LIMITS } from '../../lib/validation';
 const PAGE_SIZE = 25;
 const DETAIL_PREVIEW_LENGTH = 160;
 
-const AuditDetails: React.FC<{ text?: string | null }> = ({ text }) => {
+function censorSensitiveText(text?: string | null): string {
+  if (!text) return '';
+  return text
+    .replace(/([A-Z0-9.!#$%&'*+/=?^_`{|}~-]+)@([A-Z0-9.-]+\.[A-Z]{2,})/gi, (_match, local: string, domain: string) => `${local.slice(0, 1)}•••@${domain}`)
+    .replace(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g, (address) => address.split('.').map((part, index) => index === 3 ? part : '***').join('.'))
+    .replace(/\+?\d[\d ()-]{5,}\d/g, (phone) => phone.replace(/\d(?=(?:\D*\d){3})/g, '•'));
+}
+
+interface AuditDetailsProps {
+  text?: string | null;
+  entityType?: string | null;
+  entity?: string | null;
+  ipAddress?: string | null;
+  timestamp?: string;
+}
+
+const AuditDetails: React.FC<AuditDetailsProps> = ({ text, entityType, entity, ipAddress, timestamp }) => {
   const value = text?.trim();
-  if (!value) return <span className="text-white/40">—</span>;
-  if (value.length <= DETAIL_PREVIEW_LENGTH) {
-    return <p className="whitespace-pre-wrap break-words">{value}</p>;
-  }
+  const preview = value
+    ? value.length <= DETAIL_PREVIEW_LENGTH
+      ? value
+      : `${value.slice(0, DETAIL_PREVIEW_LENGTH).trimEnd()}…`
+    : '—';
+
   return (
     <div className="min-w-0">
-      <p className="whitespace-pre-wrap break-words">{value.slice(0, DETAIL_PREVIEW_LENGTH).trimEnd()}…</p>
-      <details className="mt-1">
-        <summary className="cursor-pointer text-indigo-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300">Ver detalle completo</summary>
-        <p className="mt-2 whitespace-pre-wrap break-words">{value}</p>
+      <p className={`whitespace-pre-wrap break-words ${value ? '' : 'text-white/40'}`}>{preview}</p>
+      <details className="group mt-1.5">
+        <summary className="inline-flex min-h-8 cursor-pointer list-none items-center text-[11px] font-medium text-indigo-300 underline decoration-indigo-300/40 underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 [&::-webkit-details-marker]:hidden">
+          <span className="group-open:hidden">Ver más</span>
+          <span className="hidden group-open:inline">Ver menos</span>
+        </summary>
+        <div className="mt-2 space-y-2 rounded-lg border border-obsidian-border bg-obsidian-bg/70 p-2.5 text-[11px]">
+          <p className="whitespace-pre-wrap break-words">{value || 'Este registro no incluye una descripción adicional.'}</p>
+          <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 border-t border-obsidian-border pt-2 text-obsidian-muted">
+            {entityType && <><dt>Tipo</dt><dd className="break-words text-obsidian-text">{getEntityTypeLabel(entityType)}</dd></>}
+            {entity && <><dt>Elemento</dt><dd className="break-all text-obsidian-text">{entity}</dd></>}
+            {timestamp && <><dt>Fecha</dt><dd className="break-words text-obsidian-text">{timestamp}</dd></>}
+            {ipAddress && <><dt>Origen</dt><dd className="break-all text-obsidian-text">{ipAddress}</dd></>}
+          </dl>
+        </div>
       </details>
     </div>
   );
@@ -42,6 +71,9 @@ const ENTITY_LABELS: Record<string, string> = {
   domain_renewal: 'Vencimiento',
   one_time_expense: 'Gasto',
   secure_resource: 'Recurso',
+  expense: 'Gasto único',
+  'Exchange Rate': 'Tipo de cambio',
+  exchange_rate: 'Tipo de cambio',
   vault: 'Acceso',
   settings: 'Ajustes',
   runtime_config: 'Configuración',
@@ -63,12 +95,21 @@ export const AuditLogsView: React.FC = () => {
   const [selectedAction, setSelectedAction] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [showSensitiveData, setShowSensitiveData] = useState(false);
+  const [expandedLogIds, setExpandedLogIds] = useState<Set<string>>(new Set());
   const loadGeneration = useRef(0);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedSearch(searchTerm.trim()), 250);
     return () => window.clearTimeout(timer);
   }, [searchTerm]);
+
+  useEffect(() => {
+    if (!isUnlocked) {
+      setShowSensitiveData(false);
+      setExpandedLogIds(new Set());
+    }
+  }, [isUnlocked]);
 
   const fetchLogs = useCallback(async () => {
     const generation = ++loadGeneration.current;
@@ -112,7 +153,14 @@ export const AuditLogsView: React.FC = () => {
   };
 
   const exportLogsAsJson = () => {
-    const blob = new Blob([JSON.stringify(logs, null, 2)], { type: 'application/json' });
+    const exportedLogs = showSensitiveData ? logs : logs.map((log) => ({
+      ...log,
+      entity_name: censorSensitiveText(log.entity_name),
+      entity_id: censorSensitiveText(log.entity_id),
+      details: censorSensitiveText(log.details),
+      ip_address: censorSensitiveText(log.ip_address),
+    }));
+    const blob = new Blob([JSON.stringify(exportedLogs, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const downloadAnchor = document.createElement('a');
     downloadAnchor.setAttribute('href', url);
@@ -121,7 +169,12 @@ export const AuditLogsView: React.FC = () => {
     downloadAnchor.click();
     downloadAnchor.remove();
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-    showToast(`Descargados ${logs.length} eventos de esta página.`, 'success');
+    showToast(
+      showSensitiveData
+        ? `Descargados ${logs.length} eventos de esta página.`
+        : `Descargados ${logs.length} eventos con datos sensibles ocultos.`,
+      'success',
+    );
   };
 
   const getActionBadge = (action: string) => {
@@ -195,66 +248,38 @@ export const AuditLogsView: React.FC = () => {
 
   return (
     <div className="mx-auto max-w-7xl min-w-0 space-y-4 p-3 sm:space-y-6 sm:p-8">
-      {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-obsidian-border">
-        <div className="flex items-center gap-2 min-w-0">
+      <div className="flex min-w-0 flex-wrap items-center gap-2 border-b border-obsidian-border pb-3">
+        <div className="mr-auto flex min-w-0 items-center gap-2">
           <Shield className="w-4 h-4 text-indigo-400 flex-shrink-0" aria-hidden="true" />
-          <h1 className="text-base font-bold text-white break-words">
-            Historial de Actividad ({total} registros)
+          <h1 className="truncate text-base font-bold text-white">
+            Historial de actividad <span className="font-normal text-obsidian-muted">({total})</span>
           </h1>
           <InfoTooltip
             title="Registro de Actividad"
             content="Historial cronológico de inicios de sesión, copias de contraseñas, seguimientos y cambios guardados."
           />
         </div>
-
-        <div className="flex max-w-full flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={fetchLogs}
-            disabled={loading}
-            aria-label="Actualizar registros de actividad"
-            className="p-2 rounded-xl bg-obsidian-surface border border-obsidian-border hover:border-obsidian-borderLight text-white/70 hover:text-white transition-all disabled:opacity-50"
-            title="Actualizar registros"
-          >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" />
-          </button>
-          <button
-            type="button"
-            onClick={exportLogsAsJson}
-            disabled={loading || searchPending || Boolean(loadError) || logs.length === 0}
-            className="px-3.5 py-2 rounded-xl bg-obsidian-surface border border-obsidian-border hover:border-obsidian-borderLight text-white text-xs font-medium flex items-center gap-2 transition-all hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <Download className="w-4 h-4 text-white/60" aria-hidden="true" /> Descargar página
-          </button>
-        </div>
-      </div>
-
-      {/* Filter and Search Bar */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-        <div className="relative flex-1 w-full sm:max-w-md">
-          <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-white/30" aria-hidden="true" />
+        <label className="relative w-full min-w-0 sm:w-auto sm:max-w-[18rem] sm:flex-1">
+          <span className="sr-only">Buscar en historial por entidad, acción o detalle</span>
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-obsidian-muted" aria-hidden="true" />
           <input
-            type="text"
+            type="search"
             maxLength={INPUT_LIMITS.SEARCH}
-            aria-label="Buscar en historial por entidad, acción o detalle"
-            placeholder="Buscar por nombre o tipo..."
+            placeholder="Buscar en el historial"
             value={searchTerm}
             onChange={(e) => {
               setSearchTerm(e.target.value);
               setOffset(0);
             }}
-            className="w-full pl-10 pr-4 py-2 rounded-xl bg-obsidian-surface border border-obsidian-border text-xs text-white placeholder-white/30 focus:outline-none focus:border-indigo-500/50"
+            className="min-h-10 w-full rounded-lg border border-obsidian-border bg-obsidian-surface pl-9 pr-3 text-xs text-white placeholder-obsidian-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
           />
-        </div>
-
-        <label className="flex w-full min-w-0 items-center gap-2 text-xs text-white/60 sm:w-auto">
-          <span>Acción</span>
-          <select
-            value={selectedAction}
-            onChange={(event) => handleActionChange(event.target.value)}
-            className="min-h-10 min-w-0 flex-1 rounded-lg border border-obsidian-border bg-obsidian-surface px-3 text-white sm:w-52"
-          >
+        </label>
+        <select
+          value={selectedAction}
+          onChange={(event) => handleActionChange(event.target.value)}
+          aria-label="Filtrar por acción"
+          className="min-h-10 w-32 min-w-0 rounded-lg border border-obsidian-border bg-obsidian-surface px-2 text-xs text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 sm:w-40"
+        >
             {[
               ['all', 'Todas'],
               ['vault_unlock', 'Desbloqueo'],
@@ -278,8 +303,37 @@ export const AuditLogsView: React.FC = () => {
                 {label}
               </option>
             ))}
-          </select>
-        </label>
+        </select>
+        <button
+          type="button"
+          onClick={() => setShowSensitiveData((visible) => !visible)}
+          aria-pressed={showSensitiveData}
+          aria-label={showSensitiveData ? 'Ocultar datos sensibles' : 'Mostrar datos sensibles'}
+          title={showSensitiveData ? 'Ocultar datos sensibles' : 'Mostrar datos sensibles'}
+          className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-lg border border-obsidian-border bg-obsidian-surface text-obsidian-muted hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
+        >
+          {showSensitiveData ? <EyeOff size={15} aria-hidden="true" /> : <Eye size={15} aria-hidden="true" />}
+        </button>
+        <button
+          type="button"
+          onClick={fetchLogs}
+          disabled={loading}
+          aria-label="Actualizar registros de actividad"
+          title="Actualizar"
+          className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-lg border border-obsidian-border bg-obsidian-surface text-obsidian-muted hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 disabled:opacity-50"
+        >
+          <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          onClick={exportLogsAsJson}
+          disabled={loading || searchPending || Boolean(loadError) || logs.length === 0}
+          aria-label="Descargar página"
+          title="Descargar página"
+          className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-lg border border-obsidian-border bg-obsidian-surface text-obsidian-muted hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <Download className="h-4 w-4" aria-hidden="true" />
+        </button>
       </div>
 
       {(loading || searchPending) && logs.length > 0 && (
@@ -337,10 +391,22 @@ export const AuditLogsView: React.FC = () => {
                     </time>
                   </div>
                   <p className="break-words font-medium text-white">
-                    {log.entity_name || log.entity_id || getEntityTypeLabel(log.entity_type)}
+                    {showSensitiveData
+                      ? (log.entity_name || log.entity_id || getEntityTypeLabel(log.entity_type))
+                      : censorSensitiveText(log.entity_name || log.entity_id || getEntityTypeLabel(log.entity_type))}
                   </p>
-                  <p className="break-words text-white/50">{getEntityTypeLabel(log.entity_type)} · {log.ip_address || 'Registro local'}</p>
-                  <div className="text-white/70"><AuditDetails text={log.details} /></div>
+                  <p className="break-words text-white/50">
+                    {getEntityTypeLabel(log.entity_type)} · {showSensitiveData ? (log.ip_address || 'Registro local') : censorSensitiveText(log.ip_address || 'Registro local')}
+                  </p>
+                  <div className="text-white/70">
+                    <AuditDetails
+                      text={showSensitiveData ? log.details : censorSensitiveText(log.details)}
+                      entityType={log.entity_type}
+                      entity={showSensitiveData ? (log.entity_name || log.entity_id) : censorSensitiveText(log.entity_name || log.entity_id)}
+                      ipAddress={showSensitiveData ? (log.ip_address || 'Registro local') : censorSensitiveText(log.ip_address || 'Registro local')}
+                      timestamp={new Date(log.timestamp).toLocaleString(locale)}
+                    />
+                  </div>
                 </div>
               ))
             )}
@@ -384,32 +450,71 @@ export const AuditLogsView: React.FC = () => {
                     </td>
                   </tr>
                 ) : (
-                  logs.map((log) => (
-                    <tr key={log.id} className="hover:bg-white/[0.02] transition-colors">
-                      <td className="py-3 px-2 text-white/50 whitespace-nowrap xl:px-3 2xl:px-4">
-                        {new Date(log.timestamp).toLocaleString(locale)}
-                      </td>
-                      <td className="py-3 px-2 whitespace-nowrap xl:px-3 2xl:px-4">
-                        {getActionBadge(log.action)}
-                      </td>
-                      <td className="py-3 px-2 text-white/70 capitalize whitespace-nowrap xl:px-3 2xl:px-4">
-                        {getEntityTypeLabel(log.entity_type)}
-                      </td>
-                      <td className="py-3 px-2 text-white font-medium max-w-[200px] break-words xl:px-3 2xl:px-4">
-                        {log.entity_name || log.entity_id ? (
-                          <span className="text-indigo-300">{log.entity_name || log.entity_id}</span>
-                        ) : (
-                          <span className="text-white/30">—</span>
+                  logs.map((log) => {
+                    const isExpanded = expandedLogIds.has(log.id);
+                    const entity = showSensitiveData
+                      ? (log.entity_name || log.entity_id || '')
+                      : censorSensitiveText(log.entity_name || log.entity_id);
+                    const details = showSensitiveData ? (log.details || '') : censorSensitiveText(log.details);
+                    const origin = showSensitiveData
+                      ? (log.ip_address || 'Registro local')
+                      : censorSensitiveText(log.ip_address || 'Registro local');
+                    const timestamp = new Date(log.timestamp).toLocaleString(locale);
+                    const preview = details
+                      ? details.length <= DETAIL_PREVIEW_LENGTH
+                        ? details
+                        : `${details.slice(0, DETAIL_PREVIEW_LENGTH).trimEnd()}…`
+                      : '—';
+
+                    return (
+                      <React.Fragment key={log.id}>
+                        <tr className="hover:bg-white/[0.02] transition-colors">
+                          <td className="py-3 px-2 text-white/50 whitespace-nowrap xl:px-3 2xl:px-4">{timestamp}</td>
+                          <td className="py-3 px-2 whitespace-nowrap xl:px-3 2xl:px-4">{getActionBadge(log.action)}</td>
+                          <td className="py-3 px-2 text-white/70 capitalize whitespace-nowrap xl:px-3 2xl:px-4">{getEntityTypeLabel(log.entity_type)}</td>
+                          <td className="py-3 px-2 text-white font-medium max-w-[200px] break-words xl:px-3 2xl:px-4">
+                            {entity ? <span className="text-indigo-300">{entity}</span> : <span className="text-white/30">—</span>}
+                          </td>
+                          <td className="min-w-[180px] py-3 px-2 text-white/70 xl:px-3 2xl:px-4">
+                            <p className="whitespace-pre-wrap break-words">{preview}</p>
+                            <button
+                              type="button"
+                              aria-expanded={isExpanded}
+                              aria-controls={`audit-detail-${log.id}`}
+                              onClick={() => setExpandedLogIds((current) => {
+                                const next = new Set(current);
+                                if (next.has(log.id)) next.delete(log.id);
+                                else next.add(log.id);
+                                return next;
+                              })}
+                              className="mt-1 inline-flex min-h-8 items-center text-[11px] font-medium text-indigo-300 underline decoration-indigo-300/40 underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
+                            >
+                              {isExpanded ? 'Ver menos' : 'Ver más'}
+                            </button>
+                          </td>
+                          <td className="py-3 px-2 text-white/40 text-[11px] whitespace-nowrap xl:px-3 2xl:px-4">{origin}</td>
+                        </tr>
+                        {isExpanded && (
+                          <tr id={`audit-detail-${log.id}`} className="bg-obsidian-bg/70">
+                            <td colSpan={6} className="border-t border-obsidian-border px-3 py-3 xl:px-4">
+                              <div className="grid min-w-0 gap-3 md:grid-cols-[minmax(0,1.5fr)_minmax(14rem,1fr)]">
+                                <div className="min-w-0">
+                                  <h3 className="text-[10px] font-semibold uppercase tracking-wide text-obsidian-muted">Detalle de la actividad</h3>
+                                  <p className="mt-1 whitespace-pre-wrap break-words text-xs text-white/80">{details || 'Este registro no incluye una descripción adicional.'}</p>
+                                </div>
+                                <dl className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 border-t border-obsidian-border pt-2 text-[11px] text-obsidian-muted md:border-l md:border-t-0 md:pl-3 md:pt-0">
+                                  <dt>Tipo</dt><dd className="break-words text-obsidian-text">{getEntityTypeLabel(log.entity_type)}</dd>
+                                  {entity && <><dt>Elemento</dt><dd className="break-all text-obsidian-text">{entity}</dd></>}
+                                  <dt>Fecha</dt><dd className="break-words text-obsidian-text">{timestamp}</dd>
+                                  <dt>Origen</dt><dd className="break-all text-obsidian-text">{origin}</dd>
+                                </dl>
+                              </div>
+                            </td>
+                          </tr>
                         )}
-                      </td>
-                      <td className="py-3 px-2 text-white/70 max-w-xs xl:px-3 2xl:px-4">
-                        <AuditDetails text={log.details} />
-                      </td>
-                      <td className="py-3 px-2 text-white/40 text-[11px] whitespace-nowrap xl:px-3 2xl:px-4">
-                        {log.ip_address || 'Registro local'}
-                      </td>
-                    </tr>
-                  ))
+                      </React.Fragment>
+                    );
+                  })
                 )}
               </tbody>
             </table>

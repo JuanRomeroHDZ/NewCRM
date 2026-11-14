@@ -16,7 +16,7 @@ import {
   computeRealProfitAndRenewalsSummary
 } from '../../lib/financeUtils';
 import { computeCommercialPipelineSummary } from '../../lib/prospectUtils';
-import { INPUT_LIMITS } from '../../lib/validation';
+import { INPUT_LIMITS, isValidCalendarDate } from '../../lib/validation';
 import { needsExchangeRateReview } from '../../lib/exchangeRateReview';
 import { FinancialExecutiveSummary } from './subscriptions/FinancialExecutiveSummary';
 import { SubscriptionsLists } from './subscriptions/SubscriptionsLists';
@@ -371,7 +371,6 @@ export const SubscriptionsView: React.FC = () => {
       await refreshExchangeRate();
       triggerDataReload();
       if (updated && updated.synced === false) {
-        setIsEditingRate(true);
         showToast(
           updated.source === 'modo_local'
             ? 'Modo local activo. Puedes ajustar el valor manualmente.'
@@ -382,7 +381,6 @@ export const SubscriptionsView: React.FC = () => {
         showToast(`Tipo de cambio actualizado: 1 ${exchangePairBase} = $${updated.rate.toFixed(2)} ${exchangePairTarget}`, 'success');
       }
     } catch {
-      setIsEditingRate(true);
       showToast('No se pudo conectar al servidor de divisas. Puedes editar el valor manualmente.', 'warning');
     } finally {
       setIsSyncingRate(false);
@@ -480,8 +478,12 @@ export const SubscriptionsView: React.FC = () => {
       return;
     }
     const parsedAmount = parseFloat(incAmount);
-    if (isNaN(parsedAmount) || parsedAmount <= 0) {
-      showToast('Ingresa un monto válido mayor a 0.', 'warning');
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0 || parsedAmount > INPUT_LIMITS.COST_AMOUNT) {
+      showToast(`Ingresa un monto entre 0.01 y ${INPUT_LIMITS.COST_AMOUNT.toLocaleString(systemLocale)}.`, 'warning');
+      return;
+    }
+    if (!isValidCalendarDate(incDate)) {
+      showToast('Selecciona una fecha de pago válida.', 'warning');
       return;
     }
 
@@ -638,12 +640,21 @@ export const SubscriptionsView: React.FC = () => {
       return;
     }
     const parsedCost = parseFloat(renCost || '0');
-    if (isNaN(parsedCost) || parsedCost < 0) {
-      showToast('Ingresa un costo de renovación válido.', 'warning');
+    if (!Number.isFinite(parsedCost) || parsedCost < 0 || parsedCost > INPUT_LIMITS.COST_AMOUNT) {
+      showToast(`El costo debe estar entre 0 y ${INPUT_LIMITS.COST_AMOUNT.toLocaleString(systemLocale)}.`, 'warning');
+      return;
+    }
+    if (!isValidCalendarDate(renDate)) {
+      showToast('Selecciona una fecha de vencimiento válida.', 'warning');
       return;
     }
 
-    const parsedCharge = renClientCharge ? parseFloat(renClientCharge) : null;
+    const shouldChargeClient = renScope !== 'personal' && renPaidBy === 'client';
+    const parsedCharge = shouldChargeClient && renClientCharge.trim() ? Number(renClientCharge) : null;
+    if (parsedCharge !== null && (!Number.isFinite(parsedCharge) || parsedCharge < 0 || parsedCharge > INPUT_LIMITS.COST_AMOUNT)) {
+      showToast(`El cobro al cliente debe estar entre 0 y ${INPUT_LIMITS.COST_AMOUNT.toLocaleString(systemLocale)}.`, 'warning');
+      return;
+    }
 
     setSavingRenewal(true);
     try {
@@ -658,8 +669,8 @@ export const SubscriptionsView: React.FC = () => {
         renewal_cost: parsedCost,
         currency: renCurrency,
         billing_cycle: renCycle,
-        paid_by: renPaidBy,
-        client_charge_amount: parsedCharge && !isNaN(parsedCharge) ? parsedCharge : undefined,
+        paid_by: renScope === 'personal' ? 'me' : renPaidBy,
+        client_charge_amount: shouldChargeClient ? (parsedCharge ?? 0) : 0,
         scope: renScope,
         status: 'activo',
         auto_renew: renAutoRenew,
@@ -687,23 +698,27 @@ export const SubscriptionsView: React.FC = () => {
       ? ren.client_charge_amount
       : ren.paid_by === 'client' ? ren.renewal_cost : 0;
     setAdvanceChargedAmount(suggestedCharge > 0 ? String(suggestedCharge) : '');
-    setAdvanceCreateIncome(ren.paid_by === 'client' || (ren.client_charge_amount || 0) > 0);
+    setAdvanceCreateIncome(ren.scope !== 'personal' && (ren.paid_by === 'client' || (ren.client_charge_amount || 0) > 0));
   };
 
   const handleConfirmAdvanceRenewal = async () => {
     if (!advanceRenewalTarget) return;
+    const chargeNum = advanceCreateIncome ? Number(advanceChargedAmount) : 0;
+    if (advanceCreateIncome && (!Number.isFinite(chargeNum) || chargeNum <= 0 || chargeNum > INPUT_LIMITS.COST_AMOUNT)) {
+      showToast(`Ingresa un cobro entre 0.01 y ${INPUT_LIMITS.COST_AMOUNT.toLocaleString(systemLocale)}.`, 'warning');
+      return;
+    }
     setAdvancingRenewal(true);
     try {
-      const chargeNum = parseFloat(advanceChargedAmount || '0');
       const payload: AdvanceRenewalPayload = {
         create_income: advanceCreateIncome,
-        charged_amount: !isNaN(chargeNum) && chargeNum > 0 ? chargeNum : undefined,
+        charged_amount: advanceCreateIncome ? chargeNum : undefined,
       };
       const updated = await api.advanceRenewalCycle(advanceRenewalTarget.id, payload);
-      const profitDelta = advanceCreateIncome && !isNaN(chargeNum) && chargeNum > 0
+      const profitDelta = advanceCreateIncome
         ? chargeNum - (advanceRenewalTarget.renewal_cost || 0)
         : 0;
-      const msg = advanceCreateIncome && !isNaN(chargeNum) && chargeNum > 0
+      const msg = advanceCreateIncome
         ? `Renovado con éxito. Se avanzó la fecha a ${updated.renewal_date} y se registró el cobro de $${formatAmount(chargeNum)} ${updated.currency} en Ingresos (Margen: $${formatAmount(profitDelta)}).`
         : `Renovado con éxito por un ciclo más. Nuevo vencimiento: ${updated.renewal_date}`;
       showToast(msg, 'success');
@@ -770,8 +785,12 @@ export const SubscriptionsView: React.FC = () => {
       return;
     }
     const val = parseFloat(expAmount);
-    if (isNaN(val) || val <= 0) {
-      showToast('Ingresa un monto válido mayor a 0.', 'warning');
+    if (!Number.isFinite(val) || val <= 0 || val > INPUT_LIMITS.COST_AMOUNT) {
+      showToast(`Ingresa un monto entre 0.01 y ${INPUT_LIMITS.COST_AMOUNT.toLocaleString(systemLocale)}.`, 'warning');
+      return;
+    }
+    if (!isValidCalendarDate(expDate)) {
+      showToast('Selecciona una fecha de gasto válida.', 'warning');
       return;
     }
     setSavingExpense(true);
@@ -989,15 +1008,6 @@ export const SubscriptionsView: React.FC = () => {
               <>
                 <span className="font-mono text-xs text-white font-bold whitespace-nowrap">
                   1 {exchangePairBase} = ${fin.usdRate.toFixed(2)} {exchangePairTarget}
-                </span>
-                <span
-                  className={`px-1.5 py-0.5 rounded text-[9px] font-semibold border ${
-                    exchangeRate?.is_manual
-                      ? 'bg-amber-500/10 text-amber-300 border-amber-500/20'
-                      : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                  }`}
-                >
-                  {exchangeRate?.is_manual ? 'Manual' : 'Auto'}
                 </span>
                 <button
                   type="button"

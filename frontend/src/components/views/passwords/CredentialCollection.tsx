@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertTriangle, Key, Plus, Search } from 'lucide-react';
+import { AlertTriangle, ChevronDown, Filter, Key, Plus, Search } from 'lucide-react';
 import type { VaultCredentialItem } from '../../../types';
 import { CopyButton } from '../../common/CopyButton';
 import { EmptyState } from '../../common/EmptyState';
@@ -15,6 +15,71 @@ const categories = [
   { id: 'api_key', label: 'Llaves API' },
 ];
 
+interface CredentialFiltersProps {
+  search: string;
+  onSearchChange: (value: string) => void;
+  categoryFilter: string;
+  onCategoryChange: (value: string) => void;
+}
+
+export const CredentialFilters: React.FC<CredentialFiltersProps> = ({
+  search,
+  onSearchChange,
+  categoryFilter,
+  onCategoryChange,
+}) => {
+  const selectedCategory = categories.find((category) => category.id === categoryFilter)?.label || 'Todas';
+
+  return (
+    <div className="flex min-w-0 flex-1 items-center gap-2">
+      <label className="relative min-w-0 flex-1">
+        <span className="sr-only">Buscar contraseñas por nombre, usuario o correo</span>
+        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-obsidian-muted" aria-hidden="true" />
+        <input
+          type="search"
+          maxLength={INPUT_LIMITS.SEARCH}
+          value={search}
+          onChange={(event) => onSearchChange(event.target.value)}
+          placeholder="Buscar contraseña"
+          className="min-h-10 w-full rounded-lg border border-obsidian-border bg-obsidian-bg py-2 pl-8 pr-3 text-xs text-white placeholder-obsidian-muted/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
+        />
+      </label>
+
+      <details className="group relative shrink-0">
+        <summary
+          aria-label={`Filtrar contraseñas por tipo. Selección: ${selectedCategory}`}
+          className="inline-flex min-h-10 cursor-pointer list-none items-center gap-1.5 rounded-lg border border-obsidian-border bg-obsidian-panel px-2.5 text-xs text-obsidian-text hover:bg-obsidian-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 [&::-webkit-details-marker]:hidden"
+        >
+          <Filter size={14} aria-hidden="true" />
+          <span className="hidden max-w-24 truncate sm:inline">{selectedCategory}</span>
+          <ChevronDown size={13} className="text-obsidian-muted transition-transform group-open:rotate-180" aria-hidden="true" />
+        </summary>
+        <div role="group" aria-label="Filtrar contraseñas por tipo" className="absolute right-0 top-full z-30 mt-2 grid w-52 gap-1 rounded-xl border border-obsidian-border bg-obsidian-panel p-2 shadow-xl">
+          {categories.map((category) => (
+            <button
+              key={category.id}
+              type="button"
+              aria-pressed={categoryFilter === category.id}
+              onClick={(event) => {
+                onCategoryChange(category.id);
+                const details = event.currentTarget.closest('details');
+                if (details) details.open = false;
+              }}
+              className={`min-h-10 rounded-lg px-3 text-left text-xs focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 ${
+                categoryFilter === category.id
+                  ? 'bg-indigo-600 text-white'
+                  : 'text-obsidian-text hover:bg-obsidian-surface'
+              }`}
+            >
+              {category.label}
+            </button>
+          ))}
+        </div>
+      </details>
+    </div>
+  );
+};
+
 interface CredentialCollectionProps {
   credentials: VaultCredentialItem[];
   filteredCredentials: VaultCredentialItem[];
@@ -22,12 +87,10 @@ interface CredentialCollectionProps {
   error: string | null;
   onRetry: () => void;
   search: string;
-  onSearchChange: (value: string) => void;
-  categoryFilter: string;
-  onCategoryChange: (value: string) => void;
   onOpenEmailModal: () => void;
   onOpenPlatformModal: () => void;
   onOpenInspector: (item: VaultCredentialItem) => void;
+  onRequestProtectedCopy: (value: string) => Promise<string | null>;
   onClearFilters: () => void;
 }
 
@@ -38,58 +101,13 @@ export const CredentialCollection: React.FC<CredentialCollectionProps> = ({
   error,
   onRetry,
   search,
-  onSearchChange,
-  categoryFilter,
-  onCategoryChange,
   onOpenEmailModal,
   onOpenPlatformModal,
   onOpenInspector,
+  onRequestProtectedCopy,
   onClearFilters,
 }) => (
   <section aria-label="Contraseñas y llaves" className="space-y-4">
-    <div className="flex min-w-0 flex-wrap items-center gap-3 rounded-xl border border-obsidian-border bg-obsidian-panel p-3 sm:p-4">
-      <label className="relative min-w-0 w-full flex-1 sm:min-w-[220px]">
-        <span className="sr-only">Buscar contraseñas por nombre, usuario o correo</span>
-        <Search size={14} className="absolute left-3 top-2.5 text-obsidian-muted" aria-hidden="true" />
-        <input
-          type="search"
-          maxLength={INPUT_LIMITS.SEARCH}
-          value={search}
-          onChange={(event) => onSearchChange(event.target.value)}
-          placeholder="Buscar por nombre, usuario o correo"
-          className="w-full rounded-lg border border-obsidian-border bg-obsidian-bg py-2 pl-8 pr-3 text-xs text-white placeholder-obsidian-muted/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
-        />
-      </label>
-
-      <label className="w-full min-w-0 sm:hidden">
-        <span className="sr-only">Filtrar contraseñas por tipo</span>
-        <select
-          value={categoryFilter}
-          onChange={(event) => onCategoryChange(event.target.value)}
-          className="min-h-10 w-full min-w-0 rounded-lg border border-obsidian-border bg-obsidian-bg px-3 text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
-        >
-          {categories.map((category) => <option key={category.id} value={category.id}>{category.label}</option>)}
-        </select>
-      </label>
-      <div className="hidden max-w-full flex-wrap items-center gap-1.5 sm:flex" role="group" aria-label="Filtrar contraseñas por tipo">
-        {categories.map((category) => (
-          <button
-            key={category.id}
-            type="button"
-            aria-pressed={categoryFilter === category.id}
-            onClick={() => onCategoryChange(category.id)}
-            className={`whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 ${
-              categoryFilter === category.id
-                ? 'bg-indigo-600 text-white'
-                : 'border border-obsidian-border bg-obsidian-bg text-obsidian-muted hover:text-white'
-            }`}
-          >
-            {category.label}
-          </button>
-        ))}
-      </div>
-    </div>
-
     {loading && (
       <div className="space-y-3" role="status" aria-label="Cargando contraseñas y llaves">
         <div className="h-20 rounded-xl border border-obsidian-border bg-obsidian-panel animate-pulse" />
@@ -109,7 +127,7 @@ export const CredentialCollection: React.FC<CredentialCollectionProps> = ({
     )}
 
     {!loading && !error && filteredCredentials.length > 0 && (
-      <div className="space-y-3 xl:hidden">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {filteredCredentials.map((item) => (
           <article key={item.id} className="min-w-0 space-y-3 rounded-xl border border-obsidian-border bg-obsidian-panel p-3 sm:p-4">
             <div className="flex min-w-0 items-start justify-between gap-2">
@@ -121,7 +139,12 @@ export const CredentialCollection: React.FC<CredentialCollectionProps> = ({
                 <span className="block break-words text-sm font-semibold text-white group-hover:text-indigo-300">{item.name}</span>
                 {item.parent_email && <span className="mt-0.5 block break-all text-[11px] text-obsidian-muted">{item.parent_email}</span>}
               </button>
-              <CopyButton value={item.credential_plain || ''} label={item.name} size="md" />
+              <CopyButton
+                value={item.credential_plain || ''}
+                label={item.name}
+                size="md"
+                onClickCustom={() => onRequestProtectedCopy(item.credential_plain || '')}
+              />
             </div>
 
             <div className="flex min-w-0 flex-wrap items-center gap-1.5">
@@ -139,7 +162,12 @@ export const CredentialCollection: React.FC<CredentialCollectionProps> = ({
 
             {item.username && <p className="break-all text-[11px] text-obsidian-muted">Usuario: <span className="text-white">{item.username}</span></p>}
             <div className="border-t border-obsidian-border/60 pt-2">
-              <SecretField value={item.credential_plain} masked={item.credential_masked} label={item.name} />
+              <SecretField
+                value={item.credential_plain}
+                masked={item.credential_masked}
+                label={item.name}
+                onCopyRequest={() => onRequestProtectedCopy(item.credential_plain || '')}
+              />
             </div>
           </article>
         ))}
@@ -147,7 +175,7 @@ export const CredentialCollection: React.FC<CredentialCollectionProps> = ({
     )}
 
     {!loading && !error && filteredCredentials.length > 0 && (
-      <div className="hidden overflow-hidden rounded-xl border border-obsidian-border bg-obsidian-panel xl:block">
+      <div className="hidden">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[850px] text-left text-xs text-obsidian-text">
             <caption className="sr-only">Credenciales guardadas</caption>
@@ -176,7 +204,14 @@ export const CredentialCollection: React.FC<CredentialCollectionProps> = ({
                   </td>
                   <td className="whitespace-nowrap px-3 py-3"><ScopeBadge scope={item.scope} /></td>
                   <td className="max-w-[180px] truncate px-3 py-3 font-mono text-[11px] text-white" title={item.username || ''}>{item.username || '—'}</td>
-                  <td className="px-3 py-3"><SecretField value={item.credential_plain} masked={item.credential_masked} label={item.name} /></td>
+                  <td className="px-3 py-3">
+                    <SecretField
+                      value={item.credential_plain}
+                      masked={item.credential_masked}
+                      label={item.name}
+                      onCopyRequest={() => onRequestProtectedCopy(item.credential_plain || '')}
+                    />
+                  </td>
                   <td className="whitespace-nowrap px-3 py-3">
                     {item.entropy ? (
                       <span className="inline-flex items-center gap-1.5 text-[11px] font-medium" style={{ color: item.entropy.color }}>
@@ -185,7 +220,14 @@ export const CredentialCollection: React.FC<CredentialCollectionProps> = ({
                       </span>
                     ) : <span className="text-[11px] text-obsidian-muted">Sin evaluar</span>}
                   </td>
-                  <td className="px-3 py-3 text-right"><CopyButton value={item.credential_plain || ''} label={item.name} size="md" /></td>
+                  <td className="px-3 py-3 text-right">
+                    <CopyButton
+                      value={item.credential_plain || ''}
+                      label={item.name}
+                      size="md"
+                      onClickCustom={() => onRequestProtectedCopy(item.credential_plain || '')}
+                    />
+                  </td>
                 </tr>
               ))}
             </tbody>

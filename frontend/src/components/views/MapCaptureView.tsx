@@ -428,93 +428,89 @@ export const MapCaptureView: React.FC = () => {
         </button>
       </div>
 
-          <form
-            onSubmit={handleSearch}
-            className="grid min-w-0 gap-3 rounded-2xl border border-obsidian-border bg-obsidian-card p-3 sm:p-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end"
+      <form
+        onSubmit={handleSearch}
+        className="grid min-w-0 gap-2.5 rounded-xl border border-obsidian-border bg-obsidian-card p-3 sm:grid-cols-2 sm:p-4 xl:grid-cols-[minmax(10rem,1.15fr)_minmax(9rem,0.9fr)_minmax(9rem,1fr)_minmax(16rem,auto)] xl:items-end"
+      >
+        <label className="min-w-0 text-xs font-medium text-obsidian-text">
+          Giro o negocio
+          <input
+            list={sectors.length > 0 ? sectorDatalistId : undefined}
+            value={sector}
+            onChange={(event) => {
+              setSector(event.target.value);
+              setResultsStale(results !== null);
+              setSearchError('');
+            }}
+            disabled={loading}
+            maxLength={64}
+            required
+            placeholder={sectors[0]?.label ? `Ej. ${sectors[0].label}` : 'Giro comercial'}
+            className="mt-1 min-h-10 w-full rounded-lg border border-obsidian-border bg-obsidian-bg px-3 text-sm text-white placeholder:text-obsidian-muted focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+          />
+          {sectors.length > 0 && (
+            <datalist id={sectorDatalistId}>
+              {sectors.map((item) => (
+                <option key={item.id} value={item.label} />
+              ))}
+            </datalist>
+          )}
+        </label>
+        <label className="min-w-0 text-xs font-medium text-obsidian-text">
+          Zona
+          <select
+            value={selectedZone}
+            onChange={(event) => {
+              setSelectedZone(event.target.value);
+              setResultsStale(results !== null);
+              setSearchError('');
+            }}
+            disabled={!zones.length || loading}
+            className="mt-1 min-h-10 w-full rounded-lg border border-obsidian-border bg-obsidian-bg px-3 text-sm text-white focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
           >
-            <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,9rem),1fr))] gap-3">
-            <label className="min-w-0 text-xs font-medium text-obsidian-text">
-              Giro o negocio
-              <input
-                list={sectors.length > 0 ? sectorDatalistId : undefined}
-                value={sector}
-                onChange={(event) => {
-                  setSector(event.target.value);
-                  setResultsStale(results !== null);
-                  setSearchError('');
-                }}
-                disabled={loading}
-                maxLength={64}
-                required
-                placeholder={sectors[0]?.label ? `Ej. ${sectors[0].label}` : 'Giro comercial'}
-                className="mt-1.5 min-h-11 w-full rounded-xl border border-obsidian-border bg-obsidian-bg px-3 text-sm text-white placeholder:text-obsidian-muted focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-              />
-              {sectors.length > 0 && (
-                <datalist id={sectorDatalistId}>
-                  {sectors.map((item) => (
-                    <option key={item.id} value={item.label} />
-                  ))}
-                </datalist>
-              )}
-            </label>
-            <label className="min-w-0 text-xs font-medium text-obsidian-text">
-              Zona
-              <select
-                value={selectedZone}
-                onChange={(event) => {
-                  setSelectedZone(event.target.value);
-                  setResultsStale(results !== null);
-                  setSearchError('');
-                }}
-                disabled={!zones.length || loading}
-                className="mt-1.5 min-h-11 w-full rounded-xl border border-obsidian-border bg-obsidian-bg px-3 text-sm text-white focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-              >
-                {zones.map((zone) => (
-                  <option key={zone.slug} value={zone.slug}>
-                    {zone.zone}
-                  </option>
-                ))}
-              </select>
-            </label>
-            </div>
-            <details className="group text-xs text-obsidian-muted lg:col-start-1">
-              <summary className="w-fit cursor-pointer rounded text-obsidian-text hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300">Filtro opcional{subsector.trim() ? ' · activo' : ''}</summary>
-            <label className="mt-2 block min-w-0 text-xs font-medium text-obsidian-muted">
-              Especialidad o palabra clave
-              <input
-                value={subsector}
-                onChange={(event) => {
-                  setSubsector(event.target.value);
-                  setResultsStale(results !== null);
-                  setSearchError('');
-                }}
-                disabled={loading}
-                maxLength={64}
-                placeholder="Especialidad o palabra clave"
-                className="mt-1.5 min-h-10 w-full rounded-xl border border-obsidian-border bg-obsidian-bg px-3 text-sm text-white placeholder:text-obsidian-muted focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-              />
-            </label>
-            </details>
-            <div className="flex flex-wrap items-center gap-2 lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:justify-end">
-            <button
-              type={loading ? 'button' : 'submit'}
-              onClick={loading ? cancelSearch : undefined}
-              disabled={!loading && !mapReady}
-              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-indigo-600 px-3 text-sm font-semibold text-white transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-55 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
-            >
-              {loading ? <X size={16} aria-hidden="true" /> : <Search size={16} aria-hidden="true" />}
-              {loading ? 'Cancelar búsqueda' : 'Buscar zona'}
-            </button>
-            <button
-              type="button"
-              onClick={searchMapArea}
-              disabled={loading || !mapReady}
-              className="inline-flex min-h-10 justify-self-start items-center justify-center gap-2 rounded-lg border border-obsidian-border bg-obsidian-surface px-3 text-xs font-medium text-obsidian-text hover:border-indigo-500/40 hover:text-white disabled:cursor-not-allowed disabled:opacity-55 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
-            >
-              <MapPin size={14} aria-hidden="true" /> Buscar área visible
-            </button>
-            </div>
-          </form>
+            {zones.map((zone) => (
+              <option key={zone.slug} value={zone.slug}>
+                {zone.zone}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="min-w-0 text-xs font-medium text-obsidian-text sm:col-span-2 xl:col-span-1">
+          Filtro opcional
+          <input
+            value={subsector}
+            onChange={(event) => {
+              setSubsector(event.target.value);
+              setResultsStale(results !== null);
+              setSearchError('');
+            }}
+            disabled={loading}
+            maxLength={64}
+            placeholder="Especialidad o palabra clave"
+            className="mt-1 min-h-10 w-full rounded-lg border border-obsidian-border bg-obsidian-bg px-3 text-sm text-white placeholder:text-obsidian-muted focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+          />
+        </label>
+        <div className="flex min-w-0 gap-2 sm:col-span-2 xl:col-span-1">
+          <button
+            type={loading ? 'button' : 'submit'}
+            onClick={loading ? cancelSearch : undefined}
+            disabled={!loading && !mapReady}
+            className="inline-flex min-h-10 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-lg bg-indigo-600 px-2.5 text-xs font-semibold text-white transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-55 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
+          >
+            {loading ? <X size={15} aria-hidden="true" /> : <Search size={15} aria-hidden="true" />}
+            <span>{loading ? 'Cancelar' : 'Buscar zona'}</span>
+          </button>
+          <button
+            type="button"
+            onClick={searchMapArea}
+            disabled={loading || !mapReady}
+            aria-label="Buscar negocios en el área visible del mapa"
+            className="inline-flex min-h-10 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-lg border border-obsidian-border bg-obsidian-surface px-2 text-xs font-medium text-obsidian-text hover:border-indigo-500/40 hover:text-white disabled:cursor-not-allowed disabled:opacity-55 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
+          >
+            <MapPin size={14} aria-hidden="true" /> Área visible
+          </button>
+        </div>
+      </form>
 
       <div className="grid min-w-0 gap-0 overflow-hidden rounded-2xl border border-obsidian-border bg-obsidian-card lg:grid-cols-[minmax(0,1.4fr)_minmax(19rem,0.8fr)] lg:items-stretch">
         <section

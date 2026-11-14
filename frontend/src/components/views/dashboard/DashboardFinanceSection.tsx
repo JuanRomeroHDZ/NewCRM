@@ -88,7 +88,7 @@ export const DashboardFinanceSection: React.FC<DashboardFinanceSectionProps> = (
       </div>
     </div>
 
-    <div className="grid min-w-0 grid-cols-1 gap-4 border-t border-obsidian-border/70 pt-3 lg:grid-cols-2">
+    <div className="grid min-w-0 items-start grid-cols-1 gap-4 border-t border-obsidian-border/70 pt-3 lg:grid-cols-[minmax(0,1.4fr)_minmax(13rem,0.6fr)]">
       <div className="min-w-0 space-y-2">
         <div className="flex min-w-0 items-center gap-1.5">
           <Briefcase size={13} className="shrink-0 text-emerald-400" aria-hidden="true" />
@@ -115,8 +115,8 @@ export const DashboardFinanceSection: React.FC<DashboardFinanceSectionProps> = (
         </div>
       </div>
 
-      <div className="min-w-0 space-y-2 lg:border-l lg:border-obsidian-border/70 lg:pl-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="min-w-0 self-start lg:border-l lg:border-obsidian-border/70 lg:pl-4">
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
           <h3 className="flex items-center gap-1.5 text-xs font-bold text-white">
             <Target size={13} className="shrink-0 text-indigo-400" aria-hidden="true" />
             Límite de gasto mensual
@@ -126,13 +126,13 @@ export const DashboardFinanceSection: React.FC<DashboardFinanceSectionProps> = (
               {budgetCapEval.usagePercent.toFixed(0)}% · ${formatAmount(budgetCapEval.capMXN, 0)} MXN
             </span>
           ) : (
-            <button type="button" onClick={onOpenSubscriptions} className="text-[11px] font-medium text-indigo-400 hover:text-indigo-300">
+            <button type="button" onClick={onOpenSubscriptions} className="inline-flex min-h-8 items-center text-[11px] font-medium text-indigo-400 hover:text-indigo-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400">
               Definir límite
             </button>
           )}
         </div>
         {budgetCapEval.enabled && (
-          <div className="h-1.5 w-full overflow-hidden rounded-full bg-obsidian-bg" role="progressbar" aria-label="Uso del límite mensual" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.min(100, budgetCapEval.usagePercent)}>
+          <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-obsidian-bg" role="progressbar" aria-label="Uso del límite mensual" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.min(100, budgetCapEval.usagePercent)}>
             <div className={`h-full ${budgetCapEval.level === 'critical' ? 'bg-rose-500' : budgetCapEval.level === 'warning' ? 'bg-amber-500' : 'bg-emerald-500'}`} style={{ width: `${Math.min(100, budgetCapEval.usagePercent)}%` }} />
           </div>
         )}

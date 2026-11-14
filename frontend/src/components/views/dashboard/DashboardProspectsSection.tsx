@@ -47,10 +47,10 @@ export const DashboardProspectsSection: React.FC<DashboardProspectsSectionProps>
         )}
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        <button type="button" onClick={onCreateProspect} className="inline-flex items-center gap-1 rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-1.5 text-xs font-medium text-white hover:bg-obsidian-card">
+        <button type="button" onClick={onCreateProspect} className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-obsidian-border bg-obsidian-surface px-3 text-xs font-medium text-white hover:bg-obsidian-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400">
           <Plus size={13} aria-hidden="true" /> Nuevo prospecto
         </button>
-        <button type="button" onClick={onOpenProspects} className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-indigo-400 hover:text-indigo-300">
+        <button type="button" onClick={onOpenProspects} className="inline-flex min-h-9 items-center gap-1 rounded-lg px-2 text-xs font-medium text-indigo-400 hover:text-indigo-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400">
           Ver todos <ArrowRight size={13} aria-hidden="true" />
         </button>
       </div>

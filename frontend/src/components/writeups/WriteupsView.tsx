@@ -55,12 +55,12 @@ import {
   PENTEST_TAXONOMY_PRESETS,
 } from './pentestUtils';
 
-const SEVERITY_BADGE: Record<WriteupSeverity, string> = {
-  critica: 'bg-rose-600/20 text-rose-300 border-rose-500/40',
-  alta: 'bg-orange-600/20 text-orange-300 border-orange-500/40',
-  media: 'bg-amber-600/20 text-amber-300 border-amber-500/40',
-  baja: 'bg-sky-600/20 text-sky-300 border-sky-500/40',
-  informativa: 'bg-slate-700/40 text-slate-300 border-slate-600/40',
+const SEVERITY_CARD: Record<WriteupSeverity, string> = {
+  critica: 'border-rose-700/70 bg-rose-950/55 hover:bg-rose-900/55',
+  alta: 'border-orange-700/70 bg-orange-950/50 hover:bg-orange-900/50',
+  media: 'border-amber-700/70 bg-amber-950/45 hover:bg-amber-900/45',
+  baja: 'border-sky-800/70 bg-sky-950/45 hover:bg-sky-900/45',
+  informativa: 'border-slate-700 bg-slate-800/70 hover:bg-slate-700/70',
 };
 
 const MAX_REPORT_TITLE_LENGTH = 200;
@@ -1002,17 +1002,14 @@ export const WriteupsView: React.FC = () => {
                     key={item.id}
                     type="button"
                     onClick={() => handleSelectWriteup(item.id)}
-                    className={`w-full text-left p-2.5 rounded-xl border transition-colors ${
-                      selected
-                        ? 'bg-indigo-600/15 border-indigo-500/50 text-white'
-                        : 'bg-slate-950/50 border-slate-800/80 text-slate-300 hover:border-slate-700'
-                    }`}
+                    aria-current={selected ? 'true' : undefined}
+                    aria-label={`${item.title}, severidad ${item.severity}, estado ${item.status}`}
+                    className={`w-full rounded-xl border p-2.5 text-left text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300 ${
+                      SEVERITY_CARD[item.severity] || SEVERITY_CARD.media
+                    } ${selected ? 'ring-2 ring-indigo-400 ring-offset-1 ring-offset-slate-900' : ''}`}
                   >
                     <div className="flex items-center justify-between gap-1 mb-1">
-                      <span className={`px-1.5 py-0.5 rounded border text-[10px] font-semibold uppercase ${SEVERITY_BADGE[item.severity] || SEVERITY_BADGE.media}`}>
-                        {item.severity}
-                      </span>
-                      <span className="text-[10px] text-slate-400">{item.status}</span>
+                      <span className="text-[10px] font-medium text-white/75">{item.status}</span>
                     </div>
                     <div className="text-xs font-semibold line-clamp-2">{item.title}</div>
                     <div className="text-[10px] text-slate-400 mt-1 flex items-center gap-2 tabular-nums">

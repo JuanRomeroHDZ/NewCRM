@@ -276,6 +276,7 @@ export const PlatformCredentialsTab: React.FC<PlatformCredentialsTabProps> = ({
                     value={bc.code}
                     label="Código de respaldo"
                     className="min-h-[30px] min-w-[30px]"
+                    requireVaultPassword
                   />
                 </div>
               </div>
@@ -298,6 +299,7 @@ export const PlatformCredentialsTab: React.FC<PlatformCredentialsTabProps> = ({
                     value={sq.answer}
                     label="Respuesta de seguridad"
                     className="min-h-[30px] min-w-[30px]"
+                    requireVaultPassword
                   />
                 </div>
               </div>

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { DollarSign, Globe, Plus } from 'lucide-react';
 import { useVault } from '../../../context/VaultContext';
 import { api } from '../../../lib/api';
-import { INPUT_LIMITS } from '../../../lib/validation';
+import { INPUT_LIMITS, isValidCalendarDate } from '../../../lib/validation';
 import type { ClientIncome, DomainRenewal, Prospect } from '../../../types';
 
 interface InspectorFinanceFormsProps {
@@ -144,9 +144,13 @@ export const InspectorFinanceForms: React.FC<InspectorFinanceFormsProps> = ({
       showToast('El concepto del pago es obligatorio.', 'warning');
       return;
     }
-    const amountVal = parseFloat(incAmount);
-    if (isNaN(amountVal) || amountVal <= 0) {
-      showToast('Ingresa un monto válido mayor a 0.', 'warning');
+    const amountVal = Number(incAmount);
+    if (!Number.isFinite(amountVal) || amountVal <= 0 || amountVal > INPUT_LIMITS.COST_AMOUNT) {
+      showToast(`Ingresa un monto entre 0.01 y ${INPUT_LIMITS.COST_AMOUNT.toLocaleString(systemLocale)}.`, 'warning');
+      return;
+    }
+    if (!isValidCalendarDate(incDate)) {
+      showToast('Selecciona una fecha de pago válida.', 'warning');
       return;
     }
     setIncLoading(true);
@@ -182,8 +186,20 @@ export const InspectorFinanceForms: React.FC<InspectorFinanceFormsProps> = ({
       showToast('El nombre del dominio o servicio es obligatorio.', 'warning');
       return;
     }
-    const costVal = parseFloat(domCost) || 0;
-    const chargeVal = parseFloat(domCharge) || 0;
+    const costVal = domCost.trim() ? Number(domCost) : 0;
+    const chargeVal = domCharge.trim() ? Number(domCharge) : 0;
+    if (!Number.isFinite(costVal) || costVal < 0 || costVal > INPUT_LIMITS.COST_AMOUNT) {
+      showToast(`El costo debe estar entre 0 y ${INPUT_LIMITS.COST_AMOUNT.toLocaleString(systemLocale)}.`, 'warning');
+      return;
+    }
+    if (!Number.isFinite(chargeVal) || chargeVal < 0 || chargeVal > INPUT_LIMITS.COST_AMOUNT) {
+      showToast(`El cobro debe estar entre 0 y ${INPUT_LIMITS.COST_AMOUNT.toLocaleString(systemLocale)}.`, 'warning');
+      return;
+    }
+    if (!isValidCalendarDate(domDate)) {
+      showToast('Selecciona una fecha de vencimiento válida.', 'warning');
+      return;
+    }
     setDomLoading(true);
     try {
       const created = await api.createRenewal({
@@ -280,7 +296,7 @@ export const InspectorFinanceForms: React.FC<InspectorFinanceFormsProps> = ({
               <input
                 type="number"
                 step="0.01"
-                min="0"
+                min="0.01"
                 max={INPUT_LIMITS.COST_AMOUNT}
                 required
                 value={incAmount}
@@ -326,6 +342,7 @@ export const InspectorFinanceForms: React.FC<InspectorFinanceFormsProps> = ({
               </select>
               <input
                 type="date"
+                required
                 value={incDate}
                 onChange={(e) => setIncDate(e.target.value)}
                 aria-label="Fecha del pago"
@@ -497,6 +514,7 @@ export const InspectorFinanceForms: React.FC<InspectorFinanceFormsProps> = ({
               </select>
               <input
                 type="date"
+                required
                 value={domDate}
                 onChange={(e) => setDomDate(e.target.value)}
                 aria-label="Fecha de renovación"
