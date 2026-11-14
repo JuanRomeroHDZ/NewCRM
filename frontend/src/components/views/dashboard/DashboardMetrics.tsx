@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertTriangle, CheckCircle2, DollarSign, Key, Shield, Wallet } from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
 
 type DashboardMetricsProps = {
   monthlyMXN: number;
@@ -34,11 +34,10 @@ export const DashboardMetrics: React.FC<DashboardMetricsProps> = ({
   emailsWithout2FA,
   formatAmount,
 }) => (
-  <section aria-label="Indicadores principales" className="grid min-w-0 grid-cols-1 gap-x-5 gap-y-3 rounded-xl border border-obsidian-border bg-obsidian-panel p-4 min-[420px]:grid-cols-2 sm:p-5 lg:grid-cols-4">
+  <section aria-label="Indicadores principales" className="grid min-w-0 grid-cols-1 gap-x-5 gap-y-3 rounded-xl border border-obsidian-border bg-obsidian-panel p-4 min-[420px]:grid-cols-2 sm:p-5 min-[760px]:grid-cols-4">
     <div className={metricCardClass}>
       <div className="mb-1.5 flex items-center justify-between gap-2 text-obsidian-muted">
         <span className="text-xs font-medium">Gasto mensual</span>
-        <DollarSign size={15} className="shrink-0 text-emerald-400" aria-hidden="true" />
       </div>
       <div className="break-words font-mono text-lg font-bold tracking-tight text-white sm:text-xl">
         ${formatAmount(monthlyMXN)} <span className="text-xs font-sans text-obsidian-muted">MXN</span>
@@ -51,7 +50,6 @@ export const DashboardMetrics: React.FC<DashboardMetricsProps> = ({
     <div className={metricCardClass}>
       <div className="mb-1.5 flex items-center justify-between gap-2 text-obsidian-muted">
         <span className="text-xs font-medium">Ganancia del mes</span>
-        <Wallet size={15} className="shrink-0 text-indigo-400" aria-hidden="true" />
       </div>
       <div className={`break-words font-mono text-lg font-bold tracking-tight sm:text-xl ${netMonthMXN >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
         {netMonthMXN >= 0 ? '+' : '-'}${formatAmount(Math.abs(netMonthMXN))}{' '}
@@ -65,7 +63,6 @@ export const DashboardMetrics: React.FC<DashboardMetricsProps> = ({
     <div className={metricCardClass}>
       <div className="mb-1.5 flex items-center justify-between gap-2 text-obsidian-muted">
         <span className="text-xs font-medium">Acceso con correo</span>
-        <Key size={15} className="shrink-0 text-cyan-400" aria-hidden="true" />
       </div>
       <div className="break-words font-mono text-lg font-bold tracking-tight text-white sm:text-xl">
         {ssoPercentage}% <span className="text-xs font-sans text-obsidian-muted">del total</span>
@@ -79,7 +76,6 @@ export const DashboardMetrics: React.FC<DashboardMetricsProps> = ({
     <div className="min-w-0">
       <div className="mb-1.5 flex items-center justify-between gap-2 text-obsidian-muted">
         <span className="text-xs font-medium">Correos protegidos</span>
-        <Shield size={15} className="shrink-0 text-rose-400" aria-hidden="true" />
       </div>
       <div className="break-words font-mono text-lg font-bold tracking-tight text-white sm:text-xl">
         {protectedEmailsCount} / {emailCount} <span className="text-xs font-sans text-obsidian-muted">con 2 pasos</span>
@@ -88,10 +84,7 @@ export const DashboardMetrics: React.FC<DashboardMetricsProps> = ({
         {emailCount === 0 ? (
           <span className="truncate">Sin correos principales</span>
         ) : emailsWithout2FA === 0 ? (
-          <span className="inline-flex min-w-0 items-center gap-1 text-emerald-400">
-            <CheckCircle2 size={12} className="shrink-0" aria-hidden="true" />
-            <span className="truncate">Todos protegidos</span>
-          </span>
+          null
         ) : (
           <span className="inline-flex min-w-0 items-center gap-1 text-amber-400">
             <AlertTriangle size={12} className="shrink-0" aria-hidden="true" />

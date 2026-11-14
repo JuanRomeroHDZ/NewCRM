@@ -1,3 +1,25 @@
+@font-face {
+  font-family: 'Poppins';
+  src: url('/fonts/Poppins-ExtraLight.ttf') format('truetype');
+  font-style: normal;
+  font-weight: 200;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Poppins';
+  src: url('/fonts/Poppins-Regular.ttf') format('truetype');
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Lora';
+  src: url('/fonts/Lora.ttf') format('truetype');
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -9,6 +31,7 @@
   body {
     background-color: #080A0A;
     color: #FFFFFF;
+    font-weight: 400;
     font-family: 'Poppins', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   }
   h1, h2, h3, h4, .font-heading {
@@ -47,34 +70,35 @@
 }
 
 .brand-theme [class~="bg-indigo-600"] {
-  background-color: var(--brand-accent) !important;
-  color: var(--brand-accent-contrast) !important;
+  background-color: #25334a !important;
+  color: #ffffff !important;
 }
 
 .brand-theme [class~="bg-indigo-600"] [class~="text-white"] {
-  color: var(--brand-accent-contrast) !important;
+  color: #ffffff !important;
 }
 
 .brand-theme [class~="hover:bg-indigo-500"]:hover {
-  background-color: color-mix(in srgb, var(--brand-accent) 88%, #000) !important;
+  background-color: #081416 !important;
+  color: #ffffff !important;
 }
 
 .brand-theme [class~="text-indigo-400"],
 .brand-theme [class~="text-indigo-300"] {
-  color: var(--brand-accent) !important;
+  color: #d5bc8f !important;
 }
 
 .brand-theme [class~="border-indigo-500"],
 .brand-theme [class~="focus:border-indigo-500"]:focus {
-  border-color: var(--brand-accent) !important;
+  border-color: #d5bc8f !important;
 }
 
 .brand-theme [class~="border-indigo-500/20"] {
-  border-color: color-mix(in srgb, var(--brand-accent) 20%, transparent) !important;
+  border-color: rgb(169 130 66 / 20%) !important;
 }
 
 .brand-theme [class~="border-indigo-500/30"] {
-  border-color: color-mix(in srgb, var(--brand-accent) 30%, transparent) !important;
+  border-color: rgb(169 130 66 / 30%) !important;
 }
 
 .topbar-title-compact,
@@ -498,3 +522,24 @@
     display: none !important;
   }
 }
+
+/* Jade feedback for interactive surfaces, while semantic status colors stay intact. */
+@media (hover: hover) {
+  .brand-theme :is(button, a, select, summary):hover:not(:disabled) {
+    color: #ffffff;
+    border-color: #A98242;
+  }
+  .brand-theme button[class~="bg-indigo-600"]:hover:not(:disabled),
+  .brand-theme button[class~="bg-obsidian-surface"]:hover:not(:disabled),
+  .brand-theme button[class~="bg-obsidian-panel"]:hover:not(:disabled) {
+    background-color: #081416 !important;
+    color: #fff !important;
+  }
+  .brand-theme button[class~="bg-indigo-600"]:hover:not(:disabled) [class~="text-white"] {
+    color: #fff !important;
+  }
+  .brand-theme article.group:hover { border-color: #A98242; }
+}
+
+.brand-theme :is(input, textarea, select)::placeholder { color: #b3b9bc; opacity: 1; }
+.brand-theme :is(input, textarea, select):focus-visible { outline: 2px solid #A98242; outline-offset: 2px; }

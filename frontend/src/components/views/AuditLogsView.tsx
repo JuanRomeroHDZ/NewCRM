@@ -359,7 +359,7 @@ export const AuditLogsView: React.FC = () => {
           onAction={fetchLogs}
         />
       ) : (
-        <div className="rounded-2xl border border-obsidian-border bg-obsidian-surface/60 overflow-hidden backdrop-blur-md">
+        <div className="overflow-hidden rounded-2xl border border-obsidian-border bg-obsidian-panel">
           <div className="divide-y divide-obsidian-border md:hidden">
             {(loading || searchPending) && logs.length === 0 ? (
               <p className="p-4 text-xs text-white/50" role="status">
@@ -414,7 +414,7 @@ export const AuditLogsView: React.FC = () => {
           <div className="hidden overflow-x-auto md:block" role="region" aria-label="Tabla de actividad; desplázate horizontalmente para ver todas las columnas" tabIndex={0}>
             <table className="w-full min-w-[850px] text-left border-collapse">
               <thead>
-                <tr className="border-b border-obsidian-border bg-black/20 text-[11px] font-mono uppercase tracking-wider text-white/40">
+                <tr className="border-b border-obsidian-border bg-black/20 text-[11px] font-mono uppercase tracking-wider text-obsidian-muted">
                   <th className="py-3 px-2 xl:px-3 2xl:px-4">Fecha & Hora (Local)</th>
                   <th className="py-3 px-2 xl:px-3 2xl:px-4">Acción</th>
                   <th className="py-3 px-2 xl:px-3 2xl:px-4">Tipo</th>

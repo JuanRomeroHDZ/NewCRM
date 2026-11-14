@@ -1,6 +1,6 @@
 import React from 'react';
 import { 
-  Briefcase, User, Layers, ChevronLeft, ChevronRight, ChevronDown
+  Menu, X, ChevronDown
 } from 'lucide-react';
 import { useVault } from '../../context/VaultContext';
 import { InfoTooltip } from '../common/InfoTooltip';
@@ -41,9 +41,9 @@ export const Topbar: React.FC<TopbarProps> = ({ onMenuClick, menuTriggerRef, isM
   const currentInfo = sectionTitles[activeSection] || { title: 'LESSSO', compactTitle: 'Inicio' };
 
   const scopeOptions = [
-    { value: 'all', label: 'Todos', icon: Layers },
-    { value: 'business', label: 'Negocio', icon: Briefcase },
-    { value: 'personal', label: 'Personal', icon: User },
+    { value: 'all', label: 'Todos' },
+    { value: 'business', label: 'Negocio' },
+    { value: 'personal', label: 'Personal' },
   ] as const;
 
   return (
@@ -56,10 +56,10 @@ export const Topbar: React.FC<TopbarProps> = ({ onMenuClick, menuTriggerRef, isM
           onClick={onMenuClick}
           aria-expanded={Boolean(isMenuOpen)}
           aria-controls="primary-navigation"
-          className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-obsidian-border bg-obsidian-surface text-obsidian-text hover:bg-obsidian-border hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 lg:hidden"
+          className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-obsidian-muted transition-colors hover:bg-obsidian-surface hover:text-white active:bg-obsidian-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 lg:hidden"
           aria-label={isMenuOpen ? 'Cerrar menú de navegación' : 'Abrir menú de navegación'}
         >
-          {isMenuOpen ? <ChevronLeft size={18} aria-hidden="true" /> : <ChevronRight size={18} aria-hidden="true" />}
+          {isMenuOpen ? <X size={20} aria-hidden="true" /> : <Menu size={20} aria-hidden="true" />}
         </button>
         <h1 className="text-sm sm:text-base font-semibold text-white tracking-tight truncate" title={currentInfo.title}>
           <span className="topbar-title-full">{currentInfo.title}</span>
@@ -77,7 +77,7 @@ export const Topbar: React.FC<TopbarProps> = ({ onMenuClick, menuTriggerRef, isM
         <select
           value={activeScope}
           onChange={(event) => setActiveScope(event.target.value as typeof activeScope)}
-          className="min-h-10 max-w-[120px] appearance-none rounded-xl border border-obsidian-border bg-obsidian-surface pl-3 pr-8 text-xs font-medium text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 sm:max-w-none"
+          className="min-h-11 max-w-[120px] appearance-none rounded-md border border-obsidian-border bg-obsidian-panel pl-3 pr-8 text-xs font-medium text-obsidian-text transition-colors hover:bg-obsidian-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 sm:max-w-none"
         >
           {scopeOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
         </select>

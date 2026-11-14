@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  Settings, Lock, Key, Shield, Download, Upload, Check, Save,
+  Settings, Lock, Key, Shield, Download, Upload, Save,
   Palette, Clock, Target
 } from 'lucide-react';
 import { SectionType, useVault } from '../../context/VaultContext';
@@ -242,15 +242,6 @@ export const SettingsView: React.FC = () => {
     }
   };
 
-  const colorOptions = [
-    { name: 'Índigo', color: '#6366f1' },
-    { name: 'Violeta', color: '#8b5cf6' },
-    { name: 'Cian', color: '#06b6d4' },
-    { name: 'Azul', color: '#3b82f6' },
-    { name: 'Celeste', color: '#0ea5e9' },
-    { name: 'Pizarra', color: '#64748b' },
-  ];
-
   const currencySelectOptions = ['MXN', 'USD'];
 
   return (
@@ -289,31 +280,6 @@ export const SettingsView: React.FC = () => {
           </h3>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-            {/* Accent color picker */}
-            <div className="space-y-2">
-              <span className="text-obsidian-text font-medium block">
-                Color Principal de la Interfaz
-              </span>
-              <div className="flex flex-wrap items-center gap-2.5" role="group" aria-label="Color principal de la interfaz">
-                {colorOptions.map((opt) => (
-                  <button
-                    key={opt.color}
-                    type="button"
-                    aria-label={`Seleccionar color ${opt.name}`}
-                    aria-pressed={localAccent === opt.color}
-                    onClick={() => setLocalAccent(opt.color)}
-                    className={`w-9 h-9 rounded-full flex items-center justify-center transition-all ${
-                      localAccent === opt.color ? 'ring-2 ring-white ring-offset-2 ring-offset-obsidian-panel scale-110' : 'opacity-75 hover:opacity-100'
-                    }`}
-                    style={{ backgroundColor: opt.color }}
-                    title={opt.name}
-                  >
-                    {localAccent === opt.color && <Check size={15} className="text-white" aria-hidden="true" />}
-                  </button>
-                ))}
-              </div>
-            </div>
-
             {/* Canvas pattern */}
             <div className="space-y-1.5">
                 <label htmlFor="canvas-style-select" className="text-obsidian-text font-medium block">

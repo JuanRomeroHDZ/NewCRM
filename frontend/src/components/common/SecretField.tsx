@@ -32,7 +32,7 @@ export const SecretField: React.FC<SecretFieldProps> = ({
   }, [canReveal, value]);
 
   return (
-    <div className={`inline-flex min-w-0 max-w-full items-center gap-1.5 px-2.5 py-1 rounded-md bg-obsidian-surface border border-obsidian-border group ${className}`}>
+    <div className={`inline-flex min-w-0 max-w-full items-center gap-1.5 px-2.5 py-1 rounded-md bg-indigo-600 border border-obsidian-border group ${className}`}>
       <span className="min-w-0 overflow-x-auto whitespace-nowrap font-mono text-xs text-obsidian-text tracking-wider select-all">
         {canReveal && revealed && value ? value : masked}
       </span>

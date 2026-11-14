@@ -250,7 +250,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onCloseMobile })
 
       <footer className={`shrink-0 border-t border-obsidian-border ${compact ? 'p-2' : 'p-3'}`}>
         {compact ? (
-          <div className={`flex items-center justify-center rounded-xl border p-1 transition-colors ${isUnlocked ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300' : 'border-obsidian-border bg-obsidian-surface text-obsidian-muted'}`}>
+          <div className={`flex items-center justify-center rounded-xl border p-1 transition-colors ${isUnlocked ? 'border-obsidian-border bg-obsidian-panel text-obsidian-muted' : 'border-obsidian-border bg-obsidian-surface text-obsidian-muted'}`}>
             <button
               type="button"
               onClick={toggleVault}
@@ -258,19 +258,19 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onCloseMobile })
               title={isUnlocked ? `Bóveda desbloqueada (${formatTimer(remainingSeconds)})` : 'Bóveda bloqueada'}
               aria-label={isUnlocked ? 'Bloquear bóveda' : 'Desbloquear bóveda'}
             >
-              {isUnlocked ? <Unlock size={15} className="text-emerald-400" /> : <Lock size={15} className="text-amber-400" />}
+              {isUnlocked ? <Unlock size={15} className="text-obsidian-muted" /> : <Lock size={15} className="text-obsidian-muted" />}
             </button>
           </div>
         ) : (
-          <div className={`flex items-center justify-between gap-2 rounded-xl border p-2.5 transition-colors ${isUnlocked ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300' : 'border-obsidian-border bg-obsidian-surface text-obsidian-muted'}`}>
+          <div className={`flex items-center justify-between gap-2 rounded-xl border p-2.5 transition-colors ${isUnlocked ? 'border-obsidian-border bg-obsidian-panel text-obsidian-muted' : 'border-obsidian-border bg-obsidian-surface text-obsidian-muted'}`}>
             <div className="flex min-w-0 items-center gap-2">
-              {isUnlocked ? <Unlock size={16} className="shrink-0 text-emerald-400" /> : <Lock size={16} className="shrink-0 text-amber-400" />}
+              {isUnlocked ? <Unlock size={16} className="shrink-0 text-obsidian-muted" /> : <Lock size={16} className="shrink-0 text-obsidian-muted" />}
               <div className="min-w-0">
                 <div className="truncate text-[11px] font-semibold text-white">{isUnlocked ? 'Bóveda desbloqueada' : 'Bóveda bloqueada'}</div>
                 <div className="truncate text-[10px] text-obsidian-muted">{isUnlocked ? `Se bloquea en ${formatTimer(remainingSeconds)}` : 'Protegida con contraseña de acceso'}</div>
               </div>
             </div>
-            <button type="button" onClick={toggleVault} className={`min-h-10 shrink-0 rounded-lg px-2.5 text-[10px] font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 ${isUnlocked ? 'bg-emerald-500/20 text-emerald-100 hover:bg-emerald-500/30' : 'bg-indigo-600 text-white hover:bg-indigo-500'}`}>
+            <button type="button" onClick={toggleVault} className={`min-h-10 shrink-0 rounded-lg px-2.5 text-[10px] font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 ${isUnlocked ? 'bg-obsidian-surface text-white hover:bg-obsidian-borderLight' : 'bg-obsidian-surface text-white hover:bg-obsidian-borderLight'}`}>
               {isUnlocked ? 'Bloquear' : 'Desbloquear'}
             </button>
           </div>

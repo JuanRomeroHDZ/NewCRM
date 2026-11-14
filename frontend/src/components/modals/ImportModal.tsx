@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { X, Upload } from 'lucide-react';
 import { useVault } from '../../context/VaultContext';
 import { api } from '../../lib/api';
 import { INPUT_LIMITS } from '../../lib/validation';
+import { useTransferDialog } from './useTransferDialog';
 
 function detectCsvDelimiter(text: string): ',' | ';' {
   let inQuotes = false;
@@ -79,17 +80,9 @@ export const ImportModal: React.FC = () => {
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    if (!isImportModalOpen) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        closeImportModal();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isImportModalOpen, closeImportModal]);
+  const [error, setError] = useState('');
+  const dialogRef = useTransferDialog(isImportModalOpen, closeImportModal, loading);
+  const closeWhenIdle = () => { if (!loading) closeImportModal(); };
 
   if (!isImportModalOpen) return null;
 
@@ -100,6 +93,8 @@ export const ImportModal: React.FC = () => {
       return;
     }
 
+    if (loading) return;
+    setError('');
     setLoading(true);
     try {
       let items: any[] = [];
@@ -156,7 +151,7 @@ export const ImportModal: React.FC = () => {
       }
 
       if (items.length === 0) {
-        showToast('No se pudieron detectar registros válidos en los datos ingresados.', 'warning');
+        setError('No se pudieron detectar registros válidos. Revisa el formato del archivo.');
         setLoading(false);
         return;
       }
@@ -166,7 +161,7 @@ export const ImportModal: React.FC = () => {
       closeImportModal();
       triggerDataReload();
     } catch (err: any) {
-      showToast(`Error al procesar importación: ${err.message}`, 'error');
+      setError(err instanceof Error ? err.message : 'No se pudo importar. Revisa el contenido e intenta de nuevo.');
     } finally {
       setLoading(false);
     }
@@ -175,32 +170,36 @@ export const ImportModal: React.FC = () => {
   return (
     <div
       className="responsive-overlay fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn"
-      onClick={closeImportModal}
+      onClick={closeWhenIdle}
     >
       <div 
+        ref={dialogRef}
+        tabIndex={-1}
+        aria-busy={loading}
         role="dialog"
         aria-modal="true"
         aria-labelledby="import-modal-title"
         className="relative w-full max-w-xl bg-obsidian-panel border border-obsidian-borderLight rounded-2xl shadow-2xl p-4 sm:p-6 max-h-[90dvh] overflow-y-auto flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between pb-4 border-b border-obsidian-border shrink-0">
-          <div className="flex items-center gap-2.5 min-w-0">
+        <div className="flex items-start justify-between gap-3 pb-4 border-b border-obsidian-border shrink-0">
+          <div className="flex min-w-0 flex-1 items-start gap-2.5">
             <div className="p-2 rounded-xl bg-indigo-500/10 text-indigo-400 flex-shrink-0">
               <Upload size={20} aria-hidden="true" />
             </div>
             <div className="min-w-0">
-              <h2 id="import-modal-title" className="text-base font-bold text-white tracking-tight truncate">
+              <h2 id="import-modal-title" className="text-base font-bold text-white tracking-tight break-words">
                 Importador Universal de Bóvedas
               </h2>
-              <p className="text-xs text-obsidian-muted truncate">
+              <p className="text-xs text-obsidian-muted">
                 Importación desde Bitwarden, 1Password, Chrome o CSV
               </p>
             </div>
           </div>
           <button
             type="button"
-            onClick={closeImportModal}
+            disabled={loading}
+            onClick={closeWhenIdle}
             aria-label="Cerrar importador"
             className="p-1.5 text-obsidian-muted hover:text-white rounded-lg hover:bg-obsidian-surface flex-shrink-0"
           >
@@ -210,6 +209,8 @@ export const ImportModal: React.FC = () => {
 
         <form onSubmit={handleProcessImport} className="flex-1 min-h-0 flex flex-col">
           <div className="py-4 space-y-4 text-xs">
+            {error && <p role="alert" className="rounded-lg border border-rose-500/30 bg-obsidian-dangerBg p-3 text-rose-200">{error}</p>}
+            {loading && <p role="status" className="text-obsidian-muted">Importando registros. Espera a que termine antes de cerrar.</p>}
             <div>
               <span className="text-obsidian-text font-medium block mb-1.5">Origen de los Datos</span>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2" role="group" aria-label="Origen de los datos">
@@ -222,6 +223,7 @@ export const ImportModal: React.FC = () => {
                   <button
                     key={src.id}
                     type="button"
+                    disabled={loading}
                     aria-pressed={source === src.id}
                     onClick={() => setSource(src.id as any)}
                     className={`p-2 rounded-xl text-center text-xs font-medium border transition-colors ${
@@ -242,6 +244,7 @@ export const ImportModal: React.FC = () => {
               </label>
               <textarea
                 id="import-textarea"
+                disabled={loading}
                 rows={8}
                 required
                 maxLength={INPUT_LIMITS.IMPORT_PAYLOAD}
@@ -256,10 +259,11 @@ export const ImportModal: React.FC = () => {
             </div>
           </div>
 
-          <div className="pt-3 border-t border-obsidian-border flex items-center justify-end gap-2.5 shrink-0">
+          <div className="pt-3 border-t border-obsidian-border flex flex-wrap items-center justify-end gap-2.5 shrink-0">
             <button
               type="button"
-              onClick={closeImportModal}
+              disabled={loading}
+              onClick={closeWhenIdle}
               className="px-4 py-2 text-xs font-medium text-obsidian-muted hover:text-white"
             >
               Cancelar

@@ -25,6 +25,8 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   onConfirm,
   onCancel,
 }) => {
+  const cancelRef = useRef(onCancel);
+  cancelRef.current = onCancel;
   const headingId = useId();
   const descriptionId = useId();
   const cancelBtnRef = useRef<HTMLButtonElement>(null);
@@ -46,8 +48,8 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault();
-        e.stopPropagation();
-        onCancel();
+        e.stopImmediatePropagation();
+        cancelRef.current();
       } else if (e.key === 'Tab') {
         const focusables = [cancelBtnRef.current, confirmBtnRef.current].filter(Boolean) as HTMLElement[];
         if (focusables.length < 2) return;
@@ -70,7 +72,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
       const previousFocus = previousFocusRef.current;
       if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true });
     };
-  }, [open, tone, onCancel]);
+  }, [open, tone]);
 
   if (!open) return null;
 
@@ -86,7 +88,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
       ? 'bg-rose-600 hover:bg-rose-500 text-white focus-visible:ring-rose-400'
       : tone === 'warning'
       ? 'bg-amber-600 hover:bg-amber-500 text-white focus-visible:ring-amber-400'
-      : 'bg-brand-600 hover:bg-brand-500 text-white focus-visible:ring-brand-400';
+      : 'bg-indigo-600 hover:bg-indigo-500 text-white focus-visible:ring-indigo-400';
 
   const Icon = tone === 'danger' ? ShieldAlert : tone === 'warning' ? AlertTriangle : Info;
 

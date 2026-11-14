@@ -25,8 +25,8 @@ export const DashboardAccountsSection: React.FC<DashboardAccountsSectionProps> =
   onOpenPlatform,
   onOpenSubscriptions,
 }) => (
-  <section className="grid min-w-0 grid-cols-1 gap-6 lg:grid-cols-3" aria-label="Cuentas y vencimientos próximos">
-    <div className="min-w-0 space-y-3 rounded-xl border border-obsidian-border bg-obsidian-panel p-4 sm:p-5 lg:col-span-2">
+  <section className="grid min-w-0 grid-cols-1 gap-6 min-[680px]:grid-cols-2" aria-label="Cuentas y vencimientos próximos">
+    <div className="min-w-0 space-y-3 rounded-xl border border-obsidian-border bg-obsidian-panel p-4 sm:p-5">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
           <h2 className="text-sm font-bold tracking-tight text-white">Correos principales</h2>

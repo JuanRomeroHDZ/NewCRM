@@ -380,7 +380,7 @@ export const MapCaptureView: React.FC = () => {
   if (!isUnlocked) {
     return (
       <div className="mx-auto flex max-w-3xl flex-col items-start gap-4 p-5 sm:p-8">
-        <div className="rounded-2xl border border-obsidian-border bg-obsidian-card p-5 sm:p-7">
+        <div className="rounded-2xl border border-obsidian-border bg-obsidian-panel p-5 sm:p-7">
           <ShieldCheck size={24} className="mb-3 text-indigo-300" aria-hidden="true" />
           <h1 className="text-xl font-bold text-white">Captación en mapa</h1>
           <p className="mt-2 max-w-prose text-sm leading-relaxed text-obsidian-muted">
@@ -402,7 +402,7 @@ export const MapCaptureView: React.FC = () => {
     <div className="mx-auto w-full max-w-7xl min-w-0 space-y-4 p-3 sm:space-y-6 sm:p-8">
       {/* Mobile/Tablet (<lg) tab switch to avoid double-scroll traps */}
       <div
-        className="flex items-center gap-1 rounded-xl border border-obsidian-border bg-obsidian-card p-1 lg:hidden"
+        className="flex items-center gap-1 rounded-xl border border-obsidian-border bg-obsidian-panel p-1 lg:hidden"
         role="group"
         aria-label="Mostrar"
       >
@@ -430,7 +430,7 @@ export const MapCaptureView: React.FC = () => {
 
       <form
         onSubmit={handleSearch}
-        className="grid min-w-0 gap-2.5 rounded-xl border border-obsidian-border bg-obsidian-card p-3 sm:grid-cols-2 sm:p-4 xl:grid-cols-[minmax(10rem,1.15fr)_minmax(9rem,0.9fr)_minmax(9rem,1fr)_minmax(16rem,auto)] xl:items-end"
+        className="grid min-w-0 gap-2.5 rounded-xl border border-obsidian-border bg-obsidian-panel p-3 sm:grid-cols-2 sm:p-4 xl:grid-cols-[minmax(10rem,1.15fr)_minmax(9rem,0.9fr)_minmax(9rem,1fr)_minmax(16rem,auto)] xl:items-end"
       >
         <label className="min-w-0 text-xs font-medium text-obsidian-text">
           Giro o negocio
@@ -512,7 +512,7 @@ export const MapCaptureView: React.FC = () => {
         </div>
       </form>
 
-      <div className="grid min-w-0 gap-0 overflow-hidden rounded-2xl border border-obsidian-border bg-obsidian-card lg:grid-cols-[minmax(0,1.4fr)_minmax(19rem,0.8fr)] lg:items-stretch">
+      <div className="grid min-w-0 gap-0 overflow-hidden rounded-2xl border border-obsidian-border bg-obsidian-panel lg:grid-cols-[minmax(0,1.4fr)_minmax(19rem,0.8fr)] lg:items-stretch">
         <section
           aria-label="Mapa de búsqueda"
           className={`min-w-0 ${
@@ -553,7 +553,7 @@ export const MapCaptureView: React.FC = () => {
             aria-label={defaultCity ? `Mapa interactivo de ${defaultCity}` : 'Mapa interactivo'}
             className="relative z-0 min-h-[190px] h-[clamp(190px,44dvh,340px)] w-full bg-obsidian-bg sm:min-h-[260px] sm:h-[clamp(260px,48dvh,400px)] lg:min-h-[320px] lg:h-[clamp(320px,52dvh,480px)]"
           />
-          <div className="flex flex-col gap-1.5 border-t border-obsidian-border bg-obsidian-surface/40 px-4 py-3 text-[11px] leading-relaxed text-obsidian-muted sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-1.5 border-t border-obsidian-border bg-obsidian-panel px-4 py-3 text-[11px] leading-relaxed text-obsidian-muted sm:flex-row sm:items-center sm:justify-between">
             <span>Los datos de negocios dependen de lo publicado en OpenStreetMap.</span>
             <a
               href="https://www.openstreetmap.org/fixthemap"

@@ -1,3 +1,4 @@
+import { useFormModalFocus } from '../../hooks/useFormModalFocus';
 import React, { useState, useEffect } from 'react';
 import { X, Globe, Trash2, Sparkles, AlertCircle, Mail, UserPlus } from 'lucide-react';
 import { useVault } from '../../context/VaultContext';
@@ -69,6 +70,7 @@ export const PlatformModal: React.FC = () => {
   const [formError, setFormError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadingDetail, setLoadingDetail] = useState(false);
+  const [detailFailed, setDetailFailed] = useState(false);
 
   const fallbackCurrency = baseCurrency || 'MXN';
   const currencyOptions = supportedCurrencies.length > 0
@@ -79,12 +81,15 @@ export const PlatformModal: React.FC = () => {
 
   useEffect(() => {
     if (!isPlatformModalOpen) return;
+    let active = true;
+    setDetailFailed(false);
     setFormError(null);
     Promise.all([
       api.getEmails(),
       api.getPaymentMethods(),
       api.getProspects().catch(() => [])
     ]).then(([eList, pList, prList]) => {
+      if (!active) return;
       setEmails(eList);
       setPayments(pList);
       setProspects(prList || []);
@@ -93,12 +98,14 @@ export const PlatformModal: React.FC = () => {
         setEmailId(platformModalDefaultEmailId);
       }
     }).catch((err: any) => {
+        if (!active) return;
       showToast(err?.message || 'No se pudieron cargar los catálogos auxiliares.', 'warning');
     });
 
     if (editingPlatformId) {
       setLoadingDetail(true);
       api.getPlatformDetail(editingPlatformId).then((p) => {
+        if (!active) return;
         setScope(p.scope || 'business');
         setOwnershipType(p.ownership_type || (p.prospect_id ? 'client' : 'own'));
         setProspectId(p.prospect_id || '');
@@ -124,11 +131,13 @@ export const PlatformModal: React.FC = () => {
         setEnvVars(p.env_variables || []);
         setTags(p.tags || []);
       }).catch((err: any) => {
+        if (!active) return;
         const msg = err?.message || 'Error al cargar los detalles de la plataforma.';
+        setDetailFailed(true);
         setFormError(msg);
         showToast(msg, 'error');
       }).finally(() => {
-        setLoadingDetail(false);
+        if (active) setLoadingDetail(false);
       });
     } else {
       setLoadingDetail(false);
@@ -157,19 +166,10 @@ export const PlatformModal: React.FC = () => {
       setEnvVars([]);
       setTags([]);
     }
+    return () => { active = false; };
   }, [isPlatformModalOpen, editingPlatformId, platformModalDefaultEmailId, defaultEntityScope, fallbackCurrency, showToast]);
 
-  useEffect(() => {
-    if (!isPlatformModalOpen) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        closePlatformModal();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isPlatformModalOpen, closePlatformModal]);
+  useFormModalFocus(isPlatformModalOpen, 'platform-modal-title', closePlatformModal);
 
   const handleQuickCreateEmail = async () => {
     const trimmed = newEmailAddress.trim();
@@ -229,6 +229,7 @@ export const PlatformModal: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading || loadingDetail || detailFailed) return;
     setFormError(null);
 
     if (!name.trim()) {
@@ -411,6 +412,7 @@ export const PlatformModal: React.FC = () => {
                 <button
                   key={opt.val}
                   type="button"
+                  aria-pressed={scope === opt.val}
                   onClick={() => setScope(opt.val)}
                   className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all ${
                     scope === opt.val
@@ -451,8 +453,8 @@ export const PlatformModal: React.FC = () => {
             {/* If linked to client, show client picker + inline quick-create */}
             {ownershipType === 'client' && (
               <div className="pt-2">
-                <label className="text-obsidian-text font-medium block mb-1">Cliente / Prospecto Asociado</label>
-                <select
+                <label htmlFor="platformmodal-field-1" className="text-obsidian-text font-medium block mb-1">Cliente / Prospecto Asociado</label>
+                <select id="platformmodal-field-1"
                   value={prospectId}
                   onChange={(e) => {
                     if (e.target.value === '__create_client__') {
@@ -503,8 +505,8 @@ export const PlatformModal: React.FC = () => {
           {/* Platform Identity & Correlation */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
-              <label className="text-obsidian-text font-medium block mb-1">Nombre de la Plataforma / Servicio *</label>
-              <input
+              <label htmlFor="platformmodal-field-2" className="text-obsidian-text font-medium block mb-1">Nombre de la Plataforma / Servicio *</label>
+              <input id="platformmodal-field-2"
                 type="text"
                 required
                 autoFocus
@@ -517,8 +519,8 @@ export const PlatformModal: React.FC = () => {
             </div>
 
             <div>
-              <label className="text-obsidian-text font-medium block mb-1">Correo Principal Vinculado (Opcional)</label>
-              <select
+              <label htmlFor="platformmodal-field-3" className="text-obsidian-text font-medium block mb-1">Correo Principal Vinculado (Opcional)</label>
+              <select id="platformmodal-field-3"
                 value={emailId}
                 onChange={(e) => {
                   if (e.target.value === '__create_email__') {
@@ -578,8 +580,8 @@ export const PlatformModal: React.FC = () => {
 
             {selectedParentEmail && selectedParentEmail.aliases && selectedParentEmail.aliases.length > 0 && (
               <div>
-                <label className="text-obsidian-text font-medium block mb-1">Alias Específico Utilizado</label>
-                <select
+                <label htmlFor="platformmodal-field-4" className="text-obsidian-text font-medium block mb-1">Alias Específico Utilizado</label>
+                <select id="platformmodal-field-4"
                   value={specificAlias}
                   onChange={(e) => setSpecificAlias(e.target.value)}
                   className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs focus:outline-none focus:border-indigo-500"
@@ -595,8 +597,8 @@ export const PlatformModal: React.FC = () => {
             )}
 
             <div>
-              <label className="text-obsidian-text font-medium block mb-1">Enlace de Inicio de Sesión</label>
-              <input
+              <label htmlFor="platformmodal-field-5" className="text-obsidian-text font-medium block mb-1">Enlace de Inicio de Sesión</label>
+              <input id="platformmodal-field-5"
                 type="text"
                 maxLength={INPUT_LIMITS.URL}
                 value={loginUrl}
@@ -607,8 +609,8 @@ export const PlatformModal: React.FC = () => {
             </div>
 
             <div>
-              <label className="text-obsidian-text font-medium block mb-1">Nombre de Usuario / Identificador</label>
-              <input
+              <label htmlFor="platformmodal-field-6" className="text-obsidian-text font-medium block mb-1">Nombre de Usuario / Identificador</label>
+              <input id="platformmodal-field-6"
                 type="text"
                 maxLength={INPUT_LIMITS.USERNAME}
                 value={username}
@@ -619,8 +621,8 @@ export const PlatformModal: React.FC = () => {
             </div>
 
             <div>
-              <label className="text-obsidian-text font-medium block mb-1">Forma de Inicio de Sesión</label>
-              <select
+              <label htmlFor="platformmodal-field-7" className="text-obsidian-text font-medium block mb-1">Forma de Inicio de Sesión</label>
+              <select id="platformmodal-field-7"
                 value={accessType}
                 onChange={(e) => setAccessType(e.target.value as any)}
                 className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs focus:outline-none focus:border-indigo-500"
@@ -650,10 +652,11 @@ export const PlatformModal: React.FC = () => {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
-                  <label className="text-obsidian-muted block mb-1">
+                  <label htmlFor="platform-password" className="text-obsidian-muted block mb-1">
                     Contraseña {editingPlatformId && '(Dejar vacía para conservar actual)'}
                   </label>
                   <input
+                    id="platform-password"
                     type="password"
                     maxLength={INPUT_LIMITS.PASSWORD}
                     value={password}
@@ -664,8 +667,8 @@ export const PlatformModal: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="text-obsidian-muted block mb-1">PIN de Seguridad / Perfil (Opcional)</label>
-                  <input
+                  <label htmlFor="platformmodal-field-8" className="text-obsidian-muted block mb-1">PIN de Seguridad / Perfil (Opcional)</label>
+                  <input id="platformmodal-field-8"
                     type="password"
                     value={pin}
                     onChange={(e) => setPin(e.target.value)}
@@ -688,8 +691,8 @@ export const PlatformModal: React.FC = () => {
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div>
-                <label className="text-obsidian-muted block mb-1">Estado del Plan</label>
-                <select
+                <label htmlFor="platformmodal-field-9" className="text-obsidian-muted block mb-1">Estado del Plan</label>
+                <select id="platformmodal-field-9"
                   value={subscriptionStatus}
                   onChange={(e) => {
                     const val = e.target.value as any;
@@ -707,9 +710,10 @@ export const PlatformModal: React.FC = () => {
               </div>
 
               <div>
-                <label className="text-obsidian-muted block mb-1">Costo del Plan</label>
+                <label htmlFor="platform-cost" className="text-obsidian-muted block mb-1">Costo del Plan</label>
                 <div className="flex gap-1.5">
                   <input
+                    id="platform-cost"
                     type="text"
                     inputMode="decimal"
                     maxLength={12}
@@ -731,8 +735,8 @@ export const PlatformModal: React.FC = () => {
               </div>
 
               <div>
-                <label className="text-obsidian-muted block mb-1">Ciclo de Cobro</label>
-                <select
+                <label htmlFor="platformmodal-field-10" className="text-obsidian-muted block mb-1">Ciclo de Cobro</label>
+                <select id="platformmodal-field-10"
                   value={billingCycle}
                   onChange={(e) => setBillingCycle(e.target.value as any)}
                   className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs focus:outline-none focus:border-indigo-500"
@@ -745,8 +749,8 @@ export const PlatformModal: React.FC = () => {
               </div>
 
               <div>
-                <label className="text-obsidian-muted block mb-1">Fecha de Inicio / Alta</label>
-                <input
+                <label htmlFor="platformmodal-field-11" className="text-obsidian-muted block mb-1">Fecha de Inicio / Alta</label>
+                <input id="platformmodal-field-11"
                   type="date"
                   value={startDate}
                   onChange={(e) => setStartDate(e.target.value)}
@@ -755,8 +759,8 @@ export const PlatformModal: React.FC = () => {
               </div>
 
               <div>
-                <label className="text-obsidian-muted block mb-1">Próxima Fecha de Renovación</label>
-                <input
+                <label htmlFor="platformmodal-field-12" className="text-obsidian-muted block mb-1">Próxima Fecha de Renovación</label>
+                <input id="platformmodal-field-12"
                   type="date"
                   value={nextBillingDate}
                   onChange={(e) => setNextBillingDate(e.target.value)}
@@ -766,8 +770,8 @@ export const PlatformModal: React.FC = () => {
 
               {subscriptionStatus === 'free_trial' && (
                 <div>
-                  <label className="text-amber-400 block mb-1">Vencimiento de Prueba Gratuita</label>
-                  <input
+                  <label htmlFor="platformmodal-field-13" className="text-amber-400 block mb-1">Vencimiento de Prueba Gratuita</label>
+                  <input id="platformmodal-field-13"
                     type="date"
                     value={trialEndDate}
                     onChange={(e) => setTrialEndDate(e.target.value)}
@@ -777,8 +781,8 @@ export const PlatformModal: React.FC = () => {
               )}
 
               <div>
-                <label className="text-obsidian-muted block mb-1">Método de Pago Asociado</label>
-                <select
+                <label htmlFor="platformmodal-field-14" className="text-obsidian-muted block mb-1">Método de Pago Asociado</label>
+                <select id="platformmodal-field-14"
                   value={paymentMethodId}
                   onChange={(e) => setPaymentMethodId(e.target.value)}
                   className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs focus:outline-none focus:border-indigo-500"
@@ -801,6 +805,7 @@ export const PlatformModal: React.FC = () => {
               <input
                 type="text"
                 maxLength={INPUT_LIMITS.API_KEY_LABEL}
+                aria-label="Etiqueta de la llave API"
                 placeholder="Etiqueta (ej. Producción, Servidor)"
                 value={newApiKeyLabel}
                 onChange={(e) => setNewApiKeyLabel(e.target.value)}
@@ -809,6 +814,7 @@ export const PlatformModal: React.FC = () => {
               <input
                 type="password"
                 maxLength={INPUT_LIMITS.API_KEY_VALUE}
+                aria-label="Valor de la llave API"
                 placeholder="Valor de la llave (ej. sk-proj-...)"
                 value={newApiKeyValue}
                 onChange={(e) => setNewApiKeyValue(e.target.value)}
@@ -846,6 +852,7 @@ export const PlatformModal: React.FC = () => {
               <input
                 type="text"
                 maxLength={INPUT_LIMITS.ENV_KEY}
+                aria-label="Nombre de la variable de entorno"
                 placeholder="CLAVE_ENV (ej. STRIPE_WEBHOOK_SECRET)"
                 value={newEnvKey}
                 onChange={(e) => setNewEnvKey(e.target.value.toUpperCase().replace(/\s+/g, '_'))}
@@ -854,6 +861,7 @@ export const PlatformModal: React.FC = () => {
               <input
                 type="password"
                 maxLength={INPUT_LIMITS.ENV_VALUE}
+                aria-label="Valor de la variable de entorno"
                 placeholder="Valor secreto de la variable"
                 value={newEnvValue}
                 onChange={(e) => setNewEnvValue(e.target.value)}
@@ -891,6 +899,7 @@ export const PlatformModal: React.FC = () => {
               <input
                 type="text"
                 maxLength={INPUT_LIMITS.TAG_NAME}
+                aria-label="Nombre de la etiqueta"
                 placeholder="Ej. Infraestructura, IA, Trabajo, Clientes..."
                 value={newTagName}
                 onChange={(e) => setNewTagName(e.target.value)}
@@ -904,6 +913,7 @@ export const PlatformModal: React.FC = () => {
               />
               <input
                 type="color"
+                aria-label="Color de la etiqueta"
                 value={newTagColor}
                 onChange={(e) => setNewTagColor(e.target.value)}
                 className="w-10 h-8 rounded-lg bg-obsidian-bg border border-obsidian-border cursor-pointer p-0.5 flex-shrink-0"
@@ -940,10 +950,10 @@ export const PlatformModal: React.FC = () => {
 
           {/* Notes */}
           <div>
-            <label className="text-obsidian-text font-medium block mb-1">
+            <label htmlFor="platformmodal-notes" className="text-obsidian-text font-medium block mb-1">
               Notas Privadas <span className="text-[10px] text-obsidian-muted font-mono">({notes.length}/{INPUT_LIMITS.NOTES})</span>
             </label>
-            <textarea
+            <textarea id="platformmodal-notes"
               rows={2}
               maxLength={INPUT_LIMITS.NOTES}
               value={notes}
@@ -964,7 +974,7 @@ export const PlatformModal: React.FC = () => {
             </button>
             <button
               type="submit"
-              disabled={loading || loadingDetail}
+              disabled={loading || loadingDetail || detailFailed}
               className="inline-flex items-center gap-1.5 px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md shadow-indigo-600/20 disabled:opacity-50"
             >
               {loading ? 'Guardando...' : editingPlatformId ? 'Guardar Cambios' : 'Guardar Plataforma'}

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { X, CreditCard, AlertCircle, ShieldCheck, Eye, EyeOff } from 'lucide-react';
+import { useAuditedDialog } from '../common/useAuditedDialog';
 import { useVault } from '../../context/VaultContext';
 import { api } from '../../lib/api';
 import { isValidLastFour, isValidExpiryMonth, isValidExpiryYear, validateCardFields, INPUT_LIMITS } from '../../lib/validation';
@@ -53,22 +54,14 @@ export const PaymentModal: React.FC = () => {
     cardCaretDigits.current = null;
   }, [cardNumber]);
 
-  useEffect(() => {
-    if (!isPaymentModalOpen) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        closePaymentModal();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isPaymentModalOpen, closePaymentModal]);
+  const requestClose = () => { if (!loading) closePaymentModal(); };
+  const dialogRef = useAuditedDialog(isPaymentModalOpen, requestClose, loading);
 
   if (!isPaymentModalOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return;
     setFormError(null);
 
     if (!alias.trim()) {
@@ -141,29 +134,32 @@ export const PaymentModal: React.FC = () => {
   return (
     <div 
       className="responsive-overlay fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-fadeIn"
-      onClick={closePaymentModal}
+      onClick={requestClose}
     >
       <div 
+        ref={dialogRef}
+        tabIndex={-1}
+        aria-busy={loading}
         role="dialog"
         aria-modal="true"
         aria-labelledby="payment-modal-title"
-        className="relative w-full max-w-lg bg-obsidian-panel border border-obsidian-borderLight rounded-2xl shadow-2xl p-6 overflow-hidden max-h-[90dvh] flex flex-col"
+        className="relative w-full max-w-lg bg-obsidian-panel border border-obsidian-borderLight rounded-2xl shadow-2xl p-4 sm:p-6 overflow-hidden max-h-[calc(100dvh-1rem)] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between pb-4 border-b border-obsidian-border">
-          <div className="flex items-center gap-2.5 min-w-0">
+        <div className="flex items-start justify-between gap-3 pb-4 border-b border-obsidian-border">
+          <div className="flex min-w-0 flex-1 items-start gap-2.5">
             <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 flex-shrink-0">
               <CreditCard size={20} aria-hidden="true" />
             </div>
             <div className="min-w-0">
-              <h2 id="payment-modal-title" className="text-base font-bold text-white tracking-tight truncate">
+              <h2 id="payment-modal-title" className="text-base font-bold text-white tracking-tight break-words">
                 {editingPayment ? 'Editar Método de Pago o Billetera' : 'Registrar Método de Pago o Billetera'}
               </h2>
             </div>
           </div>
           <button
             type="button"
-            onClick={closePaymentModal}
+            onClick={requestClose}
             className="p-1.5 text-obsidian-muted hover:text-white rounded-lg hover:bg-obsidian-surface flex-shrink-0"
             aria-label="Cerrar modal"
           >
@@ -171,7 +167,7 @@ export const PaymentModal: React.FC = () => {
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto py-4 space-y-4 text-xs pr-1">
+        <form onSubmit={handleSubmit} className="min-h-0 flex-1 overflow-y-auto py-4 space-y-4 text-xs pr-1">
           {formError && (
             <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 flex items-start gap-2 text-rose-300 text-xs" role="alert">
               <AlertCircle size={15} className="text-rose-400 flex-shrink-0 mt-0.5" />
@@ -335,7 +331,7 @@ export const PaymentModal: React.FC = () => {
           <div className="pt-2 border-t border-obsidian-border flex items-center justify-end gap-2.5">
             <button
               type="button"
-              onClick={closePaymentModal}
+              onClick={requestClose}
               disabled={loading}
               className="inline-flex min-h-10 items-center justify-center rounded-lg px-4 py-2 text-sm font-medium text-obsidian-muted transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400"
             >
@@ -344,7 +340,7 @@ export const PaymentModal: React.FC = () => {
             <button
               type="submit"
               disabled={loading}
-              className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-300"
+              className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
             >
               {loading ? (
                 <>

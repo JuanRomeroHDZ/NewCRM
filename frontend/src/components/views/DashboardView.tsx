@@ -417,6 +417,7 @@ export const DashboardView: React.FC = () => {
         onOpenSubscriptions={openSubscriptions}
       />
 
+      <div className="grid min-w-0 grid-cols-1 gap-6 min-[680px]:grid-cols-2">
       <DashboardProspectsSection
         prospects={filteredProspects}
         recontactCount={recontactProspects.length}
@@ -427,6 +428,9 @@ export const DashboardView: React.FC = () => {
         onQuickContact={handleQuickContact}
         onMarkResponded={handleMarkResponded}
       />
+
+      <DashboardMapLink onOpen={() => setActiveSection('graph')} />
+      </div>
 
       <DashboardAccountsSection
         emails={filteredEmails}
@@ -439,7 +443,6 @@ export const DashboardView: React.FC = () => {
         onOpenSubscriptions={openSubscriptions}
       />
 
-      <DashboardMapLink onOpen={() => setActiveSection('graph')} />
     </div>
   );
 };

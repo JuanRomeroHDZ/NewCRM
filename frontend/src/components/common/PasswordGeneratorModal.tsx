@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { X, RefreshCw, Copy, Check, ShieldCheck, Sliders, Sparkles } from 'lucide-react';
 import { useVault } from '../../context/VaultContext';
 import { api } from '../../lib/api';
@@ -23,9 +23,37 @@ export const PasswordGeneratorModal: React.FC = () => {
   });
   const [copied, setCopied] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [generationError, setGenerationError] = useState('');
+  const requestIdRef = useRef(0);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const closeRef = useRef(closePasswordGen);
+  closeRef.current = closePasswordGen;
+
+  useEffect(() => {
+    if (!isPasswordGenOpen) return;
+    const previousFocus = document.activeElement as HTMLElement | null;
+    const focusable = () => Array.from(dialogRef.current?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled), [tabindex]:not([tabindex="-1"])') || []);
+    focusable()[0]?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') { event.preventDefault(); event.stopImmediatePropagation(); closeRef.current(); }
+      if (event.key !== 'Tab') return;
+      const elements = focusable();
+      if (!elements.length) return;
+      const first = elements[0];
+      const last = elements[elements.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    };
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => { window.removeEventListener('keydown', onKeyDown, true); if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true }); };
+  }, [isPasswordGenOpen]);
 
   const generate = async () => {
+    const requestId = ++requestIdRef.current;
     setIsGenerating(true);
+    setGenerationError('');
+    setCopied(false);
+    setGeneratedPassword('');
     try {
       const res = await api.generatePassword({
         length,
@@ -36,12 +64,13 @@ export const PasswordGeneratorModal: React.FC = () => {
         avoid_ambiguous: avoidAmbiguous,
         mode
       });
+      if (requestId !== requestIdRef.current) return;
       setGeneratedPassword(res.password);
       setEntropy(res.entropy);
     } catch (err) {
-      console.error(err);
+      if (requestId === requestIdRef.current) setGenerationError(err instanceof Error ? err.message : 'No se pudo generar la contraseña. Intenta regenerar.');
     } finally {
-      setIsGenerating(false);
+      if (requestId === requestIdRef.current) setIsGenerating(false);
     }
   };
 
@@ -49,6 +78,7 @@ export const PasswordGeneratorModal: React.FC = () => {
     if (isPasswordGenOpen) {
       generate();
     }
+    return () => { requestIdRef.current += 1; };
   }, [isPasswordGenOpen, mode, length, includeUpper, includeLower, includeDigits, includeSymbols, avoidAmbiguous]);
 
   if (!isPasswordGenOpen) return null;
@@ -63,10 +93,11 @@ export const PasswordGeneratorModal: React.FC = () => {
   return (
     <div className="responsive-overlay fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/75 backdrop-blur-md animate-fadeIn">
       <div 
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="password-gen-title"
-        className="relative w-full max-w-lg bg-obsidian-panel border border-obsidian-borderLight rounded-xl sm:rounded-2xl shadow-2xl p-4 sm:p-6 overflow-hidden"
+        className="relative max-h-[calc(100dvh-1rem)] w-full max-w-lg overflow-y-auto rounded-xl border border-obsidian-borderLight bg-obsidian-panel p-4 shadow-2xl sm:rounded-2xl sm:p-6"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Glow */}
@@ -89,6 +120,7 @@ export const PasswordGeneratorModal: React.FC = () => {
           <button
             type="button"
             onClick={closePasswordGen}
+            aria-label="Cerrar generador"
             className="p-1.5 text-obsidian-muted hover:text-white rounded-lg hover:bg-obsidian-surface transition-colors"
           >
             <X size={18} />
@@ -98,7 +130,7 @@ export const PasswordGeneratorModal: React.FC = () => {
         {/* Display Box */}
         <div className="mb-5 p-4 rounded-xl bg-obsidian-bg border border-obsidian-border flex items-center justify-between gap-3 group">
           <span className="font-mono text-sm text-cyan-200 tracking-wider break-all select-all font-medium">
-            {generatedPassword || 'Generando...'}
+            {generatedPassword || (generationError ? 'Sin contraseña generada' : 'Generando...')}
           </span>
           <div className="flex items-center gap-1.5 flex-shrink-0">
             <button
@@ -112,6 +144,7 @@ export const PasswordGeneratorModal: React.FC = () => {
             <button
               type="button"
               onClick={handleCopy}
+              disabled={isGenerating || !generatedPassword}
               className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                 copied
                   ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
@@ -133,6 +166,7 @@ export const PasswordGeneratorModal: React.FC = () => {
           </div>
         </div>
 
+        {generationError && <p role="alert" className="mb-4 rounded-lg border border-rose-500/30 bg-obsidian-dangerBg p-3 text-xs text-rose-200">{generationError}</p>}
         {/* Entropy Meter */}
         <div className="mb-6 space-y-1.5">
           <div className="flex items-center justify-between text-xs">
@@ -184,6 +218,7 @@ export const PasswordGeneratorModal: React.FC = () => {
             </div>
             <input
               type="range"
+              aria-label={mode === 'random' ? 'Longitud de caracteres' : 'Palabras clave'}
               min={mode === 'random' ? 12 : 16}
               max={mode === 'random' ? 48 : 32}
               value={length}

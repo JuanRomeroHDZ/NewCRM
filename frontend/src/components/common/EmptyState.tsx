@@ -51,7 +51,7 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
           className={`mt-4 inline-flex min-h-[40px] items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 ${
             isError
               ? 'border border-rose-500/40 bg-rose-600/20 text-rose-200 hover:bg-rose-600/30 focus-visible:ring-rose-400'
-              : 'bg-brand-600 text-white hover:bg-brand-500 focus-visible:ring-brand-400'
+              : 'bg-indigo-600 text-white hover:bg-indigo-500 focus-visible:ring-indigo-400'
           }`}
         >
           {isError && <RefreshCw size={13} aria-hidden="true" />}

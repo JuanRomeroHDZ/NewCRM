@@ -7,6 +7,7 @@ import {
 } from '../../../types';
 import { INPUT_LIMITS } from '../../../lib/validation';
 import { INCOME_CATEGORIES, RENEWAL_SERVICE_TYPES } from './SubscriptionsLists';
+import { useAuditedDialog } from '../../common/useAuditedDialog';
 import { InfoTooltip } from '../../common/InfoTooltip';
 
 export const EXPENSE_CATEGORIES = [
@@ -250,36 +251,14 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
   const advanceTitleId = `${uid}-advance-title`;
   const expenseTitleId = `${uid}-expense-title`;
 
-  const anyModalOpen = isIncomeModalOpen || isRenewalModalOpen || Boolean(advanceRenewalTarget) || isExpenseModalOpen;
-
-  useEffect(() => {
-    if (!anyModalOpen) return;
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return;
-      e.preventDefault();
-      if (advanceRenewalTarget) {
-        setAdvanceRenewalTarget(null);
-      } else if (isExpenseModalOpen) {
-        setIsExpenseModalOpen(false);
-      } else if (isRenewalModalOpen) {
-        setIsRenewalModalOpen(false);
-      } else if (isIncomeModalOpen) {
-        setIsIncomeModalOpen(false);
-      }
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [
-    anyModalOpen,
-    advanceRenewalTarget,
-    isExpenseModalOpen,
-    isRenewalModalOpen,
-    isIncomeModalOpen,
-    setAdvanceRenewalTarget,
-    setIsExpenseModalOpen,
-    setIsRenewalModalOpen,
-    setIsIncomeModalOpen,
-  ]);
+  const incomeClose = () => { if (!savingIncome) setIsIncomeModalOpen(false); };
+  const renewalClose = () => { if (!savingRenewal) setIsRenewalModalOpen(false); };
+  const advanceClose = () => { if (!advancingRenewal) setAdvanceRenewalTarget(null); };
+  const expenseClose = () => { if (!savingExpense) setIsExpenseModalOpen(false); };
+  const incomeDialogRef = useAuditedDialog(isIncomeModalOpen, incomeClose, savingIncome);
+  const renewalDialogRef = useAuditedDialog(isRenewalModalOpen, renewalClose, savingRenewal);
+  const advanceDialogRef = useAuditedDialog(Boolean(advanceRenewalTarget), advanceClose, advancingRenewal);
+  const expenseDialogRef = useAuditedDialog(isExpenseModalOpen, expenseClose, savingExpense);
 
   const buildCurrencyOptions = (current: string) => {
     const exists = supportedCurrencies.some((c) => c.code === current);
@@ -293,14 +272,17 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
       {isIncomeModalOpen && (
         <div
           className="responsive-overlay fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/80 backdrop-blur-md animate-fadeIn"
-          onClick={() => setIsIncomeModalOpen(false)}
+          onClick={incomeClose}
           role="presentation"
         >
           <div
             role="dialog"
             aria-modal="true"
             aria-labelledby={incomeTitleId}
-            className="relative w-full max-w-lg bg-obsidian-panel border border-obsidian-borderLight rounded-2xl shadow-2xl p-4 sm:p-6 overflow-y-auto max-h-[92vh]"
+            ref={incomeDialogRef}
+            tabIndex={-1}
+            aria-busy={savingIncome}
+            className="relative w-full max-w-lg bg-obsidian-panel border border-obsidian-borderLight rounded-2xl shadow-2xl p-4 sm:p-6 overflow-y-auto max-h-[calc(100dvh-1rem)]"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between pb-4 border-b border-obsidian-border gap-2">
@@ -309,7 +291,7 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                   <Wallet size={18} aria-hidden="true" />
                 </div>
                 <div className="min-w-0">
-                  <h3 id={incomeTitleId} className="text-sm font-bold text-white truncate">
+                  <h3 id={incomeTitleId} className="text-sm font-bold text-white break-words">
                     {editingIncome ? 'Editar Pago de Cliente' : 'Registrar Pago Recibido de Cliente'}
                   </h3>
                   <p className="text-[11px] text-obsidian-muted truncate">Pagos, anticipos e igualas.</p>
@@ -317,7 +299,7 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
               </div>
               <button
                 type="button"
-                onClick={() => setIsIncomeModalOpen(false)}
+                onClick={incomeClose}
                 aria-label="Cerrar modal de pago"
                 className="p-1.5 text-obsidian-muted hover:text-white rounded-lg hover:bg-obsidian-surface shrink-0"
               >
@@ -581,7 +563,7 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
               <div className="pt-3 border-t border-obsidian-border flex items-center justify-end gap-2.5">
                 <button
                   type="button"
-                  onClick={() => setIsIncomeModalOpen(false)}
+                  onClick={incomeClose}
                   className="inline-flex min-h-10 items-center justify-center rounded-lg px-4 py-2 text-sm font-medium text-obsidian-muted transition-colors hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400"
                 >
                   Cancelar
@@ -603,14 +585,17 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
       {isRenewalModalOpen && (
         <div
           className="responsive-overlay fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/80 backdrop-blur-md animate-fadeIn"
-          onClick={() => setIsRenewalModalOpen(false)}
+          onClick={renewalClose}
           role="presentation"
         >
           <div
             role="dialog"
             aria-modal="true"
             aria-labelledby={renewalTitleId}
-            className="relative w-full max-w-lg bg-obsidian-panel border border-obsidian-borderLight rounded-2xl shadow-2xl p-4 sm:p-6 overflow-y-auto max-h-[92vh]"
+            ref={renewalDialogRef}
+            tabIndex={-1}
+            aria-busy={savingRenewal}
+            className="relative w-full max-w-lg bg-obsidian-panel border border-obsidian-borderLight rounded-2xl shadow-2xl p-4 sm:p-6 overflow-y-auto max-h-[calc(100dvh-1rem)]"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between pb-4 border-b border-obsidian-border gap-2">
@@ -619,7 +604,7 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                   <Server size={18} aria-hidden="true" />
                 </div>
                 <div className="min-w-0">
-                  <h3 id={renewalTitleId} className="text-sm font-bold text-white truncate">
+                  <h3 id={renewalTitleId} className="text-sm font-bold text-white break-words">
                     {editingRenewal ? 'Editar servicio' : 'Agregar servicio y vencimiento'}
                   </h3>
                   <p className="text-[11px] text-obsidian-muted truncate">Dominio, alojamiento u otro servicio.</p>
@@ -627,7 +612,7 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
               </div>
               <button
                 type="button"
-                onClick={() => setIsRenewalModalOpen(false)}
+                onClick={renewalClose}
                 aria-label="Cerrar modal de dominio o hosting"
                 className="p-1.5 text-obsidian-muted hover:text-white rounded-lg hover:bg-obsidian-surface shrink-0"
               >
@@ -943,7 +928,7 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
               <div className="pt-3 border-t border-obsidian-border flex items-center justify-end gap-2.5">
                 <button
                   type="button"
-                  onClick={() => setIsRenewalModalOpen(false)}
+                  onClick={renewalClose}
                   className="inline-flex min-h-10 items-center justify-center rounded-lg px-4 py-2 text-sm font-medium text-obsidian-muted transition-colors hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400"
                 >
                   Cancelar
@@ -965,13 +950,16 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
       {advanceRenewalTarget && (
         <div
           className="responsive-overlay fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/80 backdrop-blur-md animate-fadeIn"
-          onClick={() => setAdvanceRenewalTarget(null)}
+          onClick={advanceClose}
           role="presentation"
         >
           <div
             role="dialog"
             aria-modal="true"
             aria-labelledby={advanceTitleId}
+            ref={advanceDialogRef}
+            tabIndex={-1}
+            aria-busy={advancingRenewal}
             className="relative w-full max-w-md bg-obsidian-panel border border-emerald-500/40 rounded-2xl shadow-2xl p-4 sm:p-6 space-y-4"
             onClick={(e) => e.stopPropagation()}
           >
@@ -981,13 +969,13 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                   <RefreshCw size={18} aria-hidden="true" />
                 </div>
                 <div className="min-w-0">
-                  <h3 id={advanceTitleId} className="text-sm font-bold text-white truncate">Renovar Ciclo (+1 Ciclo)</h3>
+                  <h3 id={advanceTitleId} className="text-sm font-bold text-white break-words">Renovar Ciclo (+1 Ciclo)</h3>
                   <p className="text-[11px] text-obsidian-muted truncate">{advanceRenewalTarget.domain_or_service}</p>
                 </div>
               </div>
               <button
                 type="button"
-                onClick={() => setAdvanceRenewalTarget(null)}
+                onClick={advanceClose}
                 aria-label="Cerrar modal de renovación"
                 className="p-1.5 text-obsidian-muted hover:text-white rounded-lg hover:bg-obsidian-surface shrink-0"
               >
@@ -1065,7 +1053,7 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
             <div className="pt-3 border-t border-obsidian-border flex items-center justify-end gap-2 text-xs">
               <button
                 type="button"
-                onClick={() => setAdvanceRenewalTarget(null)}
+                onClick={advanceClose}
                 className="inline-flex min-h-10 items-center justify-center rounded-lg px-4 py-2 text-sm font-medium text-obsidian-muted transition-colors hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400"
               >
                 Cancelar
@@ -1087,14 +1075,17 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
       {isExpenseModalOpen && (
         <div
           className="responsive-overlay fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/80 backdrop-blur-md animate-fadeIn"
-          onClick={() => setIsExpenseModalOpen(false)}
+          onClick={expenseClose}
           role="presentation"
         >
           <div
             role="dialog"
             aria-modal="true"
             aria-labelledby={expenseTitleId}
-            className="relative w-full max-w-lg bg-obsidian-panel border border-obsidian-borderLight rounded-2xl shadow-2xl p-4 sm:p-6 overflow-y-auto max-h-[92vh]"
+            ref={expenseDialogRef}
+            tabIndex={-1}
+            aria-busy={savingExpense}
+            className="relative w-full max-w-lg bg-obsidian-panel border border-obsidian-borderLight rounded-2xl shadow-2xl p-4 sm:p-6 overflow-y-auto max-h-[calc(100dvh-1rem)]"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between pb-4 border-b border-obsidian-border gap-2">
@@ -1103,7 +1094,7 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                   <Receipt size={18} aria-hidden="true" />
                 </div>
                 <div className="min-w-0">
-                  <h3 id={expenseTitleId} className="text-sm font-bold text-white truncate">
+                  <h3 id={expenseTitleId} className="text-sm font-bold text-white break-words">
                     {editingExpense ? 'Editar gasto' : 'Registrar gasto'}
                   </h3>
                   <p className="text-[11px] text-obsidian-muted truncate">Compra no recurrente.</p>
@@ -1111,7 +1102,7 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
               </div>
               <button
                 type="button"
-                onClick={() => setIsExpenseModalOpen(false)}
+                onClick={expenseClose}
                 aria-label="Cerrar modal de gasto único"
                 className="p-1.5 text-obsidian-muted hover:text-white rounded-lg hover:bg-obsidian-surface shrink-0"
               >
@@ -1274,7 +1265,7 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
               <div className="pt-3 border-t border-obsidian-border flex items-center justify-end gap-2.5">
                 <button
                   type="button"
-                  onClick={() => setIsExpenseModalOpen(false)}
+                  onClick={expenseClose}
                   className="inline-flex min-h-10 items-center justify-center rounded-lg px-4 py-2 text-sm font-medium text-obsidian-muted transition-colors hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400"
                 >
                   Cancelar

@@ -2,7 +2,6 @@ import React, { useState, useEffect, useId, useRef } from 'react';
 import {
   Mail,
   Plus,
-  ArrowRight,
   Smartphone,
   ExternalLink,
   Lock,
@@ -387,7 +386,6 @@ export const EmailsView: React.FC = () => {
                   className="inline-flex min-h-[32px] flex-shrink-0 items-center gap-1 rounded-lg px-2 text-obsidian-muted transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
                 >
                   <span>Ver detalles</span>
-                  <ArrowRight size={13} aria-hidden="true" />
                 </button>
               </div>
             </article>

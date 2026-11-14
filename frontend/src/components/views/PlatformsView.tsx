@@ -536,7 +536,7 @@ export const PlatformsView: React.FC = () => {
       {/* Grid view (always on <md, or when grid mode selected) */}
       {!loading && !error && filteredPlatforms.length > 0 && (
         <div
-          className={`grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3 ${
+          className={`grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 ${
             viewMode === 'table' ? 'md:hidden' : ''
           }`}
         >

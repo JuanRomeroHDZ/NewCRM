@@ -1,3 +1,4 @@
+import { useFormModalFocus } from '../../hooks/useFormModalFocus';
 import React, { useState, useEffect } from 'react';
 import { X, Mail, AlertCircle } from 'lucide-react';
 import { useVault } from '../../context/VaultContext';
@@ -40,17 +41,22 @@ export const EmailModal: React.FC = () => {
   const [formError, setFormError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadingDetail, setLoadingDetail] = useState(false);
+  const [detailFailed, setDetailFailed] = useState(false);
 
   useEffect(() => {
     if (!isEmailModalOpen) return;
+    let active = true;
+    setDetailFailed(false);
     setFormError(null);
-    api.getEmails().then(setExistingEmails).catch((err: any) => {
+    api.getEmails().then((items) => { if (active) setExistingEmails(items); }).catch((err: any) => {
+        if (!active) return;
       showToast(err?.message || 'No se pudieron cargar los correos existentes.', 'warning');
     });
 
     if (editingEmailId) {
       setLoadingDetail(true);
       api.getEmailDetail(editingEmailId).then((e) => {
+        if (!active) return;
         setAddress(e.address);
         if (STANDARD_PROVIDERS.includes(e.provider)) {
           setProvider(e.provider);
@@ -70,11 +76,13 @@ export const EmailModal: React.FC = () => {
         setBackupCodes(e.backup_codes || []);
         setSecurityQuestions(e.security_questions || []);
       }).catch((err: any) => {
+        if (!active) return;
         const msg = err?.message || 'Error al cargar los detalles del correo.';
+        setDetailFailed(true);
         setFormError(msg);
         showToast(msg, 'error');
       }).finally(() => {
-        setLoadingDetail(false);
+        if (active) setLoadingDetail(false);
       });
     } else {
       setLoadingDetail(false);
@@ -92,24 +100,16 @@ export const EmailModal: React.FC = () => {
       setBackupCodes([]);
       setSecurityQuestions([]);
     }
+    return () => { active = false; };
   }, [isEmailModalOpen, editingEmailId, defaultEntityScope, showToast]);
 
-  useEffect(() => {
-    if (!isEmailModalOpen) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        closeEmailModal();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isEmailModalOpen, closeEmailModal]);
+  useFormModalFocus(isEmailModalOpen, 'email-modal-title', closeEmailModal);
 
   if (!isEmailModalOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading || loadingDetail || detailFailed) return;
     setFormError(null);
 
     const trimmedAddress = address.trim();
@@ -264,6 +264,7 @@ export const EmailModal: React.FC = () => {
                 <button
                   key={opt.val}
                   type="button"
+                  aria-pressed={scope === opt.val}
                   onClick={() => setScope(opt.val)}
                   className={`min-h-9 min-w-0 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all max-[480px]:w-full ${
                     scope === opt.val
@@ -280,8 +281,8 @@ export const EmailModal: React.FC = () => {
           {/* Identity */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
-              <label className="text-obsidian-text font-medium block mb-1">Dirección de Correo Electrónico *</label>
-              <input
+              <label htmlFor="emailmodal-field-1" className="text-obsidian-text font-medium block mb-1">Dirección de Correo Electrónico *</label>
+              <input id="emailmodal-field-1"
                 type="email"
                 required
                 autoFocus
@@ -294,8 +295,8 @@ export const EmailModal: React.FC = () => {
             </div>
 
             <div>
-              <label className="text-obsidian-text font-medium block mb-1">Proveedor de Correo</label>
-              <select
+              <label htmlFor="emailmodal-field-2" className="text-obsidian-text font-medium block mb-1">Proveedor de Correo</label>
+              <select id="emailmodal-field-2"
                 value={provider}
                 onChange={(e) => {
                   const nextProvider = e.target.value;
@@ -328,8 +329,8 @@ export const EmailModal: React.FC = () => {
             </div>
 
             <div>
-              <label className="text-obsidian-text font-medium block mb-1">Enlace a la Bandeja de Entrada</label>
-              <input
+              <label htmlFor="emailmodal-field-3" className="text-obsidian-text font-medium block mb-1">Enlace a la Bandeja de Entrada</label>
+              <input id="emailmodal-field-3"
                 type="text"
                 maxLength={INPUT_LIMITS.URL}
                 value={inboxUrl}
@@ -340,10 +341,11 @@ export const EmailModal: React.FC = () => {
             </div>
 
             <div>
-              <label className="text-obsidian-text font-medium block mb-1">
+              <label htmlFor="email-password" className="text-obsidian-text font-medium block mb-1">
                 Contraseña del Correo {editingEmailId && '(Dejar vacía para conservar actual)'}
               </label>
               <input
+                id="email-password"
                 type="password"
                 maxLength={INPUT_LIMITS.PASSWORD}
                 value={password}
@@ -364,8 +366,8 @@ export const EmailModal: React.FC = () => {
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div>
-                <label className="text-obsidian-muted block mb-1">Correo de Respaldo</label>
-                <select
+                <label htmlFor="emailmodal-field-4" className="text-obsidian-muted block mb-1">Correo de Respaldo</label>
+                <select id="emailmodal-field-4"
                   value={recoveryEmailId}
                   onChange={(e) => setRecoveryEmailId(e.target.value)}
                   className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs focus:outline-none focus:border-indigo-500"
@@ -382,8 +384,8 @@ export const EmailModal: React.FC = () => {
               </div>
 
               <div>
-                <label className="text-obsidian-muted block mb-1">Teléfono de Recuperación</label>
-                <input
+                <label htmlFor="emailmodal-field-5" className="text-obsidian-muted block mb-1">Teléfono de Recuperación</label>
+                <input id="emailmodal-field-5"
                   type="text"
                   maxLength={INPUT_LIMITS.PHONE}
                   value={recoveryPhone}
@@ -394,8 +396,8 @@ export const EmailModal: React.FC = () => {
               </div>
 
               <div>
-                <label className="text-obsidian-muted block mb-1">Verificación en dos pasos</label>
-                <select
+                <label htmlFor="emailmodal-field-6" className="text-obsidian-muted block mb-1">Verificación en dos pasos</label>
+                <select id="emailmodal-field-6"
                   value={twoFactorMethod}
                   onChange={(e) => setTwoFactorMethod(e.target.value as any)}
                   className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs focus:outline-none focus:border-indigo-500"
@@ -413,10 +415,11 @@ export const EmailModal: React.FC = () => {
           {/* Aliases */}
           <div className="space-y-2">
             <div>
-              <label className="text-obsidian-text font-medium block">Alias o Sub-direcciones del Correo</label>
+              <label htmlFor="email-alias" className="text-obsidian-text font-medium block">Alias o Sub-direcciones del Correo</label>
             </div>
             <div className="flex gap-2">
               <input
+                id="email-alias"
                 type="email"
                 maxLength={INPUT_LIMITS.EMAIL}
                 value={newAliasInput}
@@ -454,9 +457,10 @@ export const EmailModal: React.FC = () => {
 
           {/* Backup codes */}
           <div className="space-y-2">
-            <label className="text-obsidian-text font-medium block">Códigos de Recuperación de Emergencia</label>
+            <label htmlFor="email-recovery-code" className="text-obsidian-text font-medium block">Códigos de Recuperación de Emergencia</label>
             <div className="flex gap-2">
               <input
+                id="email-recovery-code"
                 type="text"
                 maxLength={INPUT_LIMITS.BACKUP_CODE}
                 value={newCodeInput}
@@ -506,10 +510,10 @@ export const EmailModal: React.FC = () => {
 
           {/* Notes */}
           <div>
-            <label className="text-obsidian-text font-medium block mb-1">
+            <label htmlFor="emailmodal-notes" className="text-obsidian-text font-medium block mb-1">
               Notas Privadas <span className="text-[10px] text-obsidian-muted font-mono">({notes.length}/{INPUT_LIMITS.NOTES})</span>
             </label>
-            <textarea
+            <textarea id="emailmodal-notes"
               rows={2}
               maxLength={INPUT_LIMITS.NOTES}
               value={notes}
@@ -530,7 +534,7 @@ export const EmailModal: React.FC = () => {
             </button>
             <button
               type="submit"
-              disabled={loading || loadingDetail}
+              disabled={loading || loadingDetail || detailFailed}
               className="inline-flex items-center gap-1.5 px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md shadow-indigo-600/20 disabled:opacity-50"
             >
               {loading ? 'Guardando...' : editingEmailId ? 'Guardar Cambios' : 'Guardar Correo Principal'}

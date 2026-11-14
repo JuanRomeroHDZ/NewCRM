@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { KeyRound, X } from 'lucide-react';
+import { useAuditedDialog } from './useAuditedDialog';
 import { INPUT_LIMITS } from '../../lib/validation';
 
 interface VaultPasswordConfirmModalProps {
@@ -14,17 +15,11 @@ export const VaultPasswordConfirmModal: React.FC<VaultPasswordConfirmModalProps>
   const [loading, setLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    inputRef.current?.focus();
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !loading) onCancel();
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [loading, onCancel]);
+  const dialogRef = useAuditedDialog(true, onCancel, loading);
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
+    if (loading) return;
     if (!password) {
       setError('Escribe tu contraseña de acceso.');
       return;
@@ -45,11 +40,14 @@ export const VaultPasswordConfirmModal: React.FC<VaultPasswordConfirmModalProps>
   return createPortal((
     <div className="responsive-overlay fixed inset-0 z-[70] flex items-center justify-center bg-black/75 p-4" role="presentation">
       <section
+        ref={dialogRef}
+        tabIndex={-1}
+        aria-busy={loading}
         role="dialog"
         aria-modal="true"
         aria-labelledby="copy-confirm-title"
         aria-describedby="copy-confirm-description"
-        className="w-full max-w-sm rounded-2xl border border-obsidian-borderLight bg-obsidian-panel p-5 shadow-2xl"
+        className="max-h-[calc(100dvh-2rem)] overflow-y-auto w-full max-w-sm rounded-2xl border border-obsidian-borderLight bg-obsidian-panel p-5 shadow-2xl"
       >
         <div className="mb-4 flex items-start justify-between gap-3">
           <div className="flex min-w-0 items-start gap-3">

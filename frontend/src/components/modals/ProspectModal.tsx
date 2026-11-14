@@ -1,3 +1,4 @@
+import { useFormModalFocus } from '../../hooks/useFormModalFocus';
 import React, { useState, useEffect } from 'react';
 import { 
   X, Rocket, Globe, MessageCircle, Phone, MapPin, 
@@ -74,6 +75,7 @@ export const ProspectModal: React.FC = () => {
   const [formError, setFormError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadingDetail, setLoadingDetail] = useState(false);
+  const [detailFailed, setDetailFailed] = useState(false);
   const [showFollowupConfig, setShowFollowupConfig] = useState(false);
 
   const fallbackCurrency = baseCurrency || 'MXN';
@@ -85,6 +87,7 @@ export const ProspectModal: React.FC = () => {
 
   useEffect(() => {
     if (!isProspectModalOpen) return;
+    setDetailFailed(false);
     let active = true;
     setFormError(null);
     setShowFollowupConfig(Boolean(editingProspectId));
@@ -132,6 +135,7 @@ export const ProspectModal: React.FC = () => {
       }).catch((err: any) => {
         if (!active) return;
         const msg = err?.message || 'Error al cargar la ficha del prospecto.';
+        setDetailFailed(true);
         setFormError(msg);
         showToast(msg, 'error');
       }).finally(() => {
@@ -167,17 +171,7 @@ export const ProspectModal: React.FC = () => {
     };
   }, [isProspectModalOpen, editingProspectId, prospectModalDefaultEmailId, defaultEntityScope, fallbackCurrency, showToast]);
 
-  useEffect(() => {
-    if (!isProspectModalOpen) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        closeProspectModal();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isProspectModalOpen, closeProspectModal]);
+  useFormModalFocus(isProspectModalOpen, 'prospect-modal-title', closeProspectModal);
 
   const handleQuickCreateEmail = async () => {
     const trimmed = newEmailAddress.trim();
@@ -211,6 +205,7 @@ export const ProspectModal: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading || loadingDetail || detailFailed) return;
     setFormError(null);
 
     if (!companyName.trim()) {
@@ -421,6 +416,7 @@ export const ProspectModal: React.FC = () => {
                 <button
                   key={opt.val}
                   type="button"
+                  aria-pressed={scope === opt.val}
                   onClick={() => setScope(opt.val)}
                   className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all ${
                     scope === opt.val
@@ -445,6 +441,7 @@ export const ProspectModal: React.FC = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               <button
                 type="button"
+                aria-pressed={workflowType === 'demo_first'}
                 onClick={() => {
                   setWorkflowType('demo_first');
                   if (!editingProspectId && status === 'en_cotizacion') {
@@ -468,6 +465,7 @@ export const ProspectModal: React.FC = () => {
 
               <button
                 type="button"
+                aria-pressed={workflowType === 'direct_quote'}
                 onClick={() => {
                   setWorkflowType('direct_quote');
                   if (!editingProspectId && status === 'demo_creada') {
@@ -502,10 +500,8 @@ export const ProspectModal: React.FC = () => {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
-                <label className="text-obsidian-text font-medium block mb-1">
-                  Nombre de la Empresa / Cliente *
-                </label>
-                <input
+                <label htmlFor="prospectmodal-field-1" className="text-obsidian-text font-medium block mb-1">Nombre de la Empresa / Cliente *</label>
+                <input id="prospectmodal-field-1"
                   type="text"
                   required
                   autoFocus
@@ -518,10 +514,8 @@ export const ProspectModal: React.FC = () => {
               </div>
 
               <div>
-                <label className="text-obsidian-text font-medium block mb-1">
-                  Estado Actual del Seguimiento *
-                </label>
-                <select
+                <label htmlFor="prospectmodal-field-2" className="text-obsidian-text font-medium block mb-1">Estado Actual del Seguimiento *</label>
+                <select id="prospectmodal-field-2"
                   value={status}
                   onChange={(e) => setStatus(e.target.value as ProspectStatus)}
                   className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs focus:outline-none focus:border-indigo-500"
@@ -535,10 +529,8 @@ export const ProspectModal: React.FC = () => {
               </div>
 
               <div>
-                <label className="text-obsidian-text font-medium block mb-1">
-                  Nombre de la Persona de Contacto
-                </label>
-                <input
+                <label htmlFor="prospectmodal-field-3" className="text-obsidian-text font-medium block mb-1">Nombre de la Persona de Contacto</label>
+                <input id="prospectmodal-field-3"
                   type="text"
                   maxLength={INPUT_LIMITS.CONTACT_NAME}
                   value={contactName}
@@ -549,10 +541,8 @@ export const ProspectModal: React.FC = () => {
               </div>
 
               <div>
-                <label className="text-obsidian-text font-medium block mb-1">
-                  URL de la Página Demo o Sitio Creado
-                </label>
-                <input
+                <label htmlFor="prospectmodal-field-4" className="text-obsidian-text font-medium block mb-1">URL de la Página Demo o Sitio Creado</label>
+                <input id="prospectmodal-field-4"
                   type="text"
                   maxLength={INPUT_LIMITS.URL}
                   value={demoUrl}
@@ -643,8 +633,8 @@ export const ProspectModal: React.FC = () => {
               </div>
 
               <div>
-                <label className="text-obsidian-muted block mb-1">Divisa</label>
-                <select
+                <label htmlFor="prospectmodal-field-5" className="text-obsidian-muted block mb-1">Divisa</label>
+                <select id="prospectmodal-field-5"
                   aria-label="Divisa"
                   value={currency}
                   onChange={(e) => setCurrency(e.target.value)}
@@ -659,8 +649,8 @@ export const ProspectModal: React.FC = () => {
               </div>
 
               <div>
-                <label className="text-obsidian-muted block mb-1">Modalidad de Cobro</label>
-                <select
+                <label htmlFor="prospectmodal-field-6" className="text-obsidian-muted block mb-1">Modalidad de Cobro</label>
+                <select id="prospectmodal-field-6"
                   value={billingType}
                   onChange={(e) => setBillingType(e.target.value as 'one_time' | 'monthly_retainer')}
                   className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs focus:outline-none focus:border-indigo-500"
@@ -692,10 +682,8 @@ export const ProspectModal: React.FC = () => {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
-                <label className="text-obsidian-muted block mb-1">
-                  Mi Correo Principal de Envío / Seguimiento
-                </label>
-                <select
+                <label htmlFor="prospectmodal-field-7" className="text-obsidian-muted block mb-1">Mi Correo Principal de Envío / Seguimiento</label>
+                <select id="prospectmodal-field-7"
                   value={emailId}
                   onChange={(e) => {
                     if (e.target.value === '__create_new__') {
@@ -754,10 +742,8 @@ export const ProspectModal: React.FC = () => {
               </div>
 
               <div>
-                <label className="text-obsidian-muted block mb-1">
-                  Correo Electrónico del Cliente / Prospecto
-                </label>
-                <input
+                <label htmlFor="prospectmodal-field-8" className="text-obsidian-muted block mb-1">Correo Electrónico del Cliente / Prospecto</label>
+                <input id="prospectmodal-field-8"
                   type="email"
                   maxLength={INPUT_LIMITS.EMAIL}
                   value={contactEmail}
@@ -769,8 +755,8 @@ export const ProspectModal: React.FC = () => {
 
               {selectedParentEmail && selectedParentEmail.aliases && selectedParentEmail.aliases.length > 0 && (
                 <div className="md:col-span-2">
-                  <label className="text-obsidian-muted block mb-1">Alias Específico Utilizado para Contactar</label>
-                  <select
+                  <label htmlFor="prospectmodal-field-9" className="text-obsidian-muted block mb-1">Alias Específico Utilizado para Contactar</label>
+                  <select id="prospectmodal-field-9"
                     value={specificAlias}
                     onChange={(e) => setSpecificAlias(e.target.value)}
                     className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs focus:outline-none focus:border-indigo-500"
@@ -809,10 +795,8 @@ export const ProspectModal: React.FC = () => {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
-                <label className="text-obsidian-muted block mb-1">
-                  Fecha y Hora del Primer Contacto
-                </label>
-                <input
+                <label htmlFor="prospectmodal-field-10" className="text-obsidian-muted block mb-1">Fecha y Hora del Primer Contacto</label>
+                <input id="prospectmodal-field-10"
                   type="datetime-local"
                   value={startedAtInput}
                   onChange={(e) => setStartedAtInput(e.target.value)}
@@ -974,10 +958,10 @@ export const ProspectModal: React.FC = () => {
             </div>
 
             <div>
-              <label className="text-obsidian-text font-medium block mb-1">
+              <label htmlFor="prospectmodal-notes" className="text-obsidian-text font-medium block mb-1">
                 Notas Privadas <span className="text-[10px] text-obsidian-muted font-mono">({notes.length}/{INPUT_LIMITS.NOTES})</span>
               </label>
-              <textarea
+              <textarea id="prospectmodal-notes"
                 rows={2}
                 maxLength={INPUT_LIMITS.NOTES}
                 value={notes}
@@ -1000,7 +984,7 @@ export const ProspectModal: React.FC = () => {
             </button>
             <button
               type="submit"
-              disabled={loading || loadingDetail}
+              disabled={loading || loadingDetail || detailFailed}
               className="inline-flex items-center gap-1.5 px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md shadow-indigo-600/20 disabled:opacity-50"
             >
               {loading ? 'Guardando...' : editingProspectId ? 'Guardar Cambios' : 'Registrar Prospecto'}

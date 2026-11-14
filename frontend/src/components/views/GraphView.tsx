@@ -389,7 +389,7 @@ export const GraphView: React.FC = () => {
         ctx.fillStyle = isHovered ? '#262a33' : '#17191f';
         ctx.fill();
         ctx.lineWidth = isCritical ? 2.5 : 2;
-        ctx.strokeStyle = isCritical ? '#f43f5e' : '#6366f1';
+        ctx.strokeStyle = isCritical ? '#f43f5e' : '#A98242';
         ctx.stroke();
 
         if (!hideEmailAddresses && (showLabels || isHovered)) {
@@ -407,7 +407,7 @@ export const GraphView: React.FC = () => {
         }
 
         ctx.font = 'bold 13px Inter, system-ui, sans-serif';
-        ctx.fillStyle = isCritical ? '#f43f5e' : '#818cf8';
+        ctx.fillStyle = isCritical ? '#f43f5e' : '#d5bc8f';
         ctx.fillText(getNodeMonogram(node.label), node.x, node.y + 5);
       } else if (node.type === 'platform') {
         const radius = 16;
@@ -922,7 +922,7 @@ export const GraphView: React.FC = () => {
       <aside aria-label="Guía del mapa" className={`absolute ${mapOverlayBottomClass} left-3 z-10 max-h-[min(40vh,15rem)] max-w-[min(18rem,calc(100%-7rem))] overflow-y-auto rounded-xl border border-obsidian-border bg-obsidian-panel/95 p-3 text-[11px] text-obsidian-muted shadow-xl sm:left-6`}>
           <div className="space-y-1.5">
             <div className="flex items-center gap-2">
-              <span className="h-3 w-3 shrink-0 rounded-full border-2 border-indigo-500 bg-obsidian-card" aria-hidden="true" />
+              <span className="h-3 w-3 shrink-0 rounded-full border-2 bg-obsidian-card" style={{ borderColor: '#A98242' }} aria-hidden="true" />
               <span>Correo Principal</span>
             </div>
             <div className="flex items-center gap-2">

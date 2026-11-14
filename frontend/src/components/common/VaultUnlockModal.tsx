@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Lock, ShieldAlert, KeyRound, ArrowRight, X } from 'lucide-react';
+import { useAuditedDialog } from './useAuditedDialog';
 import { useVault } from '../../context/VaultContext';
 import { INPUT_LIMITS } from '../../lib/validation';
 
@@ -14,14 +15,19 @@ export const VaultUnlockModal: React.FC = () => {
     if (isUnlockModalOpen) {
       setPassword('');
       setError(null);
-      setTimeout(() => inputRef.current?.focus(), 100);
+      const timer = window.setTimeout(() => inputRef.current?.focus(), 100);
+      return () => window.clearTimeout(timer);
     }
   }, [isUnlockModalOpen]);
+
+  const requestClose = () => { if (!isLoading) closeUnlockModal(); };
+  const dialogRef = useAuditedDialog(isUnlockModalOpen, requestClose, isLoading);
 
   if (!isUnlockModalOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isLoading) return;
     if (!password.trim()) {
       setError('Ingresa tu contraseña de acceso para continuar.');
       return;
@@ -49,12 +55,16 @@ export const VaultUnlockModal: React.FC = () => {
   return (
     <div 
       className="responsive-overlay fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-fadeIn"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="vault-modal-title"
+
     >
-      <div 
-        className="relative w-full max-w-md bg-obsidian-panel border border-obsidian-borderLight rounded-2xl shadow-2xl p-6 overflow-hidden"
+      <div
+        ref={dialogRef}
+        tabIndex={-1}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="vault-modal-title"
+        aria-busy={isLoading}
+        className="relative w-full max-w-md bg-obsidian-panel border border-obsidian-borderLight rounded-2xl shadow-2xl p-4 sm:p-6 max-h-[calc(100dvh-2rem)] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Subtle accent glow */}
@@ -66,17 +76,19 @@ export const VaultUnlockModal: React.FC = () => {
               <Lock size={22} />
             </div>
             <div className="min-w-0">
-              <h2 id="vault-modal-title" className="text-lg font-semibold text-white tracking-tight truncate">
+              <h2 id="vault-modal-title" className="text-lg font-semibold text-white tracking-tight break-words">
                 {isSetup ? 'Desbloquear espacio seguro' : 'Inicializar espacio seguro'}
               </h2>
-              <p className="text-xs text-obsidian-muted truncate">
+              <p className="text-xs text-obsidian-muted">
                 Protege el acceso a tus datos
               </p>
             </div>
           </div>
           <button
             type="button"
-            onClick={closeUnlockModal}
+            onClick={requestClose}
+            disabled={isLoading}
+            aria-label="Cerrar desbloqueo de bóveda"
             className="p-1.5 text-obsidian-muted hover:text-white rounded-lg hover:bg-obsidian-surface transition-colors flex-shrink-0"
           >
             <X size={18} />
@@ -84,7 +96,7 @@ export const VaultUnlockModal: React.FC = () => {
         </div>
 
         {error && (
-          <div className="mb-4 p-3 rounded-lg bg-rose-500/10 border border-rose-500/30 flex items-center gap-2.5 text-rose-400 text-xs animate-shake">
+          <div role="alert" className="mb-4 p-3 rounded-lg bg-rose-500/10 border border-rose-500/30 flex items-center gap-2.5 text-rose-400 text-xs animate-shake">
             <ShieldAlert size={16} className="flex-shrink-0" />
             <span className="break-words">{error}</span>
           </div>
@@ -92,12 +104,14 @@ export const VaultUnlockModal: React.FC = () => {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-xs font-medium text-obsidian-text/80 mb-1.5">
+            <label htmlFor="vault-unlock-password" className="block text-xs font-medium text-obsidian-text/80 mb-1.5">
               {isSetup ? 'contraseña de acceso de la Bóveda' : 'Define tu contraseña de acceso (mínimo 8 caracteres)'}
             </label>
             <div className="relative">
               <input
                 ref={inputRef}
+                id="vault-unlock-password"
+                aria-invalid={Boolean(error)}
                 type="password"
                 maxLength={INPUT_LIMITS.MASTER_PASSWORD}
                 value={password}
@@ -122,7 +136,8 @@ export const VaultUnlockModal: React.FC = () => {
           <div className="pt-2 flex items-center justify-end gap-2.5">
             <button
               type="button"
-              onClick={closeUnlockModal}
+              onClick={requestClose}
+              disabled={isLoading}
               className="px-4 py-2 text-xs font-medium text-obsidian-muted hover:text-white transition-colors"
             >
               Cancelar

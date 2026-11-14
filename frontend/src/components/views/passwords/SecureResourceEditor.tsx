@@ -24,6 +24,9 @@ export const SecureResourceEditor: React.FC<SecureResourceEditorProps> = ({ reso
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(saving);
   savingRef.current = saving;
+  const [saveError, setSaveError] = useState('');
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
   const titleRef = useRef<HTMLInputElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
 
@@ -31,8 +34,11 @@ export const SecureResourceEditor: React.FC<SecureResourceEditorProps> = ({ reso
     const previousFocus = document.activeElement as HTMLElement | null;
     const focusTimer = window.setTimeout(() => titleRef.current?.focus(), 0);
     const handleKeyDown = (event: KeyboardEvent) => {
+      const dialogs = Array.from(document.querySelectorAll('[role="dialog"][aria-modal="true"]'));
+      if (dialogs[dialogs.length - 1] !== dialogRef.current) return;
       if (event.key === 'Escape') {
-        if (!savingRef.current) onClose();
+        event.preventDefault(); event.stopImmediatePropagation();
+        if (!savingRef.current) onCloseRef.current();
         return;
       }
       if (event.key !== 'Tab' || !dialogRef.current) return;
@@ -50,13 +56,13 @@ export const SecureResourceEditor: React.FC<SecureResourceEditorProps> = ({ reso
         first.focus();
       }
     };
-    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keydown', handleKeyDown, true);
     return () => {
       window.clearTimeout(focusTimer);
-      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keydown', handleKeyDown, true);
       previousFocus?.focus();
     };
-  }, [onClose]);
+  }, []);
 
   useEffect(() => {
     if (!isUnlocked) {
@@ -69,17 +75,21 @@ export const SecureResourceEditor: React.FC<SecureResourceEditorProps> = ({ reso
 
   const save = async (event: React.FormEvent) => {
     event.preventDefault();
+    if (savingRef.current) return;
+    setSaveError('');
     if (!isUnlocked) {
       onClose();
       return;
     }
     const cleanTitle = title.trim();
     if (!cleanTitle) {
+      setSaveError('Ingresa un título para el recurso.');
       showToast('Ingresa un título para el recurso.', 'error');
       return;
     }
     const tagNames = tags.split(',').map((tag) => tag.trim()).filter(Boolean);
     if (tagNames.length > 100 || tagNames.some((tag) => tag.length > INPUT_LIMITS.TAG_NAME)) {
+      setSaveError('Usa hasta 100 etiquetas de máximo 50 caracteres cada una.');
       showToast('Usa hasta 100 etiquetas de máximo 50 caracteres cada una.', 'error');
       return;
     }
@@ -106,6 +116,7 @@ export const SecureResourceEditor: React.FC<SecureResourceEditorProps> = ({ reso
       onClose();
       onSaved();
     } catch (error) {
+      setSaveError(error instanceof Error ? error.message : 'No se pudo guardar el recurso.');
       showToast(error instanceof Error ? error.message : 'No se pudo guardar el recurso.', 'error');
     } finally {
       setSaving(false);
@@ -123,9 +134,11 @@ export const SecureResourceEditor: React.FC<SecureResourceEditorProps> = ({ reso
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
+        aria-busy={saving}
         aria-labelledby="resource-modal-title"
         className="my-auto flex max-h-[88dvh] w-full max-w-xl min-w-0 flex-col overflow-hidden rounded-xl border border-obsidian-border bg-obsidian-panel shadow-2xl"
       >
+        {saveError && <p role="alert" className="m-3 rounded-lg border border-rose-500/30 bg-rose-500/10 p-3 text-xs text-rose-200">{saveError}</p>}
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-obsidian-border p-3 sm:p-4">
           <div className="flex min-w-0 items-center gap-2.5">
             <span className="shrink-0 rounded-lg border border-indigo-500/20 bg-indigo-500/10 p-2 text-indigo-300">

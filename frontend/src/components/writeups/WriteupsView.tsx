@@ -713,6 +713,8 @@ export const WriteupsView: React.FC = () => {
     document.body.style.overflow = 'hidden';
     const focusTimer = window.setTimeout(() => modalCloseRef.current?.focus(), 0);
     const onKeyDown = (e: KeyboardEvent) => {
+      const dialogs = Array.from(document.querySelectorAll('[role="dialog"][aria-modal="true"]'));
+      if (dialogs[dialogs.length - 1] !== modalDialogRef.current) return;
       if (e.key === 'Escape') {
         e.preventDefault();
         e.stopPropagation();
@@ -2136,8 +2138,8 @@ export const WriteupsView: React.FC = () => {
             className="my-auto w-full max-w-3xl max-h-[calc(100dvh-1rem)] flex flex-col bg-slate-900 border border-slate-700 rounded-2xl overflow-hidden shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800">
-              <div>
+            <div className="flex flex-wrap items-start justify-between gap-3 px-4 py-3 border-b border-slate-800">
+              <div className="min-w-0">
                 <h3 id="diff-modal-title" className="text-sm font-semibold text-white">
                   Revisión v{diffRevision.revision_number} frente al borrador actual
                 </h3>
@@ -2145,7 +2147,7 @@ export const WriteupsView: React.FC = () => {
                   Guardada el {new Date(diffRevision.created_at).toLocaleString(systemLocale || 'es-MX')}
                 </p>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex max-w-full flex-wrap items-center gap-2">
                 <button
                   ref={modalCloseRef}
                   type="button"

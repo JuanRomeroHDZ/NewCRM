@@ -49,6 +49,9 @@ export const WriteupExportModal: React.FC<WriteupExportModalProps> = ({ writeup,
   const [exporting, setExporting] = useState(false);
   const [lastSha, setLastSha] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const exportingRef = useRef(false);
+  exportingRef.current = exporting;
+  const requestClose = () => { if (!exportingRef.current) onCloseRef.current(); };
 
   useEffect(() => {
     previousFocusRef.current = document.activeElement as HTMLElement | null;
@@ -59,7 +62,7 @@ export const WriteupExportModal: React.FC<WriteupExportModalProps> = ({ writeup,
       if (event.key === 'Escape') {
         event.preventDefault();
         event.stopPropagation();
-        onCloseRef.current();
+        if (!exportingRef.current) onCloseRef.current();
         return;
       }
       if (event.key !== 'Tab' || !dialogRef.current) return;
@@ -92,6 +95,8 @@ export const WriteupExportModal: React.FC<WriteupExportModalProps> = ({ writeup,
   );
 
   const handleRunExport = async () => {
+    if (exportingRef.current) return;
+    setLastSha(null);
     setExporting(true);
     setErrorMsg(null);
     try {
@@ -120,6 +125,7 @@ export const WriteupExportModal: React.FC<WriteupExportModalProps> = ({ writeup,
     <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center overflow-y-auto bg-black/75 p-2 sm:p-4">
       <div
         ref={dialogRef}
+        aria-busy={exporting}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
@@ -131,7 +137,7 @@ export const WriteupExportModal: React.FC<WriteupExportModalProps> = ({ writeup,
             <h2 id={titleId} className="text-base font-semibold text-white break-words">Exportar informe — {writeup.title}</h2>
             <p id={descriptionId} className="mt-1 text-xs text-slate-400">El archivo se genera en esta computadora y no se envía a servicios externos.</p>
           </div>
-          <button ref={firstFormatRef} type="button" onClick={onClose} aria-label="Cerrar ventana de exportación" className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60">
+          <button ref={firstFormatRef} type="button" onClick={requestClose} disabled={exporting} aria-label="Cerrar ventana de exportación" className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60">
             <X className="w-4 h-4" aria-hidden="true" />
           </button>
         </div>
@@ -145,7 +151,8 @@ export const WriteupExportModal: React.FC<WriteupExportModalProps> = ({ writeup,
                 <button
                   key={opt.format}
                   type="button"
-                  onClick={() => setSelectedFormat(opt.format)}
+                  onClick={() => { setSelectedFormat(opt.format); setLastSha(null); setErrorMsg(null); }}
+                  disabled={exporting}
                   aria-pressed={active}
                   className={`min-h-11 min-w-0 text-left p-3 rounded-xl border transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
                     active
@@ -236,7 +243,7 @@ export const WriteupExportModal: React.FC<WriteupExportModalProps> = ({ writeup,
         </div>
 
         <div className="flex flex-wrap items-center justify-end gap-2 px-3 py-3.5 sm:px-5 bg-slate-950/80 border-t border-slate-800">
-          <button type="button" onClick={onClose} className="min-h-11 px-4 py-2 rounded-lg text-xs text-slate-200 hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60">
+          <button type="button" onClick={requestClose} disabled={exporting} className="min-h-11 px-4 py-2 rounded-lg text-xs text-slate-200 hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60">
             Cerrar
           </button>
           <button

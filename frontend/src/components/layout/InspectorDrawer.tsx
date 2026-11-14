@@ -14,6 +14,7 @@ import {
   Rocket,
   Plus,
 } from 'lucide-react';
+import { useAuditedDialog } from '../common/useAuditedDialog';
 import { useVault } from '../../context/VaultContext';
 import { api } from '../../lib/api';
 import {
@@ -54,9 +55,7 @@ export const InspectorDrawer: React.FC = () => {
   } = useVault();
 
   const titleId = useId();
-  const drawerRef = useRef<HTMLDivElement>(null);
-  const previousFocusRef = useRef<HTMLElement | null>(null);
-  const wasOpenRef = useRef(false);
+  const drawerRef = useAuditedDialog(Boolean(selectedEntity), closeInspector);
   const previousSectionRef = useRef(activeSection);
 
   const [activeTab, setActiveTab] = useState<'general' | 'credentials' | 'api_keys' | 'subscription' | 'history'>('general');
@@ -73,34 +72,6 @@ export const InspectorDrawer: React.FC = () => {
   const [nowMs, setNowMs] = useState<number>(Date.now());
   const [clientIncomes, setClientIncomes] = useState<ClientIncome[]>([]);
   const [clientRenewals, setClientRenewals] = useState<DomainRenewal[]>([]);
-
-  // Focus management & restoration when drawer opens/closes
-  useEffect(() => {
-    const isOpen = Boolean(selectedEntity);
-    if (isOpen && !wasOpenRef.current) {
-      previousFocusRef.current = document.activeElement as HTMLElement | null;
-      requestAnimationFrame(() => {
-        drawerRef.current?.focus();
-      });
-    } else if (!isOpen && wasOpenRef.current) {
-      previousFocusRef.current?.focus?.();
-      previousFocusRef.current = null;
-    }
-    wasOpenRef.current = isOpen;
-  }, [selectedEntity]);
-
-  // Escape key handling
-  useEffect(() => {
-    if (!selectedEntity) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        closeInspector();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedEntity, closeInspector]);
 
   // Reset activeTab & transient result whenever selected entity id or type changes
   useEffect(() => {
@@ -362,6 +333,7 @@ export const InspectorDrawer: React.FC = () => {
       ref={drawerRef}
       role="dialog"
       aria-modal="true"
+      aria-busy={loading}
       aria-labelledby={titleId}
       tabIndex={-1}
       className="fixed inset-y-0 right-0 z-40 flex w-full max-w-lg flex-col border-l border-obsidian-border bg-obsidian-panel shadow-2xl outline-none animate-slideLeft"

@@ -38,7 +38,7 @@ export const DashboardFinanceSection: React.FC<DashboardFinanceSectionProps> = (
   <section aria-labelledby="dashboard-finance-heading" className="min-w-0 space-y-3 rounded-xl border border-obsidian-border bg-obsidian-panel p-4 sm:p-5">
     <div className="flex flex-wrap items-center justify-between gap-2">
       <div className="flex min-w-0 items-center gap-2">
-        <BarChart3 size={16} className="shrink-0 text-emerald-400" aria-hidden="true" />
+        <BarChart3 size={16} className="shrink-0 text-obsidian-muted" aria-hidden="true" />
         <h2 id="dashboard-finance-heading" className="min-w-0 break-words text-sm font-bold tracking-tight text-white">
           Finanzas y vencimientos
         </h2>
@@ -51,8 +51,8 @@ export const DashboardFinanceSection: React.FC<DashboardFinanceSectionProps> = (
 
     <div className="grid min-w-0 grid-cols-1 gap-3 min-[420px]:grid-cols-2 lg:grid-cols-4">
       <div className="min-w-0 border-b border-obsidian-border pb-3 min-[420px]:border-b-0 min-[420px]:pb-0">
-        <h3 className="mb-2 flex items-center gap-1 text-[10px] font-semibold uppercase text-emerald-300">
-          <Wallet size={11} className="shrink-0 text-emerald-400" aria-hidden="true" />
+        <h3 className="mb-2 flex items-center gap-1 text-[10px] font-semibold uppercase text-obsidian-muted">
+          <Wallet size={11} className="shrink-0 text-obsidian-muted" aria-hidden="true" />
           Ganancia neta
         </h3>
         <MetricRow label="Semana" value={`${realProfit.netWeekMXN >= 0 ? '+' : '-'}$${formatAmount(Math.abs(realProfit.netWeekMXN))} MXN`} color={realProfit.netWeekMXN >= 0 ? 'text-emerald-400' : 'text-rose-400'} />
@@ -69,7 +69,7 @@ export const DashboardFinanceSection: React.FC<DashboardFinanceSectionProps> = (
 
       <div className="min-w-0 border-b border-obsidian-border pb-3 min-[420px]:border-b-0 min-[420px]:pb-0">
         <h3 className="mb-2 flex items-center gap-1 text-[10px] font-semibold uppercase text-obsidian-muted">
-          <TrendingUp size={11} className="shrink-0 text-rose-400" aria-hidden="true" />
+          <TrendingUp size={11} className="shrink-0 text-obsidian-muted" aria-hidden="true" />
           Meses con más y menos gasto
         </h3>
         <MetricRow label={`Más alto (${fin.peakMonth.shortName})`} value={`$${formatAmount(fin.peakMonth.totalMXN)} MXN`} color="text-rose-300" />
@@ -79,7 +79,7 @@ export const DashboardFinanceSection: React.FC<DashboardFinanceSectionProps> = (
 
       <div className="min-w-0">
         <h3 className="mb-2 flex items-center gap-1 text-[10px] font-semibold uppercase text-obsidian-muted">
-          <Server size={11} className="shrink-0 text-cyan-400" aria-hidden="true" />
+          <Server size={11} className="shrink-0 text-obsidian-muted" aria-hidden="true" />
           Dominios y hosting ({realProfit.activeRenewalsCount})
         </h3>
         <MetricRow label="Por vencer (30 días)" value={`${realProfit.expiringSoonRenewals.length} servicios`} color={realProfit.expiringSoonRenewals.length ? 'text-amber-300' : 'text-emerald-400'} />
@@ -91,7 +91,7 @@ export const DashboardFinanceSection: React.FC<DashboardFinanceSectionProps> = (
     <div className="grid min-w-0 items-start grid-cols-1 gap-4 border-t border-obsidian-border/70 pt-3 lg:grid-cols-[minmax(0,1.4fr)_minmax(13rem,0.6fr)]">
       <div className="min-w-0 space-y-2">
         <div className="flex min-w-0 items-center gap-1.5">
-          <Briefcase size={13} className="shrink-0 text-emerald-400" aria-hidden="true" />
+          <Briefcase size={13} className="shrink-0 text-obsidian-muted" aria-hidden="true" />
           <h3 className="min-w-0 break-words text-xs font-bold text-white">Cotizaciones frente al gasto mensual</h3>
           <InfoTooltip content="Compara cotizaciones activas y proyectos cerrados con el gasto mensual en herramientas." />
         </div>
@@ -118,7 +118,7 @@ export const DashboardFinanceSection: React.FC<DashboardFinanceSectionProps> = (
       <div className="min-w-0 self-start lg:border-l lg:border-obsidian-border/70 lg:pl-4">
         <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
           <h3 className="flex items-center gap-1.5 text-xs font-bold text-white">
-            <Target size={13} className="shrink-0 text-indigo-400" aria-hidden="true" />
+            <Target size={13} className="shrink-0 text-obsidian-muted" aria-hidden="true" />
             Límite de gasto mensual
           </h3>
           {budgetCapEval.enabled ? (

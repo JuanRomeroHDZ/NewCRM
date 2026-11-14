@@ -31,6 +31,8 @@ export const PromptDialog: React.FC<PromptDialogProps> = ({
   onSubmit,
   onCancel,
 }) => {
+  const cancelRef = useRef(onCancel);
+  cancelRef.current = onCancel;
   const headingId = useId();
   const messageId = useId();
   const inputId = useId();
@@ -56,8 +58,8 @@ export const PromptDialog: React.FC<PromptDialogProps> = ({
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault();
-        e.stopPropagation();
-        onCancel();
+        e.stopImmediatePropagation();
+        cancelRef.current();
       } else if (e.key === 'Tab') {
         const focusables = [inputRef.current, cancelBtnRef.current, submitBtnRef.current].filter(Boolean) as HTMLElement[];
         if (focusables.length < 2) return;
@@ -80,7 +82,7 @@ export const PromptDialog: React.FC<PromptDialogProps> = ({
       const previousFocus = previousFocusRef.current;
       if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true });
     };
-  }, [open, defaultValue, onCancel]);
+  }, [open, defaultValue]);
 
   if (!open) return null;
 
@@ -167,7 +169,7 @@ export const PromptDialog: React.FC<PromptDialogProps> = ({
           <button
             ref={submitBtnRef}
             type="submit"
-            className="min-h-[44px] rounded-xl bg-brand-600 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-brand-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 sm:min-h-[38px]"
+            className="min-h-[44px] rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 sm:min-h-[38px]"
           >
             {confirmLabel}
           </button>
