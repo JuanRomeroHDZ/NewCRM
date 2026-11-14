@@ -15,7 +15,7 @@ export const SettingsView: React.FC = () => {
     isUnlocked, openUnlockModal, timeoutMinutes,
     clipboardClearSeconds, allowRevealPasswords, searchHotkey,
     accentColor, setAccentColor, canvasStyle, setCanvasStyle,
-    openImportModal, refreshVaultStatus, showToast, triggerDataReload, systemLocale,
+    openImportModal, openEnvExport, openEmergencyKit, openPasswordGen, refreshVaultStatus, showToast, triggerDataReload, systemLocale,
   } = useVault();
 
   const [localTimeout, setLocalTimeout] = useState(timeoutMinutes);
@@ -554,6 +554,15 @@ export const SettingsView: React.FC = () => {
       </form>
 
       <RuntimeConfigSection />
+
+      <section aria-labelledby="settings-tools-heading" className="rounded-xl border border-obsidian-border bg-obsidian-panel p-4">
+        <h3 id="settings-tools-heading" className="text-sm font-bold text-white">Herramientas</h3>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button type="button" onClick={openEnvExport} className="min-h-10 rounded-lg border border-obsidian-border bg-obsidian-surface px-3 text-xs font-medium text-white hover:bg-obsidian-border">Exportar configuración</button>
+          <button type="button" onClick={openEmergencyKit} className="min-h-10 rounded-lg border border-obsidian-border bg-obsidian-surface px-3 text-xs font-medium text-white hover:bg-obsidian-border">Hoja de recuperación</button>
+          <button type="button" onClick={openPasswordGen} className="min-h-10 rounded-lg border border-obsidian-border bg-obsidian-surface px-3 text-xs font-medium text-white hover:bg-obsidian-border">Generar contraseña</button>
+        </div>
+      </section>
 
       {/* Backup & Import/Export Section */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

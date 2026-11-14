@@ -413,17 +413,11 @@ export const MapCaptureView: React.FC = () => {
         </button>
       </div>
 
-      <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1.25fr)_minmax(19rem,0.75fr)] lg:items-start">
-        <section
-          aria-label="Mapa de búsqueda"
-          className={`min-w-0 overflow-hidden rounded-2xl border border-obsidian-border bg-obsidian-card ${
-            mobileTab === 'map' ? 'block' : 'hidden lg:block'
-          }`}
-        >
           <form
             onSubmit={handleSearch}
-            className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,12rem),1fr))] items-end gap-3 border-b border-obsidian-border p-3 sm:p-4"
+            className="grid gap-3 rounded-2xl border border-obsidian-border bg-obsidian-card p-3 sm:p-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end"
           >
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,9rem),1fr))] gap-3">
             <label className="min-w-0 text-xs font-medium text-obsidian-text">
               Giro o negocio
               <input
@@ -469,17 +463,11 @@ export const MapCaptureView: React.FC = () => {
                 ))}
               </select>
             </label>
-            <button
-              type={loading ? 'button' : 'submit'}
-              onClick={loading ? cancelSearch : undefined}
-              disabled={!loading && !mapReady}
-              className="inline-flex min-h-10 justify-self-start items-center justify-center gap-2 rounded-xl bg-indigo-600 px-3 text-sm font-semibold text-white transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-55 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
-            >
-              {loading ? <X size={16} aria-hidden="true" /> : <Search size={16} aria-hidden="true" />}
-              {loading ? 'Cancelar búsqueda' : 'Buscar zona'}
-            </button>
-            <label className="min-w-0 text-xs font-medium text-obsidian-muted">
-              Filtro opcional
+            </div>
+            <details className="group text-xs text-obsidian-muted lg:col-start-1">
+              <summary className="w-fit cursor-pointer rounded text-obsidian-text hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300">Filtro opcional{subsector.trim() ? ' · activo' : ''}</summary>
+            <label className="mt-2 block min-w-0 text-xs font-medium text-obsidian-muted">
+              Especialidad o palabra clave
               <input
                 value={subsector}
                 onChange={(event) => {
@@ -494,6 +482,17 @@ export const MapCaptureView: React.FC = () => {
                 className="mt-1.5 min-h-10 w-full rounded-xl border border-obsidian-border bg-obsidian-bg px-3 text-sm text-white placeholder:text-obsidian-muted focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
               />
             </label>
+            </details>
+            <div className="flex flex-wrap items-center gap-2 lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:justify-end">
+            <button
+              type={loading ? 'button' : 'submit'}
+              onClick={loading ? cancelSearch : undefined}
+              disabled={!loading && !mapReady}
+              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-3 text-sm font-semibold text-white transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-55 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
+            >
+              {loading ? <X size={16} aria-hidden="true" /> : <Search size={16} aria-hidden="true" />}
+              {loading ? 'Cancelar búsqueda' : 'Buscar zona'}
+            </button>
             <button
               type="button"
               onClick={searchMapArea}
@@ -502,9 +501,17 @@ export const MapCaptureView: React.FC = () => {
             >
               <MapPin size={14} aria-hidden="true" /> Buscar área visible
             </button>
-
-
+            </div>
           </form>
+
+      <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(19rem,0.8fr)] lg:items-stretch">
+        <section
+          aria-label="Mapa de búsqueda"
+          className={`min-w-0 overflow-hidden rounded-2xl border border-obsidian-border bg-obsidian-card ${
+            mobileTab === 'map' ? 'block' : 'hidden lg:block'
+          }`}
+        >
+
 
           {searchError && (
             <p
@@ -552,8 +559,8 @@ export const MapCaptureView: React.FC = () => {
 
         <section
           aria-labelledby="captura-resultados"
-          className={`min-w-0 overflow-hidden rounded-2xl border border-obsidian-border bg-obsidian-card lg:sticky lg:top-4 ${
-            mobileTab === 'results' ? 'block' : 'hidden lg:block'
+          className={`min-w-0 overflow-hidden rounded-2xl border border-obsidian-border bg-obsidian-card lg:flex lg:flex-col ${
+            mobileTab === 'results' ? 'flex flex-col' : 'hidden'
           }`}
         >
           <div className="flex items-start justify-between gap-3 border-b border-obsidian-border p-4 sm:p-5">
@@ -575,13 +582,13 @@ export const MapCaptureView: React.FC = () => {
           {loading ? (
             <div
               role="status"
-              className="flex min-h-48 flex-col items-center justify-center gap-3 p-6 text-sm text-obsidian-muted"
+              className="flex min-h-48 flex-1 flex-col items-center justify-center gap-3 p-6 text-sm text-obsidian-muted"
             >
               <LoaderCircle size={22} className="animate-spin text-indigo-300" aria-hidden="true" /> Consultando
               OpenStreetMap…
             </div>
           ) : !results ? (
-            <div className="flex min-h-48 flex-col items-center justify-center gap-2 p-6 text-center text-sm text-obsidian-muted">
+            <div className="flex min-h-48 flex-1 flex-col items-center justify-center gap-2 p-6 text-center text-sm text-obsidian-muted">
               <Building2 size={22} className="text-obsidian-muted/70" aria-hidden="true" />
               {searchError && mobileTab === 'results' ? (
                 <div className="lg:hidden" role="alert">
@@ -599,12 +606,12 @@ export const MapCaptureView: React.FC = () => {
               ) : null}
             </div>
           ) : results.length === 0 ? (
-            <div className="flex min-h-48 flex-col items-center justify-center gap-2 p-6 text-center text-sm text-obsidian-muted">
+            <div className="flex min-h-48 flex-1 flex-col items-center justify-center gap-2 p-6 text-center text-sm text-obsidian-muted">
               <Search size={22} className="text-obsidian-muted/70" aria-hidden="true" />
               <p>No encontramos negocios publicados en esta búsqueda. Prueba otro giro o una zona cercana.</p>
             </div>
           ) : (
-            <ul className="max-h-[min(55dvh,520px)] divide-y divide-obsidian-border overflow-y-auto lg:max-h-[min(620px,65dvh)]">
+            <ul className="max-h-[min(55dvh,520px)] flex-1 divide-y divide-obsidian-border overflow-y-auto lg:max-h-[min(620px,65dvh)]">
               {results.map((lead) => {
                 const website = leadWebsite(lead);
                 const isSaved = savedIds.includes(lead.osm_id);

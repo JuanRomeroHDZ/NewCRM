@@ -2,8 +2,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import {
   LayoutDashboard, Mail, Globe, Key, Network, CreditCard, Trash2, Settings,
-  Lock, Unlock, Search, Sparkles, ChevronLeft, ChevronRight, ChevronDown,
-  Shield, ShieldCheck, FileText, Code, Rocket, MapPinned, Briefcase, X, BookOpen,
+  Lock, Unlock, Search, ChevronLeft, ChevronRight, ChevronDown,
+  Shield, ShieldCheck, FileText, Rocket, MapPinned, Briefcase, X, BookOpen,
 } from 'lucide-react';
 import { useVault, SectionType } from '../../context/VaultContext';
 
@@ -90,7 +90,7 @@ const groupForSection = (section: SectionType) => navGroups.find((group) => grou
 export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onCloseMobile }) => {
   const {
     activeSection, setActiveSection, isUnlocked, remainingSeconds, openUnlockModal,
-    lockVault, openCommandPalette, openPasswordGen, openEmergencyKit, openEnvExport,
+    lockVault, openCommandPalette,
     searchHotkey,
   } = useVault();
   const [collapsed, setCollapsed] = useState(false);
@@ -255,17 +255,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onCloseMobile })
         </ul>
       </nav>
 
-      <div className={`shrink-0 space-y-1.5 border-t border-obsidian-border ${compact ? 'p-2' : 'p-3'}`}>
-        <button type="button" onClick={() => { openEnvExport(); onCloseMobile(); }} title={compact ? 'Descargar archivo .env' : undefined} aria-label="Descargar archivo .env" className={`flex min-h-9 w-full items-center rounded-lg border border-obsidian-border bg-obsidian-surface/60 text-left text-[11px] text-obsidian-muted transition-colors hover:bg-obsidian-surface hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 ${compact ? 'justify-center px-2' : 'gap-2.5 px-3'}`}>
-          <Code size={14} className="shrink-0 text-cyan-300" />{!compact && <span className="truncate">Exportar configuración</span>}
-        </button>
-        <button type="button" onClick={() => { openEmergencyKit(); onCloseMobile(); }} title={compact ? 'Hoja de recuperación' : undefined} aria-label="Abrir hoja de recuperación" className={`flex min-h-9 w-full items-center rounded-lg border border-obsidian-border bg-obsidian-surface/60 text-left text-[11px] text-obsidian-muted transition-colors hover:bg-obsidian-surface hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 ${compact ? 'justify-center px-2' : 'gap-2.5 px-3'}`}>
-          <Shield size={14} className="shrink-0 text-indigo-300" />{!compact && <span className="truncate">Hoja de recuperación</span>}
-        </button>
-        <button type="button" onClick={() => { openPasswordGen(); onCloseMobile(); }} title={compact ? 'Generar contraseña' : undefined} aria-label="Generar contraseña" className={`flex min-h-10 w-full items-center rounded-lg border border-obsidian-border bg-obsidian-surface text-left text-xs text-obsidian-text transition-colors hover:bg-obsidian-border hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 ${compact ? 'justify-center px-2' : 'gap-2.5 px-3'}`}>
-          <Sparkles size={15} className="shrink-0 text-cyan-300" />{!compact && <span className="truncate font-medium">Generar contraseña</span>}
-        </button>
-      </div>
     </aside>
   );
 };

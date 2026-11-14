@@ -11,6 +11,24 @@ import { EmptyState } from '../common/EmptyState';
 import { INPUT_LIMITS } from '../../lib/validation';
 
 const PAGE_SIZE = 25;
+const DETAIL_PREVIEW_LENGTH = 160;
+
+const AuditDetails: React.FC<{ text?: string | null }> = ({ text }) => {
+  const value = text?.trim();
+  if (!value) return <span className="text-white/40">—</span>;
+  if (value.length <= DETAIL_PREVIEW_LENGTH) {
+    return <p className="whitespace-pre-wrap break-words">{value}</p>;
+  }
+  return (
+    <div className="min-w-0">
+      <p className="whitespace-pre-wrap break-words">{value.slice(0, DETAIL_PREVIEW_LENGTH).trimEnd()}…</p>
+      <details className="mt-1">
+        <summary className="cursor-pointer text-indigo-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300">Ver detalle completo</summary>
+        <p className="mt-2 whitespace-pre-wrap break-words">{value}</p>
+      </details>
+    </div>
+  );
+};
 const ENTITY_LABELS: Record<string, string> = {
   email: 'Correo principal',
   email_account: 'Correo principal',
@@ -275,7 +293,7 @@ export const AuditLogsView: React.FC = () => {
         />
       ) : (
         <div className="rounded-2xl border border-obsidian-border bg-obsidian-surface/60 overflow-hidden backdrop-blur-md">
-          <div className="divide-y divide-obsidian-border xl:hidden">
+          <div className="divide-y divide-obsidian-border md:hidden">
             {loading || searchPending ? (
               <p className="p-4 text-xs text-white/50" role="status">
                 Cargando actividad...
@@ -308,17 +326,14 @@ export const AuditLogsView: React.FC = () => {
                   <p className="break-words font-medium text-white">
                     {log.entity_name || log.entity_id || getEntityTypeLabel(log.entity_type)}
                   </p>
-                  <details className="text-white/70">
-                    <summary className="cursor-pointer text-indigo-300">Ver detalles</summary>
-                    <p className="mt-2 whitespace-pre-wrap break-words">{log.details || 'Sin detalles adicionales'}</p>
-                    <p className="mt-1 break-words text-white/50">Origen: {log.ip_address || 'Registro local'}</p>
-                  </details>
+                  <p className="break-words text-white/50">{getEntityTypeLabel(log.entity_type)} · {log.ip_address || 'Registro local'}</p>
+                  <div className="text-white/70"><AuditDetails text={log.details} /></div>
                 </div>
               ))
             )}
           </div>
-          <div className="hidden overflow-x-auto xl:block">
-            <table className="w-full text-left border-collapse">
+          <div className="hidden overflow-x-auto md:block" role="region" aria-label="Tabla de actividad; desplázate horizontalmente para ver todas las columnas" tabIndex={0}>
+            <table className="w-full min-w-[850px] text-left border-collapse">
               <thead>
                 <tr className="border-b border-obsidian-border bg-black/20 text-[11px] font-mono uppercase tracking-wider text-white/40">
                   <th className="py-3 px-2 xl:px-3 2xl:px-4">Fecha & Hora (Local)</th>
@@ -367,7 +382,7 @@ export const AuditLogsView: React.FC = () => {
                       <td className="py-3 px-2 text-white/70 capitalize whitespace-nowrap xl:px-3 2xl:px-4">
                         {getEntityTypeLabel(log.entity_type)}
                       </td>
-                      <td className="py-3 px-2 text-white font-medium max-w-[200px] truncate xl:px-3 2xl:px-4" title={log.entity_name || log.entity_id || ''}>
+                      <td className="py-3 px-2 text-white font-medium max-w-[200px] break-words xl:px-3 2xl:px-4">
                         {log.entity_name || log.entity_id ? (
                           <span className="text-indigo-300">{log.entity_name || log.entity_id}</span>
                         ) : (
@@ -375,10 +390,7 @@ export const AuditLogsView: React.FC = () => {
                         )}
                       </td>
                       <td className="py-3 px-2 text-white/70 max-w-xs xl:px-3 2xl:px-4">
-                        <details>
-                          <summary className="cursor-pointer text-indigo-300">Ver detalles</summary>
-                          <p className="mt-2 whitespace-pre-wrap break-words">{log.details || 'Sin detalles adicionales'}</p>
-                        </details>
+                        <AuditDetails text={log.details} />
                       </td>
                       <td className="py-3 px-2 text-white/40 text-[11px] whitespace-nowrap xl:px-3 2xl:px-4">
                         {log.ip_address || 'Registro local'}
