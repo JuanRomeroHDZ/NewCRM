@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   ArrowUpRight,
@@ -34,25 +34,60 @@ export const ProspectsView: React.FC = () => {
   } = useVault();
   const [prospects, setProspects] = useState<Prospect[]>([]);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [status, setStatus] = useState('todos');
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+  const [total, setTotal] = useState(0);
+  const [loadMoreError, setLoadMoreError] = useState('');
   const [error, setError] = useState('');
   const [attempt, setAttempt] = useState(0);
+  const requestVersion = useRef(0);
+  const nextOffset = useRef(0);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedSearch(search.trim()), 250);
+    return () => window.clearTimeout(timer);
+  }, [search]);
 
   useEffect(() => {
     if (!isUnlocked) {
+      requestVersion.current += 1;
+      nextOffset.current = 0;
       setProspects([]);
+      setTotal(0);
+      setHasMore(false);
+      setLoadingMore(false);
+      setLoadMoreError('');
       setError('');
       setLoading(false);
       return;
     }
     let active = true;
+    const version = ++requestVersion.current;
+    nextOffset.current = 0;
     setLoading(true);
+    setLoadingMore(false);
+    setProspects([]);
+    setTotal(0);
+    setHasMore(false);
+    setLoadMoreError('');
     setError('');
     api
-      .getProspects()
-      .then((items) => {
-        if (active) setProspects(items);
+      .getProspectsPage({
+        status: status === 'todos' ? undefined : status,
+        search: debouncedSearch || undefined,
+        limit: 50,
+        offset: 0,
+      })
+      .then((page) => {
+        if (active && version === requestVersion.current) {
+          setProspects(page.items);
+          setTotal(page.total);
+          setHasMore(page.hasMore);
+          nextOffset.current = page.items.length;
+        }
       })
       .catch((err) => {
         if (active) {
@@ -64,36 +99,45 @@ export const ProspectsView: React.FC = () => {
         }
       })
       .finally(() => {
-        if (active) setLoading(false);
+        if (active && version === requestVersion.current) setLoading(false);
       });
     return () => {
       active = false;
     };
-  }, [isUnlocked, dataVersion, attempt]);
+  }, [isUnlocked, dataVersion, attempt, status, debouncedSearch]);
+
+  const handleLoadMore = async () => {
+    if (loadingMore || !hasMore) return;
+    const version = requestVersion.current;
+    setLoadingMore(true);
+    setLoadMoreError('');
+    try {
+      const page = await api.getProspectsPage({
+        status: status === 'todos' ? undefined : status,
+        search: debouncedSearch || undefined,
+        limit: 50,
+        offset: nextOffset.current,
+      });
+      if (version !== requestVersion.current) return;
+      nextOffset.current += page.items.length;
+      setProspects((current) => {
+        const knownIds = new Set(current.map((prospect) => prospect.id));
+        return [...current, ...page.items.filter((prospect) => !knownIds.has(prospect.id))];
+      });
+      setTotal(page.total);
+      setHasMore(page.hasMore);
+    } catch (err) {
+      if (version === requestVersion.current) {
+        setLoadMoreError(err instanceof Error ? err.message : 'No se pudieron cargar más prospectos.');
+      }
+    } finally {
+      if (version === requestVersion.current) setLoadingMore(false);
+    }
+  };
 
   const visibleProspects = useMemo(() => {
-    const term = search.trim().toLocaleLowerCase();
-    return prospects.filter((prospect) => {
-      const tagText = prospect.tags?.map((t) => t.name).join(' ') || '';
-      const text = [
-        prospect.company_name,
-        prospect.contact_name,
-        prospect.contact_email,
-        prospect.phones,
-        prospect.whatsapp,
-        prospect.notes,
-        tagText,
-      ]
-        .filter(Boolean)
-        .join(' ')
-        .toLocaleLowerCase();
-      return (
-        matchesScope(prospect.scope) &&
-        (status === 'todos' || prospect.status === status) &&
-        (!term || text.includes(term))
-      );
-    });
-  }, [prospects, search, status, matchesScope]);
+    return prospects.filter((prospect) => matchesScope(prospect.scope));
+  }, [prospects, matchesScope]);
 
   const formatEstimatedValue = (amount?: number, currencyCode?: string) => {
     const code = currencyCode || baseCurrency;
@@ -140,7 +184,7 @@ export const ProspectsView: React.FC = () => {
               Seguimiento
             </h2>
             <p aria-live="polite" className="text-xs text-obsidian-muted">
-              {visibleProspects.length} {visibleProspects.length === 1 ? 'prospecto' : 'prospectos'}
+              {visibleProspects.length} {visibleProspects.length === 1 ? 'prospecto visible' : 'prospectos visibles'}
             </p>
           </div>
           <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(12rem,0.45fr)]">
@@ -157,7 +201,8 @@ export const ProspectsView: React.FC = () => {
                   maxLength={INPUT_LIMITS.SEARCH}
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Empresa, contacto, correo, teléfono, notas o etiquetas"
+                  placeholder="Empresa, contacto, correo, teléfono o sitio web"
+                  aria-label="Buscar prospectos por empresa, contacto, correo, teléfono o sitio web"
                   className="min-h-11 w-full rounded-xl border border-obsidian-border bg-obsidian-bg pl-9 pr-3 text-sm text-white placeholder:text-obsidian-muted focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
                 />
               </span>
@@ -210,11 +255,13 @@ export const ProspectsView: React.FC = () => {
         ) : visibleProspects.length === 0 ? (
           <div className="flex flex-col items-start gap-3 p-5 sm:p-7">
             <p className="text-sm text-obsidian-muted">
-              {prospects.length
-                ? 'No hay prospectos que coincidan con los filtros.'
-                : 'Todavía no hay prospectos en tu seguimiento.'}
+              {total > 0
+                ? 'No hay prospectos visibles que coincidan con esta selección.'
+                : search.trim() || status !== 'todos'
+                  ? 'No hay prospectos que coincidan con los filtros.'
+                  : 'Todavía no hay prospectos en tu seguimiento.'}
             </p>
-            {!prospects.length && (
+            {total === 0 && !search.trim() && status === 'todos' && (
               <button
                 type="button"
                 onClick={() => setActiveSection('capture')}
@@ -294,6 +341,22 @@ export const ProspectsView: React.FC = () => {
               );
             })}
           </ul>
+        )}
+
+        {isUnlocked && !loading && !error && hasMore && (
+          <div className="flex flex-col items-center gap-2 border-t border-obsidian-border p-3">
+            {loadMoreError && <p role="alert" className="text-center text-xs text-rose-300">{loadMoreError}</p>}
+            <button
+              type="button"
+              onClick={handleLoadMore}
+              disabled={loadingMore}
+              aria-label="Cargar más prospectos"
+              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-obsidian-border bg-obsidian-surface px-4 text-xs font-semibold text-obsidian-text transition-colors hover:border-indigo-400/60 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 disabled:cursor-wait disabled:opacity-60"
+            >
+              {loadingMore && <LoaderCircle size={14} className="animate-spin" aria-hidden="true" />}
+              {loadingMore ? 'Cargando…' : loadMoreError ? 'Reintentar carga' : 'Cargar más'}
+            </button>
+          </div>
         )}
       </section>
     </div>

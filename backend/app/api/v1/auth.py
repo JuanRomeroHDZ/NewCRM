@@ -2,12 +2,14 @@ import json
 import secrets
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Body, Depends, HTTPException, Header, Request, status
-from sqlalchemy import select, update
+from pydantic import BaseModel, Field, SecretStr, field_validator
+from sqlalchemy import func, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings as app_settings
 from app.database import get_db
 from app.models import UserSettings
-from app.models.core import DbSession, User
+from app.models.core import ConfigParameter, DbSession, User
 from app.schemas import (
     MasterPasswordSetup,
     TotpSetupConfirmRequest,
@@ -26,6 +28,7 @@ from app.security.tokens import (
     verify_vault_token,
     revoke_vault_token,
     get_vault_remaining_seconds,
+    require_vault_unlocked,
 )
 from app.security.totp import generate_random_totp_secret, verify_totp_code
 from app.services.audit import log_audit_event
@@ -36,10 +39,57 @@ from app.services.core_auth import (
     get_or_create_initial_owner,
     hash_token,
 )
+from app.services.activity_service import record_event
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 _VAULT_FAILED_ATTEMPTS: dict[str, list[datetime]] = {}
+
+
+class InitialAccountRequest(BaseModel):
+    username: str = Field(..., min_length=3, max_length=64, pattern=r"^[a-zA-Z0-9._-]+$")
+    email: str = Field(..., min_length=6, max_length=255, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+    full_name: str = Field(..., min_length=2, max_length=128)
+    password: SecretStr = Field(..., min_length=12, max_length=256)
+
+    @field_validator("username", mode="before")
+    @classmethod
+    def normalize_username(cls, value: str) -> str:
+        return value.strip().lower() if isinstance(value, str) else value
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def normalize_email(cls, value: str) -> str:
+        return value.strip().lower() if isinstance(value, str) else value
+
+    @field_validator("full_name", mode="before")
+    @classmethod
+    def validate_full_name(cls, value: str) -> str:
+        normalized = value.strip() if isinstance(value, str) else value
+        if not isinstance(normalized, str):
+            return normalized
+        if not normalized:
+            raise ValueError("Ingresa el nombre completo.")
+        return normalized
+
+
+async def _initial_account_is_available(db: AsyncSession) -> bool:
+    claim = await db.scalar(
+        select(ConfigParameter.id).where(
+            ConfigParameter.key == "auth.initial_ordinary_account_claimed"
+        )
+    )
+    if claim:
+        return False
+
+    existing_users = list((await db.execute(select(User))).scalars().all())
+    return all(
+        user.username.strip().lower() == app_settings.INITIAL_OWNER_USERNAME.strip().lower()
+        and user.role == "owner"
+        and user.is_active
+        and user.must_change_password
+        for user in existing_users
+    )
 
 
 def reset_vault_lockout() -> None:
@@ -182,6 +232,108 @@ async def lock_vault(x_vault_token: str | None = Header(None)):
     if x_vault_token:
         revoke_vault_token(x_vault_token)
     return {"message": "Bóveda bloqueada exitosamente y sesión revocada."}
+
+
+@router.post("/bootstrap-account", response_model=UserLoginResponse, status_code=status.HTTP_201_CREATED)
+async def bootstrap_initial_account(
+    payload: InitialAccountRequest,
+    db: AsyncSession = Depends(get_db),
+    _: bool = Depends(require_vault_unlocked),
+):
+    """Creates one ordinary seller account after the owner unlocks the vault."""
+    claim_key = "auth.initial_ordinary_account_claimed"
+    if not await _initial_account_is_available(db):
+        raise HTTPException(status_code=409, detail="La creación inicial de cuenta ya no está disponible.")
+
+    normalized_username = payload.username.strip().lower()
+    normalized_email = payload.email.strip().lower()
+    reserved_username = app_settings.INITIAL_OWNER_USERNAME.strip().lower()
+    reserved_email = app_settings.INITIAL_OWNER_EMAIL.strip().lower()
+    if normalized_username == reserved_username or normalized_email == reserved_email:
+        raise HTTPException(status_code=409, detail="El nombre de usuario o correo está reservado para la cuenta inicial del sistema.")
+
+    duplicate = await db.scalar(
+        select(User.id).where(
+            (func.lower(User.username) == normalized_username)
+            | (func.lower(User.email) == normalized_email)
+        )
+    )
+    if duplicate:
+        raise HTTPException(status_code=409, detail="El nombre de usuario o correo ya está registrado.")
+
+    claim = ConfigParameter(
+        key=claim_key,
+        scope="system",
+        category="security",
+        value_json='"claimed"',
+        is_encrypted=False,
+        description="Marca única de creación de la primera cuenta ordinaria.",
+    )
+    db.add(claim)
+    try:
+        await db.flush()
+    except IntegrityError as error:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail="La cuenta inicial ya fue creada.") from error
+
+    user = User(
+        username=normalized_username,
+        email=normalized_email,
+        full_name=payload.full_name.strip(),
+        role="seller",
+        hashed_password=hash_master_password(payload.password.get_secret_value()),
+        is_active=True,
+        must_change_password=False,
+    )
+    db.add(user)
+    try:
+        await db.flush()
+        await record_event(
+            db,
+            module="system",
+            action="create",
+            entity_type="user",
+            entity_id=user.id,
+            summary="Se creó la primera cuenta de uso diario.",
+            user_id=user.id,
+            user_name=user.username,
+        )
+        token, _ = await create_user_session(
+            db,
+            user=user,
+            timeout_minutes=app_settings.VAULT_SESSION_TIMEOUT_MINUTES,
+        )
+    except IntegrityError as error:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail="El nombre de usuario o correo ya está registrado.") from error
+    except Exception:
+        await db.rollback()
+        raise
+
+    return UserLoginResponse(
+        token=token,
+        user=UserResponse(
+            id=user.id,
+            username=user.username,
+            email=user.email,
+            full_name=user.full_name,
+            role=user.role,
+            is_active=user.is_active,
+            is_totp_enabled=user.is_totp_enabled,
+            must_change_password=user.must_change_password,
+            created_at=user.created_at,
+        ),
+        expires_in_minutes=app_settings.VAULT_SESSION_TIMEOUT_MINUTES,
+    )
+
+
+@router.get("/bootstrap-status")
+async def get_initial_account_status(
+    db: AsyncSession = Depends(get_db),
+    _: bool = Depends(require_vault_unlocked),
+):
+    """Reports whether the first daily-use account can still be created."""
+    return {"available": await _initial_account_is_available(db)}
 
 # Endpoints de Autenticación de Usuarios del Núcleo
 

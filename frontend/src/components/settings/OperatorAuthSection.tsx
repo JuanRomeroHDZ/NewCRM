@@ -16,7 +16,7 @@ const ROLE_LABELS: Record<CoreUserRole, string> = {
 };
 
 export const OperatorAuthSection: React.FC = () => {
-  const { showToast } = useVault();
+  const { showToast, isUnlocked } = useVault();
 
   const [currentUser, setCurrentUser] = useState<CoreUser | null>(null);
   const [loadingSession, setLoadingSession] = useState(false);
@@ -27,6 +27,14 @@ export const OperatorAuthSection: React.FC = () => {
   const [loginPassword, setLoginPassword] = useState('');
   const [loginTotp, setLoginTotp] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
+  const [bootstrapAvailable, setBootstrapAvailable] = useState(false);
+  const [showBootstrapForm, setShowBootstrapForm] = useState(false);
+  const [bootstrapLoading, setBootstrapLoading] = useState(false);
+  const [bootstrapUsername, setBootstrapUsername] = useState('');
+  const [bootstrapEmail, setBootstrapEmail] = useState('');
+  const [bootstrapFullName, setBootstrapFullName] = useState('');
+  const [bootstrapPassword, setBootstrapPassword] = useState('');
+  const [bootstrapPasswordConfirm, setBootstrapPasswordConfirm] = useState('');
 
   // Password change state
   const [currentPwd, setCurrentPwd] = useState('');
@@ -106,6 +114,29 @@ export const OperatorAuthSection: React.FC = () => {
     return () => window.removeEventListener('core_user_session_expired', handleExpired);
   }, [refreshOperatorSession]);
 
+  useEffect(() => {
+    if (!isUnlocked || currentUser || loadingSession) {
+      setBootstrapAvailable(false);
+      setShowBootstrapForm(false);
+      if (!isUnlocked || currentUser) {
+        setBootstrapPassword('');
+        setBootstrapPasswordConfirm('');
+      }
+      return;
+    }
+    let active = true;
+    api.getBootstrapStatus()
+      .then(({ available }) => {
+        if (active) setBootstrapAvailable(available);
+      })
+      .catch(() => {
+        if (active) setBootstrapAvailable(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [isUnlocked, currentUser, loadingSession]);
+
   const handleOperatorLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!loginIdentifier.trim() || !loginPassword) {
@@ -130,6 +161,52 @@ export const OperatorAuthSection: React.FC = () => {
       showToast(err.message || 'No se pudo iniciar sesión operativa.', 'error');
     } finally {
       setLoginLoading(false);
+    }
+  };
+
+  const handleBootstrapAccount = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!/^[a-zA-Z0-9._-]{3,64}$/.test(bootstrapUsername.trim())) {
+      showToast('El usuario debe tener entre 3 y 64 caracteres: letras, números, punto, guion o guion bajo.', 'error');
+      return;
+    }
+    if (!isValidEmail(bootstrapEmail.trim())) {
+      showToast('Ingresa un correo electrónico válido.', 'error');
+      return;
+    }
+    if (bootstrapFullName.trim().length < 2) {
+      showToast('Ingresa tu nombre completo.', 'error');
+      return;
+    }
+    if (bootstrapPassword.length < 12 || bootstrapPassword.length > INPUT_LIMITS.PASSWORD) {
+      showToast('Usa una contraseña de 12 a 256 caracteres.', 'error');
+      return;
+    }
+    if (bootstrapPassword !== bootstrapPasswordConfirm) {
+      showToast('Las contraseñas no coinciden.', 'error');
+      return;
+    }
+
+    setBootstrapLoading(true);
+    try {
+      const response = await api.bootstrapAccount({
+        username: bootstrapUsername.trim(),
+        email: bootstrapEmail.trim(),
+        full_name: bootstrapFullName.trim(),
+        password: bootstrapPassword,
+      });
+      setApiUserToken(response.token);
+      setCurrentUser(response.user);
+      setBootstrapPassword('');
+      setBootstrapPasswordConfirm('');
+      setBootstrapAvailable(false);
+      setShowBootstrapForm(false);
+      showToast(`Cuenta creada. Bienvenido, ${response.user.full_name}.`, 'success');
+      await loadUsersIfOwner(response.user);
+    } catch (err: any) {
+      showToast(err.message || 'No se pudo crear la cuenta inicial.', 'error');
+    } finally {
+      setBootstrapLoading(false);
     }
   };
 
@@ -337,6 +414,7 @@ export const OperatorAuthSection: React.FC = () => {
           Verificando tu sesión...
         </div>
       ) : !currentUser ? (
+        <>
         <form onSubmit={handleOperatorLogin} className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div>
             <label htmlFor="op-login-identifier" className="text-xs text-obsidian-muted block mb-1">
@@ -349,7 +427,7 @@ export const OperatorAuthSection: React.FC = () => {
               value={loginIdentifier}
               onChange={(e) => setLoginIdentifier(e.target.value)}
               maxLength={INPUT_LIMITS.EMAIL}
-              placeholder="owner o correo@empresa.com"
+              placeholder="Tu usuario o correo"
               className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs focus:outline-none focus:border-indigo-500"
             />
           </div>
@@ -376,7 +454,7 @@ export const OperatorAuthSection: React.FC = () => {
               <input
                 id="op-login-totp"
                 type="text"
-              inputMode="numeric"
+                inputMode="numeric"
                 value={loginTotp}
                 onChange={(e) => setLoginTotp(e.target.value)}
                 maxLength={8}
@@ -393,6 +471,108 @@ export const OperatorAuthSection: React.FC = () => {
             </div>
           </div>
         </form>
+        {isUnlocked && !loadingSession && !currentUser && bootstrapAvailable && (
+          <section className="space-y-3 rounded-xl border border-indigo-500/25 bg-indigo-500/5 p-3 sm:p-4" aria-labelledby="initial-account-heading">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="min-w-0">
+                <h4 id="initial-account-heading" className="text-xs font-semibold text-white">Primera cuenta</h4>
+                <p className="mt-1 max-w-prose text-[11px] leading-relaxed text-obsidian-muted">
+                  Crea una cuenta de uso diario con acceso de Ventas. No podrá administrar otras cuentas.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (showBootstrapForm) {
+                    setBootstrapPassword('');
+                    setBootstrapPasswordConfirm('');
+                  }
+                  setShowBootstrapForm((open) => !open);
+                }}
+                className="min-h-9 rounded-lg border border-indigo-500/30 px-3 text-xs font-semibold text-indigo-200 hover:bg-indigo-500/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
+              >
+                {showBootstrapForm ? 'Cerrar' : 'Crear cuenta'}
+              </button>
+            </div>
+            {showBootstrapForm && (
+              <form onSubmit={handleBootstrapAccount} className="grid min-w-0 gap-3 sm:grid-cols-2">
+                <label className="min-w-0 text-xs text-obsidian-muted">
+                  Usuario
+                  <input
+                    required
+                    autoComplete="username"
+                    minLength={3}
+                    maxLength={64}
+                    value={bootstrapUsername}
+                    onChange={(event) => setBootstrapUsername(event.target.value)}
+                    className="mt-1 block min-h-10 w-full rounded-lg border border-obsidian-border bg-obsidian-bg px-3 text-xs text-white focus:border-indigo-400 focus:outline-none"
+                  />
+                </label>
+                <label className="min-w-0 text-xs text-obsidian-muted">
+                  Nombre completo
+                  <input
+                    required
+                    autoComplete="name"
+                    minLength={2}
+                    maxLength={128}
+                    value={bootstrapFullName}
+                    onChange={(event) => setBootstrapFullName(event.target.value)}
+                    className="mt-1 block min-h-10 w-full rounded-lg border border-obsidian-border bg-obsidian-bg px-3 text-xs text-white focus:border-indigo-400 focus:outline-none"
+                  />
+                </label>
+                <label className="min-w-0 text-xs text-obsidian-muted sm:col-span-2">
+                  Correo electrónico
+                  <input
+                    required
+                    type="email"
+                    autoComplete="email"
+                    maxLength={INPUT_LIMITS.EMAIL}
+                    value={bootstrapEmail}
+                    onChange={(event) => setBootstrapEmail(event.target.value)}
+                    className="mt-1 block min-h-10 w-full rounded-lg border border-obsidian-border bg-obsidian-bg px-3 text-xs text-white focus:border-indigo-400 focus:outline-none"
+                  />
+                </label>
+                <label className="min-w-0 text-xs text-obsidian-muted">
+                  Contraseña
+                  <input
+                    required
+                    type="password"
+                    autoComplete="new-password"
+                    minLength={12}
+                    maxLength={INPUT_LIMITS.PASSWORD}
+                    value={bootstrapPassword}
+                    onChange={(event) => setBootstrapPassword(event.target.value)}
+                    className="mt-1 block min-h-10 w-full rounded-lg border border-obsidian-border bg-obsidian-bg px-3 text-xs text-white focus:border-indigo-400 focus:outline-none"
+                  />
+                </label>
+                <label className="min-w-0 text-xs text-obsidian-muted">
+                  Confirmar contraseña
+                  <input
+                    required
+                    type="password"
+                    autoComplete="new-password"
+                    minLength={12}
+                    maxLength={INPUT_LIMITS.PASSWORD}
+                    value={bootstrapPasswordConfirm}
+                    onChange={(event) => setBootstrapPasswordConfirm(event.target.value)}
+                    className="mt-1 block min-h-10 w-full rounded-lg border border-obsidian-border bg-obsidian-bg px-3 text-xs text-white focus:border-indigo-400 focus:outline-none"
+                  />
+                </label>
+                <p className="text-[11px] leading-relaxed text-obsidian-muted sm:col-span-2">
+                  Esta cuenta se crea una sola vez. Para añadir más personas después, se requiere una cuenta autorizada.
+                </p>
+                <button
+                  type="submit"
+                  disabled={bootstrapLoading}
+                  className="min-h-10 rounded-lg bg-indigo-600 px-4 text-xs font-semibold text-white hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60 sm:col-span-2"
+                >
+                  {bootstrapLoading ? 'Creando cuenta…' : 'Crear cuenta de uso diario'}
+                </button>
+              </form>
+            )}
+          </section>
+        )}
+        </>
       ) : (
         <div className="space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-2 text-xs pb-3 border-b border-obsidian-border/70">

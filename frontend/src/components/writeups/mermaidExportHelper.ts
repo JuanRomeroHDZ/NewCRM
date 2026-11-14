@@ -4,26 +4,31 @@ let mermaidModulePromise: Promise<typeof import('mermaid')> | null = null;
 
 export function loadMermaid() {
   if (!mermaidModulePromise) {
-    mermaidModulePromise = import('mermaid').then((mod) => {
-      mod.default.initialize({
-        startOnLoad: false,
-        theme: 'dark',
-        securityLevel: 'strict',
-        flowchart: { htmlLabels: false },
-        fontFamily: 'Poppins, DejaVu Sans, system-ui, sans-serif',
-        themeVariables: {
-          darkMode: true,
-          background: '#081416',
-          primaryColor: '#1e1b4b',
-          primaryTextColor: '#f8fafc',
-          primaryBorderColor: '#6366f1',
-          lineColor: '#94a3b8',
-          secondaryColor: '#0f172a',
-          tertiaryColor: '#111827',
-        },
+    mermaidModulePromise = import('mermaid')
+      .then((mod) => {
+        mod.default.initialize({
+          startOnLoad: false,
+          theme: 'dark',
+          securityLevel: 'strict',
+          flowchart: { htmlLabels: false },
+          fontFamily: 'Poppins, DejaVu Sans, system-ui, sans-serif',
+          themeVariables: {
+            darkMode: true,
+            background: '#081416',
+            primaryColor: '#1e1b4b',
+            primaryTextColor: '#f8fafc',
+            primaryBorderColor: '#6366f1',
+            lineColor: '#94a3b8',
+            secondaryColor: '#0f172a',
+            tertiaryColor: '#111827',
+          },
+        });
+        return mod;
+      })
+      .catch((error: unknown) => {
+        mermaidModulePromise = null;
+        throw error;
       });
-      return mod;
-    });
   }
   return mermaidModulePromise;
 }

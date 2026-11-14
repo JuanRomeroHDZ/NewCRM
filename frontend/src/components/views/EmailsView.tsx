@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useId } from 'react';
+import React, { useState, useEffect, useId, useRef } from 'react';
 import {
   Mail,
   Plus,
@@ -45,25 +45,45 @@ export const EmailsView: React.FC = () => {
   const [emails, setEmails] = useState<EmailAccount[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadMoreError, setLoadMoreError] = useState('');
   const [error, setError] = useState('');
   const [attempt, setAttempt] = useState(0);
+  const requestVersion = useRef(0);
+  const nextOffset = useRef(0);
 
   const filteredEmails = emails.filter((email) => matchesScope(email.scope));
 
   useEffect(() => {
     if (!isUnlocked) {
+      requestVersion.current += 1;
+      nextOffset.current = 0;
       setEmails([]);
+      setHasMore(false);
+      setLoadingMore(false);
+      setLoadMoreError('');
       setError('');
       setLoading(false);
       return;
     }
     let active = true;
+    const version = ++requestVersion.current;
+    nextOffset.current = 0;
     setLoading(true);
+    setLoadingMore(false);
+    setEmails([]);
+    setHasMore(false);
+    setLoadMoreError('');
     setError('');
     api
-      .getEmails(search || undefined)
-      .then((items) => {
-        if (active) setEmails(items);
+      .getEmailsPage({ search: search.trim() || undefined, limit: 50, offset: 0 })
+      .then((page) => {
+        if (active && version === requestVersion.current) {
+          setEmails(page.items);
+          setHasMore(page.hasMore);
+          nextOffset.current = page.items.length;
+        }
       })
       .catch((err) => {
         if (active) {
@@ -71,12 +91,39 @@ export const EmailsView: React.FC = () => {
         }
       })
       .finally(() => {
-        if (active) setLoading(false);
+        if (active && version === requestVersion.current) setLoading(false);
       });
     return () => {
       active = false;
     };
   }, [search, isUnlocked, dataVersion, attempt]);
+
+  const handleLoadMore = async () => {
+    if (loadingMore || !hasMore) return;
+    const version = requestVersion.current;
+    setLoadingMore(true);
+    setLoadMoreError('');
+    try {
+      const page = await api.getEmailsPage({
+        search: search.trim() || undefined,
+        limit: 50,
+        offset: nextOffset.current,
+      });
+      if (version !== requestVersion.current) return;
+      nextOffset.current += page.items.length;
+      setEmails((current) => {
+        const knownIds = new Set(current.map((email) => email.id));
+        return [...current, ...page.items.filter((email) => !knownIds.has(email.id))];
+      });
+      setHasMore(page.hasMore);
+    } catch (err) {
+      if (version === requestVersion.current) {
+        setLoadMoreError(err instanceof Error ? err.message : 'No se pudieron cargar más correos.');
+      }
+    } finally {
+      if (version === requestVersion.current) setLoadingMore(false);
+    }
+  };
 
   const handleDeleteEmail = async (email: EmailAccount) => {
     if (!isUnlocked) {
@@ -372,6 +419,22 @@ export const EmailsView: React.FC = () => {
               </div>
             </article>
           ))}
+        </div>
+      )}
+
+      {!loading && !error && hasMore && (
+        <div className="flex flex-col items-center gap-2 py-2">
+          {loadMoreError && <p role="alert" className="text-center text-xs text-rose-300">{loadMoreError}</p>}
+          <button
+            type="button"
+            onClick={handleLoadMore}
+            disabled={loadingMore}
+            aria-label="Cargar más correos"
+            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-obsidian-border bg-obsidian-panel px-4 text-xs font-semibold text-obsidian-text transition-colors hover:border-indigo-400/60 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 disabled:cursor-wait disabled:opacity-60"
+          >
+            {loadingMore && <LoaderCircle size={14} className="animate-spin" aria-hidden="true" />}
+            {loadingMore ? 'Cargando…' : loadMoreError ? 'Reintentar carga' : 'Cargar más'}
+          </button>
         </div>
       )}
 

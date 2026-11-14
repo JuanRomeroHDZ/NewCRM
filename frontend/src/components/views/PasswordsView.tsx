@@ -220,7 +220,7 @@ export const PasswordsView: React.FC = () => {
         <div className="flex min-w-0 items-center gap-2">
           {activeTab === 'passwords' ? <Key className="shrink-0 text-indigo-300" size={18} aria-hidden="true" /> : <FolderLock className="shrink-0 text-indigo-300" size={18} aria-hidden="true" />}
           <h2 className="truncate text-base font-semibold text-white">
-            {activeTab === 'passwords' ? `Contraseñas y llaves (${filteredCredentials.length})` : `Recursos y notas (${filteredResources.length})`}
+            {activeTab === 'passwords' ? `Claves (${filteredCredentials.length})` : `Recursos (${filteredResources.length})`}
           </h2>
           <InfoTooltip
             title={activeTab === 'passwords' ? 'Contraseñas y llaves' : 'Recursos y notas'}
@@ -235,11 +235,11 @@ export const PasswordsView: React.FC = () => {
       </header>
 
       <div role="tablist" aria-label="Colecciones" className="flex min-w-0 gap-1 border-b border-obsidian-border">
-        <button type="button" role="tab" id="passwords-tab" aria-controls="passwords-panel" aria-selected={activeTab === 'passwords'} onClick={() => selectTab('passwords')} className={`inline-flex min-h-10 min-w-0 flex-1 items-center justify-center gap-1.5 border-b-2 px-2 text-xs font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 sm:flex-initial sm:gap-2 sm:px-3 ${activeTab === 'passwords' ? 'border-indigo-400 text-white' : 'border-transparent text-obsidian-muted hover:text-white'}`}>
-          <Key size={14} className="shrink-0" aria-hidden="true" /><span className="truncate">Contraseñas</span><span className="shrink-0 rounded bg-white/10 px-1.5 py-0.5 text-[10px]">{filteredCredentials.length}</span>
+        <button type="button" role="tab" id="passwords-tab" aria-label="Contraseñas y llaves" aria-controls="passwords-panel" aria-selected={activeTab === 'passwords'} onClick={() => selectTab('passwords')} className={`inline-flex min-h-10 min-w-0 flex-1 items-center justify-center gap-1.5 border-b-2 px-2 text-xs font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 sm:flex-initial sm:gap-2 sm:px-3 ${activeTab === 'passwords' ? 'border-indigo-400 text-white' : 'border-transparent text-obsidian-muted hover:text-white'}`}>
+          <Key size={14} className="shrink-0" aria-hidden="true" /><span className="truncate">Claves</span><span className="shrink-0 rounded bg-white/10 px-1.5 py-0.5 text-[10px]">{filteredCredentials.length}</span>
         </button>
-        <button type="button" role="tab" id="resources-tab" aria-controls="resources-panel" aria-selected={activeTab === 'resources'} onClick={() => selectTab('resources')} className={`inline-flex min-h-10 min-w-0 flex-1 items-center justify-center gap-1.5 border-b-2 px-2 text-xs font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 sm:flex-initial sm:gap-2 sm:px-3 ${activeTab === 'resources' ? 'border-indigo-400 text-white' : 'border-transparent text-obsidian-muted hover:text-white'}`}>
-          <FolderLock size={14} className="shrink-0" aria-hidden="true" /><span className="truncate">Recursos y notas</span><span className="shrink-0 rounded bg-white/10 px-1.5 py-0.5 text-[10px]">{filteredResources.length}</span>
+        <button type="button" role="tab" id="resources-tab" aria-label="Recursos y notas" aria-controls="resources-panel" aria-selected={activeTab === 'resources'} onClick={() => selectTab('resources')} className={`inline-flex min-h-10 min-w-0 flex-1 items-center justify-center gap-1.5 border-b-2 px-2 text-xs font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 sm:flex-initial sm:gap-2 sm:px-3 ${activeTab === 'resources' ? 'border-indigo-400 text-white' : 'border-transparent text-obsidian-muted hover:text-white'}`}>
+          <FolderLock size={14} className="shrink-0" aria-hidden="true" /><span className="truncate">Notas</span><span className="shrink-0 rounded bg-white/10 px-1.5 py-0.5 text-[10px]">{filteredResources.length}</span>
         </button>
       </div>
 

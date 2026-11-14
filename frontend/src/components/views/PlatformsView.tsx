@@ -217,8 +217,8 @@ export const PlatformsView: React.FC = () => {
       )}
 
       {/* Filter Toolbar */}
-      <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 border-y border-obsidian-border py-3 text-xs">
-        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 border-y border-obsidian-border py-3 text-xs max-[480px]:flex-col max-[480px]:items-stretch">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 max-[480px]:w-full max-[480px]:flex-col max-[480px]:items-stretch">
           {/* Search box */}
           <div className="relative min-w-0 w-full flex-1 sm:min-w-[180px]">
             <label htmlFor={searchInputId} className="sr-only">
@@ -231,7 +231,7 @@ export const PlatformsView: React.FC = () => {
               maxLength={INPUT_LIMITS.SEARCH}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar por nombre de servicio o usuario..."
+              placeholder="Buscar servicio o usuario..."
               aria-label="Buscar por nombre de servicio o usuario"
               className="min-h-[38px] w-full rounded-xl border border-obsidian-border bg-obsidian-bg pl-8 pr-3 py-1.5 text-xs text-white placeholder-obsidian-muted/60 focus:border-indigo-500 focus:outline-none"
             />
@@ -246,7 +246,7 @@ export const PlatformsView: React.FC = () => {
             aria-label="Filtrar por correo principal"
             value={selectedEmail}
             onChange={(e) => setSelectedEmail(e.target.value)}
-            className="min-h-[38px] max-w-full min-w-0 rounded-lg border border-obsidian-border bg-obsidian-bg px-3 py-2 text-obsidian-text focus:border-indigo-500 focus:outline-none sm:max-w-[220px]"
+            className="min-h-[38px] max-w-full min-w-0 rounded-lg border border-obsidian-border bg-obsidian-bg px-3 py-2 text-obsidian-text focus:border-indigo-500 focus:outline-none sm:max-w-[220px] max-[480px]:w-full"
           >
             <option value="">Todos los Correos Principales</option>
             {filteredEmails.map((e) => (
@@ -265,7 +265,7 @@ export const PlatformsView: React.FC = () => {
             aria-label="Filtrar por estado de suscripción"
             value={selectedStatus}
             onChange={(e) => setSelectedStatus(e.target.value)}
-            className="min-h-[38px] max-w-full min-w-0 rounded-lg border border-obsidian-border bg-obsidian-bg px-3 py-2 text-obsidian-text focus:border-indigo-500 focus:outline-none"
+            className="min-h-[38px] max-w-full min-w-0 rounded-lg border border-obsidian-border bg-obsidian-bg px-3 py-2 text-obsidian-text focus:border-indigo-500 focus:outline-none max-[480px]:w-full"
           >
             <option value="">Todos los Estados</option>
             <option value="active">Activa (Con cobro)</option>
@@ -286,7 +286,7 @@ export const PlatformsView: React.FC = () => {
                 aria-label="Filtrar por etiqueta"
                 value={selectedTag}
                 onChange={(e) => setSelectedTag(e.target.value)}
-                className="min-h-[38px] max-w-full min-w-0 rounded-lg border border-obsidian-border bg-obsidian-bg px-3 py-2 text-obsidian-text focus:border-indigo-500 focus:outline-none"
+                className="min-h-[38px] max-w-full min-w-0 rounded-lg border border-obsidian-border bg-obsidian-bg px-3 py-2 text-obsidian-text focus:border-indigo-500 focus:outline-none max-[480px]:w-full"
               >
                 <option value="">Todas las Etiquetas</option>
                 {allTags.map((t) => (

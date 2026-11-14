@@ -46,6 +46,7 @@ export const GraphView: React.FC = () => {
   const [highlightSPOF, setHighlightSPOF] = useState(true);
   const [hoveredNode, setHoveredNode] = useState<GraphNode | null>(null);
   const [isLegendOpen, setIsLegendOpen] = useState(false);
+  const [nodeSearch, setNodeSearch] = useState('');
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -580,7 +581,7 @@ export const GraphView: React.FC = () => {
     <div className="relative h-[calc(100dvh-4rem)] min-h-0 w-full select-none overflow-hidden bg-obsidian-bg dot-grid-canvas">
       {/* Keep mobile controls compact so the map remains visible. */}
       <div className="absolute inset-x-2 top-2 z-10 flex flex-wrap items-start gap-2 sm:left-6 sm:right-6 sm:top-4">
-        <details className="relative max-w-[calc(100vw-1rem)] rounded-xl border border-obsidian-border bg-obsidian-panel/95 p-1 text-xs shadow-xl backdrop-blur-md sm:hidden">
+        <details className="relative max-w-[calc(100vw-1rem)] rounded-xl border border-obsidian-border bg-obsidian-panel/95 p-1 text-xs shadow-xl backdrop-blur-md">
           <summary className="flex min-h-[34px] cursor-pointer list-none items-center gap-2 rounded-lg px-2.5 font-medium text-white [&::-webkit-details-marker]:hidden">
             <span>Filtros: {FILTER_OPTIONS.find((option) => option.value === filterType)?.label}</span>
           </summary>
@@ -614,47 +615,6 @@ export const GraphView: React.FC = () => {
             </button>
           </div>
         </details>
-
-        <div
-          role="group"
-          aria-label="Filtrar nodos del mapa"
-          className="hidden flex-wrap items-center gap-1 rounded-xl border border-obsidian-border bg-obsidian-panel/90 p-1 text-xs shadow-xl backdrop-blur-md sm:flex"
-        >
-          {FILTER_OPTIONS.map((opt) => {
-            const active = filterType === opt.value;
-            return (
-              <button
-                key={opt.value}
-                type="button"
-                aria-pressed={active}
-                onClick={() => setFilterType(opt.value)}
-                className={`min-h-[34px] rounded-lg px-2.5 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
-                  active
-                    ? 'bg-indigo-600 text-white shadow-sm'
-                    : 'text-obsidian-muted hover:bg-obsidian-surface hover:text-white'
-                }`}
-              >
-                {opt.label}
-              </button>
-            );
-          })}
-        </div>
-
-        <div className="hidden items-center gap-1.5 rounded-xl border border-obsidian-border bg-obsidian-panel/90 p-1 text-xs shadow-xl backdrop-blur-md sm:flex">
-          <button
-            type="button"
-            aria-pressed={highlightSPOF}
-            onClick={() => setHighlightSPOF(!highlightSPOF)}
-            className={`flex min-h-[34px] items-center gap-1.5 rounded-lg px-3 py-1 font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 ${
-              highlightSPOF
-                ? 'border border-rose-500/30 bg-rose-500/20 text-rose-300'
-                : 'text-obsidian-muted hover:text-white'
-            }`}
-          >
-            <ShieldAlert size={14} aria-hidden="true" />
-            <span>Resaltar correos clave</span>
-          </button>
-        </div>
 
         {/* Cycles Alert Banner */}
         {graphData?.cycles_detected && graphData.cycles_detected.length > 0 && (
@@ -737,8 +697,12 @@ export const GraphView: React.FC = () => {
           {isLegendOpen && graphData?.nodes.length ? (
             <div className="mt-3 border-t border-obsidian-border pt-3">
               <h2 className="text-xs font-semibold text-white">Elementos del mapa</h2>
+              <label className="mt-2 block text-xs text-obsidian-muted">
+                Buscar elemento
+                <input value={nodeSearch} onChange={(event) => setNodeSearch(event.target.value)} maxLength={100} className="mt-1 min-h-10 w-full rounded-lg border border-obsidian-border bg-obsidian-bg px-2 text-sm text-white" />
+              </label>
               <ul className="mt-1.5 max-h-40 space-y-1 overflow-y-auto" aria-label="Elementos disponibles en el mapa">
-                {graphData.nodes.filter((node) => isNodeVisible(node, filterType)).map((node) => {
+                {graphData.nodes.filter((node) => isNodeVisible(node, filterType) && node.label.toLocaleLowerCase().includes(nodeSearch.trim().toLocaleLowerCase())).map((node) => {
                   const typeLabel = node.type === 'email'
                     ? 'Correo'
                     : node.type === 'platform'

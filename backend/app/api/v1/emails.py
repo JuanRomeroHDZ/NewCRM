@@ -1,5 +1,5 @@
 import json
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
@@ -20,18 +20,25 @@ def parse_json_safely(val: str | None, default_val=None):
     except Exception:
         return default_val if default_val is not None else []
 
-async def _build_email_response(e: EmailAccount, db: AsyncSession, is_unlocked: bool = True) -> EmailResponse:
-    # Count linked platforms
-    p_count_stmt = select(func.count(PlatformAccount.id)).where(
-        PlatformAccount.email_id == e.id, PlatformAccount.is_deleted == False
-    )
-    p_count = (await db.execute(p_count_stmt)).scalar() or 0
-
-    # Count linked prospects
-    pr_count_stmt = select(func.count(Prospect.id)).where(
-        Prospect.email_id == e.id, Prospect.is_deleted == False
-    )
-    pr_count = (await db.execute(pr_count_stmt)).scalar() or 0
+async def _build_email_response(
+    e: EmailAccount,
+    db: AsyncSession,
+    is_unlocked: bool = True,
+    list_relations: tuple[dict[str, int], dict[str, int], dict[str, str]] | None = None,
+) -> EmailResponse:
+    if list_relations is None:
+        p_count_stmt = select(func.count(PlatformAccount.id)).where(
+            PlatformAccount.email_id == e.id, PlatformAccount.is_deleted == False
+        )
+        p_count = (await db.execute(p_count_stmt)).scalar() or 0
+        pr_count_stmt = select(func.count(Prospect.id)).where(
+            Prospect.email_id == e.id, Prospect.is_deleted == False
+        )
+        pr_count = (await db.execute(pr_count_stmt)).scalar() or 0
+    else:
+        platform_counts, prospect_counts, recovery_addresses = list_relations
+        p_count = platform_counts.get(e.id, 0)
+        pr_count = prospect_counts.get(e.id, 0)
 
     backup_codes_raw = parse_json_safely(e.encrypted_backup_codes, [])
     sec_questions_raw = parse_json_safely(e.encrypted_security_questions, [])
@@ -58,7 +65,9 @@ async def _build_email_response(e: EmailAccount, db: AsyncSession, is_unlocked: 
     plain_pw = decrypt_secret(e.encrypted_password) if (is_unlocked and e.encrypted_password) else None
 
     recovery_email_address = None
-    if e.recovery_email_id:
+    if list_relations is not None:
+        recovery_email_address = list_relations[2].get(e.recovery_email_id or "")
+    elif e.recovery_email_id:
         r_stmt = select(EmailAccount.address).where(EmailAccount.id == e.recovery_email_id)
         recovery_email_address = (await db.execute(r_stmt)).scalar_one_or_none()
 
@@ -91,23 +100,64 @@ async def _build_email_response(e: EmailAccount, db: AsyncSession, is_unlocked: 
 
 @router.get("", response_model=list[EmailResponse])
 async def list_emails(
-    search: str | None = None,
-    provider: str | None = None,
-    db: AsyncSession = Depends(get_db)
+    response: Response,
+    search: str | None = Query(default=None, max_length=120),
+    provider: str | None = Query(default=None, max_length=80),
+    limit: int | None = Query(default=None, ge=1, le=500),
+    offset: int = Query(default=0, ge=0, le=100_000),
+    db: AsyncSession = Depends(get_db),
 ):
     stmt = select(EmailAccount).where(EmailAccount.is_deleted == False)
-    if search:
-        stmt = stmt.where(EmailAccount.address.ilike(f"%{search.strip()}%"))
-    if provider:
-        stmt = stmt.where(EmailAccount.provider.ilike(provider.strip()))
+    count_stmt = select(func.count(EmailAccount.id)).where(EmailAccount.is_deleted == False)
+    if search and search.strip():
+        clean_search = search.strip()
+        stmt = stmt.where(EmailAccount.address.ilike(f"%{clean_search}%"))
+        count_stmt = count_stmt.where(EmailAccount.address.ilike(f"%{clean_search}%"))
+    if provider and provider.strip():
+        clean_provider = provider.strip()
+        stmt = stmt.where(EmailAccount.provider.ilike(clean_provider))
+        count_stmt = count_stmt.where(EmailAccount.provider.ilike(clean_provider))
 
-    stmt = stmt.order_by(EmailAccount.address.asc())
+    total = (await db.execute(count_stmt)).scalar_one()
+    stmt = stmt.order_by(EmailAccount.address.asc(), EmailAccount.id.asc())
+    if limit is not None:
+        stmt = stmt.limit(limit)
+    if offset:
+        stmt = stmt.offset(offset)
     res = await db.execute(stmt)
     emails = res.scalars().all()
 
+    ids = [email.id for email in emails]
+    platform_counts: dict[str, int] = {}
+    prospect_counts: dict[str, int] = {}
+    recovery_addresses: dict[str, str] = {}
+    if ids:
+        platform_rows = await db.execute(
+            select(PlatformAccount.email_id, func.count(PlatformAccount.id))
+            .where(PlatformAccount.email_id.in_(ids), PlatformAccount.is_deleted == False)
+            .group_by(PlatformAccount.email_id)
+        )
+        platform_counts = {email_id: count for email_id, count in platform_rows.all() if email_id}
+        prospect_rows = await db.execute(
+            select(Prospect.email_id, func.count(Prospect.id))
+            .where(Prospect.email_id.in_(ids), Prospect.is_deleted == False)
+            .group_by(Prospect.email_id)
+        )
+        prospect_counts = {email_id: count for email_id, count in prospect_rows.all() if email_id}
+        recovery_ids = {email.recovery_email_id for email in emails if email.recovery_email_id}
+        if recovery_ids:
+            recovery_rows = await db.execute(
+                select(EmailAccount.id, EmailAccount.address).where(EmailAccount.id.in_(recovery_ids))
+            )
+            recovery_addresses = dict(recovery_rows.all())
+    response.headers["X-Total-Count"] = str(total)
+    if limit is not None:
+        response.headers["X-Has-More"] = str(total > offset + limit).lower()
+
     output = []
+    list_relations = (platform_counts, prospect_counts, recovery_addresses)
     for e in emails:
-        output.append(await _build_email_response(e, db=db, is_unlocked=True))
+        output.append(await _build_email_response(e, db=db, is_unlocked=True, list_relations=list_relations))
 
     return output
 

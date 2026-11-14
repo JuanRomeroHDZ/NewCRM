@@ -66,6 +66,13 @@ const navGroups: NavGroup[] = [
       { id: 'passwords', label: 'Contraseñas y notas', icon: Key, requiresVault: true },
       { id: 'writeups', label: 'Informes de seguridad', icon: BookOpen, requiresVault: true },
       { id: 'security_audit', label: 'Auditoría de seguridad', icon: ShieldCheck, requiresVault: true },
+    ],
+  },
+  {
+    id: 'actividad',
+    label: 'Actividad y papelera',
+    icon: FileText,
+    items: [
       { id: 'audit_logs', label: 'Historial de actividad', icon: FileText, requiresVault: true },
       { id: 'trash', label: 'Papelera', icon: Trash2, requiresVault: true },
     ],
@@ -153,7 +160,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onCloseMobile })
       onKeyDown={handleMobileTab}
       className={`responsive-sidebar fixed inset-y-0 left-0 z-50 flex h-[100dvh] w-72 max-w-[calc(100vw-2rem)] shrink-0 flex-col border-r border-obsidian-border bg-obsidian-panel transition-transform duration-200 ease-out lg:static lg:h-[100dvh] lg:max-w-none ${collapsed ? 'lg:w-16' : 'lg:w-64'} ${isMobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}
     >
-      <div className={`flex h-16 shrink-0 items-center justify-between border-b border-obsidian-border ${compact ? 'px-2' : 'px-4'}`}>
+      <div className={`flex h-16 shrink-0 items-center justify-between border-b border-obsidian-border ${compact ? 'px-1' : 'px-4'}`}>
         {!compact ? (
           <div className="flex min-w-0 items-center gap-2.5">
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr from-indigo-600 to-indigo-400 text-white shadow-md shadow-indigo-600/30">
@@ -165,8 +172,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onCloseMobile })
             </div>
           </div>
         ) : (
-          <div className="mx-auto flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-white" role="img" aria-label="LESSSO">
-            <Network size={18} aria-hidden="true" />
+          <div className="mx-auto flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-indigo-600 text-white" role="img" aria-label="LESSSO">
+            <Network size={14} aria-hidden="true" />
           </div>
         )}
 

@@ -955,8 +955,7 @@ export const SubscriptionsView: React.FC = () => {
 
         <div className="flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto">
           {/* Compact Exchange Rate Control */}
-          <div className="flex max-w-full min-w-0 flex-wrap items-center gap-2 rounded-xl border border-obsidian-border bg-obsidian-panel px-3 py-1.5">
-            <DollarSign size={14} className="text-emerald-400 flex-shrink-0" aria-hidden="true" />
+          <div className="flex max-w-full min-w-0 flex-wrap items-center gap-1 rounded-lg bg-obsidian-panel px-2 py-1">
             {isEditingRate ? (
               <div className="flex items-center gap-1.5">
                 <input
@@ -998,7 +997,7 @@ export const SubscriptionsView: React.FC = () => {
                       : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
                   }`}
                 >
-                  {exchangeRate?.is_manual ? 'Manual' : 'Automático'}
+                  {exchangeRate?.is_manual ? 'Manual' : 'Auto'}
                 </span>
                 <button
                   type="button"

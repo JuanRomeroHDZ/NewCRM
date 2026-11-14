@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, Key, Lock, X } from 'lucide-react';
+import { AlertTriangle, ArrowRight, Key, Lock, X } from 'lucide-react';
 import { useVault } from '../../context/VaultContext';
 import { api } from '../../lib/api';
 import type {
@@ -357,7 +357,7 @@ export const DashboardView: React.FC = () => {
       )}
 
       {expiringTrials.length > 0 && (
-        <section className="flex min-w-0 flex-col items-start justify-between gap-3 border-y border-amber-500/30 py-3 sm:flex-row sm:items-center">
+        <section className="flex min-w-0 flex-col items-start justify-between gap-3 rounded-xl border border-amber-500/30 bg-obsidian-panel p-4 sm:flex-row sm:items-center">
           <div className="flex min-w-0 items-start gap-3">
             <AlertTriangle size={17} className="mt-0.5 shrink-0 text-amber-400" aria-hidden="true" />
             <div className="min-w-0">
@@ -371,7 +371,7 @@ export const DashboardView: React.FC = () => {
               </div>
             </div>
           </div>
-          <button type="button" onClick={openSubscriptions} className="shrink-0 text-xs font-semibold text-amber-300 hover:text-white">Ver todos</button>
+          <button type="button" onClick={openSubscriptions} className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-amber-300 hover:text-white">Ver suscripciones <ArrowRight size={12} aria-hidden="true" /></button>
         </section>
       )}
 

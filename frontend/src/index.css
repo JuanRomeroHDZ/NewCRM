@@ -435,6 +435,18 @@
   animation: mermaidDashFlow 1.2s linear infinite;
 }
 
+.writeups-view :is(button, input, select, textarea, summary, a[href]):focus-visible {
+  outline: 2px solid #a5b4fc;
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mermaid-animated svg .edgePath path,
+  .mermaid-animated svg path.flowchart-link {
+    animation: none;
+  }
+}
+
 @media print {
   @page {
     margin: 12mm;

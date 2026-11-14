@@ -26,6 +26,7 @@ const ENTITY_LABELS: Record<string, string> = {
   vault: 'Acceso',
   settings: 'Ajustes',
   runtime_config: 'Configuración',
+  writeup: 'Informe',
 };
 
 const getEntityTypeLabel = (entityType?: string | null) => {
@@ -307,8 +308,11 @@ export const AuditLogsView: React.FC = () => {
                   <p className="break-words font-medium text-white">
                     {log.entity_name || log.entity_id || getEntityTypeLabel(log.entity_type)}
                   </p>
-                  {log.details && <p className="break-words text-white/70">{log.details}</p>}
-                  <p className="break-words text-white/40">{log.ip_address || 'Registro local'}</p>
+                  <details className="text-white/70">
+                    <summary className="cursor-pointer text-indigo-300">Ver detalles</summary>
+                    <p className="mt-2 whitespace-pre-wrap break-words">{log.details || 'Sin detalles adicionales'}</p>
+                    <p className="mt-1 break-words text-white/50">Origen: {log.ip_address || 'Registro local'}</p>
+                  </details>
                 </div>
               ))
             )}
@@ -370,8 +374,11 @@ export const AuditLogsView: React.FC = () => {
                           <span className="text-white/30">—</span>
                         )}
                       </td>
-                      <td className="py-3 px-2 text-white/70 max-w-xs truncate xl:px-3 2xl:px-4" title={log.details || ''}>
-                        {log.details || '—'}
+                      <td className="py-3 px-2 text-white/70 max-w-xs xl:px-3 2xl:px-4">
+                        <details>
+                          <summary className="cursor-pointer text-indigo-300">Ver detalles</summary>
+                          <p className="mt-2 whitespace-pre-wrap break-words">{log.details || 'Sin detalles adicionales'}</p>
+                        </details>
                       </td>
                       <td className="py-3 px-2 text-white/40 text-[11px] whitespace-nowrap xl:px-3 2xl:px-4">
                         {log.ip_address || 'Registro local'}

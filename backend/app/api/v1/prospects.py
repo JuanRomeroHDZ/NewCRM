@@ -1,7 +1,7 @@
 import json
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models import Prospect, EmailAccount
@@ -213,51 +213,134 @@ def build_prospect_response(
 
 @router.get("", response_model=list[ProspectResponse])
 async def list_prospects(
-    email_id: str | None = None,
-    status: str | None = None,
-    workflow_type: str | None = None,
-    sla_status: str | None = None,
-    search: str | None = None,
-    tag: str | None = None,
+    response: Response,
+    email_id: str | None = Query(default=None, max_length=36),
+    status: str | None = Query(default=None, max_length=32),
+    workflow_type: str | None = Query(default=None, max_length=32),
+    sla_status: str | None = Query(default=None, max_length=32),
+    search: str | None = Query(default=None, max_length=120),
+    tag: str | None = Query(default=None, max_length=80),
+    limit: int | None = Query(default=None, ge=1, le=500),
+    offset: int = Query(default=0, ge=0, le=100_000),
     db: AsyncSession = Depends(get_db)
 ):
+    candidate_cursor: str | None = None
+    while True:
+        candidates_stmt = select(Prospect).where(
+            Prospect.is_deleted == False,
+            Prospect.responded_at.is_(None),
+            Prospect.status.not_in(("respondido", "archivado_frio")),
+            func.coalesce(Prospect.followup_count, 0)
+            >= func.coalesce(Prospect.max_followup_attempts, 3),
+        )
+        if candidate_cursor:
+            candidates_stmt = candidates_stmt.where(Prospect.id > candidate_cursor)
+        candidates_stmt = candidates_stmt.order_by(Prospect.id.asc()).limit(500)
+        candidates = list((await db.execute(candidates_stmt)).scalars().all())
+        if not candidates:
+            break
+        candidate_cursor = candidates[-1].id
+        await evaluate_auto_archive_cold_prospects(candidates, db)
+
     stmt = select(Prospect).where(Prospect.is_deleted == False)
+    count_stmt = select(func.count(Prospect.id)).where(Prospect.is_deleted == False)
     if email_id:
         stmt = stmt.where(Prospect.email_id == email_id)
+        count_stmt = count_stmt.where(Prospect.email_id == email_id)
     if workflow_type:
         stmt = stmt.where(Prospect.workflow_type == workflow_type)
-    if search:
-        q = f"%{search}%"
-        stmt = stmt.where(
-            Prospect.company_name.ilike(q)
-            | Prospect.contact_name.ilike(q)
-            | Prospect.contact_email.ilike(q)
-            | Prospect.demo_url.ilike(q)
-            | Prospect.whatsapp.ilike(q)
-            | Prospect.phones.ilike(q)
-        )
-
-    stmt = stmt.order_by(Prospect.created_at.desc())
-    res = await db.execute(stmt)
-    prospects = list(res.scalars().all())
-
-    # Evaluate auto-archiving rules before filtering by status
-    await evaluate_auto_archive_cold_prospects(prospects, db)
-
+        count_stmt = count_stmt.where(Prospect.workflow_type == workflow_type)
     if status:
-        prospects = [p for p in prospects if p.status == status]
+        stmt = stmt.where(Prospect.status == status)
+        count_stmt = count_stmt.where(Prospect.status == status)
+    if search and search.strip():
+        clean_search = search.strip()
+        escaped_search = clean_search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        search_filter = or_(
+            Prospect.company_name.ilike(f"%{escaped_search}%", escape="\\"),
+            Prospect.contact_name.ilike(f"%{escaped_search}%", escape="\\"),
+            Prospect.contact_email.ilike(f"%{escaped_search}%", escape="\\"),
+            Prospect.demo_url.ilike(f"%{escaped_search}%", escape="\\"),
+            Prospect.whatsapp.ilike(f"%{escaped_search}%", escape="\\"),
+            Prospect.phones.ilike(f"%{escaped_search}%", escape="\\"),
+        )
+        stmt = stmt.where(search_filter)
+        count_stmt = count_stmt.where(search_filter)
+    if tag:
+        clean_tag = tag.strip().lower()
+        encoded_tag = json.dumps(clean_tag).lower()
+        escaped_tag = encoded_tag.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        tag_candidate_filter = func.lower(Prospect.tags).like(f"%{escaped_tag}%", escape="\\")
+        stmt = stmt.where(tag_candidate_filter)
+        count_stmt = count_stmt.where(tag_candidate_filter)
 
     email_res = await db.execute(select(EmailAccount.id, EmailAccount.address, EmailAccount.provider))
     email_map = {row[0]: (row[1], row[2]) for row in email_res.all()}
 
+    stmt = stmt.order_by(Prospect.created_at.desc(), Prospect.id.desc())
     output: list[ProspectResponse] = []
-    for p in prospects:
-        item = build_prospect_response(p, email_map)
-        if tag and not any(t.name.lower() == tag.lower() for t in item.tags):
-            continue
-        if sla_status and item.sla_status != sla_status:
-            continue
-        output.append(item)
+    if tag or sla_status:
+        if limit is None:
+            prospects = list((await db.execute(stmt)).scalars().all())
+            matching: list[ProspectResponse] = []
+            for prospect in prospects:
+                item = build_prospect_response(prospect, email_map)
+                if tag and not any(t.name.casefold() == tag.casefold() for t in item.tags):
+                    continue
+                if sla_status and item.sla_status != sla_status:
+                    continue
+                matching.append(item)
+            response.headers["X-Total-Count"] = str(len(matching))
+            response.headers["X-Has-More"] = "false"
+            return matching[offset:]
+
+        batch_size = 500
+        scan_offset = 0
+        matching: list[ProspectResponse] = []
+        required_matches = offset + limit + 1
+        clean_tag = tag.casefold() if tag else None
+        while len(matching) < required_matches:
+            batch = list(
+                (
+                    await db.execute(
+                        stmt.limit(batch_size).offset(scan_offset)
+                    )
+                ).scalars().all()
+            )
+            if not batch:
+                break
+            for prospect in batch:
+                item = build_prospect_response(prospect, email_map)
+                if clean_tag and not any(t.name.casefold() == clean_tag for t in item.tags):
+                    continue
+                if sla_status and item.sla_status != sla_status:
+                    continue
+                matching.append(item)
+                if len(matching) >= required_matches:
+                    break
+            scan_offset += len(batch)
+            if len(batch) < batch_size:
+                break
+        has_more = len(matching) > offset + limit
+        output = matching[offset:offset + limit]
+        response.headers["X-Has-More"] = str(has_more).lower()
+    else:
+        total = (await db.execute(count_stmt)).scalar_one()
+        response.headers["X-Total-Count"] = str(total)
+        if limit is None:
+            prospects = list((await db.execute(stmt.offset(offset))).scalars().all())
+            response.headers["X-Has-More"] = "false"
+            output = [build_prospect_response(prospect, email_map) for prospect in prospects]
+        else:
+            prospects = list(
+                (
+                    await db.execute(
+                        stmt.limit(limit + 1).offset(offset)
+                    )
+                ).scalars().all()
+            )
+            response.headers["X-Has-More"] = str(total > offset + limit).lower()
+            output = [build_prospect_response(prospect, email_map) for prospect in prospects[:limit]]
 
     return output
 

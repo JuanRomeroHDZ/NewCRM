@@ -191,6 +191,7 @@ async def get_security_health_audit(db: AsyncSession = Depends(get_db)):
             ))
 
     total_accounts = len(emails) + len(platforms)
+    passwords_checked_count = sum(len(accounts) for accounts in pw_clusters.values())
 
     # Calculate Global Health Score (0 - 100)
     penalty = 0
@@ -213,6 +214,8 @@ async def get_security_health_audit(db: AsyncSession = Depends(get_db)):
     return SecurityAuditResponse(
         health_score=health_score,
         total_accounts=total_accounts,
+        email_accounts_count=len(emails),
+        passwords_checked_count=passwords_checked_count,
         vulnerable_accounts_count=vulnerable_accounts,
         reused_passwords_count=reused_count,
         weak_passwords_count=len(weak_accounts),

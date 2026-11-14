@@ -385,24 +385,6 @@ export const MapCaptureView: React.FC = () => {
 
   return (
     <div className="mx-auto w-full max-w-7xl space-y-5 p-4 sm:p-6 lg:p-8">
-      <header className="flex min-w-0 flex-col gap-3 rounded-2xl border border-obsidian-borderLight bg-gradient-to-r from-obsidian-card via-obsidian-panel to-obsidian-surface p-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:p-5 lg:p-7">
-        <div className="flex min-w-0 items-start gap-2.5 sm:gap-3.5">
-          <span className="shrink-0 rounded-xl border border-indigo-500/25 bg-indigo-500/10 p-2 text-indigo-300 sm:p-3" aria-hidden="true">
-            <MapPin size={19} className="sm:h-[22px] sm:w-[22px]" />
-          </span>
-          <div className="min-w-0">
-            <h1 id="capture-map-heading" className="text-base font-bold tracking-tight text-white sm:text-2xl">Captación en mapa</h1>
-            <p className="mt-1 max-w-2xl text-xs leading-relaxed text-obsidian-muted sm:text-sm">
-              Busca negocios publicados en OpenStreetMap dentro de una zona{defaultCity ? ` de ${defaultCity}` : ''} y
-              guarda únicamente los que quieras seguir.
-            </p>
-          </div>
-        </div>
-          <span className="inline-flex w-fit shrink-0 items-center gap-1.5 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-medium text-emerald-200 sm:gap-2 sm:px-3 sm:py-1.5 sm:text-xs">
-          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" aria-hidden="true" /> OpenStreetMap
-        </span>
-      </header>
-
       {/* Mobile/Tablet (<lg) tab switch to avoid double-scroll traps */}
       <div
         className="flex items-center gap-1 rounded-xl border border-obsidian-border bg-obsidian-card p-1 lg:hidden"
@@ -440,7 +422,7 @@ export const MapCaptureView: React.FC = () => {
         >
           <form
             onSubmit={handleSearch}
-            className="grid gap-3 border-b border-obsidian-border p-4 sm:grid-cols-[minmax(0,1fr)_minmax(11rem,0.7fr)_auto] sm:items-end"
+            className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,12rem),1fr))] items-end gap-3 border-b border-obsidian-border p-3 sm:p-4"
           >
             <label className="min-w-0 text-xs font-medium text-obsidian-text">
               Giro o negocio
@@ -491,12 +473,12 @@ export const MapCaptureView: React.FC = () => {
               type={loading ? 'button' : 'submit'}
               onClick={loading ? cancelSearch : undefined}
               disabled={!loading && !mapReady}
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 text-sm font-semibold text-white shadow-md shadow-indigo-950/30 transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-55 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
+              className="inline-flex min-h-10 justify-self-start items-center justify-center gap-2 rounded-xl bg-indigo-600 px-3 text-sm font-semibold text-white transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-55 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
             >
               {loading ? <X size={16} aria-hidden="true" /> : <Search size={16} aria-hidden="true" />}
               {loading ? 'Cancelar búsqueda' : 'Buscar zona'}
             </button>
-            <label className="min-w-0 text-xs font-medium text-obsidian-muted sm:col-span-2">
+            <label className="min-w-0 text-xs font-medium text-obsidian-muted">
               Filtro opcional
               <input
                 value={subsector}
@@ -508,7 +490,7 @@ export const MapCaptureView: React.FC = () => {
                 }}
                 disabled={loading}
                 maxLength={64}
-                placeholder="Especialidad o palabra clave opcional"
+                placeholder="Especialidad o palabra clave"
                 className="mt-1.5 min-h-10 w-full rounded-xl border border-obsidian-border bg-obsidian-bg px-3 text-sm text-white placeholder:text-obsidian-muted focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
               />
             </label>
@@ -516,40 +498,12 @@ export const MapCaptureView: React.FC = () => {
               type="button"
               onClick={searchMapArea}
               disabled={loading || !mapReady}
-              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-obsidian-border bg-obsidian-surface px-3 text-xs font-medium text-obsidian-text hover:border-indigo-500/40 hover:text-white disabled:cursor-not-allowed disabled:opacity-55 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
+              className="inline-flex min-h-10 justify-self-start items-center justify-center gap-2 rounded-xl border border-obsidian-border bg-obsidian-surface px-3 text-xs font-medium text-obsidian-text hover:border-indigo-500/40 hover:text-white disabled:cursor-not-allowed disabled:opacity-55 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
             >
               <MapPin size={14} aria-hidden="true" /> Buscar área visible
             </button>
 
-            {sectors.length > 0 && (
-              <div className="flex flex-wrap items-center gap-1.5 sm:col-span-3" role="group" aria-label="Giros sugeridos">
-                <span className="text-[11px] text-obsidian-muted mr-1">Sugeridos:</span>
-                {sectors.map((item) => {
-                  const isActive = sector.trim().toLowerCase() === item.label.toLowerCase();
-                  return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => {
-                        setSector(item.label);
-                        setResults(null);
-                        setResultSource(null);
-                        setSearchError('');
-                      }}
-                      disabled={loading}
-                      aria-pressed={isActive}
-                      className={`min-h-[36px] rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-55 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400 ${
-                        isActive
-                          ? 'border-indigo-500/60 bg-indigo-500/20 text-indigo-200'
-                          : 'border-obsidian-border bg-obsidian-surface text-obsidian-muted hover:border-obsidian-borderLight hover:text-white'
-                      }`}
-                    >
-                      {item.label}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
+
           </form>
 
           {searchError && (

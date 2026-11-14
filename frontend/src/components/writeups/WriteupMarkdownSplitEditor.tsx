@@ -4,6 +4,7 @@ import {
   Binary,
   Bold,
   Calculator,
+  Check,
   CheckSquare,
   ChevronDown,
   Code,
@@ -343,34 +344,22 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
     <div className="flex min-w-0 max-w-full flex-col h-full min-h-[300px] bg-slate-950 border border-slate-800 rounded-xl overflow-hidden">
       {/* Row 1: Category Filter Pills + View Mode Switch */}
       <div className="flex flex-wrap items-center justify-between gap-2 px-2.5 py-2 bg-slate-900/95 border-b border-slate-800">
-        <div className="flex items-center gap-1 overflow-x-auto max-w-full min-w-0">
-          {(
-            [
-              ['all', 'Todo'],
-              ['text', 'Texto'],
-              ['blocks', 'Bloques'],
-              ['media', 'Multimedia'],
-              ['pentest', 'Seguridad'],
-            ] as const
-          ).map(([id, label]) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => setToolFilter(id)}
-              className={`px-2 py-1 rounded-md text-[11px] font-medium shrink-0 transition-colors ${
-                toolFilter === id ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+        <label className="relative inline-flex items-center">
+          <span className="sr-only">Categoría de herramientas</span>
+          <select value={toolFilter} onChange={(event) => setToolFilter(event.target.value as ToolGroupFilter)} className="min-h-9 appearance-none rounded-lg border border-slate-700 bg-slate-950 pl-3 pr-9 text-xs text-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300">
+            <option value="all">Todas las herramientas</option>
+            <option value="text">Texto</option><option value="blocks">Bloques</option><option value="media">Multimedia</option><option value="pentest">Seguridad</option>
+          </select>
+          <ChevronDown className="pointer-events-none absolute right-3 h-4 w-4 text-slate-400" aria-hidden="true" />
+        </label>
 
         <div className="flex items-center gap-1.5 ml-auto">
           <button
             type="button"
             onClick={() => setRedactPreview((v) => !v)}
-            className={`px-2 py-1 rounded-md text-[11px] flex items-center gap-1 border shrink-0 ${
+            aria-pressed={redactPreview}
+            aria-label={redactPreview ? 'Mostrar vista para cliente' : 'Mostrar vista interna'}
+            className={`min-h-9 px-3 py-1 rounded-lg text-xs flex items-center gap-1.5 border shrink-0 ${
               redactPreview
                 ? 'bg-emerald-600/20 border-emerald-500/40 text-emerald-300'
                 : 'bg-slate-800 border-slate-700 text-slate-300'
@@ -378,23 +367,16 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
             title="Alternar vista interna vs cliente censurada"
           >
             {redactPreview ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-            <span className="hidden sm:inline">{redactPreview ? 'Cliente' : 'Interna'}</span>
+            <span>{redactPreview ? 'Cliente' : 'Interna'}</span>
           </button>
 
-          <div className="flex bg-slate-800 rounded-lg p-0.5 text-[11px]">
-            {(['edit', 'split', 'preview'] as const).map((m) => (
-              <button
-                key={m}
-                type="button"
-                onClick={() => setSplitView(m)}
-                className={`px-2 py-1 rounded transition-colors ${
-                  splitView === m ? 'bg-indigo-600 text-white font-medium' : 'text-slate-300 hover:text-white'
-                }`}
-              >
-              {m === 'edit' ? 'Editar' : m === 'split' ? 'Dos vistas' : 'Vista previa'}
-              </button>
-            ))}
-          </div>
+          <label className="relative inline-flex items-center">
+            <span className="sr-only">Modo de edición</span>
+            <select value={splitView} onChange={(event) => setSplitView(event.target.value as 'edit' | 'split' | 'preview')} className="min-h-9 appearance-none rounded-lg border border-slate-700 bg-slate-950 pl-3 pr-9 text-xs text-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300">
+              <option value="edit">Editar</option><option value="split">Dos vistas</option><option value="preview">Vista previa</option>
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-3 h-4 w-4 text-slate-400" aria-hidden="true" />
+          </label>
         </div>
       </div>
 
@@ -506,8 +488,9 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
                 type="checkbox"
                 checked={convertVideoToGif}
                 onChange={(e) => setConvertVideoToGif(e.target.checked)}
-                className="rounded border-slate-600 accent-indigo-500"
+                className="peer sr-only"
               />
+              <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded border border-slate-500 bg-slate-950 text-transparent peer-checked:border-indigo-400 peer-checked:bg-indigo-600 peer-checked:text-white peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-indigo-300" aria-hidden="true"><Check className="h-3 w-3" /></span>
               <span>Video→GIF</span>
             </label>
             <button
@@ -945,9 +928,9 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
       )}
 
       {/* Editor + Live Preview Panes */}
-      <div className={`flex-1 grid min-h-0 ${splitView === 'split' ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1'}`}>
+      <div className={`flex-1 grid min-h-0 min-w-0 max-w-full ${splitView === 'split' ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1'}`}>
         {splitView !== 'preview' && (
-          <div className="flex flex-col min-h-[280px] md:min-h-[360px] lg:min-h-0 border-b md:border-b-0 md:border-r border-slate-800">
+          <div className="flex min-w-0 flex-col min-h-[280px] md:min-h-[360px] lg:min-h-0 border-b md:border-b-0 md:border-r border-slate-800">
             <textarea
               ref={textareaRef}
               value={markdown}
@@ -956,6 +939,8 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
               onKeyDown={handleKeyDown}
               onPaste={handlePaste}
               onDrop={handleDrop}
+              aria-label="Contenido Markdown del informe"
+              lang="es"
               spellCheck={false}
               placeholder="Escribe el informe. Pega imágenes con Ctrl+V; Ctrl+S guarda; Ctrl+B/I/K aplica formato."
               className="flex-1 w-full min-h-[240px] bg-slate-950 text-slate-100 font-mono text-sm leading-6 p-3.5 sm:p-4 resize-none focus:outline-none"
@@ -973,7 +958,7 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
         )}
 
         {splitView !== 'edit' && (
-          <div className="overflow-y-auto min-h-[260px] lg:min-h-0 p-4 sm:p-5 bg-slate-900/30">
+          <div className="min-w-0 max-w-full overflow-y-auto min-h-[260px] lg:min-h-0 p-4 sm:p-5 bg-slate-900/30">
             <MarkdownRichPreview
               markdown={markdown}
               redactPreview={redactPreview}

@@ -1,6 +1,6 @@
 import json
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, Response, UploadFile, status
-from sqlalchemy import desc, select
+from sqlalchemy import desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models import utc_now
@@ -31,6 +31,8 @@ from app.schemas.writeups import (
     WriteupUpdate,
 )
 from app.security.crypto import decrypt_note, encrypt_note
+from app.config import settings
+from app.middleware.request_limits import read_upload_limited
 from app.security.tokens import require_vault_unlocked
 from app.services.activity_service import record_event
 from app.services.core_auth import get_current_user_from_token
@@ -84,32 +86,60 @@ router = APIRouter(
 
 @router.get("", response_model=list[WriteupSummaryOut])
 async def list_writeups(
+    response: Response,
     status_filter: str | None = Query(default=None, alias="status", max_length=32),
     severity_filter: str | None = Query(default=None, alias="severity", max_length=32),
     prospect_id: str | None = Query(default=None, max_length=36),
     project_id: str | None = Query(default=None, max_length=36),
     q: str | None = Query(default=None, max_length=120),
+    limit: int | None = Query(default=None, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
     db: AsyncSession = Depends(get_db),
     current_user: User | None = Depends(require_writeup_access),
 ):
-    stmt = select(Writeup).where(Writeup.is_deleted == False).order_by(desc(Writeup.updated_at))  # noqa: E712
+    stmt = select(Writeup).where(Writeup.is_deleted == False)  # noqa: E712
+    count_stmt = select(func.count(Writeup.id)).where(Writeup.is_deleted == False)  # noqa: E712
     if status_filter:
         stmt = stmt.where(Writeup.status == status_filter)
+        count_stmt = count_stmt.where(Writeup.status == status_filter)
     if severity_filter:
         stmt = stmt.where(Writeup.severity == severity_filter)
+        count_stmt = count_stmt.where(Writeup.severity == severity_filter)
     if prospect_id:
         stmt = stmt.where(Writeup.prospect_id == prospect_id)
+        count_stmt = count_stmt.where(Writeup.prospect_id == prospect_id)
     if project_id:
         stmt = stmt.where(Writeup.project_id == project_id)
+        count_stmt = count_stmt.where(Writeup.project_id == project_id)
+    query_text = q.strip() if q else ""
+    if query_text:
+        escaped_query = query_text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        query_filter = or_(
+            Writeup.title.ilike(f"%{escaped_query}%", escape="\\"),
+            Writeup.cwe_id.ilike(f"%{escaped_query}%", escape="\\"),
+            Writeup.cve_id.ilike(f"%{escaped_query}%", escape="\\"),
+            Writeup.target_scope.ilike(f"%{escaped_query}%", escape="\\"),
+            Writeup.tags_json.ilike(f"%{escaped_query}%", escape="\\"),
+        )
+        stmt = stmt.where(query_filter)
+        count_stmt = count_stmt.where(query_filter)
+
+    total = (await db.execute(count_stmt)).scalar_one()
+    response.headers["X-Total-Count"] = str(total)
+    stmt = stmt.order_by(desc(Writeup.updated_at), Writeup.id.desc())
+    if limit is None:
+        if offset:
+            stmt = stmt.offset(offset)
+        response.headers["X-Has-More"] = "false"
+    else:
+        stmt = stmt.limit(limit + 1).offset(offset)
+        response.headers["X-Has-More"] = str(total > offset + limit).lower()
     rows = (await db.execute(stmt)).scalars().all()
-    query_lower = q.strip().lower() if q else None
+    if limit is not None:
+        rows = rows[:limit]
     results: list[dict] = []
     for row in rows:
         tags = json.loads(row.tags_json) if row.tags_json else []
-        if query_lower:
-            haystack = f"{row.title} {row.cwe_id or ''} {row.cve_id or ''} {row.target_scope or ''} {' '.join(tags)}".lower()
-            if query_lower not in haystack:
-                continue
         boards_count, assets_count, citations_count = await count_related_entities(db, row.id)
         results.append({
             "id": row.id,
@@ -334,7 +364,8 @@ async def upload_writeup_asset(
     current_user: User | None = Depends(require_writeup_access),
 ):
     await get_writeup_or_404(db, writeup_id)
-    raw_bytes = await file.read()
+    upload_limit = max(settings.WRITEUP_MAX_IMAGE_BYTES, settings.WRITEUP_MAX_VIDEO_BYTES)
+    raw_bytes = await read_upload_limited(file, upload_limit)
     optimized = optimize_and_encrypt_media(raw_bytes, file.filename, convert_to_gif=convert_to_gif)
     asset = WriteupAsset(
         writeup_id=writeup_id,

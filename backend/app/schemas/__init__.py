@@ -515,6 +515,8 @@ class PasswordReuseGroup(BaseModel):
 class SecurityAuditResponse(BaseModel):
     health_score: int | None  # Null means there are no accounts to audit.
     total_accounts: int
+    email_accounts_count: int
+    passwords_checked_count: int
     vulnerable_accounts_count: int
     reused_passwords_count: int
     weak_passwords_count: int
@@ -968,7 +970,7 @@ class SecureResourceCreate(SecureResourceBase):
     resource_type: str = Field(default="nota_segura", max_length=64)
     scope: str = Field(default="business", max_length=32)
     ownership_type: str = Field(default="own", max_length=32)
-    content: str | None = Field(default=None, max_length=1000000)
+    content: str | None = Field(default=None, max_length=100000)
     email_id: str | None = Field(default=None, max_length=36)
     platform_id: str | None = Field(default=None, max_length=36)
     prospect_id: str | None = Field(default=None, max_length=36)
@@ -983,7 +985,7 @@ class SecureResourceUpdate(BaseModel):
     resource_type: str | None = Field(default=None, max_length=64)
     scope: str | None = Field(default=None, max_length=32)
     ownership_type: str | None = Field(default=None, max_length=32)
-    content: str | None = Field(default=None, max_length=1000000)
+    content: str | None = Field(default=None, max_length=100000)
     email_id: str | None = Field(default=None, max_length=36)
     platform_id: str | None = Field(default=None, max_length=36)
     prospect_id: str | None = Field(default=None, max_length=36)

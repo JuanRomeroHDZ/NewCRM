@@ -34,7 +34,7 @@ export const DashboardMetrics: React.FC<DashboardMetricsProps> = ({
   emailsWithout2FA,
   formatAmount,
 }) => (
-  <section aria-label="Indicadores principales" className="grid min-w-0 grid-cols-1 gap-x-5 gap-y-3 min-[420px]:grid-cols-2 lg:grid-cols-4">
+  <section aria-label="Indicadores principales" className="grid min-w-0 grid-cols-1 gap-x-5 gap-y-3 rounded-xl border border-obsidian-border bg-obsidian-panel p-4 min-[420px]:grid-cols-2 sm:p-5 lg:grid-cols-4">
     <div className={metricCardClass}>
       <div className="mb-1.5 flex items-center justify-between gap-2 text-obsidian-muted">
         <span className="text-xs font-medium">Gasto mensual</span>

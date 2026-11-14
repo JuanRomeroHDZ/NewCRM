@@ -229,11 +229,11 @@ export const InspectorFinanceForms: React.FC<InspectorFinanceFormsProps> = ({
   return (
     <>
       {/* HISTORIAL FINANCIERO / PAGOS DE ESTE CLIENTE */}
-      <div className="space-y-3 rounded-xl border border-obsidian-border bg-obsidian-surface p-3.5">
+      <div className="space-y-2 rounded-xl border border-obsidian-border bg-obsidian-surface p-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-1.5">
             <DollarSign size={14} className="text-emerald-400" aria-hidden="true" />
-            <span className="text-xs font-semibold text-white">Pagos Realizados por este Cliente</span>
+            <span className="text-xs font-semibold text-white">Pagos del cliente</span>
           </div>
           <button
             type="button"
@@ -247,15 +247,15 @@ export const InspectorFinanceForms: React.FC<InspectorFinanceFormsProps> = ({
         </div>
 
         {/* Summary Metrics */}
-        <div className="grid grid-cols-2 gap-2 text-center">
-          <div className="rounded-lg border border-obsidian-border bg-obsidian-bg p-2">
-            <span className="block text-[10px] text-obsidian-muted">Total Cobrado</span>
+        <div className="grid grid-cols-2 gap-2">
+          <div className="min-w-0 border-l border-obsidian-border pl-2">
+            <span className="block text-[10px] text-obsidian-muted">Cobrado</span>
             <span className="font-mono text-xs font-bold text-emerald-400">
               {totalCobrado === null ? 'Sin tipo de cambio' : formatAmount(totalCobrado, baseCurrency)}
             </span>
           </div>
-          <div className="rounded-lg border border-obsidian-border bg-obsidian-bg p-2">
-            <span className="block text-[10px] text-obsidian-muted">Total Pendiente</span>
+          <div className="min-w-0 border-l border-obsidian-border pl-2">
+            <span className="block text-[10px] text-obsidian-muted">Pendiente</span>
             <span className="font-mono text-xs font-bold text-amber-400">
               {totalPendiente === null ? 'Sin tipo de cambio' : formatAmount(totalPendiente, baseCurrency)}
             </span>
@@ -355,7 +355,7 @@ export const InspectorFinanceForms: React.FC<InspectorFinanceFormsProps> = ({
         {/* Incomes List */}
         <div className="max-h-48 space-y-1.5 overflow-y-auto">
           {clientIncomes.length === 0 ? (
-            <div className="py-3 text-center text-[11px] italic text-obsidian-muted">
+            <div className="py-1 text-[11px] text-obsidian-muted">
               Sin pagos registrados para este cliente.
             </div>
           ) : (
@@ -395,7 +395,7 @@ export const InspectorFinanceForms: React.FC<InspectorFinanceFormsProps> = ({
       </div>
 
       {/* DOMINIOS Y HOSTING ASOCIADOS */}
-      <div className="space-y-3 rounded-xl border border-obsidian-border bg-obsidian-surface p-3.5">
+      <div className="space-y-2 rounded-xl border border-obsidian-border bg-obsidian-surface p-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-1.5">
             <Globe size={14} className="text-indigo-400" aria-hidden="true" />
@@ -516,7 +516,7 @@ export const InspectorFinanceForms: React.FC<InspectorFinanceFormsProps> = ({
         {/* Domain Renewals List */}
         <div className="max-h-48 space-y-1.5 overflow-y-auto">
           {clientRenewals.length === 0 ? (
-            <div className="py-3 text-center text-[11px] italic text-obsidian-muted">
+            <div className="py-1 text-[11px] text-obsidian-muted">
               Sin dominios ni hosting asociados a este cliente.
             </div>
           ) : (

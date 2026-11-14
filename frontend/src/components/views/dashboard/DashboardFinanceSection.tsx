@@ -35,7 +35,7 @@ export const DashboardFinanceSection: React.FC<DashboardFinanceSectionProps> = (
   onCurrencyChange,
   onOpenSubscriptions,
 }) => (
-  <section aria-labelledby="dashboard-finance-heading" className="min-w-0 space-y-3">
+  <section aria-labelledby="dashboard-finance-heading" className="min-w-0 space-y-3 rounded-xl border border-obsidian-border bg-obsidian-panel p-4 sm:p-5">
     <div className="flex flex-wrap items-center justify-between gap-2">
       <div className="flex min-w-0 items-center gap-2">
         <BarChart3 size={16} className="shrink-0 text-emerald-400" aria-hidden="true" />
@@ -44,8 +44,8 @@ export const DashboardFinanceSection: React.FC<DashboardFinanceSectionProps> = (
         </h2>
         <InfoTooltip content="Compara ingresos cobrados con gastos de suscripciones y revisa los vencimientos próximos." />
       </div>
-      <button type="button" onClick={onOpenSubscriptions} className="shrink-0 text-xs font-medium text-indigo-400 hover:text-indigo-300">
-        Ver todos <ArrowRight size={12} aria-hidden="true" />
+      <button type="button" onClick={onOpenSubscriptions} className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-indigo-400 hover:text-indigo-300">
+        Ver suscripciones <ArrowRight size={12} aria-hidden="true" />
       </button>
     </div>
 
@@ -142,8 +142,8 @@ export const DashboardFinanceSection: React.FC<DashboardFinanceSectionProps> = (
 );
 
 const MetricRow: React.FC<{ label: string; value: string; color?: string }> = ({ label, value, color = 'text-white' }) => (
-    <div className="flex min-w-0 justify-between gap-2 py-0.5 text-xs font-mono">
-    <span className="min-w-0 truncate text-obsidian-muted">{label}</span>
-    <span className={`min-w-0 max-w-[62%] break-words text-right font-semibold ${color}`}>{value}</span>
+  <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5 py-0.5 text-xs font-mono">
+    <span className="min-w-0 flex-[1_1_8rem] break-words text-obsidian-muted">{label}</span>
+    <span className={`min-w-0 max-w-full flex-[0_1_auto] break-words text-right font-semibold ${color}`}>{value}</span>
   </div>
 );

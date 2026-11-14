@@ -200,6 +200,7 @@ async def test_close_sale_rejects_a_second_sale_for_the_same_prospect(db_session
     prospect = Prospect(company_name="Clínica Central")
     db_session.add(prospect)
     await db_session.commit()
+    prospect_id = prospect.id
 
     first_sale, _, _ = await CrmSalesService.close_sale_atomic(
         session=db_session,
@@ -207,7 +208,7 @@ async def test_close_sale_rejects_a_second_sale_for_the_same_prospect(db_session
         company_name=prospect.company_name,
         title="Sitio web",
         total_amount=12000.0,
-        prospect_id=prospect.id,
+        prospect_id=prospect_id,
     )
     first_sale_prospect_id = first_sale.prospect_id
 
@@ -218,18 +219,18 @@ async def test_close_sale_rejects_a_second_sale_for_the_same_prospect(db_session
             company_name=prospect.company_name,
             title="Sitio web",
             total_amount=12000.0,
-            prospect_id=prospect.id,
+            prospect_id=prospect_id,
         )
 
     sales_count = await db_session.scalar(
-        select(func.count()).select_from(Sale).where(Sale.prospect_id == prospect.id)
+        select(func.count()).select_from(Sale).where(Sale.prospect_id == prospect_id)
     )
     clients_count = await db_session.scalar(
-        select(func.count()).select_from(Client).where(Client.prospect_id == prospect.id)
+        select(func.count()).select_from(Client).where(Client.prospect_id == prospect_id)
     )
     assert sales_count == 1
     assert clients_count == 1
-    assert first_sale_prospect_id == prospect.id
+    assert first_sale_prospect_id == prospect_id
 
 
 @pytest.mark.asyncio

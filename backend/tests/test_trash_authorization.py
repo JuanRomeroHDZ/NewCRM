@@ -71,6 +71,7 @@ async def test_trash_role_matrix(client, db_session, auth_token):
     )
     db_session.add_all([restore_target, admin_purge_target, owner_purge_target])
     await db_session.commit()
+    restore_target_id = restore_target.id
 
     for role_token in [owner_token, admin_token, seller_token, readonly_token]:
         headers = _headers(auth_token, role_token)
@@ -127,7 +128,7 @@ async def test_trash_role_matrix(client, db_session, auth_token):
 
     db_session.expire_all()
     restored_item = await db_session.execute(
-        select(EmailAccount).where(EmailAccount.id == restore_target.id)
+        select(EmailAccount).where(EmailAccount.id == restore_target_id)
     )
     assert restored_item.scalar_one().is_deleted is False
 

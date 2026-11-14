@@ -5,16 +5,14 @@ import {
   BookOpen,
   Calculator,
   CheckCircle2,
-  Columns2,
+  ChevronDown,
   Copy,
   CopyPlus,
   Download,
-  FileCode2,
   Film,
   GitCompare,
   History,
   Image as ImageIcon,
-  Layers,
   Maximize2,
   PanelLeftClose,
   PanelLeftOpen,
@@ -65,9 +63,9 @@ const SEVERITY_BADGE: Record<WriteupSeverity, string> = {
   informativa: 'bg-slate-700/40 text-slate-300 border-slate-600/40',
 };
 
-const MAX_REPORT_TITLE_LENGTH = 240;
-const MAX_REPORT_TEXT_LENGTH = 200000;
-const MAX_FINDINGS_COUNT = 100;
+const MAX_REPORT_TITLE_LENGTH = 200;
+const MAX_REPORT_TEXT_LENGTH = 500000;
+const MAX_FINDINGS_COUNT = 200;
 
 const SEVERITY_BAR_COLOR: Record<WriteupSeverity, string> = {
   critica: '#f43f5e',
@@ -84,6 +82,9 @@ export const WriteupsView: React.FC = () => {
   const [items, setItems] = useState<WriteupSummary[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<WriteupDetail | null>(null);
+  const [loadingDetail, setLoadingDetail] = useState(false);
+  const [detailError, setDetailError] = useState('');
+  const [creatingWriteup, setCreatingWriteup] = useState(false);
   const [activeBoardId, setActiveBoardId] = useState<string | null>(null);
   const [mode, setMode] = useState<WorkspaceMode>(() =>
     typeof window !== 'undefined' && window.innerWidth >= 1280 ? 'dual' : 'markdown'
@@ -96,6 +97,11 @@ export const WriteupsView: React.FC = () => {
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   const [severityFilter, setSeverityFilter] = useState<string>('');
   const [loadingList, setLoadingList] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+  const [total, setTotal] = useState(0);
+  const [listError, setListError] = useState('');
+  const [loadMoreError, setLoadMoreError] = useState('');
   const [saving, setSaving] = useState(false);
   const [convertingAssetId, setConvertingAssetId] = useState<string | null>(null);
   const [convertUploadToGif, setConvertUploadToGif] = useState(true);
@@ -117,6 +123,18 @@ export const WriteupsView: React.FC = () => {
   const modalDialogRef = useRef<HTMLDivElement>(null);
   const modalCloseRef = useRef<HTMLButtonElement>(null);
   const previousModalFocusRef = useRef<HTMLElement | null>(null);
+  const listRequestVersion = useRef(0);
+  const detailRequestVersion = useRef(0);
+  const selectionInProgressRef = useRef(false);
+  const creationInProgressRef = useRef(false);
+  const nextListOffset = useRef(0);
+
+  const clearAssetUrlCache = useCallback(() => {
+    Object.values(assetUrlsRef.current).forEach((url) => URL.revokeObjectURL(url));
+    assetUrlsRef.current = {};
+    setAssetUrls({});
+    setFailedAssetIds({});
+  }, []);
 
   useEffect(() => {
     selectedIdRef.current = selectedId;
@@ -150,6 +168,49 @@ export const WriteupsView: React.FC = () => {
     };
   }, []);
 
+  useEffect(() => {
+    if (isUnlocked) return;
+    listRequestVersion.current += 1;
+    detailRequestVersion.current += 1;
+    selectedIdRef.current = null;
+    clearAssetUrlCache();
+    setItems([]);
+    setSelectedId(null);
+    setDetail(null);
+    setRevisions([]);
+    setProspects([]);
+    setProjects([]);
+    setAssetUrls({});
+    setFailedAssetIds({});
+    setActiveBoardId(null);
+    setTitle('');
+    setStatusVal('borrador');
+    setSeverity('media');
+    setCvssScore('');
+    setCvssVector('');
+    setCweId('');
+    setCveId('');
+    setTargetScope('');
+    setExecSummary('');
+    setMarkdown('');
+    setFindings([]);
+    setProspectId('');
+    setProjectId('');
+    setDirty(false);
+    setLoadingList(false);
+    setLoadingMore(false);
+    setLoadingDetail(false);
+    setCreatingWriteup(false);
+    setListError('');
+    setDetailError('');
+    setLoadMoreError('');
+    setTotal(0);
+    setHasMore(false);
+    setShowExportModal(false);
+    setLightboxAsset(null);
+    setDiffRevision(null);
+  }, [isUnlocked, clearAssetUrlCache]);
+
   const hydrateDraft = (data: WriteupDetail) => {
     setDetail(data);
     setTitle(data.title);
@@ -171,17 +232,29 @@ export const WriteupsView: React.FC = () => {
     setDirty(false);
   };
 
-  const preloadAssetUrls = useCallback(async (writeup: WriteupDetail) => {
+  const preloadAssetUrls = useCallback(async (writeup: WriteupDetail, requestVersion: number) => {
+    if (!isUnlocked || requestVersion !== detailRequestVersion.current) return;
     const nextMap: Record<string, string> = { ...assetUrlsRef.current };
     const nextErrors: Record<string, boolean> = {};
+    const createdUrls: string[] = [];
     for (const asset of writeup.assets) {
       if (nextMap[asset.id]) continue;
       try {
         const blob = await api.fetchWriteupAssetBlob(writeup.id, asset.id);
-        nextMap[asset.id] = URL.createObjectURL(blob);
+        if (!isUnlocked || requestVersion !== detailRequestVersion.current) {
+          createdUrls.forEach((url) => URL.revokeObjectURL(url));
+          return;
+        }
+        const url = URL.createObjectURL(blob);
+        createdUrls.push(url);
+        nextMap[asset.id] = url;
       } catch {
         nextErrors[asset.id] = true;
       }
+    }
+    if (!isUnlocked || requestVersion !== detailRequestVersion.current) {
+      createdUrls.forEach((url) => URL.revokeObjectURL(url));
+      return;
     }
     assetUrlsRef.current = nextMap;
     setAssetUrls(nextMap);
@@ -196,47 +269,105 @@ export const WriteupsView: React.FC = () => {
       }
       return updated;
     });
-  }, []);
+  }, [isUnlocked]);
 
   const loadList = useCallback(async () => {
     if (!isUnlocked) return;
+    const version = ++listRequestVersion.current;
+    nextListOffset.current = 0;
     setLoadingList(true);
+    setLoadingMore(false);
+    setItems([]);
+    setTotal(0);
+    setHasMore(false);
+    setListError('');
+    setLoadMoreError('');
     try {
-      const [rows, pros, projs] = await Promise.all([
-        api.listWriteups({
+      const [page, pros, projs] = await Promise.all([
+        api.listWriteupsPage({
           q: debouncedSearchQuery.trim() || undefined,
           severity: severityFilter || undefined,
+          limit: 50,
+          offset: 0,
         }),
         api.getProspects().catch(() => [] as Prospect[]),
         api.getProjects().catch(() => [] as InternalProject[]),
       ]);
-      setItems(rows);
+      if (version !== listRequestVersion.current) return;
+      setItems(page.items);
+      setTotal(page.total);
+      setHasMore(page.hasMore);
+      nextListOffset.current = page.items.length;
       setProspects(pros);
       setProjects(projs);
-      if (!selectedIdRef.current && rows.length > 0) {
-        setSelectedId(rows[0].id);
+      if (!selectedIdRef.current && page.items.length > 0) {
+        setSelectedId(page.items[0].id);
       }
     } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Error al cargar los informes', 'error');
+      if (version === listRequestVersion.current) {
+        setListError(err instanceof Error ? err.message : 'Error al cargar los informes');
+      }
     } finally {
-      setLoadingList(false);
+      if (version === listRequestVersion.current) setLoadingList(false);
     }
-  }, [isUnlocked, debouncedSearchQuery, severityFilter, showToast]);
+  }, [isUnlocked, debouncedSearchQuery, severityFilter]);
+
+  const handleLoadMore = async () => {
+    if (!isUnlocked || loadingMore || !hasMore) return;
+    const version = listRequestVersion.current;
+    setLoadingMore(true);
+    setLoadMoreError('');
+    try {
+      const page = await api.listWriteupsPage({
+        q: debouncedSearchQuery.trim() || undefined,
+        severity: severityFilter || undefined,
+        limit: 50,
+        offset: nextListOffset.current,
+      });
+      if (version !== listRequestVersion.current) return;
+      nextListOffset.current += page.items.length;
+      setItems((current) => {
+        const knownIds = new Set(current.map((item) => item.id));
+        return [...current, ...page.items.filter((item) => !knownIds.has(item.id))];
+      });
+      setTotal(page.total);
+      setHasMore(page.hasMore);
+    } catch (err) {
+      if (version === listRequestVersion.current) {
+        setLoadMoreError(err instanceof Error ? err.message : 'No se pudieron cargar más informes.');
+      }
+    } finally {
+      if (version === listRequestVersion.current) setLoadingMore(false);
+    }
+  };
 
   const loadDetail = useCallback(async (id: string) => {
     if (!isUnlocked) return;
+    const version = ++detailRequestVersion.current;
+    setLoadingDetail(true);
+    setDetailError('');
     try {
-      const [data, revs] = await Promise.all([
-        api.getWriteup(id),
-        api.listWriteupRevisions(id),
-      ]);
+      const data = await api.getWriteup(id);
+      if (version !== detailRequestVersion.current) return;
       hydrateDraft(data);
-      setRevisions(revs);
-      void preloadAssetUrls(data);
+      try {
+        const revs = await api.listWriteupRevisions(id);
+        if (version !== detailRequestVersion.current) return;
+        setRevisions(revs);
+      } catch {
+        if (version === detailRequestVersion.current) setRevisions([]);
+      }
+      void preloadAssetUrls(data, version);
     } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Error al cargar el informe', 'error');
+      if (version === detailRequestVersion.current) {
+        setDetail(null);
+        setRevisions([]);
+        setDetailError(err instanceof Error ? err.message : 'No se pudo cargar el informe.');
+      }
+    } finally {
+      if (version === detailRequestVersion.current) setLoadingDetail(false);
     }
-  }, [isUnlocked, preloadAssetUrls, showToast]);
+  }, [isUnlocked, preloadAssetUrls]);
 
   useEffect(() => {
     void loadList();
@@ -248,46 +379,92 @@ export const WriteupsView: React.FC = () => {
     }
   }, [selectedId, isUnlocked, loadDetail]);
 
-  const handleSelectWriteup = (id: string) => {
-    setSelectedId(id);
-    if (typeof window !== 'undefined' && window.innerWidth < 1280) {
-      setShowList(false);
+  const confirmDiscardDraft = async (nextAction: string) => {
+    if (!dirty) return true;
+    return confirm({
+      title: 'Cambios sin guardar',
+      message: `Tienes cambios sin guardar. Si ${nextAction}, se perderán.`,
+      confirmLabel: 'Descartar cambios',
+      cancelLabel: 'Seguir editando',
+      tone: 'warning',
+    });
+  };
+
+  const handleSelectWriteup = async (id: string) => {
+    if (id === selectedIdRef.current) {
+      if (typeof window !== 'undefined' && window.innerWidth < 1280) setShowList(false);
+      return;
+    }
+    if (selectionInProgressRef.current) return;
+    selectionInProgressRef.current = true;
+    try {
+      if (!(await confirmDiscardDraft('cambias de informe'))) return;
+      detailRequestVersion.current += 1;
+      clearAssetUrlCache();
+      selectedIdRef.current = id;
+      setSelectedId(id);
+      setDetail(null);
+      setRevisions([]);
+      setDetailError('');
+      setDirty(false);
+      if (typeof window !== 'undefined' && window.innerWidth < 1280) setShowList(false);
+    } finally {
+      selectionInProgressRef.current = false;
     }
   };
 
   const handleCreateWriteup = async () => {
-    const newTitle = await prompt({
-      title: 'Nuevo informe de seguridad',
-      message: 'Escribe el título del informe.',
-      confirmLabel: 'Crear',
-      required: true,
-      maxLength: MAX_REPORT_TITLE_LENGTH,
-    });
-    if (!newTitle || !newTitle.trim()) return;
+    if (creationInProgressRef.current) return;
+    creationInProgressRef.current = true;
     try {
+      const newTitle = await prompt({
+        title: 'Nuevo informe de seguridad',
+        message: 'Escribe el título del informe.',
+        confirmLabel: 'Crear',
+        required: true,
+        maxLength: MAX_REPORT_TITLE_LENGTH,
+      });
+      if (newTitle === null) return;
+      const cleanTitle = newTitle.trim();
+      if (cleanTitle.length < 2) {
+        showToast('El título debe tener al menos 2 caracteres.', 'warning');
+        return;
+      }
+      if (cleanTitle.length > MAX_REPORT_TITLE_LENGTH) {
+        showToast(`El título no puede superar ${MAX_REPORT_TITLE_LENGTH} caracteres.`, 'warning');
+        return;
+      }
+      if (!(await confirmDiscardDraft('creas un informe')) || !isUnlocked) return;
+      setCreatingWriteup(true);
       const created = await api.createWriteup({
-        title: newTitle.trim(),
+        title: cleanTitle,
         severity: 'media',
         status: 'borrador',
-        markdown_content: `# ${newTitle.trim()} {#intro}\n\n## Resumen de hallazgos\nDescribe el contexto de la prueba autorizada aquí.\n`,
+        markdown_content: `# ${cleanTitle} {#intro}\n\n## Resumen de hallazgos\nDescribe el contexto de la prueba autorizada aquí.\n`,
       });
-      setItems((prev) => [created, ...prev]);
+      detailRequestVersion.current += 1;
+      selectedIdRef.current = created.id;
       setSelectedId(created.id);
+      clearAssetUrlCache();
       hydrateDraft(created);
+      await loadList();
       if (typeof window !== 'undefined' && window.innerWidth < 1280) {
         setShowList(false);
       }
       showToast('Informe creado con una pizarra', 'success');
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'No se pudo crear el informe', 'error');
+    } finally {
+      creationInProgressRef.current = false;
+      setCreatingWriteup(false);
     }
   };
 
   const handleSaveWriteup = async (saveRevision = false, markdownOverride?: string) => {
     if (!detail) return false;
     const cleanTitle = title.trim();
-    if (!cleanTitle) {
-      showToast('Escribe un título antes de guardar el informe.', 'warning');
+    if (cleanTitle.length < 2) {
+      showToast('El título debe tener al menos 2 caracteres.', 'warning');
       return false;
     }
     if (cleanTitle.length > MAX_REPORT_TITLE_LENGTH) {
@@ -306,15 +483,19 @@ export const WriteupsView: React.FC = () => {
     }
     if (
       (markdownOverride ?? markdown).length > MAX_REPORT_TEXT_LENGTH ||
-      execSummary.length > 12000 || cweId.length > 120 || cveId.length > 32 || targetScope.length > 500 ||
-      findings.some((finding) => finding.summary.length > 12000 || finding.remediation.length > 12000 || (finding.cwe_id || '').length > 160 || (finding.affected_target || '').length > 500)
+      execSummary.length > 25000 || cweId.length > 32 || cveId.length > 64 || targetScope.length > 500 ||
+      findings.some((finding) =>
+        finding.id.length > 64 || finding.title.length > 200 ||
+        finding.summary.length > 4000 || finding.remediation.length > 4000 ||
+        (finding.cvss_vector || '').length > 128 || (finding.cwe_id || '').length > 32 ||
+        (finding.cve_id || '').length > 64 || (finding.affected_target || '').length > 255
+      )
     ) {
       showToast('Uno o más campos superan el límite permitido. Acorta el texto antes de guardar.', 'warning');
       return false;
     }
     const invalidFinding = findings.find((finding) =>
       !finding.id.trim() || !finding.title.trim() ||
-      finding.id.length > 80 || finding.title.length > 240 ||
       (finding.cvss_score != null && (!Number.isFinite(finding.cvss_score) || finding.cvss_score < 0 || finding.cvss_score > 10))
     );
     if (invalidFinding) {
@@ -369,9 +550,14 @@ export const WriteupsView: React.FC = () => {
     });
     if (!confirmed) return;
     try {
+      detailRequestVersion.current += 1;
       await api.deleteWriteup(detail.id);
+      clearAssetUrlCache();
       setDetail(null);
+      selectedIdRef.current = null;
       setSelectedId(null);
+      setRevisions([]);
+      setDetailError('');
       await loadList();
       showToast('Informe eliminado', 'info');
     } catch (err) {
@@ -452,11 +638,20 @@ export const WriteupsView: React.FC = () => {
       defaultValue: `Diagrama #${detail.boards.length + 1}`,
       confirmLabel: 'Crear',
       required: true,
-      maxLength: 120,
+      maxLength: 180,
     });
-    if (!name || !name.trim()) return;
+    if (name === null) return;
+    const cleanName = name.trim();
+    if (cleanName.length < 2) {
+      showToast('El nombre debe tener al menos 2 caracteres.', 'warning');
+      return;
+    }
+    if (cleanName.length > 180) {
+      showToast('El nombre no puede superar 180 caracteres.', 'warning');
+      return;
+    }
     try {
-      const board = await api.createWriteupBoard(detail.id, { title: name.trim() });
+      const board = await api.createWriteupBoard(detail.id, { title: cleanName });
       setDetail((prev) => (prev ? { ...prev, boards: [...prev.boards, board] } : prev));
       setActiveBoardId(board.id);
       showToast('Nueva pizarra agregada', 'success');
@@ -674,7 +869,7 @@ export const WriteupsView: React.FC = () => {
 
   if (!isUnlocked) {
     return (
-      <div className="flex flex-col items-center justify-center h-[70vh] text-center p-6">
+      <div className="flex min-h-[40vh] flex-col items-center justify-center p-4 text-center sm:min-h-[70vh] sm:p-6">
         <Shield className="w-12 h-12 text-indigo-400 mb-3" />
         <h2 className="text-xl font-bold text-white mb-2">Bóveda bloqueada</h2>
         <p className="text-sm text-slate-400 max-w-md mb-5">
@@ -701,7 +896,7 @@ export const WriteupsView: React.FC = () => {
   ].filter(Boolean);
 
   return (
-    <div className="relative flex flex-col lg:flex-row gap-3 p-2 sm:p-3 lg:p-4 min-h-[calc(100dvh-4.5rem)] lg:h-[calc(100dvh-4.5rem)]">
+    <div className="writeups-view relative flex min-h-[calc(100dvh-4.5rem)] min-w-0 flex-col gap-3 overflow-x-clip p-2 sm:p-3 lg:h-[calc(100dvh-4.5rem)] lg:min-h-0 lg:flex-row lg:p-4">
       {/* Mobile / Medium Drawer Backdrop */}
       {showList && (
         <button
@@ -714,26 +909,27 @@ export const WriteupsView: React.FC = () => {
 
       {/* Collapsible / Drawer Writeups List */}
       {showList && (
-        <aside className="fixed inset-y-0 left-0 z-40 w-80 max-w-[85vw] lg:static lg:z-auto lg:w-64 xl:w-72 shrink-0 flex flex-col bg-slate-900 border border-slate-800 lg:rounded-2xl overflow-hidden shadow-2xl lg:shadow-none">
+        <aside aria-label="Lista de informes" className="fixed inset-y-0 left-0 z-40 flex w-80 max-w-[85vw] shrink-0 flex-col overflow-hidden border border-slate-800 bg-slate-900 shadow-2xl lg:static lg:z-auto lg:w-64 lg:rounded-2xl lg:shadow-none xl:w-72">
           <div className="p-3 border-b border-slate-800 space-y-2">
             <div className="flex items-center justify-between gap-2">
               <h2 className="text-sm font-bold text-white flex items-center gap-2">
                 <BookOpen className="w-4 h-4 text-indigo-400" />
-                Informes ({items.length})
+                Informes ({total})
               </h2>
               <div className="flex items-center gap-1">
                 <button
                   type="button"
                   onClick={handleCreateWriteup}
-                  className="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium flex items-center gap-1"
+                  disabled={creatingWriteup}
+                  className="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium flex items-center gap-1 disabled:cursor-wait disabled:opacity-60"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  Nuevo
+                  {creatingWriteup ? 'Creando…' : 'Nuevo'}
                 </button>
                 <button
                   type="button"
                   onClick={() => setShowList(false)}
-                  className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 lg:hidden"
+                  className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800"
                   aria-label="Cerrar panel"
                 >
                   <X className="w-4 h-4" />
@@ -748,15 +944,18 @@ export const WriteupsView: React.FC = () => {
                 value={searchQuery}
                 maxLength={120}
                 onChange={(e) => setSearchQuery(e.target.value)}
+                aria-label="Buscar informes"
                 placeholder="Buscar…"
                 className="w-full pl-8 pr-2.5 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-xs text-slate-100"
               />
             </div>
 
+            <div className="relative">
             <select
               value={severityFilter}
               onChange={(e) => setSeverityFilter(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-slate-200"
+              aria-label="Filtrar informes por severidad"
+              className="w-full appearance-none bg-slate-950 border border-slate-800 rounded-lg pl-2 pr-8 py-1.5 text-xs text-slate-200"
             >
               <option value="">Todas las severidades</option>
               <option value="critica">Crítica</option>
@@ -765,20 +964,34 @@ export const WriteupsView: React.FC = () => {
               <option value="baja">Baja</option>
               <option value="informativa">Informativa</option>
             </select>
+            <ChevronDown aria-hidden="true" className="pointer-events-none absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            </div>
           </div>
 
           <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
             {loadingList && items.length === 0 ? (
-              <p className="text-xs text-slate-400 p-3">Cargando…</p>
+              <p role="status" aria-live="polite" className="p-3 text-xs text-slate-400">Cargando informes…</p>
+            ) : listError && items.length === 0 ? (
+              <div className="space-y-2 p-3 text-xs text-rose-300">
+                <p role="alert">{listError}</p>
+                <button
+                  type="button"
+                  onClick={() => void loadList()}
+                  className="min-h-9 rounded-lg border border-rose-500/30 px-3 text-rose-200 hover:bg-rose-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                >
+                  Reintentar
+                </button>
+              </div>
             ) : items.length === 0 ? (
               <div className="text-center p-4 text-xs text-slate-400 space-y-2">
                 <p>Aún no hay informes.</p>
                 <button
                   type="button"
                   onClick={handleCreateWriteup}
-                  className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-indigo-300"
+                  disabled={creatingWriteup}
+                  className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-indigo-300 disabled:cursor-wait disabled:opacity-60"
                 >
-                  Crear primero
+                  {creatingWriteup ? 'Creando…' : 'Crear primero'}
                 </button>
               </div>
             ) : (
@@ -811,13 +1024,41 @@ export const WriteupsView: React.FC = () => {
                 );
               })
             )}
+            {hasMore && !loadingList && (
+              <div className="flex flex-col items-center gap-2 p-2">
+                {loadMoreError && <p role="alert" className="text-center text-xs text-rose-300">{loadMoreError}</p>}
+                <button
+                  type="button"
+                  onClick={handleLoadMore}
+                  disabled={loadingMore}
+                  aria-label="Cargar más informes"
+                  className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-slate-700 bg-slate-900 px-3 text-xs font-medium text-slate-200 hover:border-indigo-400/60 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 disabled:cursor-wait disabled:opacity-60"
+                >
+                  {loadingMore && <RefreshCw className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />}
+                  {loadingMore ? 'Cargando…' : loadMoreError ? 'Reintentar carga' : 'Cargar más'}
+                </button>
+              </div>
+            )}
           </div>
         </aside>
       )}
 
       {/* Main Editor + Whiteboard Workspace */}
-      <section className="flex-1 flex flex-col min-w-0 min-h-0 bg-slate-900/50 border border-slate-800 rounded-2xl overflow-hidden">
-        {!detail ? (
+      <section aria-label="Editor del informe" className="flex min-h-[50vh] min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/50 lg:min-h-0">
+        {!detail ? loadingDetail ? (
+          <div role="status" className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center text-slate-400">
+            <RefreshCw className="h-6 w-6 animate-spin text-indigo-300" aria-hidden="true" />
+            <p className="text-sm">Cargando informe…</p>
+          </div>
+        ) : detailError ? (
+          <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
+            <p role="alert" className="max-w-md text-sm text-rose-300">{detailError}</p>
+            <div className="flex flex-wrap justify-center gap-2">
+              {selectedId && <button type="button" onClick={() => void loadDetail(selectedId)} className="min-h-9 rounded-lg bg-indigo-600 px-3 text-xs font-medium text-white hover:bg-indigo-500">Reintentar</button>}
+              <button type="button" onClick={() => setShowList(true)} className="min-h-9 rounded-lg bg-slate-800 px-3 text-xs font-medium text-slate-200 hover:bg-slate-700">Ver lista</button>
+            </div>
+          </div>
+        ) : (
           <div className="flex-1 flex flex-col items-center justify-center text-slate-400 p-6 text-center gap-3">
             <BookOpen className="w-10 h-10 text-slate-600" />
             <p className="text-sm">Selecciona un informe o crea uno nuevo.</p>
@@ -828,15 +1069,16 @@ export const WriteupsView: React.FC = () => {
                 className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium flex items-center gap-1.5"
               >
                 <PanelLeftOpen className="w-4 h-4" />
-                Ver lista ({items.length})
+                Ver lista ({total})
               </button>
               <button
                 type="button"
                 onClick={handleCreateWriteup}
-                className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-1.5"
+                disabled={creatingWriteup}
+                className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-1.5 disabled:cursor-wait disabled:opacity-60"
               >
                 <Plus className="w-4 h-4" />
-                Nuevo informe
+                {creatingWriteup ? 'Creando…' : 'Nuevo informe'}
               </button>
             </div>
           </div>
@@ -901,6 +1143,8 @@ export const WriteupsView: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowMetadata((v) => !v)}
+                  aria-label="Mostrar u ocultar detalles del informe"
+                  aria-expanded={showMetadata}
                   className={`px-2 py-1.5 rounded-lg text-xs flex items-center gap-1 border ${
                     showMetadata ? 'bg-indigo-600/20 border-indigo-500/40 text-indigo-200' : 'bg-slate-800 border-slate-700 text-slate-300'
                   }`}
@@ -922,6 +1166,7 @@ export const WriteupsView: React.FC = () => {
                     type="button"
                     disabled={saving}
                     onClick={() => void handleSaveWriteup(false)}
+                    aria-label={saving ? 'Guardando informe' : dirty ? 'Guardar cambios del informe' : 'Informe guardado'}
                     className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 ${
                       dirty ? 'bg-indigo-600 hover:bg-indigo-500 text-white' : 'bg-slate-800 hover:bg-slate-700 text-slate-200'
                     }`}
@@ -956,6 +1201,7 @@ export const WriteupsView: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setShowExportModal(true)}
+                    aria-label="Exportar informe"
                     className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1"
                     title="Exportar el informe"
                   >
@@ -1006,7 +1252,7 @@ export const WriteupsView: React.FC = () => {
                   <input
                     type="text"
                     value={cweId}
-                    maxLength={120}
+                    maxLength={32}
                     onChange={(e) => {
                       setCweId(e.target.value);
                       setDirty(true);
@@ -1018,7 +1264,7 @@ export const WriteupsView: React.FC = () => {
                   <input
                     type="text"
                     value={cveId}
-                    maxLength={32}
+                    maxLength={64}
                     onChange={(e) => {
                       setCveId(e.target.value);
                       setDirty(true);
@@ -1041,6 +1287,7 @@ export const WriteupsView: React.FC = () => {
                   />
                   <select
                     value={prospectId}
+                    aria-label="Vincular prospecto"
                     onChange={(e) => {
                       setProspectId(e.target.value);
                       setDirty(true);
@@ -1054,6 +1301,7 @@ export const WriteupsView: React.FC = () => {
                   </select>
                   <select
                     value={projectId}
+                    aria-label="Vincular proyecto"
                     onChange={(e) => {
                       setProjectId(e.target.value);
                       setDirty(true);
@@ -1070,38 +1318,25 @@ export const WriteupsView: React.FC = () => {
 
               {/* Mode Switcher + Board Picker */}
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800 overflow-x-auto max-w-full">
-                  {[
-                    { id: 'markdown', label: 'Editor', icon: FileCode2 },
-                    { id: 'whiteboard', label: 'Pizarra', icon: Layers },
-                    { id: 'dual', label: 'Dos vistas', icon: Columns2 },
-                    { id: 'findings', label: `Hallazgos (${findings.length})`, icon: Shield },
-                    { id: 'assets', label: `Medios (${detail.assets.length})`, icon: ImageIcon },
-                  ].map((tab) => {
-                    const Icon = tab.icon;
-                    const active = mode === tab.id;
-                    return (
-                      <button
-                        key={tab.id}
-                        type="button"
-                        onClick={() => setMode(tab.id as WorkspaceMode)}
-                        className={`px-2.5 py-1 rounded-lg text-xs font-medium flex items-center gap-1.5 shrink-0 ${
-                          active ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800'
-                        }`}
-                      >
-                        <Icon className="w-3.5 h-3.5" />
-                        {tab.label}
-                      </button>
-                    );
-                  })}
-                </div>
+                <label className="relative inline-flex max-w-full items-center">
+                  <span className="sr-only">Vista del informe</span>
+                  <select value={mode} onChange={(event) => setMode(event.target.value as WorkspaceMode)} className="min-h-10 max-w-full appearance-none rounded-lg border border-slate-700 bg-slate-950 pl-3 pr-9 text-xs text-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300">
+                    <option value="markdown">Editor</option>
+                    <option value="whiteboard">Pizarra</option>
+                    <option value="dual">Dos vistas</option>
+                    <option value="findings">Hallazgos ({findings.length})</option>
+                    <option value="assets">Medios ({detail.assets.length})</option>
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-3 h-4 w-4 text-slate-400" aria-hidden="true" />
+                </label>
 
                 {(mode === 'dual' || mode === 'whiteboard') && (
                   <div className="flex items-center gap-1.5 text-xs">
                     <select
                       value={activeBoard?.id || ''}
                       onChange={(e) => setActiveBoardId(e.target.value)}
-                      className="bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-slate-200 max-w-[160px]"
+                      aria-label="Seleccionar pizarra"
+                      className="min-h-9 max-w-[160px] rounded-lg border border-slate-800 bg-slate-950 px-2 py-1 text-slate-200"
                     >
                       {detail.boards.map((b) => (
                         <option key={b.id} value={b.id}>{b.title}</option>
@@ -1110,6 +1345,7 @@ export const WriteupsView: React.FC = () => {
                     <button
                       type="button"
                       onClick={handleCreateBoard}
+                      aria-label="Crear nueva pizarra"
                       className="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-indigo-300 flex items-center gap-1"
                       title="Nueva pizarra"
                     >
@@ -1253,11 +1489,12 @@ export const WriteupsView: React.FC = () => {
                   </div>
 
                   <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-3.5 space-y-2">
-                    <label className="block text-xs font-semibold text-slate-300">Resumen Ejecutivo</label>
+                    <label htmlFor="writeup-executive-summary" className="block text-xs font-semibold text-slate-300">Resumen ejecutivo</label>
                     <textarea
+                      id="writeup-executive-summary"
                       rows={3}
                       value={execSummary}
-                      maxLength={12000}
+                      maxLength={25000}
                       onChange={(e) => {
                         setExecSummary(e.target.value);
                         setDirty(true);
@@ -1305,7 +1542,7 @@ export const WriteupsView: React.FC = () => {
                           <input
                             type="text"
                             value={f.id}
-                            maxLength={80}
+                            maxLength={64}
                             onChange={(e) => {
                               const next = [...findings];
                               next[idx] = { ...f, id: e.target.value };
@@ -1318,7 +1555,7 @@ export const WriteupsView: React.FC = () => {
                           <input
                             type="text"
                             value={f.title}
-                            maxLength={240}
+                            maxLength={200}
                             onChange={(e) => {
                               const next = [...findings];
                               next[idx] = { ...f, title: e.target.value };
@@ -1418,7 +1655,7 @@ export const WriteupsView: React.FC = () => {
                               const next = [...findings];
                               next[idx] = {
                                 ...f,
-                                cwe_id: `${preset.cwe} · ${preset.owasp} · MITRE ${preset.mitre}`,
+                                cwe_id: preset.cwe,
                                 cvss_score: res.score,
                                 cvss_vector: res.vector,
                                 severity: res.severity,
@@ -1439,7 +1676,7 @@ export const WriteupsView: React.FC = () => {
                           <input
                             type="text"
                             value={f.cwe_id || ''}
-                            maxLength={160}
+                            maxLength={32}
                             onChange={(e) => {
                               const next = [...findings];
                               next[idx] = { ...f, cwe_id: e.target.value };
@@ -1452,7 +1689,7 @@ export const WriteupsView: React.FC = () => {
                           <input
                             type="text"
                             value={f.affected_target || ''}
-                            maxLength={500}
+                            maxLength={255}
                             onChange={(e) => {
                               const next = [...findings];
                               next[idx] = { ...f, affected_target: e.target.value };
@@ -1531,7 +1768,7 @@ export const WriteupsView: React.FC = () => {
                           <textarea
                             rows={2}
                             value={f.summary}
-                            maxLength={12000}
+                            maxLength={4000}
                             onChange={(e) => {
                               const next = [...findings];
                               next[idx] = { ...f, summary: e.target.value };
@@ -1544,7 +1781,7 @@ export const WriteupsView: React.FC = () => {
                           <textarea
                             rows={2}
                             value={f.remediation}
-                            maxLength={12000}
+                            maxLength={4000}
                             onChange={(e) => {
                               const next = [...findings];
                               next[idx] = { ...f, remediation: e.target.value };

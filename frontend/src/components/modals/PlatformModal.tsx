@@ -479,6 +479,7 @@ export const PlatformModal: React.FC = () => {
                     <div className="flex items-center gap-1.5">
                       <input
                         type="text"
+                        maxLength={INPUT_LIMITS.COMPANY_NAME}
                         value={newClientName}
                         onChange={(e) => setNewClientName(e.target.value)}
                         placeholder="Nombre de la empresa o cliente"
@@ -544,6 +545,7 @@ export const PlatformModal: React.FC = () => {
                   <span className="text-[11px] font-semibold text-white block">Nuevo Correo al Vuelo:</span>
                   <input
                     type="email"
+                    maxLength={INPUT_LIMITS.EMAIL}
                     value={newEmailAddress}
                     onChange={(e) => setNewEmailAddress(e.target.value)}
                     placeholder="nuevo@dominio.com"

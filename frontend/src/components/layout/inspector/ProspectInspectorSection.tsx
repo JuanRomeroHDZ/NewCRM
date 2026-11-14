@@ -113,7 +113,7 @@ export const ProspectInspectorSection: React.FC<ProspectInspectorSectionProps> =
   return (
     <>
       {/* Flow, Status & Commercial Value control */}
-      <div className="space-y-2.5 rounded-xl border border-obsidian-border bg-obsidian-surface p-3.5">
+      <div className="space-y-2 rounded-xl border border-obsidian-border bg-obsidian-surface p-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <span className="text-obsidian-muted">Modalidad del Flujo</span>
           <span
@@ -230,15 +230,15 @@ export const ProspectInspectorSection: React.FC<ProspectInspectorSectionProps> =
       </div>
 
       {/* BLOQUE 1: Correlación de Emails */}
-      <div className="space-y-2.5 rounded-xl border border-obsidian-border bg-obsidian-surface p-3.5">
+      <div className="space-y-2 rounded-xl border border-obsidian-border bg-obsidian-surface p-3">
         <span className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-white">
           <Mail size={12} className="text-indigo-400" aria-hidden="true" />
-          <span>1. Correos Relacionados</span>
+          <span>Correos</span>
         </span>
 
-        <div className="flex items-center justify-between gap-2 rounded-lg border border-obsidian-border bg-obsidian-bg p-2.5">
+        <div className="flex min-w-0 items-center justify-between gap-2 border-b border-obsidian-border/60 py-1.5 last:border-0">
           <div className="min-w-0">
-            <span className="block text-[10px] text-obsidian-muted">Mi Correo Principal Vinculado</span>
+            <span className="block text-[10px] text-obsidian-muted">Correo principal</span>
             <span className="block truncate font-mono font-medium text-cyan-300">
               {prospectData.specific_alias || prospectData.email_address || 'Sin correo vinculado'}
             </span>
@@ -264,9 +264,9 @@ export const ProspectInspectorSection: React.FC<ProspectInspectorSectionProps> =
         </div>
 
         {prospectData.contact_email && (
-          <div className="flex items-center justify-between gap-2 rounded-lg border border-obsidian-border bg-obsidian-bg p-2.5">
+          <div className="flex min-w-0 items-center justify-between gap-2 border-b border-obsidian-border/60 py-1.5 last:border-0">
             <div className="min-w-0">
-              <span className="block text-[10px] text-obsidian-muted">Correo del Cliente / Prospecto</span>
+              <span className="block text-[10px] text-obsidian-muted">Correo del prospecto</span>
               <span className="block truncate font-mono text-white">{prospectData.contact_email}</span>
             </div>
             <CopyButton
@@ -279,14 +279,14 @@ export const ProspectInspectorSection: React.FC<ProspectInspectorSectionProps> =
       </div>
 
       {/* BLOQUE 2: Datos del Prospecto y Página Demo */}
-      <div className="space-y-2.5 rounded-xl border border-obsidian-border bg-obsidian-surface p-3.5">
+      <div className="space-y-2 rounded-xl border border-obsidian-border bg-obsidian-surface p-3">
         <span className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-white">
           <Globe size={12} className="text-cyan-400" aria-hidden="true" />
-          <span>2. Datos del Prospecto y Página Demo</span>
+          <span>Contacto y página demo</span>
         </span>
 
         {prospectData.demo_url ? (
-          <div className="space-y-1.5 rounded-lg border border-obsidian-border bg-obsidian-bg p-2.5">
+          <div className="space-y-1 border-b border-obsidian-border/60 py-1.5">
             <span className="block text-[10px] text-obsidian-muted">URL de la Página Demo Creada</span>
             <div className="flex items-center justify-between gap-2">
               <a
@@ -316,13 +316,13 @@ export const ProspectInspectorSection: React.FC<ProspectInspectorSectionProps> =
             </div>
           </div>
         ) : (
-          <div className="rounded-lg border border-obsidian-border bg-obsidian-bg p-2.5 italic text-obsidian-muted">
+          <div className="py-1 text-obsidian-muted">
             Sin URL de página demo asignada.
           </div>
         )}
 
         {prospectData.whatsapp && prospectWaUrl && (
-          <div className="flex items-center justify-between gap-2 rounded-lg border border-obsidian-border bg-obsidian-bg p-2.5">
+          <div className="flex min-w-0 items-center justify-between gap-2 border-b border-obsidian-border/60 py-1.5 last:border-0">
             <div className="flex min-w-0 items-center gap-2">
               <MessageCircle size={14} className="flex-shrink-0 text-emerald-400" aria-hidden="true" />
               <span className="truncate font-mono text-white">{prospectData.whatsapp}</span>
@@ -347,7 +347,7 @@ export const ProspectInspectorSection: React.FC<ProspectInspectorSectionProps> =
         )}
 
         {prospectData.phones && (
-          <div className="flex items-center justify-between gap-2 rounded-lg border border-obsidian-border bg-obsidian-bg p-2.5">
+          <div className="flex min-w-0 items-center justify-between gap-2 border-b border-obsidian-border/60 py-1.5 last:border-0">
             <div className="flex min-w-0 items-center gap-2">
               <Phone size={14} className="flex-shrink-0 text-cyan-400" aria-hidden="true" />
               <span className="truncate font-mono text-white">{prospectData.phones}</span>
@@ -357,7 +357,7 @@ export const ProspectInspectorSection: React.FC<ProspectInspectorSectionProps> =
         )}
 
         {prospectData.maps_url && (
-          <div className="flex items-center justify-between gap-2 rounded-lg border border-obsidian-border bg-obsidian-bg p-2.5">
+          <div className="flex min-w-0 items-center justify-between gap-2 border-b border-obsidian-border/60 py-1.5 last:border-0">
             <div className="flex min-w-0 items-center gap-2">
               <MapPin size={14} className="flex-shrink-0 text-amber-400" aria-hidden="true" />
               <span className="truncate text-obsidian-text">Ubicación en Mapa</span>
@@ -383,7 +383,7 @@ export const ProspectInspectorSection: React.FC<ProspectInspectorSectionProps> =
       </div>
 
       {/* Acciones Rápidas de Seguimiento y Contacto Directo */}
-      <div className="space-y-2.5 rounded-xl border border-indigo-500/25 bg-indigo-500/5 p-3.5">
+      <div className="space-y-2 rounded-xl border border-indigo-500/25 bg-indigo-500/5 p-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <span className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-indigo-300">
             <MessageCircle size={12} className="text-indigo-400" aria-hidden="true" />
@@ -538,10 +538,10 @@ export const ProspectInspectorSection: React.FC<ProspectInspectorSectionProps> =
       </div>
 
       {/* BLOQUE 3: Doble Cronómetro */}
-      <div className="space-y-3 rounded-xl border border-obsidian-border bg-obsidian-surface p-4">
+      <div className="space-y-2 rounded-xl border border-obsidian-border bg-obsidian-surface p-3">
         <span className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-white">
           <Clock size={12} className="text-amber-400" aria-hidden="true" />
-          <span>3. Tiempo de Respuesta y Seguimiento</span>
+          <span>Tiempo de respuesta</span>
         </span>
 
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -607,7 +607,7 @@ export const ProspectInspectorSection: React.FC<ProspectInspectorSectionProps> =
           </div>
         </div>
 
-        <div className="flex items-center justify-between gap-2 rounded-xl border border-obsidian-border bg-obsidian-bg p-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-obsidian-border/60 pt-2">
           <div>
             <div className="text-[10px] uppercase tracking-wider text-obsidian-muted">
               {prospectLive.isResponded
@@ -692,9 +692,9 @@ export const ProspectInspectorSection: React.FC<ProspectInspectorSectionProps> =
       )}
 
       {prospectData.notes && (
-        <div className="space-y-1 rounded-xl border border-obsidian-border bg-obsidian-surface p-3">
-          <span className="block text-obsidian-muted">Notas Adicionales</span>
-          <p className="whitespace-pre-wrap break-words leading-relaxed text-obsidian-text">
+        <div className="space-y-2 rounded-xl border border-obsidian-border bg-obsidian-surface p-3">
+          <span className="block text-xs font-semibold text-white">Notas</span>
+          <p className="whitespace-pre-wrap break-words leading-5 text-obsidian-text">
             {prospectData.notes}
           </p>
         </div>
@@ -710,8 +710,8 @@ export const ProspectInspectorSection: React.FC<ProspectInspectorSectionProps> =
       />
 
       {/* Tags */}
-      <div className="space-y-2 rounded-xl border border-obsidian-border bg-obsidian-surface p-3">
-        <span className="block text-obsidian-muted">Etiquetas</span>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-obsidian-border pt-3">
+        <span className="text-obsidian-muted">Etiquetas</span>
         <div className="flex flex-wrap gap-1.5">
           {prospectData.tags && prospectData.tags.length > 0 ? (
             prospectData.tags.map((t, idx) => <TagBadge key={idx} name={t.name} color={t.color} />)

@@ -234,14 +234,6 @@ export const SubscriptionsLists: React.FC<SubscriptionsListsProps> = ({
             </h3>
             <InfoTooltip content="Controla cuándo vence el dominio o alojamiento de cada página web creada, cuánto cuesta renovarlo y si el pago corre por tu cuenta o por cuenta del cliente." />
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[11px] font-mono text-obsidian-muted">
-              Por mi cuenta: <strong className="text-rose-300">${formatAmount(realProfit.myRenewalsYearlyMXN)} {baseCurrency}/año</strong>
-            </span>
-            <span className="text-obsidian-muted">•</span>
-            <span className="text-[11px] font-mono text-obsidian-muted">
-              Paga el cliente: <strong className="text-emerald-300">${formatAmount(realProfit.clientRenewalsYearlyMXN)} {baseCurrency}/año</strong>
-            </span>
             <button
               type="button"
               onClick={openNewRenewalModal}
@@ -250,6 +242,15 @@ export const SubscriptionsLists: React.FC<SubscriptionsListsProps> = ({
               <Plus size={13} aria-hidden="true" />
               <span>Agregar Dominio / Hosting</span>
             </button>
+          <div className="flex w-full flex-wrap items-center gap-2">
+            <span className="text-[11px] font-mono text-obsidian-muted">
+              Por mi cuenta: <strong className="text-rose-300">${formatAmount(realProfit.myRenewalsYearlyMXN)} {baseCurrency}/año</strong>
+            </span>
+            <span className="text-obsidian-muted">•</span>
+            <span className="text-[11px] font-mono text-obsidian-muted">
+              Paga el cliente: <strong className="text-emerald-300">${formatAmount(realProfit.clientRenewalsYearlyMXN)} {baseCurrency}/año</strong>
+            </span>
+
           </div>
         </div>
 
@@ -398,7 +399,15 @@ export const SubscriptionsLists: React.FC<SubscriptionsListsProps> = ({
             </h3>
             <InfoTooltip content="Registra compras no recurrentes (hardware, laptops, licencias vitalicias, insumos, mobiliario) para deducirlas de tu ganancia neta real sin alterar tus suscripciones mensuales." />
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={openNewExpenseModal}
+            className="inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-xl bg-purple-600 px-3 py-1.5 text-xs font-semibold text-white transition-all hover:bg-purple-500"
+          >
+            <Plus size={13} aria-hidden="true" />
+            <span>Registrar gasto</span>
+          </button>
+          <div className="flex basis-full flex-wrap items-center gap-2">
             <span className="text-[11px] font-mono text-obsidian-muted">
               Total este mes: <strong className="text-purple-300">${formatAmount(isProfitBase ? realProfit.variableMonthExpenseMXN : realProfit.variableMonthExpenseUSD)} {profitCurrencyView}</strong>
             </span>
@@ -406,14 +415,6 @@ export const SubscriptionsLists: React.FC<SubscriptionsListsProps> = ({
             <span className="text-[11px] font-mono text-obsidian-muted">
               Total del año: <strong className="text-white/80">${formatAmount(isProfitBase ? realProfit.variableYearExpenseMXN : realProfit.variableYearExpenseUSD)} {profitCurrencyView}</strong>
             </span>
-            <button
-              type="button"
-              onClick={openNewExpenseModal}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold shadow-sm transition-all shrink-0"
-            >
-              <Plus size={13} aria-hidden="true" />
-              <span>Registrar Gasto Único</span>
-            </button>
           </div>
         </div>
 
@@ -493,12 +494,16 @@ export const SubscriptionsLists: React.FC<SubscriptionsListsProps> = ({
       </div>
 
       {/* Payment Cards Grid */}
-      <div>
-        <div className="flex items-center gap-2 mb-3">
-          <h3 className="text-sm font-bold text-white tracking-tight">
-            Tarjetas y Métodos de Pago ({filteredPaymentMethods.length})
-          </h3>
-          <InfoTooltip content="Los números de tarjeta, código CVV y notas privadas se guardan encriptados en tu base de datos local." />
+      <div className="p-4 sm:p-6 rounded-2xl bg-obsidian-panel border border-obsidian-border space-y-4 shadow-xl">
+        <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-obsidian-border/70">
+          <div className="flex items-center gap-2 min-w-0">
+            <CreditCard size={16} className="text-cyan-400 shrink-0" aria-hidden="true" />
+            <h3 className="text-sm font-bold text-white tracking-tight">Tarjetas y métodos de pago ({filteredPaymentMethods.length})</h3>
+            <InfoTooltip content="Los números de tarjeta, código CVV y notas privadas se guardan encriptados en tu base de datos local." />
+          </div>
+          <button type="button" onClick={() => { if (!isUnlocked) openUnlockModal(); else openPaymentModal(); }} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold">
+            <Plus size={13} aria-hidden="true" /> Agregar tarjeta
+          </button>
         </div>
 
         {filteredPaymentMethods.length > 0 ? (
@@ -607,22 +612,8 @@ export const SubscriptionsLists: React.FC<SubscriptionsListsProps> = ({
             })}
           </div>
         ) : (
-          <div className="py-10 px-4 rounded-2xl bg-obsidian-panel border border-obsidian-border text-center space-y-3">
-            <div className="w-11 h-11 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center mx-auto">
-              <CreditCard size={20} aria-hidden="true" />
-            </div>
-            <h4 className="text-sm font-semibold text-white">No hay tarjetas registradas</h4>
-            <button
-              type="button"
-              onClick={() => {
-                if (!isUnlocked) openUnlockModal();
-                else openPaymentModal();
-              }}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold"
-            >
-              <Plus size={14} aria-hidden="true" />
-              <span>Registrar Primera Tarjeta</span>
-            </button>
+          <div className="py-8 px-4 rounded-xl bg-obsidian-bg/50 border border-obsidian-border text-center">
+            <p className="text-xs text-obsidian-muted">No hay tarjetas registradas.</p>
           </div>
         )}
       </div>

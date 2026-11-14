@@ -26,15 +26,15 @@ export const DashboardAccountsSection: React.FC<DashboardAccountsSectionProps> =
   onOpenSubscriptions,
 }) => (
   <section className="grid min-w-0 grid-cols-1 gap-6 lg:grid-cols-3" aria-label="Cuentas y vencimientos próximos">
-    <div className="min-w-0 space-y-3 lg:col-span-2">
-      <div className="flex items-center justify-between gap-2">
+    <div className="min-w-0 space-y-3 rounded-xl border border-obsidian-border bg-obsidian-panel p-4 sm:p-5 lg:col-span-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
           <h2 className="text-sm font-bold tracking-tight text-white">Correos principales</h2>
           <span className="text-xs text-obsidian-muted">{emails.length}</span>
         </div>
         <div className="flex shrink-0 items-center gap-1">
-          <button type="button" onClick={onOpenEmails} className="rounded-md px-2 py-1 text-xs text-indigo-400 hover:text-indigo-300">
-            Ver todos <ArrowRight size={12} aria-hidden="true" />
+          <button type="button" onClick={onOpenEmails} className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-indigo-400 hover:text-indigo-300">
+            Ver todas <ArrowRight size={12} aria-hidden="true" />
           </button>
           <button type="button" onClick={onCreateEmail} aria-label="Agregar correo principal" className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-obsidian-muted hover:text-white">
             <Mail size={13} aria-hidden="true" /> Agregar
@@ -76,20 +76,17 @@ export const DashboardAccountsSection: React.FC<DashboardAccountsSectionProps> =
       ) : (
         <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 border-y border-obsidian-border py-4 text-xs text-obsidian-muted">
           <p>No hay correos principales registrados.</p>
-          <button type="button" onClick={onCreateEmail} className="rounded-md bg-indigo-600 px-3 py-1.5 font-semibold text-white hover:bg-indigo-500">
-            Registrar correo
-          </button>
         </div>
       )}
     </div>
 
-    <div className="min-w-0 space-y-3">
+    <div className="min-w-0 space-y-3 rounded-xl border border-obsidian-border bg-obsidian-panel p-4 sm:p-5">
       <div className="flex items-center justify-between gap-2">
         <h2 className="flex min-w-0 items-center gap-2 text-sm font-bold tracking-tight text-white">
           <Clock size={15} className="shrink-0 text-indigo-400" aria-hidden="true" />
           <span className="truncate">Próximos cobros</span>
         </h2>
-        <button type="button" onClick={onOpenSubscriptions} className="shrink-0 text-xs text-indigo-400 hover:text-indigo-300">
+        <button type="button" onClick={onOpenSubscriptions} className="inline-flex shrink-0 items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300">
           Ver todos <ArrowRight size={12} aria-hidden="true" />
         </button>
       </div>

@@ -722,6 +722,7 @@ export const ProspectModal: React.FC = () => {
                     <span className="text-[11px] font-semibold text-white block">Nuevo Correo Principal al Vuelo:</span>
                     <input
                       type="email"
+                      maxLength={INPUT_LIMITS.EMAIL}
                       value={newEmailAddress}
                       onChange={(e) => setNewEmailAddress(e.target.value)}
                       placeholder="nuevo@dominio.com"

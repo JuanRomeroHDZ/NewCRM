@@ -93,13 +93,37 @@ const CALLOUT_LABELS: Record<string, { label: string; cls: string }> = {
 };
 
 const MermaidDiagramCard: React.FC<{ code: string; renderId: string }> = ({ code, renderId }) => {
+  const cardRef = useRef<HTMLDivElement>(null);
   const [svgHtml, setSvgHtml] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [animated, setAnimated] = useState(true);
+  const [nearViewport, setNearViewport] = useState(false);
+  const [renderAttempt, setRenderAttempt] = useState(0);
 
   useEffect(() => {
+    const card = cardRef.current;
+    if (!card) return;
+    if (!('IntersectionObserver' in window)) {
+      setNearViewport(true);
+      return;
+    }
+
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) {
+        setNearViewport(true);
+        observer.disconnect();
+      }
+    }, { rootMargin: '300px 0px' });
+    observer.observe(card);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (!nearViewport) return;
     let active = true;
     const uniqueId = `mmd_${renderId}_${Math.random().toString(36).slice(2, 8)}`;
+    setSvgHtml('');
+    setError(null);
     loadMermaid()
       .then(async (mod) => {
         const { svg } = await mod.default.render(uniqueId, code);
@@ -107,14 +131,14 @@ const MermaidDiagramCard: React.FC<{ code: string; renderId: string }> = ({ code
         setSvgHtml(sanitizeMermaidSvg(svg));
         setError(null);
       })
-      .catch((err) => {
+      .catch(() => {
         if (!active) return;
-        setError(err instanceof Error ? err.message : 'Sintaxis Mermaid inválida');
+        setError('No se pudo cargar o interpretar el diagrama. Revisa la conexión y la sintaxis.');
       });
     return () => {
       active = false;
     };
-  }, [code, renderId]);
+  }, [code, renderId, nearViewport, renderAttempt]);
 
   const handleDownloadSvg = () => {
     if (!svgHtml) return;
@@ -128,44 +152,54 @@ const MermaidDiagramCard: React.FC<{ code: string; renderId: string }> = ({ code
   };
 
   return (
-    <div className="my-3 rounded-xl border border-slate-800 bg-[#070b14] overflow-hidden">
+    <div ref={cardRef} className="my-3 min-w-0 rounded-xl border border-slate-800 bg-[#070b14] overflow-hidden">
       <div className="flex items-center justify-between px-3 py-1.5 bg-slate-900/90 border-b border-slate-800 text-[11px] text-slate-300">
         <span className="flex items-center gap-1.5 font-medium text-indigo-300">
-          <Sparkles className="w-3.5 h-3.5" />
+          <Sparkles className="w-3.5 h-3.5" aria-hidden="true" />
           Diagrama Mermaid
         </span>
         <div className="flex items-center gap-1.5">
           <button
             type="button"
             onClick={() => setAnimated((v) => !v)}
-            className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center gap-1"
+            aria-pressed={animated}
+            aria-label={animated ? 'Pausar animación del diagrama' : 'Reanudar animación del diagrama'}
+            className="inline-flex min-h-9 items-center gap-1 rounded bg-slate-800 px-2 py-0.5 text-slate-200 hover:bg-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300"
             title="Alternar flujo animado en aristas"
           >
-            {animated ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3" />}
+            {animated ? <Pause className="w-3 h-3" aria-hidden="true" /> : <Play className="w-3 h-3" aria-hidden="true" />}
             {animated ? 'Animado' : 'Estático'}
           </button>
           {svgHtml && (
             <button
               type="button"
               onClick={handleDownloadSvg}
-              className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center gap-1"
+              aria-label="Descargar diagrama SVG"
+              className="inline-flex min-h-9 items-center gap-1 rounded bg-slate-800 px-2 py-0.5 text-slate-200 hover:bg-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300"
               title="Descargar SVG"
             >
-              <Download className="w-3 h-3" />
+              <Download className="w-3 h-3" aria-hidden="true" />
               SVG
             </button>
           )}
         </div>
       </div>
       {error ? (
-        <div className="p-3 text-xs text-rose-300 bg-rose-950/30 font-mono whitespace-pre-wrap">{error}</div>
+        <div role="alert" className="flex min-w-0 flex-wrap items-center gap-2 bg-rose-950/30 p-3 text-xs text-rose-300">
+          <span className="min-w-0 flex-1">{error}</span>
+          <button type="button" onClick={() => setRenderAttempt((attempt) => attempt + 1)} className="min-h-9 rounded-lg bg-slate-800 px-2.5 font-medium text-white hover:bg-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300">
+            Reintentar
+          </button>
+        </div>
       ) : svgHtml ? (
         <div
           className={`p-3 overflow-x-auto flex justify-center ${animated ? 'mermaid-animated' : ''}`}
           dangerouslySetInnerHTML={{ __html: svgHtml }}
         />
       ) : (
-        <div className="p-4 text-xs text-slate-400">Renderizando diagrama…</div>
+        <div role="status" aria-live="polite" className="p-4 text-xs text-slate-400">
+          {nearViewport ? 'Cargando diagrama…' : 'El diagrama se cargará al acercarte.'}
+        </div>
       )}
     </div>
   );
@@ -273,7 +307,7 @@ export const MarkdownRichPreview: React.FC<MarkdownRichPreviewProps> = ({
       if (meta?.mime_type?.startsWith('video/')) {
         return `<figure class="my-3"><video controls loop muted playsinline src="${url}" class="w-full max-h-[380px] rounded-lg border border-slate-700 bg-black"></video>${safeAlt ? `<figcaption class="text-xs text-slate-400 mt-1">${safeAlt}</figcaption>` : ''}</figure>`;
       }
-      return `<figure class="my-3"><img src="${url}" alt="${safeAlt}" data-asset-id="${escapeHtmlAttr(assetId)}" class="max-w-full rounded-lg border border-slate-700 cursor-zoom-in hover:border-indigo-500/70 transition-colors" />${alt ? `<figcaption class="text-xs text-slate-400 mt-1">${safeAlt}</figcaption>` : ''}</figure>`;
+      return `<figure class="my-3"><button type="button" data-asset-id="${escapeHtmlAttr(assetId)}" aria-label="Abrir evidencia ${safeAlt}" class="block max-w-full rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"><img src="${url}" alt="${safeAlt}" class="max-w-full rounded-lg border border-slate-700 cursor-zoom-in hover:border-indigo-500/70 transition-colors" /></button>${alt ? `<figcaption class="text-xs text-slate-400 mt-1">${safeAlt}</figcaption>` : ''}</figure>`;
     });
 
     // 5. Extract whiteboard links as safe SVG island cards
@@ -308,7 +342,7 @@ export const MarkdownRichPreview: React.FC<MarkdownRichPreviewProps> = ({
     const withCallouts = enhanceCallouts(parsed);
     const cleanHtml = DOMPurify.sanitize(withCallouts, {
       ADD_TAGS: ['details', 'summary', 'kbd', 'mark', 'video', 'source', 'figure', 'figcaption', 'input', 'button'],
-      ADD_ATTR: ['open', 'controls', 'loop', 'muted', 'playsinline', 'src', 'type', 'checked', 'disabled', 'class', 'id', 'data-copy-code', 'data-asset-id'],
+      ADD_ATTR: ['open', 'controls', 'loop', 'muted', 'playsinline', 'src', 'type', 'checked', 'disabled', 'class', 'id', 'aria-label', 'data-copy-code', 'data-asset-id'],
       FORBID_TAGS: ['script', 'iframe', 'object', 'embed', 'form', 'style'],
       FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover'],
     });
@@ -344,9 +378,9 @@ export const MarkdownRichPreview: React.FC<MarkdownRichPreviewProps> = ({
       }
       return;
     }
-    const imgEl = target.closest<HTMLImageElement>('img[data-asset-id]');
-    if (imgEl && onInspectAsset) {
-      const assetId = imgEl.getAttribute('data-asset-id');
+    const assetButton = target.closest<HTMLButtonElement>('button[data-asset-id]');
+    if (assetButton && onInspectAsset) {
+      const assetId = assetButton.getAttribute('data-asset-id');
       if (assetId && assetMap[assetId]) {
         onInspectAsset(assetMap[assetId]);
       }

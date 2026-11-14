@@ -10,4 +10,6 @@ async def test_security_health_is_unrated_without_accounts(client, auth_token):
 
     assert response.status_code == 200
     assert response.json()["total_accounts"] == 0
+    assert response.json()["email_accounts_count"] == 0
+    assert response.json()["passwords_checked_count"] == 0
     assert response.json()["health_score"] is None

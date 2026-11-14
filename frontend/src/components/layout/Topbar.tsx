@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { 
   RefreshCw, DollarSign, ShieldAlert, Edit2, Check, X,
-  Briefcase, User, Layers, Menu
+  Briefcase, User, Layers, Menu, ChevronDown
 } from 'lucide-react';
 import { useVault } from '../../context/VaultContext';
 import { api } from '../../lib/api';
@@ -138,7 +138,7 @@ export const Topbar: React.FC<TopbarProps> = ({ onMenuClick, menuTriggerRef, isM
   ] as const;
 
   return (
-    <header className="relative z-20 flex flex-wrap min-w-0 shrink-0 items-center justify-between gap-2 border-b border-obsidian-border bg-obsidian-panel/95 px-3 py-2 sm:flex-nowrap sm:gap-3 sm:px-4 md:py-2.5">
+    <header className="relative z-20 flex min-w-0 shrink-0 items-center justify-between gap-2 border-b border-obsidian-border bg-obsidian-panel/95 px-3 py-2 sm:flex-nowrap sm:gap-3 sm:px-4 md:py-2.5">
       {/* Title & Optional Context Tooltip */}
       <div className="flex min-w-0 flex-1 items-center gap-2">
         <button
@@ -163,43 +163,16 @@ export const Topbar: React.FC<TopbarProps> = ({ onMenuClick, menuTriggerRef, isM
         )}
       </div>
 
-      {/* Global Scope Selector (Todos | Negocio | Personal) - visible on mobile, tablet & desktop */}
-      <div
-        role="group"
-        aria-label="Mostrar información de todos, negocio o personal"
-        className="topbar-scope-full order-3 grid w-full grid-cols-3 items-center rounded-xl border border-obsidian-border bg-obsidian-surface p-0.5 sm:order-none sm:flex sm:w-auto sm:shrink-0"
-        title="Mostrar información: todos, negocio o personal"
-      >
-        {scopeOptions.map((opt) => {
-          const Icon = opt.icon;
-          const isActive = activeScope === opt.value;
-          return (
-            <button
-              key={opt.value}
-              type="button"
-              onClick={() => setActiveScope(opt.value)}
-              aria-pressed={isActive}
-              className={`inline-flex min-h-[30px] items-center justify-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 ${
-                isActive
-                  ? 'bg-indigo-600 text-white shadow-sm'
-                  : 'text-obsidian-muted hover:text-white'
-              }`}
-            >
-              <Icon size={12} className="shrink-0" aria-hidden="true" />
-              <span className="truncate">{opt.label}</span>
-            </button>
-          );
-        })}
-      </div>
-      <label className="topbar-scope-compact order-3 w-full">
-        <span className="sr-only">Mostrar información de todos, negocio o personal</span>
+      <label className="relative shrink-0">
+        <span className="sr-only">Filtrar información por ámbito</span>
         <select
           value={activeScope}
           onChange={(event) => setActiveScope(event.target.value as typeof activeScope)}
-          className="min-h-9 w-full rounded-xl border border-obsidian-border bg-obsidian-surface px-3 text-xs font-medium text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 sm:min-h-11 sm:text-sm"
+          className="min-h-10 max-w-[120px] appearance-none rounded-xl border border-obsidian-border bg-obsidian-surface pl-3 pr-8 text-xs font-medium text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 sm:max-w-none"
         >
           {scopeOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
         </select>
+        <ChevronDown size={14} aria-hidden="true" className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-300" />
       </label>
 
       {/* Right Controls: Exchange ticker + Actions */}
@@ -304,7 +277,7 @@ export const Topbar: React.FC<TopbarProps> = ({ onMenuClick, menuTriggerRef, isM
           aria-label="Bloquear todo de inmediato"
         >
           <ShieldAlert size={14} className="shrink-0 text-rose-400" aria-hidden="true" />
-          <span className="hidden md:inline">Bloquear Todo</span>
+          <span className="hidden xl:inline">Bloquear</span>
         </button>
 
       </div>

@@ -1,8 +1,8 @@
 import calendar
 import json
 from datetime import date, datetime, timedelta, timezone
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models import PlatformAccount, EmailAccount, PaymentMethod, PasswordHistory, BillingRecord, utc_now
@@ -198,11 +198,21 @@ async def _build_platform_response(
 
 @router.get("/billing-history", response_model=list[BillingRecordResponse])
 async def get_billing_history(
+    response: Response,
     limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db)
 ):
-    stmt = select(BillingRecord).order_by(BillingRecord.charged_date.desc(), BillingRecord.created_at.desc()).limit(limit)
+    total = (await db.execute(select(func.count(BillingRecord.id)))).scalar_one()
+    stmt = (
+        select(BillingRecord)
+        .order_by(BillingRecord.charged_date.desc(), BillingRecord.created_at.desc(), BillingRecord.id.desc())
+        .limit(limit)
+        .offset(offset)
+    )
     rows = (await db.execute(stmt)).scalars().all()
+    response.headers["X-Total-Count"] = str(total)
+    response.headers["X-Has-More"] = str(total > offset + limit).lower()
     return [
         BillingRecordResponse(
             id=r.id,
@@ -228,38 +238,106 @@ async def trigger_process_due_subscriptions(db: AsyncSession = Depends(get_db)):
 
 @router.get("", response_model=list[PlatformResponse])
 async def list_platforms(
-    email_id: str | None = None,
-    status: str | None = None,
-    search: str | None = None,
-    tag: str | None = None,
+    response: Response,
+    email_id: str | None = Query(default=None, max_length=36),
+    status: str | None = Query(default=None, max_length=32),
+    search: str | None = Query(default=None, max_length=120),
+    tag: str | None = Query(default=None, max_length=80),
+    limit: int | None = Query(default=None, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
     db: AsyncSession = Depends(get_db)
 ):
     stmt = select(PlatformAccount).where(PlatformAccount.is_deleted == False)
+    count_stmt = select(func.count(PlatformAccount.id)).where(PlatformAccount.is_deleted == False)
     if email_id:
         stmt = stmt.where(PlatformAccount.email_id == email_id)
+        count_stmt = count_stmt.where(PlatformAccount.email_id == email_id)
     if status:
         stmt = stmt.where(PlatformAccount.subscription_status == status)
-    if search:
-        stmt = stmt.where(PlatformAccount.name.ilike(f"%{search.strip()}%") | PlatformAccount.username.ilike(f"%{search.strip()}%"))
+        count_stmt = count_stmt.where(PlatformAccount.subscription_status == status)
+    if search and search.strip():
+        clean_search = search.strip()
+        search_filter = (
+            PlatformAccount.name.ilike(f"%{clean_search}%")
+            | PlatformAccount.username.ilike(f"%{clean_search}%")
+        )
+        stmt = stmt.where(search_filter)
+        count_stmt = count_stmt.where(search_filter)
+    if tag:
+        clean_tag = tag.strip().lower()
+        encoded_tag = json.dumps(clean_tag).lower()
+        escaped_tag = encoded_tag.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        tag_filter = func.lower(PlatformAccount.tags).like(f"%{escaped_tag}%", escape="\\")
+        stmt = stmt.where(tag_filter)
+        count_stmt = count_stmt.where(tag_filter)
 
-    stmt = stmt.order_by(PlatformAccount.name.asc())
-    res = await db.execute(stmt)
-    platforms = list(res.scalars().all())
+    stmt = stmt.order_by(PlatformAccount.name.asc(), PlatformAccount.id.asc())
+
+    def has_tag(platform: PlatformAccount) -> bool:
+        if not tag:
+            return True
+        tags_raw = parse_json_safely(platform.tags, [])
+        tags = [TagItem(**item) if isinstance(item, dict) else TagItem(name=str(item)) for item in tags_raw]
+        return any(item.name.casefold() == tag.strip().casefold() for item in tags)
+
+    if tag and limit is not None:
+        page_candidates: list[PlatformAccount] = []
+        scan_offset = 0
+        required_matches = offset + limit + 1
+        while len(page_candidates) < required_matches:
+            batch = list(
+                (
+                    await db.execute(
+                        stmt.limit(500).offset(scan_offset)
+                    )
+                ).scalars().all()
+            )
+            if not batch:
+                break
+            page_candidates.extend(platform for platform in batch if has_tag(platform))
+            scan_offset += len(batch)
+            if len(batch) < 500:
+                break
+        has_more = len(page_candidates) > offset + limit
+        platforms = page_candidates[offset:offset + limit]
+        response.headers["X-Has-More"] = str(has_more).lower()
+    else:
+        total = (await db.execute(count_stmt)).scalar_one()
+        if limit is not None:
+            stmt = stmt.limit(limit + 1).offset(offset)
+        elif offset and not tag:
+            stmt = stmt.offset(offset)
+        platforms = list((await db.execute(stmt)).scalars().all())
+        if tag and limit is None:
+            platforms = [platform for platform in platforms if has_tag(platform)]
+            if offset:
+                platforms = platforms[offset:]
+        elif limit is None:
+            response.headers["X-Total-Count"] = str(total)
+        else:
+            if not tag:
+                response.headers["X-Total-Count"] = str(total)
+            response.headers["X-Has-More"] = str(total > offset + limit).lower()
+            platforms = platforms[:limit]
 
     # Pre-fetch emails and payments for labels
-    email_res = await db.execute(select(EmailAccount.id, EmailAccount.address))
-    email_map = dict(email_res.all())
-
-    pay_res = await db.execute(select(PaymentMethod.id, PaymentMethod.alias))
-    pay_map = dict(pay_res.all())
+    email_ids = {platform.email_id for platform in platforms if platform.email_id}
+    pay_ids = {platform.payment_method_id for platform in platforms if platform.payment_method_id}
+    email_map: dict[str, str] = {}
+    pay_map: dict[str, str] = {}
+    if email_ids:
+        email_res = await db.execute(
+            select(EmailAccount.id, EmailAccount.address).where(EmailAccount.id.in_(email_ids))
+        )
+        email_map = dict(email_res.all())
+    if pay_ids:
+        pay_res = await db.execute(
+            select(PaymentMethod.id, PaymentMethod.alias).where(PaymentMethod.id.in_(pay_ids))
+        )
+        pay_map = dict(pay_res.all())
 
     output = []
     for p in platforms:
-        if tag:
-            tags_raw = parse_json_safely(p.tags, [])
-            tags = [TagItem(**t) if isinstance(t, dict) else TagItem(name=str(t)) for t in tags_raw]
-            if not any(t.name.lower() == tag.lower() for t in tags):
-                continue
         output.append(await _build_platform_response(p, db=db, email_map=email_map, pay_map=pay_map))
 
     return output

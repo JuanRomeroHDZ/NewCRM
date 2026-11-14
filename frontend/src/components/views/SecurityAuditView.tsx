@@ -117,7 +117,7 @@ export const SecurityAuditView: React.FC = () => {
 
   if (loading && !audit) {
     return (
-      <div className="mx-auto max-w-7xl min-w-0 space-y-4 p-3 sm:space-y-6 sm:p-6 lg:p-8 animate-fadeIn" role="status" aria-label="Cargando diagnóstico de seguridad">
+      <div className="mx-auto max-w-7xl min-w-0 space-y-4 p-3 sm:p-5 animate-fadeIn" role="status" aria-label="Cargando diagnóstico de seguridad">
         <div className="h-8 w-52 rounded-xl bg-obsidian-panel border border-obsidian-border animate-pulse" />
         <div className="h-32 rounded-xl bg-obsidian-panel border border-obsidian-border animate-pulse" />
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -144,6 +144,8 @@ export const SecurityAuditView: React.FC = () => {
   }
 
   const totalAuditedAccounts = audit?.total_accounts ?? 0;
+  const checkedPasswords = audit?.passwords_checked_count ?? 0;
+  const checkedEmails = audit?.email_accounts_count ?? 0;
   const rawScore = Number(audit?.health_score);
   const score = totalAuditedAccounts > 0 && Number.isFinite(rawScore)
     ? Math.max(0, Math.min(100, rawScore))
@@ -156,7 +158,7 @@ export const SecurityAuditView: React.FC = () => {
   const stalePassCount = audit?.stale_passwords_count || 0;
 
   return (
-    <div className="mx-auto max-w-7xl min-w-0 space-y-4 p-3 sm:space-y-6 sm:p-6 lg:p-8 animate-fadeIn">
+    <div className="mx-auto max-w-7xl min-w-0 space-y-4 p-3 sm:p-5 animate-fadeIn">
       {loadError && audit && (
         <div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-200">
           <span>No se pudo actualizar el diagnóstico. Los datos visibles son de la última revisión correcta.</span>
@@ -327,9 +329,9 @@ export const SecurityAuditView: React.FC = () => {
       </div>
 
       {/* LLAVES POR VENCER & CONTRASEÑAS ANTIGUAS */}
-      <div className="grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-2 sm:gap-4">
+      <div className="grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-2">
         {/* Llaves API por Vencer */}
-        <div className="min-w-0 space-y-3 rounded-xl border border-obsidian-border bg-obsidian-panel p-3 sm:p-4">
+        <div className="min-w-0 space-y-2 rounded-xl border border-obsidian-border bg-obsidian-panel p-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2 min-w-0">
               <Code size={16} className="text-rose-400 shrink-0" aria-hidden="true" />
@@ -392,11 +394,11 @@ export const SecurityAuditView: React.FC = () => {
                 );
               })
             ) : (audit?.api_key_alerts?.length || 0) > 0 && normalizedQuery ? (
-              <div className="py-5 text-center text-xs text-obsidian-muted">
+              <div className="py-2 text-xs text-obsidian-muted">
                 Sin coincidencias en llaves API para "{searchQuery}".
               </div>
             ) : (
-              <div className="py-6 text-center text-xs text-emerald-400 flex items-center justify-center gap-2">
+              <div className="py-2 text-xs text-emerald-400 flex items-center gap-2">
                 <CheckCircle2 size={15} className="shrink-0" aria-hidden="true" />
                 <span>Ninguna llave API está vencida ni por vencer pronto.</span>
               </div>
@@ -405,7 +407,7 @@ export const SecurityAuditView: React.FC = () => {
         </div>
 
         {/* Contraseñas Antiguas */}
-        <div className="min-w-0 space-y-3 rounded-xl border border-obsidian-border bg-obsidian-panel p-3 sm:p-4">
+        <div className="min-w-0 space-y-2 rounded-xl border border-obsidian-border bg-obsidian-panel p-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2 min-w-0">
               <Clock size={16} className="text-indigo-400 shrink-0" aria-hidden="true" />
@@ -450,13 +452,13 @@ export const SecurityAuditView: React.FC = () => {
                 </button>
               ))
             ) : (audit?.stale_accounts?.length || 0) > 0 && normalizedQuery ? (
-              <div className="py-5 text-center text-xs text-obsidian-muted">
+              <div className="py-2 text-xs text-obsidian-muted">
                 Sin coincidencias en contraseñas antiguas para "{searchQuery}".
               </div>
             ) : (
-              <div className="py-6 text-center text-xs text-emerald-400 flex items-center justify-center gap-2">
+              <div className="py-2 text-xs text-emerald-400 flex items-center gap-2">
                 <CheckCircle2 size={15} className="shrink-0" aria-hidden="true" />
-                <span>Todas tus contraseñas están al día.</span>
+                <span>{checkedPasswords === 0 ? 'No hay contraseñas para revisar.' : 'No se encontraron contraseñas pendientes de cambio.'}</span>
               </div>
             )}
           </div>
@@ -466,7 +468,7 @@ export const SecurityAuditView: React.FC = () => {
       {/* DETAILED AUDIT SECTIONS */}
 
       {/* 1. Cuentas con la misma contraseña */}
-      <div className="min-w-0 space-y-3 rounded-xl border border-obsidian-border bg-obsidian-panel p-3 sm:p-4">
+      <div className="min-w-0 space-y-2 rounded-xl border border-obsidian-border bg-obsidian-panel p-3">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
             <AlertTriangle size={16} className="text-rose-400 shrink-0" aria-hidden="true" />
@@ -526,21 +528,21 @@ export const SecurityAuditView: React.FC = () => {
             ))}
           </div>
         ) : (audit?.reuse_groups?.length || 0) > 0 && normalizedQuery ? (
-          <div className="rounded-lg border border-obsidian-border bg-obsidian-surface/40 p-3 text-center text-xs text-obsidian-muted">
+          <div className="py-2 text-xs text-obsidian-muted">
             Sin coincidencias en contraseñas repetidas para "{searchQuery}".
           </div>
         ) : (
-          <div className="flex items-center justify-center gap-2 rounded-lg border border-obsidian-border bg-obsidian-surface/40 p-3 text-center text-xs text-emerald-400">
+          <div className="flex items-center gap-2 py-2 text-xs text-emerald-400">
             <CheckCircle2 size={16} className="shrink-0" aria-hidden="true" />
-            <span>Excelente: No tienes ninguna contraseña repetida entre tus cuentas.</span>
+            <span>{checkedPasswords === 0 ? 'No hay contraseñas para revisar.' : 'No se encontraron contraseñas repetidas.'}</span>
           </div>
         )}
       </div>
 
       {/* 2. Contraseñas fáciles de adivinar & Correos principales sin 2 pasos */}
-      <div className="grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-2 sm:gap-4">
+      <div className="grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-2">
         {/* Weak Passwords */}
-        <div className="min-w-0 space-y-3 rounded-xl border border-obsidian-border bg-obsidian-panel p-3 sm:p-4">
+        <div className="min-w-0 space-y-2 rounded-xl border border-obsidian-border bg-obsidian-panel p-3">
           <div className="flex items-center gap-2 min-w-0">
             <Key size={16} className="text-amber-400 shrink-0" aria-hidden="true" />
             <h3 className="text-sm font-bold text-white break-words">
@@ -571,20 +573,20 @@ export const SecurityAuditView: React.FC = () => {
                 </button>
               ))
             ) : (audit?.weak_accounts?.length || 0) > 0 && normalizedQuery ? (
-              <div className="py-5 text-center text-xs text-obsidian-muted">
+              <div className="py-2 text-xs text-obsidian-muted">
                 Sin coincidencias en contraseñas débiles para "{searchQuery}".
               </div>
             ) : (
-              <div className="py-6 text-center text-xs text-emerald-400 flex items-center justify-center gap-2">
+              <div className="py-2 text-xs text-emerald-400 flex items-center gap-2">
                 <CheckCircle2 size={15} className="shrink-0" aria-hidden="true" />
-                <span>Todas tus contraseñas tienen buena longitud y seguridad.</span>
+                <span>{checkedPasswords === 0 ? 'No hay contraseñas para revisar.' : 'No se encontraron contraseñas fáciles de adivinar.'}</span>
               </div>
             )}
           </div>
         </div>
 
         {/* Emails without 2FA */}
-        <div className="min-w-0 space-y-3 rounded-xl border border-obsidian-border bg-obsidian-panel p-3 sm:p-4">
+        <div className="min-w-0 space-y-2 rounded-xl border border-obsidian-border bg-obsidian-panel p-3">
           <div className="flex items-center gap-2 min-w-0">
             <ShieldAlert size={16} className="text-cyan-400 shrink-0" aria-hidden="true" />
             <h3 className="text-sm font-bold text-white break-words">
@@ -620,13 +622,13 @@ export const SecurityAuditView: React.FC = () => {
                 </button>
               ))
             ) : (audit?.unprotected_emails?.length || 0) > 0 && normalizedQuery ? (
-              <div className="py-5 text-center text-xs text-obsidian-muted">
+              <div className="py-2 text-xs text-obsidian-muted">
                 Sin coincidencias en correos sin 2FA para "{searchQuery}".
               </div>
             ) : (
-              <div className="py-6 text-center text-xs text-emerald-400 flex items-center justify-center gap-2">
+              <div className="py-2 text-xs text-emerald-400 flex items-center gap-2">
                 <CheckCircle2 size={15} className="shrink-0" aria-hidden="true" />
-                <span>Todos tus correos principales tienen verificación en 2 pasos.</span>
+                <span>{checkedEmails === 0 ? 'No hay correos principales para revisar.' : 'Todos tus correos principales tienen verificación en 2 pasos.'}</span>
               </div>
             )}
           </div>

@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models import (
@@ -120,90 +120,33 @@ async def restore_item(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role(["owner", "business_admin", "seller"])),
 ):
-    """Atomics restore of a soft-deleted item."""
-    name = ""
-    if item_type == "email":
-        stmt = select(EmailAccount).where(EmailAccount.id == item_id)
-        item = (await db.execute(stmt)).scalar_one_or_none()
-        if not item or not item.is_deleted:
-            raise HTTPException(status_code=404, detail="Elemento no encontrado en papelera.")
-        item.is_deleted = False
-        item.deleted_at = None
-        name = item.address
-
-    elif item_type == "platform":
-        stmt = select(PlatformAccount).where(PlatformAccount.id == item_id)
-        item = (await db.execute(stmt)).scalar_one_or_none()
-        if not item or not item.is_deleted:
-            raise HTTPException(status_code=404, detail="Elemento no encontrado en papelera.")
-        item.is_deleted = False
-        item.deleted_at = None
-        name = item.name
-
-    elif item_type == "prospect":
-        stmt = select(Prospect).where(Prospect.id == item_id)
-        item = (await db.execute(stmt)).scalar_one_or_none()
-        if not item or not item.is_deleted:
-            raise HTTPException(status_code=404, detail="Elemento no encontrado en papelera.")
-        item.is_deleted = False
-        item.deleted_at = None
-        name = item.company_name
-
-    elif item_type == "payment":
-        stmt = select(PaymentMethod).where(PaymentMethod.id == item_id)
-        item = (await db.execute(stmt)).scalar_one_or_none()
-        if not item or not item.is_deleted:
-            raise HTTPException(status_code=404, detail="Elemento no encontrado en papelera.")
-        item.is_deleted = False
-        item.deleted_at = None
-        name = item.alias
-
-    elif item_type == "income":
-        stmt = select(ClientIncome).where(ClientIncome.id == item_id)
-        item = (await db.execute(stmt)).scalar_one_or_none()
-        if not item or not item.is_deleted:
-            raise HTTPException(status_code=404, detail="Elemento no encontrado en papelera.")
-        item.is_deleted = False
-        item.deleted_at = None
-        name = f"{item.client_name} - {item.concept}"
-
-    elif item_type == "renewal":
-        stmt = select(DomainRenewal).where(DomainRenewal.id == item_id)
-        item = (await db.execute(stmt)).scalar_one_or_none()
-        if not item or not item.is_deleted:
-            raise HTTPException(status_code=404, detail="Elemento no encontrado en papelera.")
-        item.is_deleted = False
-        item.deleted_at = None
-        name = item.domain_or_service
-
-    elif item_type == "expense":
-        stmt = select(OneTimeExpense).where(OneTimeExpense.id == item_id)
-        item = (await db.execute(stmt)).scalar_one_or_none()
-        if not item or not item.is_deleted:
-            raise HTTPException(status_code=404, detail="Elemento no encontrado en papelera.")
-        item.is_deleted = False
-        item.deleted_at = None
-        name = item.concept
-
-    elif item_type == "project":
-        stmt = select(InternalProject).where(InternalProject.id == item_id)
-        item = (await db.execute(stmt)).scalar_one_or_none()
-        if not item or not item.is_deleted:
-            raise HTTPException(status_code=404, detail="Elemento no encontrado en papelera.")
-        item.is_deleted = False
-        item.deleted_at = None
-        name = item.name
-
-    elif item_type == "resource":
-        stmt = select(SecureResource).where(SecureResource.id == item_id)
-        item = (await db.execute(stmt)).scalar_one_or_none()
-        if not item or not item.is_deleted:
-            raise HTTPException(status_code=404, detail="Elemento no encontrado en papelera.")
-        item.is_deleted = False
-        item.deleted_at = None
-        name = item.title
-    else:
+    """Restores once and commits the state change with its audit event."""
+    restore_targets = {
+        "email": (EmailAccount, lambda item: item.address),
+        "platform": (PlatformAccount, lambda item: item.name),
+        "prospect": (Prospect, lambda item: item.company_name),
+        "payment": (PaymentMethod, lambda item: item.alias),
+        "income": (ClientIncome, lambda item: f"{item.client_name} - {item.concept}"),
+        "renewal": (DomainRenewal, lambda item: item.domain_or_service),
+        "expense": (OneTimeExpense, lambda item: item.concept),
+        "project": (InternalProject, lambda item: item.name),
+        "resource": (SecureResource, lambda item: item.title),
+    }
+    target = restore_targets.get(item_type)
+    if target is None:
         raise HTTPException(status_code=400, detail="Tipo de elemento inválido.")
+
+    model, get_name = target
+    restored = await db.execute(
+        update(model)
+        .where(model.id == item_id, model.is_deleted == True)
+        .values(is_deleted=False, deleted_at=None)
+        .returning(model)
+    )
+    item = restored.scalar_one_or_none()
+    if item is None:
+        raise HTTPException(status_code=404, detail="Elemento no encontrado en papelera.")
+    name = get_name(item)
 
     await log_audit_event(
         db, action="restore", entity_type=item_type, entity_id=item_id, entity_name=name,

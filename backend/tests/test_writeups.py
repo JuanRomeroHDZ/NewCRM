@@ -4,7 +4,7 @@ import json
 import zipfile
 from PIL import Image
 import pytest
-from sqlalchemy import select
+from sqlalchemy import func, select
 from app.models.core import User
 from app.models.writeups import Writeup, WriteupAsset
 from app.security.crypto import BYTES_ENC_PREFIX, NOTE_ENC_PREFIX, hash_master_password
@@ -20,6 +20,97 @@ def _make_jpeg_with_exif(width: int = 2400, height: int = 1200) -> bytes:
     buf = io.BytesIO()
     img.save(buf, format="JPEG", exif=exif, quality=92)
     return buf.getvalue()
+
+
+@pytest.mark.asyncio
+async def test_writeup_title_limits_accept_200_and_reject_invalid_without_partial_rows(client, db_session, auth_token):
+    headers = {"X-Vault-Token": auth_token}
+    valid = await client.post(
+        "/api/v1/writeups",
+        headers=headers,
+        json={"title": "Informe " + "A" * 192, "create_default_board": False},
+    )
+    assert valid.status_code == 201
+    assert len(valid.json()["title"]) == 200
+
+    for title in ("A", "A" * 201, " " * 200):
+        rejected = await client.post(
+            "/api/v1/writeups",
+            headers=headers,
+            json={"title": title, "create_default_board": False},
+        )
+        assert rejected.status_code == 422
+
+    count = await db_session.scalar(select(func.count(Writeup.id)))
+    assert count == 1
+
+
+@pytest.mark.asyncio
+async def test_writeup_finding_limits_accept_boundaries_and_reject_overflow(client, db_session, auth_token):
+    headers = {"X-Vault-Token": auth_token}
+    boundary_finding = {
+        "id": "I" * 64,
+        "title": "T" * 200,
+        "cvss_vector": "V" * 128,
+        "cwe_id": "C" * 32,
+        "cve_id": "E" * 64,
+        "affected_target": "h" * 255,
+        "summary": "S" * 4000,
+        "remediation": "R" * 4000,
+    }
+    accepted = await client.post(
+        "/api/v1/writeups",
+        headers=headers,
+        json={"title": "Informe de límites", "findings": [boundary_finding], "create_default_board": False},
+    )
+    assert accepted.status_code == 201
+
+    for field, overflow in (
+        ("id", "I" * 65),
+        ("title", "T" * 201),
+        ("cvss_vector", "V" * 129),
+        ("cwe_id", "C" * 33),
+        ("cve_id", "E" * 65),
+        ("affected_target", "h" * 256),
+        ("summary", "S" * 4001),
+        ("remediation", "R" * 4001),
+    ):
+        finding = {**boundary_finding, field: overflow}
+        rejected = await client.post(
+            "/api/v1/writeups",
+            headers=headers,
+            json={"title": "Informe de límites", "findings": [finding], "create_default_board": False},
+        )
+        assert rejected.status_code == 422, field
+
+    count = await db_session.scalar(select(func.count(Writeup.id)))
+    assert count == 1
+
+
+@pytest.mark.asyncio
+async def test_writeup_allows_200_findings_and_rejects_201_without_partial_rows(client, db_session, auth_token):
+    headers = {"X-Vault-Token": auth_token}
+    findings = [{"id": f"F-{index}", "title": "Hallazgo de prueba"} for index in range(200)]
+    accepted = await client.post(
+        "/api/v1/writeups",
+        headers=headers,
+        json={"title": "Informe con 200 hallazgos", "findings": findings, "create_default_board": False},
+    )
+    assert accepted.status_code == 201
+    assert len(accepted.json()["findings"]) == 200
+
+    rejected = await client.post(
+        "/api/v1/writeups",
+        headers=headers,
+        json={
+            "title": "Informe con 201 hallazgos",
+            "findings": findings + [{"id": "F-extra", "title": "Exceso"}],
+            "create_default_board": False,
+        },
+    )
+    assert rejected.status_code == 422
+    count = await db_session.scalar(select(func.count(Writeup.id)))
+    assert count == 1
 
 
 @pytest.mark.asyncio

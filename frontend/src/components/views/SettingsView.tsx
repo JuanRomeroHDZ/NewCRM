@@ -311,7 +311,15 @@ export const SettingsView: React.FC = () => {
                 <option value={10}>10 minutos (Recomendado)</option>
                 <option value={30}>30 minutos</option>
                 <option value={60}>1 hora</option>
+                <option value={120}>2 horas</option>
+                <option value={240}>4 horas</option>
+                <option value={480}>8 horas (jornada completa)</option>
               </select>
+              {localTimeout > 60 && (
+                <p role="note" className="text-[11px] leading-relaxed text-obsidian-muted">
+                  Un plazo más largo evita pedir la contraseña tan seguido, pero deja la bóveda abierta más tiempo. Aplica al próximo desbloqueo.
+                </p>
+              )}
             </div>
 
             {/* Clipboard clear timer */}

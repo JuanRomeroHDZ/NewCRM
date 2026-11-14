@@ -1,4 +1,21 @@
 import pytest
+from app.models.core import User
+from app.services.core_auth import create_user_session
+
+
+async def _authorized_headers(db_session, vault_token: str, role: str, username: str):
+    user = User(
+        username=username,
+        email=f"{username}@example.test",
+        full_name=username,
+        role=role,
+        hashed_password="not-used-by-this-test",
+        is_active=True,
+    )
+    db_session.add(user)
+    await db_session.commit()
+    token, _ = await create_user_session(db_session, user)
+    return {"X-Vault-Token": vault_token, "Authorization": f"Bearer {token}"}
 
 
 @pytest.mark.asyncio
@@ -35,8 +52,8 @@ async def test_graph_preserves_relationships_and_recovery_cycles(client, auth_to
 
 
 @pytest.mark.asyncio
-async def test_activity_and_trash_restore_preserve_existing_record(client, auth_token):
-    headers = {"X-Vault-Token": auth_token}
+async def test_activity_and_trash_restore_preserve_existing_record(client, db_session, auth_token):
+    headers = await _authorized_headers(db_session, auth_token, "seller", "restore_seller")
     created = await client.post("/api/v1/prospects", headers=headers, json={
         "company_name": "Empresa para restaurar", "notes": "Nota ficticia conservada",
     })
@@ -46,6 +63,10 @@ async def test_activity_and_trash_restore_preserve_existing_record(client, auth_
     assert (await client.get(f"/api/v1/prospects/{prospect_id}", headers=headers)).status_code == 404
     restored = await client.post(f"/api/v1/trash/restore/prospect/{prospect_id}", headers=headers)
     assert restored.status_code == 200
+    duplicate_restore = await client.post(
+        f"/api/v1/trash/restore/prospect/{prospect_id}", headers=headers
+    )
+    assert duplicate_restore.status_code == 404
     detail = await client.get(f"/api/v1/prospects/{prospect_id}", headers=headers)
     assert detail.status_code == 200
     assert detail.json()["notes"] == "Nota ficticia conservada"
@@ -84,8 +105,8 @@ async def test_activity_history_filters_and_paginates_on_server(client, auth_tok
 
 
 @pytest.mark.asyncio
-async def test_purge_only_removes_records_already_in_trash(client, auth_token):
-    headers = {"X-Vault-Token": auth_token}
+async def test_purge_only_removes_records_already_in_trash(client, db_session, auth_token):
+    headers = await _authorized_headers(db_session, auth_token, "owner", "purge_owner")
     created = await client.post("/api/v1/prospects", headers=headers, json={"company_name": "Empresa ficticia"})
     assert created.status_code == 200
     prospect_id = created.json()["id"]

@@ -251,6 +251,7 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setPromptDialog(null);
     resolve?.(value);
   }, []);
+  const cancelPrompt = useCallback(() => handlePromptResult(null), [handlePromptResult]);
 
   // Toasts
   const [toasts, setToasts] = useState<Toast[]>([]);
@@ -694,8 +695,8 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         cancelLabel={promptDialog?.cancelLabel}
         required={promptDialog?.required}
         maxLength={promptDialog?.maxLength}
-        onSubmit={(val) => handlePromptResult(val)}
-        onCancel={() => handlePromptResult(null)}
+        onSubmit={handlePromptResult}
+        onCancel={cancelPrompt}
       />
     </VaultContext.Provider>
   );

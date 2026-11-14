@@ -33,7 +33,7 @@ export const DashboardProspectsSection: React.FC<DashboardProspectsSectionProps>
   onQuickContact,
   onMarkResponded,
 }) => (
-  <section aria-labelledby="dashboard-prospects-heading" className="min-w-0 space-y-3">
+  <section aria-labelledby="dashboard-prospects-heading" className="min-w-0 space-y-3 rounded-xl border border-obsidian-border bg-obsidian-panel p-4 sm:p-5">
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div className="flex min-w-0 flex-wrap items-center gap-2">
         <h2 id="dashboard-prospects-heading" className="text-sm font-bold tracking-tight text-white">

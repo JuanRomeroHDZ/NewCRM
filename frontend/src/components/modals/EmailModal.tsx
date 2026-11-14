@@ -253,19 +253,19 @@ export const EmailModal: React.FC = () => {
           )}
 
           {/* Ámbito (Empresa vs Personal) */}
-          <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-xl bg-obsidian-surface/60 border border-obsidian-border">
+          <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-xl bg-obsidian-surface/60 border border-obsidian-border max-[480px]:flex-col max-[480px]:items-start">
             <span className="text-[11px] font-semibold text-white">Ámbito del Correo:</span>
-            <div className="flex items-center gap-1">
+            <div className="flex min-w-0 flex-wrap items-center gap-1 max-[480px]:grid max-[480px]:w-full max-[480px]:grid-cols-2">
               {([
-                { val: 'business', label: 'Empresa / Negocio' },
+                { val: 'business', label: 'Empresa' },
                 { val: 'personal', label: 'Personal' },
-                { val: 'shared', label: 'Compartido (Ambos)' },
+                { val: 'shared', label: 'Compartido' },
               ] as const).map((opt) => (
                 <button
                   key={opt.val}
                   type="button"
                   onClick={() => setScope(opt.val)}
-                  className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all ${
+                  className={`min-h-9 min-w-0 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all max-[480px]:w-full ${
                     scope === opt.val
                       ? 'bg-indigo-600 text-white'
                       : 'bg-obsidian-bg text-obsidian-muted hover:text-white border border-obsidian-border'
@@ -318,6 +318,7 @@ export const EmailModal: React.FC = () => {
               {provider === '__custom__' && (
                 <input
                   type="text"
+                  maxLength={INPUT_LIMITS.PLATFORM_NAME}
                   value={customProvider}
                   onChange={(e) => setCustomProvider(e.target.value)}
                   placeholder="Nombre del proveedor (ej. Fastmail, Hostinger...)"

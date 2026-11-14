@@ -69,6 +69,12 @@ export interface OSMSearchResponse {
   results: OSMLead[];
 }
 
+export interface ApiPage<T> {
+  items: T[];
+  total: number;
+  hasMore: boolean;
+}
+
 let currentVaultToken: string | null = localStorage.getItem('emailsaver_vault_token');
 let currentUserToken: string | null = sessionStorage.getItem('emailsaver_user_token');
 
@@ -99,6 +105,8 @@ export function getApiUserToken(): string | null {
 }
 
 const CORE_USER_ENDPOINT_PREFIXES = [
+  '/auth/bootstrap-account',
+  '/auth/bootstrap-status',
   '/auth/login',
   '/auth/logout',
   '/auth/me',
@@ -150,6 +158,8 @@ async function handleApiErrorResponse(endpoint: string, response: Response): Pro
     if (
       response.status === 401 &&
       !endpoint.startsWith('/auth/login') &&
+      !endpoint.startsWith('/auth/bootstrap-account') &&
+      !endpoint.startsWith('/auth/bootstrap-status') &&
       !endpoint.startsWith('/auth/change-password') &&
       !endpoint.startsWith('/auth/setup-2fa') &&
       !endpoint.startsWith('/auth/verify-2fa')
@@ -201,6 +211,25 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
   return response.json();
 }
 
+async function requestPage<T>(endpoint: string, offset: number, limit: number): Promise<ApiPage<T>> {
+  const headers = buildAuthHeaders(undefined, true);
+  const response = await fetch(`${API_BASE}${endpoint}`, { headers });
+  if (!response.ok) {
+    await handleApiErrorResponse(endpoint, response);
+  }
+  const items = await response.json() as T[];
+  const totalValue = response.headers.get('X-Total-Count');
+  const totalHeader = totalValue === null ? Number.NaN : Number(totalValue);
+  const total = Number.isSafeInteger(totalHeader) && totalHeader >= 0
+    ? totalHeader
+    : offset + items.length;
+  const hasMoreHeader = response.headers.get('X-Has-More');
+  const hasMore = hasMoreHeader === null
+    ? items.length === limit
+    : hasMoreHeader.toLowerCase() === 'true';
+  return { items, total, hasMore };
+}
+
 async function requestBlobResponse(endpoint: string, options: RequestInit = {}): Promise<{ blob: Blob; filename: string; sha256?: string }> {
   const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
   const headers = buildAuthHeaders(options.headers as Record<string, string> | undefined, !isFormData);
@@ -242,6 +271,14 @@ export const api = {
     if (provider) params.append('provider', provider);
     const qs = params.toString() ? `?${params.toString()}` : '';
     return request<EmailAccount[]>(`/emails${qs}`);
+  },
+  getEmailsPage: (filters: { search?: string; provider?: string; limit: number; offset: number }) => {
+    const params = new URLSearchParams();
+    if (filters.search) params.append('search', filters.search);
+    if (filters.provider) params.append('provider', filters.provider);
+    params.set('limit', String(filters.limit));
+    params.set('offset', String(filters.offset));
+    return requestPage<EmailAccount>(`/emails?${params.toString()}`, filters.offset, filters.limit);
   },
   getEmailDetail: (id: string) => request<EmailAccount>(`/emails/${id}`),
   createEmail: (data: any) => request<EmailAccount>('/emails', { method: 'POST', body: JSON.stringify(data) }),
@@ -378,6 +415,27 @@ export const api = {
     const qs = params.toString() ? `?${params.toString()}` : '';
     return request<Prospect[]>(`/prospects${qs}`);
   },
+  getProspectsPage: (filters: {
+    email_id?: string;
+    status?: string;
+    workflow_type?: string;
+    sla_status?: string;
+    search?: string;
+    tag?: string;
+    limit: number;
+    offset: number;
+  }) => {
+    const params = new URLSearchParams();
+    if (filters.email_id) params.append('email_id', filters.email_id);
+    if (filters.status) params.append('status', filters.status);
+    if (filters.workflow_type) params.append('workflow_type', filters.workflow_type);
+    if (filters.sla_status) params.append('sla_status', filters.sla_status);
+    if (filters.search) params.append('search', filters.search);
+    if (filters.tag) params.append('tag', filters.tag);
+    params.set('limit', String(filters.limit));
+    params.set('offset', String(filters.offset));
+    return requestPage<Prospect>(`/prospects?${params.toString()}`, filters.offset, filters.limit);
+  },
   getProspectDetail: (id: string) => request<Prospect>(`/prospects/${id}`),
   createProspect: (data: any) => request<Prospect>('/prospects', { method: 'POST', body: JSON.stringify(data) }),
   updateProspect: (id: string, data: any) => request<Prospect>(`/prospects/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
@@ -480,6 +538,9 @@ export const api = {
   // Core User Auth, 2FA & RBAC Users
   userLogin: (payload: { username_or_email: string; password: string; totp_code?: string }) =>
     request<CoreLoginResponse>('/auth/login', { method: 'POST', body: JSON.stringify(payload) }),
+  bootstrapAccount: (payload: { username: string; email: string; full_name: string; password: string }) =>
+    request<CoreLoginResponse>('/auth/bootstrap-account', { method: 'POST', body: JSON.stringify(payload) }),
+  getBootstrapStatus: () => request<{ available: boolean }>('/auth/bootstrap-status'),
   userLogout: () => request<{ message: string }>('/auth/logout', { method: 'POST' }),
   getCurrentUser: () => request<CoreUser>('/auth/me'),
   changeUserPassword: (payload: { current_password: string; new_password: string; totp_code?: string }) =>
@@ -509,6 +570,25 @@ export const api = {
     if (filters?.q) params.append('q', filters.q);
     const qs = params.toString() ? `?${params.toString()}` : '';
     return request<WriteupSummary[]>(`/writeups${qs}`);
+  },
+  listWriteupsPage: (filters: {
+    status?: string;
+    severity?: string;
+    prospect_id?: string;
+    project_id?: string;
+    q?: string;
+    limit: number;
+    offset: number;
+  }) => {
+    const params = new URLSearchParams();
+    if (filters.status) params.append('status', filters.status);
+    if (filters.severity) params.append('severity', filters.severity);
+    if (filters.prospect_id) params.append('prospect_id', filters.prospect_id);
+    if (filters.project_id) params.append('project_id', filters.project_id);
+    if (filters.q) params.append('q', filters.q);
+    params.set('limit', String(filters.limit));
+    params.set('offset', String(filters.offset));
+    return requestPage<WriteupSummary>(`/writeups?${params.toString()}`, filters.offset, filters.limit);
   },
   createWriteup: (payload: {
     title: string;
