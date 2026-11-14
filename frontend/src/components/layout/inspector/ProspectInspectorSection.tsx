@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import {
+  ChevronDown,
   Archive,
   CheckCircle2,
   Clock,
   Copy,
   DollarSign,
   ExternalLink,
-  Globe,
   Mail,
   MapPin,
   MessageCircle,
@@ -36,6 +36,35 @@ import { TagBadge } from '../../common/TagBadge';
 import { CopyButton } from '../../common/CopyButton';
 import { InspectorFinanceForms } from './InspectorFinanceForms';
 import type { ClientIncome, DomainRenewal, Prospect, ProspectStatus } from '../../../types';
+
+interface InspectorDisclosureProps {
+  title: string;
+  detail?: string;
+  children: React.ReactNode;
+}
+
+function toProgressPercent(value: number): number {
+  return Number.isFinite(value) ? Math.min(100, Math.max(0, Math.round(value))) : 0;
+}
+
+const InspectorDisclosure: React.FC<InspectorDisclosureProps> = ({ title, detail, children }) => (
+  <details className="group border-b border-obsidian-border last:border-0">
+    <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 py-2 text-left focus-visible:rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 [&::-webkit-details-marker]:hidden">
+      <span className="min-w-0 flex-1 truncate text-xs font-semibold text-obsidian-text">{title}</span>
+      {detail && (
+        <span className="hidden min-w-0 max-w-[55%] truncate text-right text-[10px] text-obsidian-muted sm:block">
+          {detail}
+        </span>
+      )}
+      <ChevronDown
+        size={14}
+        className="shrink-0 text-obsidian-muted transition-transform group-open:rotate-180"
+        aria-hidden="true"
+      />
+    </summary>
+    <div className="pb-3 pt-1">{children}</div>
+  </details>
+);
 
 interface ProspectInspectorSectionProps {
   prospectData: Prospect;
@@ -95,6 +124,8 @@ export const ProspectInspectorSection: React.FC<ProspectInspectorSectionProps> =
 
   const prospectLive = computeLiveSla(prospectData, nowMs);
   const prospectFollowupLive = computeLiveFollowUpSla(prospectData, nowMs);
+  const prospectSlaMeta = getSlaBadgeMeta(prospectLive.slaStatus);
+  const followupProgressPercent = toProgressPercent(prospectFollowupLive.progressPercent);
   const prospectWaUrl = buildWhatsAppUrl(
     prospectData.whatsapp,
     prospectData.company_name,
@@ -109,6 +140,7 @@ export const ProspectInspectorSection: React.FC<ProspectInspectorSectionProps> =
   const estimatedCurrency = prospectData.currency || baseCurrency;
   const estimatedSymbol =
     supportedCurrencies.find((c) => c.code === estimatedCurrency)?.symbol || '$';
+  const slaProgressPercent = toProgressPercent(prospectLive.progressPercent);
 
   return (
     <>
@@ -143,7 +175,7 @@ export const ProspectInspectorSection: React.FC<ProspectInspectorSectionProps> =
                 showToast(err.message || 'No se pudo actualizar el estado.', 'error');
               }
             }}
-            className={`min-h-[34px] cursor-pointer rounded-lg border px-2.5 py-1 text-[11px] font-semibold uppercase focus:outline-none focus:ring-2 focus:ring-indigo-400 ${
+            className={`min-h-10 cursor-pointer rounded-lg border px-2.5 py-1 text-[11px] font-semibold uppercase focus:outline-none focus:ring-2 focus:ring-indigo-400 ${
               getStatusMeta(prospectData.status).badgeClass
             }`}
           >
@@ -193,7 +225,7 @@ export const ProspectInspectorSection: React.FC<ProspectInspectorSectionProps> =
                     showToast(err.message || 'No se pudo reactivar el prospecto.', 'error');
                   }
                 }}
-                className="inline-flex min-h-[32px] items-center gap-1 rounded-lg border border-indigo-500/40 bg-indigo-600/25 px-2.5 py-1 text-[10px] font-semibold text-indigo-200 hover:bg-indigo-600/40"
+                className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-indigo-500/40 bg-indigo-600/25 px-2.5 py-1 text-[10px] font-semibold text-indigo-200 hover:bg-indigo-600/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
               >
                 <RefreshCw size={11} aria-hidden="true" />
                 <span>Reactivar prospecto</span>
@@ -218,7 +250,7 @@ export const ProspectInspectorSection: React.FC<ProspectInspectorSectionProps> =
                       showToast(err.message || 'No se pudo liberar la URL Demo.', 'error');
                     }
                   }}
-                  className="inline-flex min-h-[32px] items-center gap-1 rounded-lg border border-amber-500/35 bg-amber-500/15 px-2.5 py-1 text-[10px] font-semibold text-amber-300 hover:bg-amber-500/25"
+                  className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-amber-500/35 bg-amber-500/15 px-2.5 py-1 text-[10px] font-semibold text-amber-300 hover:bg-amber-500/25 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300"
                 >
                   <RotateCcw size={11} aria-hidden="true" />
                   <span>Liberar/Reciclar Demo</span>
@@ -229,158 +261,156 @@ export const ProspectInspectorSection: React.FC<ProspectInspectorSectionProps> =
         )}
       </div>
 
-      {/* BLOQUE 1: Correlación de Emails */}
-      <div className="space-y-2 rounded-xl border border-obsidian-border bg-obsidian-surface p-3">
-        <span className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-white">
-          <Mail size={12} className="text-indigo-400" aria-hidden="true" />
-          <span>Correos</span>
-        </span>
-
-        <div className="flex min-w-0 items-center justify-between gap-2 border-b border-obsidian-border/60 py-1.5 last:border-0">
-          <div className="min-w-0">
-            <span className="block text-[10px] text-obsidian-muted">Correo principal</span>
-            <span className="block truncate font-mono font-medium text-cyan-300">
-              {prospectData.specific_alias || prospectData.email_address || 'Sin correo vinculado'}
-            </span>
-          </div>
-          <div className="flex flex-shrink-0 items-center gap-1">
-            {(prospectData.specific_alias || prospectData.email_address) && (
-              <CopyButton
-                value={prospectData.specific_alias || prospectData.email_address || ''}
-                label="Mi correo"
-                className="min-h-[32px] min-w-[32px]"
-              />
-            )}
-            {prospectData.email_id && (
-              <button
-                type="button"
-                onClick={() => onOpenEmailInspector(prospectData.email_id!)}
-                className="min-h-[32px] rounded-lg border border-obsidian-border bg-obsidian-surface px-2.5 py-1 text-[11px] font-medium text-indigo-300 hover:bg-obsidian-border"
-              >
-                Ver Correo
-              </button>
-            )}
-          </div>
-        </div>
-
-        {prospectData.contact_email && (
+      <InspectorDisclosure
+        title="Correos"
+        detail={`Principal: ${prospectData.specific_alias || prospectData.email_address || 'sin vincular'}`}
+      >
+        <div className="space-y-1.5">
           <div className="flex min-w-0 items-center justify-between gap-2 border-b border-obsidian-border/60 py-1.5 last:border-0">
             <div className="min-w-0">
-              <span className="block text-[10px] text-obsidian-muted">Correo del prospecto</span>
-              <span className="block truncate font-mono text-white">{prospectData.contact_email}</span>
+              <span className="block text-[10px] text-obsidian-muted">Correo principal</span>
+              <span className="block truncate font-mono font-medium text-cyan-300">
+                {prospectData.specific_alias || prospectData.email_address || 'Sin correo vinculado'}
+              </span>
             </div>
-            <CopyButton
-              value={prospectData.contact_email}
-              label="Correo del cliente"
-              className="min-h-[32px] min-w-[32px]"
-            />
-          </div>
-        )}
-      </div>
-
-      {/* BLOQUE 2: Datos del Prospecto y Página Demo */}
-      <div className="space-y-2 rounded-xl border border-obsidian-border bg-obsidian-surface p-3">
-        <span className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-white">
-          <Globe size={12} className="text-cyan-400" aria-hidden="true" />
-          <span>Contacto y página demo</span>
-        </span>
-
-        {prospectData.demo_url ? (
-          <div className="space-y-1 border-b border-obsidian-border/60 py-1.5">
-            <span className="block text-[10px] text-obsidian-muted">URL de la Página Demo Creada</span>
-            <div className="flex items-center justify-between gap-2">
-              <a
-                href={prospectData.demo_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="truncate font-mono text-indigo-400 underline hover:text-indigo-300"
-              >
-                {prospectData.demo_url}
-              </a>
-              <div className="flex flex-shrink-0 items-center gap-1">
+            <div className="flex flex-shrink-0 items-center gap-1">
+              {(prospectData.specific_alias || prospectData.email_address) && (
                 <CopyButton
-                  value={prospectData.demo_url}
-                  label="URL Demo"
-                  className="min-h-[32px] min-w-[32px]"
+                  value={prospectData.specific_alias || prospectData.email_address || ''}
+                  label="Mi correo"
+                  className="min-h-10 min-w-10"
                 />
+              )}
+              {prospectData.email_id && (
+                <button
+                  type="button"
+                  onClick={() => onOpenEmailInspector(prospectData.email_id!)}
+                  className="min-h-10 rounded-lg border border-obsidian-border bg-obsidian-surface px-2.5 py-1 text-[11px] font-medium text-indigo-300 hover:bg-obsidian-border"
+                >
+                  Ver Correo
+                </button>
+              )}
+            </div>
+          </div>
+
+          {prospectData.contact_email && (
+            <div className="flex min-w-0 items-center justify-between gap-2 border-b border-obsidian-border/60 py-1.5 last:border-0">
+              <div className="min-w-0">
+                <span className="block text-[10px] text-obsidian-muted">Correo del prospecto</span>
+                <span className="block truncate font-mono text-white">{prospectData.contact_email}</span>
+              </div>
+              <CopyButton
+                value={prospectData.contact_email}
+                label="Correo del cliente"
+                className="min-h-10 min-w-10"
+              />
+            </div>
+          )}
+        </div>
+      </InspectorDisclosure>
+
+      <InspectorDisclosure
+        title="Contacto y página demo"
+        detail={`${[prospectData.demo_url, prospectData.contact_email, prospectData.whatsapp, prospectData.phones, prospectData.maps_url].filter(Boolean).length} datos disponibles`}
+      >
+        <div className="space-y-1.5">
+          {prospectData.demo_url ? (
+            <div className="space-y-1 border-b border-obsidian-border/60 py-1.5">
+              <span className="block text-[10px] text-obsidian-muted">URL de la Página Demo Creada</span>
+              <div className="flex items-center justify-between gap-2">
                 <a
                   href={prospectData.demo_url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex min-h-[32px] items-center gap-1 rounded-lg bg-indigo-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-indigo-500"
+                  className="truncate font-mono text-indigo-400 underline hover:text-indigo-300"
                 >
-                  <span>Abrir</span>
+                  {prospectData.demo_url}
+                </a>
+                <div className="flex flex-shrink-0 items-center gap-1">
+                  <CopyButton
+                    value={prospectData.demo_url}
+                    label="URL Demo"
+                    className="min-h-10 min-w-10"
+                  />
+                  <a
+                    href={prospectData.demo_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex min-h-10 items-center gap-1 rounded-lg bg-indigo-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-indigo-500"
+                  >
+                    <span>Abrir</span>
+                    <ExternalLink size={11} aria-hidden="true" />
+                  </a>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="py-1 text-obsidian-muted">
+              Sin URL de página demo asignada.
+            </div>
+          )}
+
+          {prospectData.whatsapp && prospectWaUrl && (
+            <div className="flex min-w-0 items-center justify-between gap-2 border-b border-obsidian-border/60 py-1.5 last:border-0">
+              <div className="flex min-w-0 items-center gap-2">
+                <MessageCircle size={14} className="flex-shrink-0 text-emerald-400" aria-hidden="true" />
+                <span className="truncate font-mono text-white">{prospectData.whatsapp}</span>
+              </div>
+              <div className="flex flex-shrink-0 items-center gap-1.5">
+                <CopyButton
+                  value={prospectData.whatsapp}
+                  label="WhatsApp"
+                  className="min-h-10 min-w-10"
+                />
+                <a
+                  href={prospectWaUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-emerald-500/30 bg-emerald-500/20 px-2.5 py-1 text-[11px] font-semibold text-emerald-300 hover:bg-emerald-500/30"
+                >
+                  <span>Abrir Chat</span>
                   <ExternalLink size={11} aria-hidden="true" />
                 </a>
               </div>
             </div>
-          </div>
-        ) : (
-          <div className="py-1 text-obsidian-muted">
-            Sin URL de página demo asignada.
-          </div>
-        )}
+          )}
 
-        {prospectData.whatsapp && prospectWaUrl && (
-          <div className="flex min-w-0 items-center justify-between gap-2 border-b border-obsidian-border/60 py-1.5 last:border-0">
-            <div className="flex min-w-0 items-center gap-2">
-              <MessageCircle size={14} className="flex-shrink-0 text-emerald-400" aria-hidden="true" />
-              <span className="truncate font-mono text-white">{prospectData.whatsapp}</span>
+          {prospectData.phones && (
+            <div className="flex min-w-0 items-center justify-between gap-2 border-b border-obsidian-border/60 py-1.5 last:border-0">
+              <div className="flex min-w-0 items-center gap-2">
+                <Phone size={14} className="flex-shrink-0 text-cyan-400" aria-hidden="true" />
+                <span className="truncate font-mono text-white">{prospectData.phones}</span>
+              </div>
+              <CopyButton value={prospectData.phones} label="Teléfono" className="min-h-10 min-w-10" />
             </div>
-            <div className="flex flex-shrink-0 items-center gap-1.5">
-              <CopyButton
-                value={prospectData.whatsapp}
-                label="WhatsApp"
-                className="min-h-[32px] min-w-[32px]"
-              />
-              <a
-                href={prospectWaUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex min-h-[32px] items-center gap-1 rounded-lg border border-emerald-500/30 bg-emerald-500/20 px-2.5 py-1 text-[11px] font-semibold text-emerald-300 hover:bg-emerald-500/30"
-              >
-                <span>Abrir Chat</span>
-                <ExternalLink size={11} aria-hidden="true" />
-              </a>
-            </div>
-          </div>
-        )}
+          )}
 
-        {prospectData.phones && (
-          <div className="flex min-w-0 items-center justify-between gap-2 border-b border-obsidian-border/60 py-1.5 last:border-0">
-            <div className="flex min-w-0 items-center gap-2">
-              <Phone size={14} className="flex-shrink-0 text-cyan-400" aria-hidden="true" />
-              <span className="truncate font-mono text-white">{prospectData.phones}</span>
+          {prospectData.maps_url && (
+            <div className="flex min-w-0 items-center justify-between gap-2 border-b border-obsidian-border/60 py-1.5 last:border-0">
+              <div className="flex min-w-0 items-center gap-2">
+                <MapPin size={14} className="flex-shrink-0 text-amber-400" aria-hidden="true" />
+                <span className="truncate text-obsidian-text">Ubicación en Mapa</span>
+              </div>
+              <div className="flex flex-shrink-0 items-center gap-1">
+                <CopyButton
+                  value={prospectData.maps_url}
+                  label="Enlace de mapa"
+                  className="min-h-10 min-w-10"
+                />
+                <a
+                  href={prospectData.maps_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-amber-500/30 bg-amber-500/20 px-2.5 py-1 text-[11px] font-semibold text-amber-300 hover:bg-amber-500/30"
+                >
+                  <span>Abrir Mapa</span>
+                  <ExternalLink size={11} aria-hidden="true" />
+                </a>
+              </div>
             </div>
-            <CopyButton value={prospectData.phones} label="Teléfono" className="min-h-[32px] min-w-[32px]" />
-          </div>
-        )}
-
-        {prospectData.maps_url && (
-          <div className="flex min-w-0 items-center justify-between gap-2 border-b border-obsidian-border/60 py-1.5 last:border-0">
-            <div className="flex min-w-0 items-center gap-2">
-              <MapPin size={14} className="flex-shrink-0 text-amber-400" aria-hidden="true" />
-              <span className="truncate text-obsidian-text">Ubicación en Mapa</span>
-            </div>
-            <div className="flex flex-shrink-0 items-center gap-1">
-              <CopyButton
-                value={prospectData.maps_url}
-                label="Enlace de mapa"
-                className="min-h-[32px] min-w-[32px]"
-              />
-              <a
-                href={prospectData.maps_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex min-h-[32px] items-center gap-1 rounded-lg border border-amber-500/30 bg-amber-500/20 px-2.5 py-1 text-[11px] font-semibold text-amber-300 hover:bg-amber-500/30"
-              >
-                <span>Abrir Mapa</span>
-                <ExternalLink size={11} aria-hidden="true" />
-              </a>
-            </div>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      </InspectorDisclosure>
 
       {/* Acciones Rápidas de Seguimiento y Contacto Directo */}
       <div className="space-y-2 rounded-xl border border-indigo-500/25 bg-indigo-500/5 p-3">
@@ -401,7 +431,7 @@ export const ProspectInspectorSection: React.FC<ProspectInspectorSectionProps> =
                   type="button"
                   aria-pressed={followupWindowHours === hrs}
                   onClick={() => setFollowupWindowHours(hrs)}
-                  className={`min-h-[26px] rounded px-1.5 py-0.5 font-mono transition-colors ${
+                  className={`min-h-8 rounded px-1.5 py-0.5 font-mono transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 ${
                     followupWindowHours === hrs
                       ? 'bg-indigo-600 font-semibold text-white'
                       : 'text-obsidian-muted hover:text-white'
@@ -429,7 +459,7 @@ export const ProspectInspectorSection: React.FC<ProspectInspectorSectionProps> =
                 setContactChannel('whatsapp');
                 showToast('Mensaje preparado. Registra el contacto después de enviarlo.', 'info');
               }}
-              className="inline-flex min-h-[38px] items-center justify-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/15 px-2.5 py-2 text-[11px] font-semibold text-emerald-300 transition-all hover:bg-emerald-500/25"
+              className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/15 px-2.5 py-2 text-[11px] font-semibold text-emerald-300 transition-colors hover:bg-emerald-500/25 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-300"
             >
               <MessageCircle size={13} aria-hidden="true" />
               <span>WhatsApp</span>
@@ -443,7 +473,7 @@ export const ProspectInspectorSection: React.FC<ProspectInspectorSectionProps> =
                 setContactChannel('phone');
                 showToast('Llamada preparada. Registra el contacto después de realizarla.', 'info');
               }}
-              className="inline-flex min-h-[38px] items-center justify-center gap-1.5 rounded-xl border border-cyan-500/30 bg-cyan-500/15 px-2.5 py-2 text-[11px] font-semibold text-cyan-300 transition-all hover:bg-cyan-500/25"
+              className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border border-cyan-500/30 bg-cyan-500/15 px-2.5 py-2 text-[11px] font-semibold text-cyan-300 transition-colors hover:bg-cyan-500/25 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-300"
             >
               <PhoneCall size={13} aria-hidden="true" />
               <span>Llamar</span>
@@ -459,7 +489,7 @@ export const ProspectInspectorSection: React.FC<ProspectInspectorSectionProps> =
                 setContactChannel('email');
                 showToast('Correo preparado. Registra el contacto después de enviarlo.', 'info');
               }}
-              className="inline-flex min-h-[38px] items-center justify-center gap-1.5 rounded-xl border border-cyan-500/30 bg-cyan-500/15 px-2.5 py-2 text-[11px] font-semibold text-cyan-300 transition-all hover:bg-cyan-500/25"
+              className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border border-cyan-500/30 bg-cyan-500/15 px-2.5 py-2 text-[11px] font-semibold text-cyan-300 transition-colors hover:bg-cyan-500/25 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-300"
             >
               <Mail size={13} aria-hidden="true" />
               <span>Enviar Correo</span>
@@ -473,7 +503,7 @@ export const ProspectInspectorSection: React.FC<ProspectInspectorSectionProps> =
               await copyToClipboard(msg, 'Plantilla de seguimiento');
               setContactChannel('template');
             }}
-            className="inline-flex min-h-[38px] items-center justify-center gap-1.5 rounded-xl border border-indigo-500/30 bg-indigo-500/15 px-2.5 py-2 text-[11px] font-semibold text-indigo-300 transition-all hover:bg-indigo-500/25"
+            className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border border-indigo-500/30 bg-indigo-500/15 px-2.5 py-2 text-[11px] font-semibold text-indigo-300 transition-colors hover:bg-indigo-500/25 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
           >
             <Copy size={13} aria-hidden="true" />
             <span>Copiar Plantilla</span>
@@ -486,7 +516,7 @@ export const ProspectInspectorSection: React.FC<ProspectInspectorSectionProps> =
             <select
               value={contactChannel}
               onChange={(event) => setContactChannel(event.target.value as typeof contactChannel)}
-              className="mt-1 block min-h-[36px] rounded-lg border border-obsidian-border bg-obsidian-bg px-2 py-1.5 text-white"
+              className="mt-1 block min-h-10 rounded-lg border border-obsidian-border bg-obsidian-bg px-2 py-1.5 text-white"
             >
               <option value="">Selecciona un canal</option>
               <option value="whatsapp">WhatsApp</option>
@@ -516,7 +546,7 @@ export const ProspectInspectorSection: React.FC<ProspectInspectorSectionProps> =
                 setRecordingContact(false);
               }
             }}
-            className="min-h-[36px] rounded-lg bg-indigo-600 px-3 py-2 text-xs font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
+            className="min-h-10 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-medium text-white hover:bg-indigo-500 disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
           >
             {recordingContact ? 'Registrando...' : 'Registrar contacto'}
           </button>
@@ -547,14 +577,14 @@ export const ProspectInspectorSection: React.FC<ProspectInspectorSectionProps> =
         <div className="flex flex-wrap items-center justify-between gap-2">
           <span
             className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-semibold ${
-              getSlaBadgeMeta(prospectLive.slaStatus).badgeClass
+              prospectSlaMeta.badgeClass
             }`}
           >
             <span
-              className={`h-2 w-2 rounded-full ${getSlaBadgeMeta(prospectLive.slaStatus).dotClass}`}
+              className={`h-2 w-2 rounded-full ${prospectSlaMeta.dotClass}`}
               aria-hidden="true"
             />
-            <span>{getSlaBadgeMeta(prospectLive.slaStatus).label}</span>
+            <span>{prospectSlaMeta.label}</span>
           </span>
 
           <div className="flex flex-wrap items-center gap-1.5">
@@ -580,7 +610,7 @@ export const ProspectInspectorSection: React.FC<ProspectInspectorSectionProps> =
                     showToast(err.message || 'No se pudo marcar como respondido.', 'error');
                   }
                 }}
-                className="inline-flex min-h-[34px] items-center gap-1.5 rounded-xl border border-emerald-500/35 bg-emerald-500/15 px-3 py-1.5 text-xs font-semibold text-emerald-300 transition-all hover:bg-emerald-500/25"
+                className="inline-flex min-h-10 items-center gap-1.5 rounded-xl border border-emerald-500/35 bg-emerald-500/15 px-3 py-1.5 text-xs font-semibold text-emerald-300 transition-all hover:bg-emerald-500/25 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-300"
               >
                 <CheckCircle2 size={14} className="text-emerald-400" aria-hidden="true" />
                 <span>Ya respondió</span>
@@ -599,7 +629,7 @@ export const ProspectInspectorSection: React.FC<ProspectInspectorSectionProps> =
                   showToast(err.message || 'No se pudo reiniciar el contador.', 'error');
                 }
               }}
-              className="inline-flex min-h-[34px] items-center gap-1 rounded-lg border border-obsidian-border bg-obsidian-bg px-2.5 py-1 text-[11px] text-obsidian-muted hover:bg-obsidian-border hover:text-white"
+              className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-obsidian-border bg-obsidian-bg px-2.5 py-1 text-[11px] text-obsidian-muted hover:bg-obsidian-border hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
             >
               <RotateCcw size={12} aria-hidden="true" />
               <span>Reiniciar</span>
@@ -628,18 +658,24 @@ export const ProspectInspectorSection: React.FC<ProspectInspectorSectionProps> =
           </div>
         </div>
 
-        <div className="h-2 w-full overflow-hidden rounded-full bg-obsidian-bg">
           <div
-            className={`h-full transition-all duration-500 ${
-              getSlaBadgeMeta(prospectLive.slaStatus).barClass
-            }`}
-            style={{ width: `${prospectLive.progressPercent}%` }}
-          />
-        </div>
+            role="progressbar"
+            aria-label="Progreso del plazo de respuesta"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={slaProgressPercent}
+            aria-valuetext={`${slaProgressPercent}% del plazo transcurrido`}
+            className="h-2 w-full overflow-hidden rounded-full bg-obsidian-bg"
+          >
+            <div
+              className={`h-full transition-all duration-500 ${prospectSlaMeta.barClass}`}
+              style={{ width: `${slaProgressPercent}%` }}
+            />
+          </div>
 
         {/* Secondary Follow-up SLA Readout */}
         {prospectFollowupLive.active && !prospectLive.isResponded && (
-          <div className="space-y-2 rounded-xl border border-indigo-500/30 bg-obsidian-bg p-3">
+          <div className="space-y-1.5 border-t border-obsidian-border/60 pt-2">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-indigo-300">
                 <Timer size={12} aria-hidden="true" />
@@ -655,71 +691,97 @@ export const ProspectInspectorSection: React.FC<ProspectInspectorSectionProps> =
                   : `Vence en ${formatDuration(prospectFollowupLive.remainingSeconds, false)}`}
               </span>
             </div>
-            <div className="h-1.5 w-full overflow-hidden rounded-full bg-obsidian-surface">
+            <div
+              role="progressbar"
+              aria-label="Progreso del plazo de seguimiento"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={followupProgressPercent}
+              aria-valuetext={`${followupProgressPercent}% del plazo transcurrido`}
+              className="h-1.5 w-full overflow-hidden rounded-full bg-obsidian-surface"
+            >
               <div
                 className={`h-full transition-all duration-500 ${
                   prospectFollowupLive.status === 'vencido' ? 'bg-rose-500' : 'bg-indigo-500'
                 }`}
-                style={{ width: `${prospectFollowupLive.progressPercent}%` }}
+                style={{ width: `${followupProgressPercent}%` }}
               />
             </div>
           </div>
         )}
 
-        <div className="space-y-1 font-mono text-[11px] text-obsidian-muted">
-          {prospectData.started_at && (
-            <div>Inicio original: {new Date(prospectData.started_at).toLocaleString(systemLocale)}</div>
-          )}
-          {prospectData.last_contacted_at && (
-            <div className="text-indigo-300">
-              Último seguimiento: {new Date(prospectData.last_contacted_at).toLocaleString(systemLocale)}
+        {(prospectData.started_at || prospectData.last_contacted_at || prospectData.responded_at) && (
+          <details className="group border-t border-obsidian-border/60 pt-2">
+            <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-2 text-[11px] text-obsidian-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 [&::-webkit-details-marker]:hidden">
+              <span>Fechas de seguimiento</span>
+              <ChevronDown size={13} className="transition-transform group-open:rotate-180" aria-hidden="true" />
+            </summary>
+            <div className="space-y-1 pb-1 font-mono text-[11px] text-obsidian-muted">
+              {prospectData.started_at && (
+                <div>Inicio original: {new Date(prospectData.started_at).toLocaleString(systemLocale)}</div>
+              )}
+              {prospectData.last_contacted_at && (
+                <div className="text-indigo-300">
+                  Último seguimiento: {new Date(prospectData.last_contacted_at).toLocaleString(systemLocale)}
+                </div>
+              )}
+              {prospectData.responded_at && (
+                <div className="text-emerald-300">
+                  Respondido: {new Date(prospectData.responded_at).toLocaleString(systemLocale)}
+                </div>
+              )}
             </div>
-          )}
-          {prospectData.responded_at && (
-            <div className="text-emerald-300">
-              Respondido: {new Date(prospectData.responded_at).toLocaleString(systemLocale)}
-            </div>
-          )}
-        </div>
+          </details>
+        )}
       </div>
 
-      {/* Social Links & Notes */}
-      {prospectData.social_links && (
-        <div className="space-y-1 rounded-xl border border-obsidian-border bg-obsidian-surface p-3">
-          <span className="block text-obsidian-muted">Redes Sociales / Web Actual</span>
-          <p className="whitespace-pre-wrap break-words text-obsidian-text">{prospectData.social_links}</p>
-        </div>
-      )}
-
-      {prospectData.notes && (
-        <div className="space-y-2 rounded-xl border border-obsidian-border bg-obsidian-surface p-3">
-          <span className="block text-xs font-semibold text-white">Notas</span>
-          <p className="whitespace-pre-wrap break-words leading-5 text-obsidian-text">
-            {prospectData.notes}
-          </p>
-        </div>
-      )}
-
-      <InspectorFinanceForms
-        prospect={prospectData}
-        clientIncomes={clientIncomes}
-        clientRenewals={clientRenewals}
-        onIncomeCreated={onIncomeCreated}
-        onRenewalCreated={onRenewalCreated}
-        onRenewalUpdated={onRenewalUpdated}
-      />
-
-      {/* Tags */}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-obsidian-border pt-3">
-        <span className="text-obsidian-muted">Etiquetas</span>
-        <div className="flex flex-wrap gap-1.5">
-          {prospectData.tags && prospectData.tags.length > 0 ? (
-            prospectData.tags.map((t, idx) => <TagBadge key={idx} name={t.name} color={t.color} />)
-          ) : (
-            <span className="italic text-obsidian-muted">Sin etiquetas</span>
+      <InspectorDisclosure
+        title="Notas y etiquetas"
+        detail={`${prospectData.tags?.length ?? 0} etiquetas · ${[prospectData.notes, prospectData.social_links].filter(Boolean).length} notas`}
+      >
+        <div className="space-y-3">
+          {prospectData.social_links && (
+            <div className="space-y-1 border-b border-obsidian-border/60 pb-2">
+              <span className="block text-[11px] font-medium text-obsidian-muted">Redes y sitio web</span>
+              <p className="break-words text-xs leading-relaxed text-obsidian-text">{prospectData.social_links}</p>
+            </div>
           )}
+
+          {prospectData.notes && (
+            <div className="space-y-1 border-b border-obsidian-border/60 pb-2">
+              <span className="block text-[11px] font-medium text-obsidian-muted">Notas</span>
+              <p className="whitespace-pre-wrap break-words text-xs leading-relaxed text-obsidian-text">
+                {prospectData.notes}
+              </p>
+            </div>
+          )}
+
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[11px] font-medium text-obsidian-muted">Etiquetas</span>
+            <div className="flex flex-wrap gap-1.5">
+              {prospectData.tags && prospectData.tags.length > 0 ? (
+                prospectData.tags.map((tag, index) => <TagBadge key={`${tag.name}-${index}`} name={tag.name} color={tag.color} />)
+              ) : (
+                <span className="text-[11px] text-obsidian-muted">Sin etiquetas</span>
+              )}
+            </div>
+          </div>
         </div>
-      </div>
+      </InspectorDisclosure>
+
+      <InspectorDisclosure
+        title="Pagos y servicios"
+        detail={`${clientIncomes.length} pagos · ${clientRenewals.length} servicios`}
+      >
+        <InspectorFinanceForms
+          prospect={prospectData}
+          clientIncomes={clientIncomes}
+          clientRenewals={clientRenewals}
+          onIncomeCreated={onIncomeCreated}
+          onRenewalCreated={onRenewalCreated}
+          onRenewalUpdated={onRenewalUpdated}
+        />
+      </InspectorDisclosure>
     </>
   );
 };

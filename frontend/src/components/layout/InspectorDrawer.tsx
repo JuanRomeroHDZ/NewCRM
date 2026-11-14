@@ -501,7 +501,7 @@ export const InspectorDrawer: React.FC = () => {
       </div>
 
       {/* Content Area */}
-      <div className="min-h-0 min-w-0 flex-1 space-y-5 overflow-y-auto break-words p-3 [overflow-wrap:anywhere] sm:p-5">
+      <div className={`min-h-0 min-w-0 flex-1 overflow-y-auto break-words p-3 [overflow-wrap:anywhere] sm:p-5 ${isProspect ? 'space-y-3' : 'space-y-5'}`}>
         {loading ? (
           <div role="status" className="flex flex-col items-center justify-center py-12 text-xs text-obsidian-muted">
             <div className="mb-2 h-6 w-6 animate-spin rounded-full border-2 border-indigo-500/30 border-t-indigo-500" />

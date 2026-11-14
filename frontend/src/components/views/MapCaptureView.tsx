@@ -399,7 +399,7 @@ export const MapCaptureView: React.FC = () => {
   }
 
   return (
-    <div className="mx-auto w-full max-w-7xl space-y-5 p-4 sm:p-6 lg:p-8">
+    <div className="mx-auto w-full max-w-7xl min-w-0 space-y-4 p-3 sm:space-y-6 sm:p-8">
       {/* Mobile/Tablet (<lg) tab switch to avoid double-scroll traps */}
       <div
         className="flex items-center gap-1 rounded-xl border border-obsidian-border bg-obsidian-card p-1 lg:hidden"
@@ -410,7 +410,7 @@ export const MapCaptureView: React.FC = () => {
           type="button"
           aria-pressed={mobileTab === 'map'}
           onClick={() => setMobileTab('map')}
-          className={`min-h-[40px] flex-1 rounded-lg px-3 text-xs font-semibold transition-colors ${
+          className={`min-h-10 flex-1 rounded-lg px-3 text-xs font-semibold transition-colors ${
             mobileTab === 'map' ? 'bg-indigo-600 text-white' : 'text-obsidian-muted hover:text-white'
           }`}
         >
@@ -420,7 +420,7 @@ export const MapCaptureView: React.FC = () => {
           type="button"
           aria-pressed={mobileTab === 'results'}
           onClick={() => setMobileTab('results')}
-          className={`min-h-[40px] flex-1 rounded-lg px-3 text-xs font-semibold transition-colors ${
+          className={`min-h-10 flex-1 rounded-lg px-3 text-xs font-semibold transition-colors ${
             mobileTab === 'results' ? 'bg-indigo-600 text-white' : 'text-obsidian-muted hover:text-white'
           }`}
         >
@@ -430,7 +430,7 @@ export const MapCaptureView: React.FC = () => {
 
           <form
             onSubmit={handleSearch}
-            className="grid gap-3 rounded-2xl border border-obsidian-border bg-obsidian-card p-3 sm:p-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end"
+            className="grid min-w-0 gap-3 rounded-2xl border border-obsidian-border bg-obsidian-card p-3 sm:p-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end"
           >
             <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,9rem),1fr))] gap-3">
             <label className="min-w-0 text-xs font-medium text-obsidian-text">
@@ -500,7 +500,7 @@ export const MapCaptureView: React.FC = () => {
               type={loading ? 'button' : 'submit'}
               onClick={loading ? cancelSearch : undefined}
               disabled={!loading && !mapReady}
-              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-3 text-sm font-semibold text-white transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-55 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
+              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-indigo-600 px-3 text-sm font-semibold text-white transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-55 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
             >
               {loading ? <X size={16} aria-hidden="true" /> : <Search size={16} aria-hidden="true" />}
               {loading ? 'Cancelar búsqueda' : 'Buscar zona'}
@@ -509,22 +509,20 @@ export const MapCaptureView: React.FC = () => {
               type="button"
               onClick={searchMapArea}
               disabled={loading || !mapReady}
-              className="inline-flex min-h-10 justify-self-start items-center justify-center gap-2 rounded-xl border border-obsidian-border bg-obsidian-surface px-3 text-xs font-medium text-obsidian-text hover:border-indigo-500/40 hover:text-white disabled:cursor-not-allowed disabled:opacity-55 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
+              className="inline-flex min-h-10 justify-self-start items-center justify-center gap-2 rounded-lg border border-obsidian-border bg-obsidian-surface px-3 text-xs font-medium text-obsidian-text hover:border-indigo-500/40 hover:text-white disabled:cursor-not-allowed disabled:opacity-55 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
             >
               <MapPin size={14} aria-hidden="true" /> Buscar área visible
             </button>
             </div>
           </form>
 
-      <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(19rem,0.8fr)] lg:items-stretch">
+      <div className="grid min-w-0 gap-0 overflow-hidden rounded-2xl border border-obsidian-border bg-obsidian-card lg:grid-cols-[minmax(0,1.4fr)_minmax(19rem,0.8fr)] lg:items-stretch">
         <section
           aria-label="Mapa de búsqueda"
-          className={`min-w-0 overflow-hidden rounded-2xl border border-obsidian-border bg-obsidian-card ${
+          className={`min-w-0 ${
             mobileTab === 'map' ? 'block' : 'hidden lg:block'
           }`}
         >
-
-
           {searchError && (
             <p
               role="alert"
@@ -557,9 +555,9 @@ export const MapCaptureView: React.FC = () => {
             ref={mapElementRef}
             role="region"
             aria-label={defaultCity ? `Mapa interactivo de ${defaultCity}` : 'Mapa interactivo'}
-            className="relative z-0 min-h-[220px] h-[clamp(220px,45dvh,320px)] w-full bg-[#101827] sm:min-h-[300px] sm:h-[clamp(300px,55dvh,420px)] lg:h-[clamp(380px,62dvh,560px)]"
+            className="relative z-0 min-h-[190px] h-[clamp(190px,44dvh,340px)] w-full bg-obsidian-bg sm:min-h-[260px] sm:h-[clamp(260px,48dvh,400px)] lg:min-h-[320px] lg:h-[clamp(320px,52dvh,480px)]"
           />
-          <div className="flex flex-col gap-1.5 border-t border-obsidian-border px-4 py-3 text-[11px] leading-relaxed text-obsidian-muted sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-1.5 border-t border-obsidian-border bg-obsidian-surface/40 px-4 py-3 text-[11px] leading-relaxed text-obsidian-muted sm:flex-row sm:items-center sm:justify-between">
             <span>Los datos de negocios dependen de lo publicado en OpenStreetMap.</span>
             <a
               href="https://www.openstreetmap.org/fixthemap"
@@ -574,11 +572,11 @@ export const MapCaptureView: React.FC = () => {
 
         <section
           aria-labelledby="captura-resultados"
-          className={`min-w-0 overflow-hidden rounded-2xl border border-obsidian-border bg-obsidian-card lg:flex lg:flex-col ${
+          className={`min-w-0 overflow-hidden border-t border-obsidian-border lg:flex lg:flex-col lg:border-l lg:border-t-0 ${
             mobileTab === 'results' ? 'flex flex-col' : 'hidden'
           }`}
         >
-          <div className="flex items-start justify-between gap-3 border-b border-obsidian-border p-4 sm:p-5">
+          <div className="flex items-start justify-between gap-3 border-b border-obsidian-border p-3 sm:p-4">
             <div className="min-w-0">
               <h2 id="captura-resultados" className="text-base font-semibold text-white">
                 Resultados
@@ -610,8 +608,10 @@ export const MapCaptureView: React.FC = () => {
               OpenStreetMap…
             </div>
           ) : !results ? (
-            <div className="flex min-h-48 flex-1 flex-col items-center justify-center gap-2 p-6 text-center text-sm text-obsidian-muted">
-              <Building2 size={22} className="text-obsidian-muted/70" aria-hidden="true" />
+            <div className="flex min-h-48 flex-1 flex-col items-center justify-center gap-2 p-4 text-center text-sm text-obsidian-muted">
+              <span className="rounded-lg border border-obsidian-border bg-obsidian-surface p-2">
+                <Building2 size={20} aria-hidden="true" />
+              </span>
               {searchError && mobileTab === 'results' ? (
                 <div className="lg:hidden" role="alert">
                   <p>{searchError}</p>
@@ -624,7 +624,12 @@ export const MapCaptureView: React.FC = () => {
                   </button>
                 </div>
               ) : !searchError ? (
-                <p>Los negocios aparecerán aquí después de una búsqueda.</p>
+                <>
+                  <p>Los resultados aparecerán aquí.</p>
+                  <p className="max-w-xs text-xs leading-relaxed text-obsidian-muted/80">
+                    Busca por giro y zona, o limita la consulta al área visible del mapa.
+                  </p>
+                </>
               ) : null}
             </div>
           ) : results.length === 0 && searchError ? (
@@ -645,7 +650,7 @@ export const MapCaptureView: React.FC = () => {
               <p>No encontramos negocios publicados en esta búsqueda. Prueba otro giro o una zona cercana.</p>
             </div>
           ) : (
-            <ul className="max-h-[min(55dvh,520px)] flex-1 divide-y divide-obsidian-border overflow-y-auto lg:max-h-[min(620px,65dvh)]">
+            <ul className="max-h-[min(48dvh,400px)] flex-1 divide-y divide-obsidian-border overflow-y-auto lg:max-h-[min(480px,52dvh)]">
               {results.map((lead) => {
                 const website = leadWebsite(lead);
                 const isSaved = savedIds.includes(lead.osm_id);
