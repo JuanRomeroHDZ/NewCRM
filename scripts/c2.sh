@@ -7,7 +7,7 @@ RUNTIME="$PROJECT_DIR/c2-runtime"
 MODE="${1:-menu}"
 
 if (( EUID == 0 )) && [[ "$MODE" != _run_real ]]; then
-  echo 'Ejecuta ./c2 con tu usuario habitual. El modo real solicita sudo desde la terminal.' >&2
+  echo 'Ejecuta ./lessso con tu usuario habitual. El modo real solicita sudo desde la terminal.' >&2
   exit 1
 fi
 
@@ -36,7 +36,7 @@ PY
 if [[ "$MODE" == menu ]]; then
   show_crm
   if [[ ! -t 0 ]]; then
-    echo 'Uso: ./c2 start | demo | setup'
+    echo 'Abre ./lessso para utilizar C2.'
     exit 0
   fi
   printf '\n1) Activar C2 real (sudo)\n2) Iniciar demostración\n3) Preparar C2\n4) Salir\n'
@@ -73,7 +73,7 @@ PY
     echo 'Preparación terminada. Reinicia el backend del CRM para cargar la clave nueva.'
     ;;
   start|demo)
-    test -x "$VENV/bin/uvicorn" || { echo 'Ejecuta primero scripts/c2.sh setup.' >&2; exit 1; }
+    test -x "$VENV/bin/python" || { echo 'Abre ./lessso para preparar C2.' >&2; exit 1; }
     show_crm
     printf 'Abre Red y Lab con tu cuenta de propietario y la bóveda desbloqueada.\n'
     printf 'Para cerrar C2 y realizar la limpieza, pulsa Ctrl+C en esta terminal.\n\n'
@@ -102,7 +102,7 @@ for line in Path(sys.argv[1]).read_text().splitlines():
         break
 PY
 )"
-    test "${#C2_WORKER_SECRET}" -ge 32 || { echo 'Falta una clave C2 válida; ejecuta scripts/c2.sh setup.' >&2; exit 1; }
+    test "${#C2_WORKER_SECRET}" -ge 32 || { echo 'Falta la clave de C2. Abre ./lessso para prepararlo.' >&2; exit 1; }
     mkdir -p "$RUNTIME"
     # Evita iniciar dos procesos sobre el mismo socket.
     touch "$RUNTIME/worker.lock"
@@ -115,7 +115,7 @@ PY
     export LESSSO_DEMO=0
     [[ "$MODE" == _run_demo ]] && export LESSSO_DEMO=1
     cd /tmp
-    exec "$VENV/bin/uvicorn" app.c2_worker:app --uds "$RUNTIME/worker.sock" --workers 1
+    exec "$VENV/bin/python" -m uvicorn app.c2_worker:app --uds "$RUNTIME/worker.sock" --workers 1
     ;;
   *)
     echo 'Uso: scripts/c2.sh setup | start | demo'

@@ -25,14 +25,7 @@ Las sesiones temporales detienen los servicios del CRM que encendieron. Si el CR
 
 ## Servicio C2 opcional
 
-Desde la carpeta del proyecto, prepara una vez el entorno Python y la clave independiente de comunicación:
-
-```bash
-./c2 setup
-./scripts/up.sh
-```
-
-Para controlar C2 por separado, usa `./c2`. El comando muestra la dirección del CRM. Para cerrar C2 pulsa **Ctrl+C** en su terminal. En la web entra en **Red y Lab** con la cuenta de propietario y desbloquea la bóveda. El socket local se guarda en `c2-runtime/`.
+Ejecuta `./lessso` y elige **Abrir CRM y activar C2 real** o **Abrir CRM con C2 de demostración**. El programa prepara automáticamente C2 la primera vez. En la web entra en **Red y Lab** con tu cuenta de propietario y la bóveda desbloqueada. Para cerrar C2 pulsa Ctrl+C en la terminal donde lo iniciaste.
 
 La demostración no requiere privilegios ni ejecuta operaciones reales sobre la red. No ejecutes a la vez el modo demo y el real. El modo real requiere Linux, hardware compatible y herramientas en el anfitrión, por ejemplo `ip`, `iw`, `iptables` e `ip6tables`; algunas funciones usan herramientas opcionales como `hcxpcapngtool` o `searchsploit`. La disponibilidad de Wi-Fi, servicios de red y cambios de identidad depende además del sistema y del hardware. La demostración no sustituye una prueba con esos dispositivos.
 
@@ -53,29 +46,23 @@ Necesitas Linux para el modo real de C2, Docker Engine con Compose v2, Python 3 
    cd NewCRM
    ```
 
-2. Crea la configuración local:
+2. Ejecuta el programa:
 
    ```bash
-   cp .env.example .env
+   ./lessso
    ```
 
-3. Abre `.env` en un editor y asigna valores diferentes y aleatorios a `SERVER_SECRET_KEY` y `POSTGRES_PASSWORD`. Puedes generar cada uno por separado con `openssl rand -hex 32`. Conserva `SERVER_SECRET_KEY` en un lugar seguro, ya que se necesita para acceder a los datos cifrados. Deja `HOST_BIND_IP=127.0.0.1` para acceder solo desde el mismo equipo.
+   La primera vez genera la configuración y los certificados locales. Conserva el archivo `.env` en un lugar seguro: contiene la clave necesaria para acceder a tus datos cifrados.
 
-4. Genera el certificado local:
+3. Elige **Abrir CRM**. El programa muestra la dirección HTTPS cuando está listo. Para elegir otros puertos, entra en **Administrar servicios → Elegir puertos e iniciar CRM**.
 
-   ```bash
-   ./scripts/generate_certs.sh
-   ```
+4. Abre la dirección HTTPS mostrada. Para que el navegador confíe en ella, instala el certificado `nginx/certs/local/ca.crt` en el dispositivo desde el que accederás.
 
-5. Para preparar C2 por primera vez, ejecuta `./c2 setup`. Este paso instala sus dependencias y configura su canal local. El CRM puede utilizarse sin activar C2.
+5. Configura la contraseña de la bóveda. En **Cuentas del equipo**, crea tu cuenta administradora con una contraseña provisional y cámbiala cuando se solicite. Desde esa cuenta puedes agregar usuarios y asignar roles.
 
-6. Abre el menú con `./lessso`. En **Administrar servicios → Elegir puertos e iniciar CRM**, introduce los puertos HTTP y HTTPS que prefieras. También puedes elegir **Abrir CRM** para reutilizar los configurados o seleccionar otros libres automáticamente si están ocupados.
+Para usar C2 real, ejecuta `./lessso` y selecciona **Abrir CRM y activar C2 real**. La primera vez se preparan sus dependencias. El sistema solicitará tu contraseña mediante `sudo` cuando corresponda. Mantén abierta esa terminal mientras uses C2 y pulsa Ctrl+C para cerrarlo.
 
-7. Abre la dirección HTTPS que muestre el programa. Para que el navegador confíe en ella, instala el certificado `nginx/certs/local/ca.crt` en el dispositivo desde el que accederás.
-
-8. Configura la contraseña de la bóveda. En **Cuentas del equipo**, crea tu cuenta administradora con una contraseña provisional y cámbiala cuando se solicite. Desde esa cuenta puedes agregar usuarios y asignar roles.
-
-Para usar C2 real, entra en el menú y selecciona **Abrir CRM y activar C2 real**. El sistema solicitará la contraseña de tu usuario mediante `sudo` cuando corresponda. Mantén abierta esa terminal mientras uses C2 y pulsa Ctrl+C para cerrarlo.
+Si ya tienes una sesión de Ventas y la cuenta administradora anterior sigue con su contraseña provisional, cierra la sesión de Ventas para crear tu cuenta administradora. Si ya existe un propietario que cambió su contraseña, inicia sesión con él para administrar las cuentas.
 
 ## Actualizar una instalación previa
 

@@ -8,6 +8,50 @@ if (( EUID == 0 )); then
   exit 1
 fi
 
+prepare_installation() {
+  python3 - <<'PY' || return 1
+from pathlib import Path
+import os, secrets
+path = Path('.env')
+existing = path.exists()
+if existing:
+    lines = path.read_text().splitlines()
+else:
+    lines = Path('.env.example').read_text().splitlines()
+original = list(lines)
+values = {'SERVER_SECRET_KEY': secrets.token_hex(32), 'POSTGRES_PASSWORD': secrets.token_hex(32),
+          'C2_WORKER_SECRET': secrets.token_hex(32), 'C2_SOCKET_GID': str(os.getgid())}
+for key, value in values.items():
+    matches = [i for i, line in enumerate(lines) if line.startswith(key + '=')]
+    if existing and key in ('SERVER_SECRET_KEY', 'POSTGRES_PASSWORD') and (
+        not matches or not lines[matches[0]].split('=', 1)[1].strip().strip('"\'')
+    ):
+        raise SystemExit(f'Falta {key} en .env. Configura el valor existente o retira ese archivo solo para una instalación nueva.')
+    if not matches:
+        lines.append(key + '=' + value)
+    elif not lines[matches[0]].split('=', 1)[1].strip().strip('"\''):
+        lines[matches[0]] = key + '=' + value
+if not existing or lines != original:
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, 'w') as file:
+        file.write('\n'.join(lines) + '\n')
+os.chmod(path, 0o600)
+PY
+  mkdir -p c2-runtime || return 1
+  chmod 750 c2-runtime || return 1
+  if [[ ! -f nginx/certs/local/ca.crt || ! -f nginx/certs/local/server.crt || ! -f nginx/certs/local/server.key ]]; then
+    ./scripts/generate_certs.sh || return 1
+  fi
+}
+
+prepare_c2() {
+  if [[ ! -x backend/.venv-c2/bin/python ]] ||
+     ! backend/.venv-c2/bin/python -c 'import uvicorn, scapy' >/dev/null 2>&1; then
+    echo 'Preparando C2 por primera vez...'
+    ./scripts/c2.sh setup || return 1
+  fi
+}
+
 session() (
   local before after service
   local startup_finished=0
@@ -39,11 +83,14 @@ session() (
   }
   trap cleanup_session EXIT
   trap 'exit 130' INT TERM HUP
-  ./scripts/up.sh --no-recreate || exit 1
+  if [[ ${1:-crm} == demo ]]; then
+    prepare_c2 || exit 1
+  fi
+  ./scripts/up.sh || exit 1
   capture_started || exit 1
   startup_finished=1
   if [[ ${1:-crm} == demo ]]; then
-    ./c2 demo
+    ./scripts/c2.sh demo
   else
     echo 'Sesión abierta. Pulsa Intro o Ctrl+C para cerrarla.'
     read -r || true
@@ -51,14 +98,13 @@ session() (
 )
 
 service_menu() {
-  printf '\nServicios\n1) Detener CRM\n2) Ver estado del CRM\n3) Preparar C2 por primera vez\n4) Elegir puertos e iniciar CRM\n0) Volver\n\n'
+  printf '\nServicios\n1) Detener CRM\n2) Ver estado del CRM\n3) Elegir puertos e iniciar CRM\n0) Volver\n\n'
   local choice
   read -r -p 'Elige una opción: ' choice || return 0
   case "$choice" in
     1) docker compose stop ;;
     2) docker compose ps ;;
-    3) ./c2 setup ;;
-    4) ./scripts/up.sh --choose-ports ;;
+    3) prepare_installation && ./scripts/up.sh --choose-ports ;;
     0) return 0 ;;
     *) echo 'Opción no válida.' ;;
   esac
@@ -72,11 +118,11 @@ while true; do
   printf '\nLESSSO\n\n1) Abrir CRM\n2) Abrir CRM con C2 de demostración\n3) Abrir CRM y activar C2 real\n4) Administrar servicios\n5) Abrir CRM temporal (se apaga al terminar)\n0) Salir\n\n'
   read -r -p 'Elige una opción: ' choice || exit 0
   case "$choice" in
-    1|'') ./scripts/up.sh || echo 'El CRM no pudo iniciarse.' ;;
-    2) session demo || echo 'La sesión de demostración se cerró o no pudo iniciarse.' ;;
-    3) ./scripts/up.sh --no-recreate && ./c2 start || echo 'No se pudo iniciar el CRM o C2.' ;;
+    1|'') prepare_installation && ./scripts/up.sh || echo 'El CRM no pudo iniciarse.' ;;
+    2) prepare_installation && session demo || echo 'La sesión de demostración se cerró o no pudo iniciarse.' ;;
+    3) prepare_installation && prepare_c2 && ./scripts/up.sh && ./scripts/c2.sh start || echo 'No se pudo iniciar el CRM o C2.' ;;
     4) service_menu || echo 'No se pudo completar la acción.' ;;
-    5) session || echo 'La sesión del CRM se cerró o no pudo iniciarse.' ;;
+    5) prepare_installation && session || echo 'La sesión del CRM se cerró o no pudo iniciarse.' ;;
     0) exit 0 ;;
     *) echo 'Opción no válida.' ;;
   esac

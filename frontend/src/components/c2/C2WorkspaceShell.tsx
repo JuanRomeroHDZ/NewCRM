@@ -193,11 +193,11 @@ export const C2WorkspaceShell: React.FC = () => {
                 <div className="mt-4 space-y-4 text-sm leading-relaxed text-obsidian-muted">
                   <div>
                     <h3 className="font-semibold text-white">Si C2 está apagado</h3>
-                    <p className="mt-1">Abre una terminal en la carpeta del proyecto, ejecuta <code className="break-all text-obsidian-gold">./c2 start</code> y escribe tu contraseña del sistema si se solicita. Deja la terminal abierta y vuelve a esta página para comprobar la conexión.</p>
+                    <p className="mt-1">Abre una terminal en la carpeta del proyecto, ejecuta <code className="break-all text-obsidian-gold">./lessso</code> y elige «Abrir CRM y activar C2 real». Escribe tu contraseña del sistema si se solicita y deja la terminal abierta.</p>
                   </div>
                   <div>
                     <h3 className="font-semibold text-white">Si es la primera vez</h3>
-                    <p className="mt-1">En esa carpeta, ejecuta <code className="break-all text-obsidian-gold">./c2 setup</code> y después <code className="break-all text-obsidian-gold">./scripts/up.sh</code>. Luego inicia C2 con <code className="break-all text-obsidian-gold">./c2 start</code>.</p>
+                    <p className="mt-1">El mismo menú prepara C2 automáticamente la primera vez que eliges el modo real o de demostración.</p>
                   </div>
                   <div>
                     <h3 className="font-semibold text-white">Si ya lo iniciaste</h3>
