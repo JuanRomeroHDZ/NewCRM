@@ -1,4 +1,5 @@
 import httpx
+import math
 from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -46,7 +47,7 @@ async def sync_external_exchange_rate(db: AsyncSession, force: bool = False) -> 
     if record and record.is_manual and not force:
         return float(record.rate), False, "manual"
 
-    if settings.LOCAL_MODE and not force:
+    if settings.LOCAL_MODE:
         return (float(record.rate) if record else settings.FALLBACK_USD_MXN_RATE), False, "modo_local"
 
     providers = [
@@ -76,7 +77,8 @@ async def sync_external_exchange_rate(db: AsyncSession, force: bool = False) -> 
                 if resp.status_code == 200:
                     data = resp.json()
                     raw_rate = extractor(data)
-                    if raw_rate and isinstance(raw_rate, (int, float)) and float(raw_rate) > 1.0:
+                    if (isinstance(raw_rate, (int, float)) and not isinstance(raw_rate, bool)
+                            and math.isfinite(raw_rate) and 1.0 < raw_rate <= 1000):
                         clean_rate = round(float(raw_rate), 4)
                         if not record:
                             record = ExchangeRate(

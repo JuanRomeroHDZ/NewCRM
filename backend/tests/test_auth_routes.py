@@ -4,7 +4,21 @@ import pytest
 from sqlalchemy import select
 
 from app.models.core import ConfigParameter, User
-from app.services.core_auth import get_or_create_initial_owner
+from app.security.crypto import hash_master_password
+from app.config import settings
+
+@pytest.fixture(autouse=True)
+def legacy_owner_configuration(monkeypatch):
+    monkeypatch.setattr(settings, "INITIAL_OWNER_USERNAME", "propietario")
+    monkeypatch.setattr(settings, "INITIAL_OWNER_EMAIL", "legacy@example.test")
+
+async def get_or_create_initial_owner(session):
+    user = User(username=settings.INITIAL_OWNER_USERNAME, email=settings.INITIAL_OWNER_EMAIL,
+                full_name="Legacy", role="owner", is_active=True, must_change_password=True,
+                hashed_password=hash_master_password("LegacyTemporaryPassword123!"))
+    session.add(user)
+    await session.commit()
+    return user
 
 @pytest.mark.asyncio
 async def test_auth_setup_and_unlock_lifecycle(client):
@@ -83,8 +97,8 @@ async def test_bootstrap_creates_one_ordinary_account_after_vault_unlock(
     assert created.status_code == 201
     assert created.json()["user"]["username"] == "first.user"
     assert created.json()["user"]["email"] == "first.user@example.test"
-    assert created.json()["user"]["role"] == "seller"
-    assert created.json()["user"]["must_change_password"] is False
+    assert created.json()["user"]["role"] == "owner"
+    assert created.json()["user"]["must_change_password"] is True
     assert duplicate.status_code == 409
 
     available_after = await client.get(
@@ -127,7 +141,7 @@ async def test_bootstrap_rolls_back_user_and_claim_when_audit_recording_fails(
     db_session.expire_all()
     created_user = await db_session.scalar(select(User).where(User.username == "atomic.user"))
     claim = await db_session.scalar(
-        select(ConfigParameter).where(ConfigParameter.key == "auth.initial_ordinary_account_claimed")
+        select(ConfigParameter).where(ConfigParameter.key == "auth.initial_owner_claimed")
     )
     assert created_user is None
     assert claim is None
@@ -156,10 +170,10 @@ async def test_concurrent_bootstrap_requests_are_serialized_by_unique_claim(
 
     assert sorted(response.status_code for response in responses) == [201, 409]
     db_session.expire_all()
-    sellers = await db_session.scalars(select(User).where(User.role == "seller"))
+    sellers = await db_session.scalars(select(User).where(User.role == "owner", User.is_active.is_(True)))
     assert len(list(sellers)) == 1
     claim = await db_session.scalar(
-        select(ConfigParameter).where(ConfigParameter.key == "auth.initial_ordinary_account_claimed")
+        select(ConfigParameter).where(ConfigParameter.key == "auth.initial_owner_claimed")
     )
     assert claim is not None
 
@@ -182,3 +196,36 @@ async def test_bootstrap_is_closed_after_owner_password_is_changed(client, db_se
     )
 
     assert response.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_login_handles_whitespace_and_case_insensitive_identifiers(client, db_session, auth_token):
+    import app.api.v1.auth as auth_api
+
+    await get_or_create_initial_owner(db_session)
+    # Create an ordinary user with mixed-case email/username
+    create_res = await client.post(
+        "/api/v1/auth/bootstrap-account",
+        headers={"X-Vault-Token": auth_token},
+        json={
+            "username": "Op.Operator",
+            "email": "Op.Operator@Example.TEST",
+            "full_name": "Operator Case",
+            "password": "OperatorCasePassword123!",
+        },
+    )
+    assert create_res.status_code == 201
+
+    res_username = await client.post(
+        "/api/v1/auth/login",
+        json={"username_or_email": " OP.OPERATOR ", "password": "OperatorCasePassword123!"},
+    )
+    assert res_username.status_code == 200
+    assert res_username.json()["user"]["username"] == "op.operator"
+
+    res_email = await client.post(
+        "/api/v1/auth/login",
+        json={"username_or_email": "  op.operator@EXAMPLE.test ", "password": "OperatorCasePassword123!"},
+    )
+    assert res_email.status_code == 200
+    assert res_email.json()["user"]["email"] == "op.operator@example.test"

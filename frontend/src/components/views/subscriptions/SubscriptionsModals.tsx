@@ -301,7 +301,7 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                 type="button"
                 onClick={incomeClose}
                 aria-label="Cerrar modal de pago"
-                className="p-1.5 text-obsidian-muted hover:text-white rounded-lg hover:bg-obsidian-surface shrink-0"
+                className="inline-flex min-w-[44px] min-h-[44px] lg:min-w-9 lg:min-h-9 items-center justify-center p-2 text-obsidian-muted hover:text-white rounded-lg hover:bg-obsidian-surface shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
               >
                 <X size={16} aria-hidden="true" />
               </button>
@@ -614,7 +614,7 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                 type="button"
                 onClick={renewalClose}
                 aria-label="Cerrar modal de dominio o hosting"
-                className="p-1.5 text-obsidian-muted hover:text-white rounded-lg hover:bg-obsidian-surface shrink-0"
+                className="inline-flex min-w-[44px] min-h-[44px] lg:min-w-9 lg:min-h-9 items-center justify-center p-2 text-obsidian-muted hover:text-white rounded-lg hover:bg-obsidian-surface shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
               >
                 <X size={16} aria-hidden="true" />
               </button>
@@ -977,7 +977,7 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                 type="button"
                 onClick={advanceClose}
                 aria-label="Cerrar modal de renovación"
-                className="p-1.5 text-obsidian-muted hover:text-white rounded-lg hover:bg-obsidian-surface shrink-0"
+                className="inline-flex min-w-[44px] min-h-[44px] lg:min-w-9 lg:min-h-9 items-center justify-center p-2 text-obsidian-muted hover:text-white rounded-lg hover:bg-obsidian-surface shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
               >
                 <X size={16} aria-hidden="true" />
               </button>
@@ -1104,7 +1104,7 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                 type="button"
                 onClick={expenseClose}
                 aria-label="Cerrar modal de gasto único"
-                className="p-1.5 text-obsidian-muted hover:text-white rounded-lg hover:bg-obsidian-surface shrink-0"
+                className="inline-flex min-w-[44px] min-h-[44px] lg:min-w-9 lg:min-h-9 items-center justify-center p-2 text-obsidian-muted hover:text-white rounded-lg hover:bg-obsidian-surface shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
               >
                 <X size={16} aria-hidden="true" />
               </button>

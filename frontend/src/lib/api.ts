@@ -8,9 +8,9 @@ import {
   WriteupRevision, WriteupExportFormat, WriteupStructuredFinding, WriteupStatus, WriteupSeverity,
   RuntimeConfig
 } from '../types';
-import { createHttpApiError, normalizeResponseReadError, normalizeTransportError } from './apiErrors';
+import { ApiError, createHttpApiError, normalizeResponseReadError, normalizeTransportError } from './apiErrors';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api/v1';
+export const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api/v1';
 
 export interface OSMBounds {
   min_lat: number;
@@ -106,8 +106,6 @@ export function getApiUserToken(): string | null {
 }
 
 const CORE_USER_ENDPOINT_PREFIXES = [
-  '/auth/bootstrap-account',
-  '/auth/bootstrap-status',
   '/auth/login',
   '/auth/logout',
   '/auth/me',
@@ -159,8 +157,6 @@ async function handleApiErrorResponse(endpoint: string, response: Response): Pro
     if (
       response.status === 401 &&
       !endpoint.startsWith('/auth/login') &&
-      !endpoint.startsWith('/auth/bootstrap-account') &&
-      !endpoint.startsWith('/auth/bootstrap-status') &&
       !endpoint.startsWith('/auth/change-password') &&
       !endpoint.startsWith('/auth/setup-2fa') &&
       !endpoint.startsWith('/auth/verify-2fa')
@@ -178,6 +174,20 @@ async function handleApiErrorResponse(endpoint: string, response: Response): Pro
     setApiVaultToken(null);
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('vault_locked'));
+    }
+  }
+  if ((endpoint === '/auth/bootstrap-account' || endpoint === '/users') &&
+      (response.status === 400 || response.status === 409)) {
+    const result = await response.json().catch(() => null);
+    const accountMessages = [
+      'La creación inicial de cuenta ya no está disponible.',
+      'El nombre de usuario o correo está reservado para la cuenta inicial del sistema.',
+      'El nombre de usuario o correo ya está registrado.',
+      'El nombre de usuario o correo ya se encuentra registrado.',
+      'La cuenta inicial ya fue creada.',
+    ];
+    if (accountMessages.includes(result?.detail)) {
+      throw new ApiError(result.detail, 'http', { status: response.status });
     }
   }
   throw createHttpApiError(response.status, endpoint, coreEndpoint);

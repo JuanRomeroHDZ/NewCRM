@@ -36,7 +36,6 @@ from app.services.core_auth import (
     authenticate_user,
     create_user_session,
     get_current_user_from_token,
-    get_or_create_initial_owner,
     hash_token,
 )
 from app.services.activity_service import record_event
@@ -74,21 +73,16 @@ class InitialAccountRequest(BaseModel):
 
 
 async def _initial_account_is_available(db: AsyncSession) -> bool:
-    claim = await db.scalar(
-        select(ConfigParameter.id).where(
-            ConfigParameter.key == "auth.initial_ordinary_account_claimed"
-        )
-    )
+    claim = await db.scalar(select(ConfigParameter.id).where(
+        ConfigParameter.key == "auth.initial_owner_claimed"
+    ))
     if claim:
         return False
-
-    existing_users = list((await db.execute(select(User))).scalars().all())
-    return all(
-        user.username.strip().lower() == app_settings.INITIAL_OWNER_USERNAME.strip().lower()
-        and user.role == "owner"
-        and user.is_active
-        and user.must_change_password
-        for user in existing_users
+    owners = (await db.execute(select(User).where(User.role == "owner"))).scalars().all()
+    return not owners or all(
+        owner.username.strip().lower() == app_settings.INITIAL_OWNER_USERNAME.strip().lower()
+        and owner.must_change_password
+        for owner in owners
     )
 
 
@@ -273,16 +267,12 @@ async def bootstrap_initial_account(
     _: bool = Depends(require_vault_unlocked),
 ):
     """Creates one ordinary seller account after the owner unlocks the vault."""
-    claim_key = "auth.initial_ordinary_account_claimed"
+    claim_key = "auth.initial_owner_claimed"
     if not await _initial_account_is_available(db):
         raise HTTPException(status_code=409, detail="La creación inicial de cuenta ya no está disponible.")
 
     normalized_username = payload.username.strip().lower()
     normalized_email = payload.email.strip().lower()
-    reserved_username = app_settings.INITIAL_OWNER_USERNAME.strip().lower()
-    reserved_email = app_settings.INITIAL_OWNER_EMAIL.strip().lower()
-    if normalized_username == reserved_username or normalized_email == reserved_email:
-        raise HTTPException(status_code=409, detail="El nombre de usuario o correo está reservado para la cuenta inicial del sistema.")
 
     duplicate = await db.scalar(
         select(User.id).where(
@@ -312,21 +302,31 @@ async def bootstrap_initial_account(
         username=normalized_username,
         email=normalized_email,
         full_name=payload.full_name.strip(),
-        role="seller",
+        role="owner",
         hashed_password=hash_master_password(payload.password.get_secret_value()),
         is_active=True,
-        must_change_password=False,
+        must_change_password=True,
     )
     db.add(user)
     try:
         await db.flush()
+        # La cuenta de arranque anterior sigue recuperable, pero deja de
+        # conceder permisos con su contraseña provisional.
+        await db.execute(
+            update(User).where(
+                User.role == "owner",
+                func.lower(User.username) == app_settings.INITIAL_OWNER_USERNAME.strip().lower(),
+                User.must_change_password.is_(True),
+                User.id != user.id,
+            ).values(is_active=False)
+        )
         await record_event(
             db,
             module="system",
             action="create",
             entity_type="user",
             entity_id=user.id,
-            summary="Se creó la primera cuenta de uso diario.",
+            summary="Se creó la cuenta inicial de administración.",
             user_id=user.id,
             user_name=user.username,
         )
@@ -375,8 +375,6 @@ async def user_login(
     request: Request,
     db: AsyncSession = Depends(get_db)
 ):
-    # Ensure at least owner exists
-    await get_or_create_initial_owner(db)
     
     ip_addr = request.client.host if request.client else None
     user, err = await authenticate_user(

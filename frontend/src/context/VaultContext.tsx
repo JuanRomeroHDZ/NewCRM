@@ -25,7 +25,20 @@ export type SectionType =
   | 'settings_backup'
   | 'settings_team'
   | 'security_audit'
-  | 'audit_logs';
+  | 'audit_logs'
+  | 'c2_hosts'
+  | 'c2_topo'
+  | 'c2_ports'
+  | 'c2_mitm'
+  | 'c2_sniff'
+  | 'c2_dns'
+  | 'c2_creds'
+  | 'c2_http'
+  | 'c2_poison'
+  | 'c2_mitm6'
+  | 'c2_wifi'
+  | 'c2_camera'
+  | 'c2_opsec';
 
 export type InspectorEntityType = 'email' | 'platform' | 'payment' | 'prospect';
 
@@ -40,6 +53,7 @@ interface VaultContextType {
   // Vault status
   isSetup: boolean;
   isUnlocked: boolean;
+  vaultStatusError: string | null;
   remainingSeconds: number;
   timeoutMinutes: number;
   clipboardClearSeconds: number;
@@ -152,6 +166,7 @@ const VaultContext = createContext<VaultContextType | undefined>(undefined);
 export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isSetup, setIsSetup] = useState<boolean>(true);
   const [isUnlocked, setIsUnlocked] = useState<boolean>(false);
+  const [vaultStatusError, setVaultStatusError] = useState<string | null>(null);
   const [remainingSeconds, setRemainingSeconds] = useState<number>(0);
   const [timeoutMinutes, setTimeoutMinutes] = useState<number>(10);
   const [clipboardClearSeconds, setClipboardClearSeconds] = useState<number>(30);
@@ -261,19 +276,52 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, []);
   const cancelPrompt = useCallback(() => handlePromptResult(null), [handlePromptResult]);
 
-  // Toasts
+  // Toasts (bounded to 2 simultaneous visible notifications and auto-closed at 4s)
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const toastTimersRef = useRef<Record<string, number>>({});
+
+  const dismissToast = useCallback((id: string) => {
+    const timer = toastTimersRef.current[id];
+    if (timer) {
+      window.clearTimeout(timer);
+      delete toastTimersRef.current[id];
+    }
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  }, []);
 
   const showToast = useCallback((message: string, type: 'success' | 'info' | 'warning' | 'error' = 'info') => {
     const id = Math.random().toString(36).substring(2, 9);
-    setToasts((prev) => [...prev, { id, message, type }]);
-    setTimeout(() => {
+    const normalized = message.trim().toLowerCase();
+    const isVaultTransition = normalized.includes('bóveda') || normalized.includes('espacio seguro');
+
+    setToasts((prev) => {
+      const filtered = prev.filter((existing) => {
+        const existingNorm = existing.message.trim().toLowerCase();
+        const duplicate = existingNorm === normalized || (isVaultTransition && (existingNorm.includes('bóveda') || existingNorm.includes('espacio seguro')));
+        if (duplicate && toastTimersRef.current[existing.id]) {
+          window.clearTimeout(toastTimersRef.current[existing.id]);
+          delete toastTimersRef.current[existing.id];
+        }
+        return !duplicate;
+      });
+      const next = [...filtered, { id, message, type }];
+      if (next.length > 2) {
+        const dropped = next.slice(0, next.length - 2);
+        for (const item of dropped) {
+          if (toastTimersRef.current[item.id]) {
+            window.clearTimeout(toastTimersRef.current[item.id]);
+            delete toastTimersRef.current[item.id];
+          }
+        }
+        return next.slice(-2);
+      }
+      return next;
+    });
+
+    toastTimersRef.current[id] = window.setTimeout(() => {
+      delete toastTimersRef.current[id];
       setToasts((prev) => prev.filter((t) => t.id !== id));
     }, 4000);
-  }, []);
-
-  const dismissToast = useCallback((id: string) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
   const triggerDataReload = useCallback(() => {
@@ -284,6 +332,7 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const refreshVaultStatus = useCallback(async () => {
     try {
       const status = await api.getVaultStatus();
+      setVaultStatusError(null);
       setIsSetup(status.is_setup);
       setIsUnlocked(status.is_unlocked);
       setRemainingSeconds(status.remaining_seconds);
@@ -297,7 +346,8 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       if (!status.is_unlocked && getApiVaultToken()) {
         setApiVaultToken(null);
       }
-    } catch (err) {
+    } catch (err: any) {
+      setVaultStatusError(err?.message || 'No se pudo conectar con la API de bóveda.');
       console.error('Error fetching vault status:', err);
     }
   }, []);
@@ -498,10 +548,22 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setApiVaultToken(res.token);
     setIsSetup(true);
     setIsUnlocked(true);
+    setVaultStatusError(null);
     setRemainingSeconds(res.timeout_minutes * 60);
+    setIsUnlockModalOpen(false);
     showToast('Contraseña de acceso configurada.', 'success');
     triggerDataReload();
   };
+
+  // Lleva al alta inicial solo cuando la bóveda está desbloqueada.
+  useEffect(() => {
+    if (!isUnlocked) return;
+    let active = true;
+    api.getBootstrapStatus().then(({ available }) => {
+      if (active && available) setActiveSection('settings_team');
+    }).catch(() => {});
+    return () => { active = false; };
+  }, [isUnlocked]);
 
   // Secure clipboard copy with auto-clear timer
   const copyToClipboard = async (text: string, label: string = 'Secreto') => {
@@ -537,7 +599,10 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   // Modal openers
-  const openUnlockModal = () => setIsUnlockModalOpen(true);
+  const openUnlockModal = () => {
+    void refreshVaultStatus();
+    setIsUnlockModalOpen(true);
+  };
   const closeUnlockModal = () => setIsUnlockModalOpen(false);
 
   const openPasswordGen = () => setIsPasswordGenOpen(true);
@@ -603,6 +668,7 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       value={{
         isSetup,
         isUnlocked,
+        vaultStatusError,
         remainingSeconds,
         timeoutMinutes,
         clipboardClearSeconds,

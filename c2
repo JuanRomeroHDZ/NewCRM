@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# Acceso rápido al servicio C2 de LESSSO.
+exec "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/scripts/c2.sh" "$@"

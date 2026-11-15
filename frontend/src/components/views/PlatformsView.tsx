@@ -200,7 +200,7 @@ export const PlatformsView: React.FC = () => {
           <button
             type="button"
             onClick={openUnlockModal}
-            className="min-h-[38px] flex-shrink-0 self-end rounded-lg bg-indigo-600 px-3.5 py-1.5 text-xs font-semibold text-white whitespace-nowrap hover:bg-indigo-500 sm:self-auto"
+            className="min-h-[44px] lg:min-h-9 flex-shrink-0 self-end rounded-lg bg-indigo-600 px-3.5 py-1.5 text-xs font-semibold text-white whitespace-nowrap hover:bg-indigo-500 sm:self-auto"
           >
             Desbloquear Bóveda
           </button>
@@ -301,7 +301,7 @@ export const PlatformsView: React.FC = () => {
               type="button"
               aria-pressed={viewMode === 'table'}
               onClick={() => setViewMode('table')}
-              className={`min-h-[32px] rounded-lg px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
+              className={`min-h-[44px] md:min-h-9 rounded-lg px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
                 viewMode === 'table' ? 'bg-obsidian-surface text-white' : 'text-obsidian-muted hover:text-white'
               }`}
             >
@@ -311,7 +311,7 @@ export const PlatformsView: React.FC = () => {
               type="button"
               aria-pressed={viewMode === 'grid'}
               onClick={() => setViewMode('grid')}
-              className={`min-h-[32px] rounded-lg px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
+              className={`min-h-[44px] md:min-h-9 rounded-lg px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
                 viewMode === 'grid' ? 'bg-obsidian-surface text-white' : 'text-obsidian-muted hover:text-white'
               }`}
             >
@@ -496,7 +496,7 @@ export const PlatformsView: React.FC = () => {
                             rel="noopener noreferrer"
                             title="Abrir sitio oficial"
                             aria-label={`Abrir sitio oficial de ${p.name}`}
-                            className="inline-flex min-h-[36px] min-w-[36px] items-center justify-center rounded-lg hover:bg-obsidian-surface hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                            className="inline-flex min-h-[44px] min-w-[44px] lg:min-h-9 lg:min-w-9 items-center justify-center rounded-lg hover:bg-obsidian-surface hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
                           >
                             <ExternalLink size={14} aria-hidden="true" />
                           </a>
@@ -509,7 +509,7 @@ export const PlatformsView: React.FC = () => {
                           }}
                           title="Editar plataforma"
                           aria-label={`Editar ${p.name}`}
-                          className="inline-flex min-h-[36px] min-w-[36px] items-center justify-center rounded-lg hover:bg-obsidian-surface hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                          className="inline-flex min-h-[44px] min-w-[44px] lg:min-h-9 lg:min-w-9 items-center justify-center rounded-lg hover:bg-obsidian-surface hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
                         >
                           <Edit3 size={14} aria-hidden="true" />
                         </button>
@@ -518,7 +518,7 @@ export const PlatformsView: React.FC = () => {
                           onClick={() => handleDeletePlatform(p)}
                           title="Eliminar plataforma"
                           aria-label={`Eliminar ${p.name}`}
-                          className="inline-flex min-h-[36px] min-w-[36px] items-center justify-center rounded-lg hover:bg-obsidian-surface hover:text-rose-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
+                          className="inline-flex min-h-[44px] min-w-[44px] lg:min-h-9 lg:min-w-9 items-center justify-center rounded-lg hover:bg-obsidian-surface hover:text-rose-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
                         >
                           <Trash2 size={14} aria-hidden="true" />
                         </button>
@@ -586,7 +586,7 @@ export const PlatformsView: React.FC = () => {
                         rel="noopener noreferrer"
                         title="Abrir enlace"
                         aria-label={`Abrir enlace de ${p.name}`}
-                        className="inline-flex min-h-9 min-w-9 items-center justify-center rounded-lg text-obsidian-muted hover:bg-obsidian-surface hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                        className="inline-flex min-h-[44px] min-w-[44px] lg:min-h-9 lg:min-w-9 items-center justify-center rounded-lg text-obsidian-muted hover:bg-obsidian-surface hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
                       >
                         <ExternalLink size={14} aria-hidden="true" />
                       </a>
@@ -599,7 +599,7 @@ export const PlatformsView: React.FC = () => {
                       }}
                       title="Editar plataforma"
                       aria-label={`Editar ${p.name}`}
-                      className="inline-flex min-h-9 min-w-9 items-center justify-center rounded-lg text-obsidian-muted hover:bg-obsidian-surface hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                      className="inline-flex min-h-[44px] min-w-[44px] lg:min-h-9 lg:min-w-9 items-center justify-center rounded-lg text-obsidian-muted hover:bg-obsidian-surface hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
                     >
                       <Edit3 size={14} aria-hidden="true" />
                     </button>
@@ -608,7 +608,7 @@ export const PlatformsView: React.FC = () => {
                       onClick={() => handleDeletePlatform(p)}
                       title="Eliminar plataforma"
                       aria-label={`Eliminar ${p.name}`}
-                      className="inline-flex min-h-9 min-w-9 items-center justify-center rounded-lg text-obsidian-muted hover:bg-obsidian-surface hover:text-rose-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
+                      className="inline-flex min-h-[44px] min-w-[44px] lg:min-h-9 lg:min-w-9 items-center justify-center rounded-lg text-obsidian-muted hover:bg-obsidian-surface hover:text-rose-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
                     >
                       <Trash2 size={14} aria-hidden="true" />
                     </button>

@@ -1,10 +1,20 @@
 #!/usr/bin/env bash
-# Levanta Email-CRM y elige puertos HTTP/HTTPS libres en el host.
+# Levanta el CRM de LESSSO y elige puertos HTTP/HTTPS libres en el host.
 # Los puertos quedan guardados en .env.runtime y se reutilizan al reiniciar.
 set -euo pipefail
 
+if (( EUID == 0 )); then
+  echo 'Inicia el CRM con tu usuario habitual, sin sudo.' >&2
+  exit 1
+fi
+
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 RUNTIME_FILE=".env.runtime"
+CHOOSE_PORTS=false
+if [[ "${1:-}" == "--choose-ports" ]]; then
+  CHOOSE_PORTS=true
+  shift
+fi
 
 # Lee solo una variable simple de .env; no ejecuta ni muestra sus secretos.
 dotenv_value() {
@@ -80,9 +90,33 @@ HTTPS_PORT="${HTTPS_PORT:-$(dotenv_value HTTPS_PORT)}"
 PORT="${PORT:-8080}"
 HTTPS_PORT="${HTTPS_PORT:-8443}"
 
-PORT="$(pick_port "$PORT")"
-HTTPS_PORT="$(pick_port "$HTTPS_PORT" "$PORT")"
+if $CHOOSE_PORTS; then
+  [[ -t 0 ]] || { echo 'Elige los puertos desde una terminal.' >&2; exit 1; }
+  read -r -p "Puerto HTTP [$PORT]: " selected_http
+  read -r -p "Puerto HTTPS [$HTTPS_PORT]: " selected_https
+  PORT="${selected_http:-$PORT}"
+  HTTPS_PORT="${selected_https:-$HTTPS_PORT}"
+  for port in "$PORT" "$HTTPS_PORT"; do
+    if [[ ! "$port" =~ ^[0-9]{1,5}$ ]] || (( 10#$port < 1 || 10#$port > 65535 )); then
+      echo 'Escribe puertos numéricos entre 1 y 65535.' >&2
+      exit 1
+    fi
+    if ! is_free "$port" && ! is_ours "$port"; then
+      echo "El puerto $port ya está ocupado. Elige otro." >&2
+      exit 1
+    fi
+  done
+  if (( 10#$PORT == 10#$HTTPS_PORT )); then
+    echo 'HTTP y HTTPS necesitan puertos diferentes.' >&2
+    exit 1
+  fi
+else
+  PORT="$(pick_port "$PORT")"
+  HTTPS_PORT="$(pick_port "$HTTPS_PORT" "$PORT")"
+fi
 export PORT HTTPS_PORT
+
+docker compose up -d --build --wait "$@"
 
 cat > "$RUNTIME_FILE" <<EOF
 # Generado por scripts/up.sh
@@ -90,10 +124,8 @@ PORT=${PORT}
 HTTPS_PORT=${HTTPS_PORT}
 EOF
 
-docker compose up -d --build "$@"
-
 echo
-echo "Email-CRM levantado:"
+echo "LESSSO CRM listo:"
 echo "  HTTP:  http://localhost:${PORT}"
 echo "  HTTPS: https://localhost:${HTTPS_PORT}"
 echo

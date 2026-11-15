@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   UserCheck, ShieldCheck, KeyRound, LogOut, UserPlus, Users, Unlock,
-  Copy, Check, Search, AlertTriangle, RefreshCw, X
+  Copy, Check, Search, AlertTriangle, RefreshCw, X, Eye, EyeOff
 } from 'lucide-react';
 import { api, getApiUserToken, setApiUserToken } from '../../lib/api';
 import { CoreUser, CoreUserRole, TotpSetupResponse } from '../../types';
@@ -26,9 +26,14 @@ export const OperatorAuthSection: React.FC = () => {
   const [loginIdentifier, setLoginIdentifier] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [loginTotp, setLoginTotp] = useState('');
+  const [loginError, setLoginError] = useState<string | null>(null);
+  const [showLoginPwd, setShowLoginPwd] = useState(false);
+  const [showPwdChangePwd, setShowPwdChangePwd] = useState(false);
   const [loginLoading, setLoginLoading] = useState(false);
   const [bootstrapAvailable, setBootstrapAvailable] = useState(false);
   const [showBootstrapForm, setShowBootstrapForm] = useState(false);
+  const [bootstrapError, setBootstrapError] = useState<string | null>(null);
+  const [createUserError, setCreateUserError] = useState<string | null>(null);
   const [bootstrapLoading, setBootstrapLoading] = useState(false);
   const [bootstrapUsername, setBootstrapUsername] = useState('');
   const [bootstrapEmail, setBootstrapEmail] = useState('');
@@ -115,10 +120,10 @@ export const OperatorAuthSection: React.FC = () => {
   }, [refreshOperatorSession]);
 
   useEffect(() => {
-    if (!isUnlocked || currentUser || loadingSession) {
+    if (!isUnlocked || loadingSession) {
       setBootstrapAvailable(false);
       setShowBootstrapForm(false);
-      if (!isUnlocked || currentUser) {
+      if (!isUnlocked) {
         setBootstrapPassword('');
         setBootstrapPasswordConfirm('');
       }
@@ -140,10 +145,13 @@ export const OperatorAuthSection: React.FC = () => {
   const handleOperatorLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!loginIdentifier.trim() || !loginPassword) {
-      showToast('Ingresa tu usuario o correo y tu contraseña.', 'error');
+      const msg = 'Ingresa tu usuario o correo y tu contraseña.';
+      setLoginError(msg);
+      showToast(msg, 'error');
       return;
     }
     setLoginLoading(true);
+    setLoginError(null);
     try {
       const res = await api.userLogin({
         username_or_email: loginIdentifier.trim(),
@@ -153,12 +161,15 @@ export const OperatorAuthSection: React.FC = () => {
       setApiUserToken(res.token);
       setCurrentUser(res.user);
       setSessionError(null);
+      setLoginError(null);
       setLoginPassword('');
       setLoginTotp('');
       showToast(`Sesión iniciada como ${res.user.full_name}.`, 'success');
       await loadUsersIfOwner(res.user);
     } catch (err: any) {
-      showToast(err.message || 'No se pudo iniciar sesión operativa.', 'error');
+      const msg = err.message || 'No se pudo iniciar sesión operativa.';
+      setLoginError(msg);
+      showToast(msg, 'error');
     } finally {
       setLoginLoading(false);
     }
@@ -166,24 +177,25 @@ export const OperatorAuthSection: React.FC = () => {
 
   const handleBootstrapAccount = async (event: React.FormEvent) => {
     event.preventDefault();
+    setBootstrapError(null);
     if (!/^[a-zA-Z0-9._-]{3,64}$/.test(bootstrapUsername.trim())) {
-      showToast('El usuario debe tener entre 3 y 64 caracteres: letras, números, punto, guion o guion bajo.', 'error');
+      setBootstrapError('El usuario debe tener entre 3 y 64 caracteres: letras, números, punto, guion o guion bajo.');
       return;
     }
     if (!isValidEmail(bootstrapEmail.trim())) {
-      showToast('Ingresa un correo electrónico válido.', 'error');
+      setBootstrapError('Ingresa un correo electrónico válido.');
       return;
     }
     if (bootstrapFullName.trim().length < 2) {
-      showToast('Ingresa tu nombre completo.', 'error');
+      setBootstrapError('Ingresa tu nombre completo.');
       return;
     }
     if (bootstrapPassword.length < 12 || bootstrapPassword.length > INPUT_LIMITS.PASSWORD) {
-      showToast('Usa una contraseña de 12 a 256 caracteres.', 'error');
+      setBootstrapError('Usa una contraseña de 12 a 256 caracteres.');
       return;
     }
     if (bootstrapPassword !== bootstrapPasswordConfirm) {
-      showToast('Las contraseñas no coinciden.', 'error');
+      setBootstrapError('Las contraseñas no coinciden.');
       return;
     }
 
@@ -201,10 +213,10 @@ export const OperatorAuthSection: React.FC = () => {
       setBootstrapPasswordConfirm('');
       setBootstrapAvailable(false);
       setShowBootstrapForm(false);
-      showToast(`Cuenta creada. Bienvenido, ${response.user.full_name}.`, 'success');
+      showToast(`Cuenta creada. Cambia la contraseña provisional para continuar, ${response.user.full_name}.`, 'success');
       await loadUsersIfOwner(response.user);
     } catch (err: any) {
-      showToast(err.message || 'No se pudo crear la cuenta inicial.', 'error');
+      setBootstrapError(err.message || 'No se pudo crear la cuenta inicial.');
     } finally {
       setBootstrapLoading(false);
     }
@@ -292,20 +304,21 @@ export const OperatorAuthSection: React.FC = () => {
 
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
+    setCreateUserError(null);
     if (!currentUser || currentUser.must_change_password || currentUser.role !== 'owner') {
-      showToast('Cambia tu contraseña temporal antes de administrar cuentas.', 'error');
+      setCreateUserError('Cambia tu contraseña temporal antes de administrar cuentas.');
       return;
     }
     if (!/^[a-zA-Z0-9._-]{3,64}$/.test(newUsername.trim())) {
-      showToast('Usuario inválido: usa 3-64 caracteres alfanuméricos, ".", "_" o "-".', 'error');
+      setCreateUserError('Usuario inválido: usa 3-64 caracteres alfanuméricos, ".", "_" o "-".');
       return;
     }
     if (!isValidEmail(newEmail.trim())) {
-      showToast('Ingresa un correo electrónico válido.', 'error');
+      setCreateUserError('Ingresa un correo electrónico válido.');
       return;
     }
     if (newFullName.trim().length < 2) {
-      showToast('Ingresa el nombre completo del operador.', 'error');
+      setCreateUserError('Ingresa el nombre completo del operador.');
       return;
     }
     setUserMgmtLoading(true);
@@ -324,7 +337,7 @@ export const OperatorAuthSection: React.FC = () => {
       showToast(`Operador "${created.username}" creado.`, 'success');
       await loadUsersIfOwner(currentUser);
     } catch (err: any) {
-      showToast(err.message || 'No se pudo crear el operador.', 'error');
+      setCreateUserError(err.message || 'No se pudo crear el operador.');
     } finally {
       setUserMgmtLoading(false);
     }
@@ -401,7 +414,7 @@ export const OperatorAuthSection: React.FC = () => {
           <button
             type="button"
             onClick={refreshOperatorSession}
-            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-rose-500/20 hover:bg-rose-500/30 text-white font-semibold"
+            className="inline-flex items-center gap-1 min-h-[44px] lg:min-h-9 px-3 py-1.5 rounded-md bg-rose-500/20 hover:bg-rose-500/30 text-white font-semibold"
           >
             <RefreshCw size={12} aria-hidden="true" />
             <span>Reintentar</span>
@@ -415,6 +428,12 @@ export const OperatorAuthSection: React.FC = () => {
         </div>
       ) : !currentUser ? (
         <>
+        {loginError && (
+          <div role="alert" className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-200 flex items-center gap-2">
+            <AlertTriangle size={14} className="text-rose-400 shrink-0" aria-hidden="true" />
+            <span className="break-words">{loginError}</span>
+          </div>
+        )}
         <form onSubmit={handleOperatorLogin} className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div>
             <label htmlFor="op-login-identifier" className="text-xs text-obsidian-muted block mb-1">
@@ -425,26 +444,43 @@ export const OperatorAuthSection: React.FC = () => {
               type="text"
               autoComplete="username"
               value={loginIdentifier}
-              onChange={(e) => setLoginIdentifier(e.target.value)}
+              onChange={(e) => {
+                setLoginIdentifier(e.target.value);
+                if (loginError) setLoginError(null);
+              }}
               maxLength={INPUT_LIMITS.EMAIL}
               placeholder="Tu usuario o correo"
-              className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs focus:outline-none focus:border-indigo-500"
+              className="w-full min-h-[44px] lg:min-h-9 px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs focus:outline-none focus:border-obsidian-gold"
             />
           </div>
           <div>
             <label htmlFor="op-login-password" className="text-xs text-obsidian-muted block mb-1">
               Contraseña
             </label>
-            <input
-              id="op-login-password"
-              type="password"
-              autoComplete="current-password"
-              value={loginPassword}
-              onChange={(e) => setLoginPassword(e.target.value)}
-              maxLength={INPUT_LIMITS.PASSWORD}
-              placeholder="••••••••••••"
-              className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-indigo-500"
-            />
+            <div className="relative flex items-center">
+              <input
+                id="op-login-password"
+                type={showLoginPwd ? 'text' : 'password'}
+                autoComplete="current-password"
+                value={loginPassword}
+                onChange={(e) => {
+                  setLoginPassword(e.target.value);
+                  if (loginError) setLoginError(null);
+                }}
+                maxLength={INPUT_LIMITS.PASSWORD}
+                placeholder="••••••••••••"
+                className="w-full min-h-[44px] lg:min-h-9 pl-3 pr-11 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-obsidian-gold"
+              />
+              <button
+                type="button"
+                onClick={() => setShowLoginPwd((v) => !v)}
+                aria-label={showLoginPwd ? 'Ocultar contraseña de operador' : 'Mostrar contraseña de operador'}
+                aria-pressed={showLoginPwd}
+                className="absolute right-0.5 inline-flex items-center justify-center min-w-[44px] min-h-[44px] lg:min-w-9 lg:min-h-9 text-obsidian-muted hover:text-white rounded-lg"
+              >
+                {showLoginPwd ? <EyeOff size={14} aria-hidden="true" /> : <Eye size={14} aria-hidden="true" />}
+              </button>
+            </div>
           </div>
           <div>
             <label htmlFor="op-login-totp" className="text-xs text-obsidian-muted block mb-1">
@@ -454,17 +490,17 @@ export const OperatorAuthSection: React.FC = () => {
               <input
                 id="op-login-totp"
                 type="text"
-                inputMode="numeric"
+                autoComplete="one-time-code"
                 value={loginTotp}
                 onChange={(e) => setLoginTotp(e.target.value)}
-                maxLength={8}
+                maxLength={32}
                 placeholder="123456"
-                className="w-full min-w-0 px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-indigo-500"
+                className="w-full min-w-0 min-h-[44px] lg:min-h-9 px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-obsidian-gold"
               />
               <button
                 type="submit"
                 disabled={loginLoading}
-                className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex-shrink-0 disabled:opacity-50"
+                className="min-h-[44px] lg:min-h-9 px-4 py-2 rounded-xl bg-obsidian-gold hover:brightness-110 text-black text-xs font-semibold flex-shrink-0 disabled:opacity-50"
               >
                 {loginLoading ? 'Entrando...' : 'Entrar'}
               </button>
@@ -475,27 +511,30 @@ export const OperatorAuthSection: React.FC = () => {
           <section className="space-y-3 rounded-xl border border-indigo-500/25 bg-indigo-500/5 p-3 sm:p-4" aria-labelledby="initial-account-heading">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="min-w-0">
-                <h4 id="initial-account-heading" className="text-xs font-semibold text-white">Primera cuenta</h4>
+                <h4 id="initial-account-heading" className="text-xs font-semibold text-white">Crear cuenta administradora</h4>
                 <p className="mt-1 max-w-prose text-[11px] leading-relaxed text-obsidian-muted">
-                  Crea una cuenta de uso diario con acceso de Ventas. No podrá administrar otras cuentas.
+                  Crea la cuenta de propietario. Al iniciar sesión deberás cambiar la contraseña provisional.
                 </p>
               </div>
               <button
                 type="button"
+                aria-expanded={showBootstrapForm}
+                aria-controls="initial-account-form"
                 onClick={() => {
                   if (showBootstrapForm) {
                     setBootstrapPassword('');
                     setBootstrapPasswordConfirm('');
+                    setBootstrapError(null);
                   }
                   setShowBootstrapForm((open) => !open);
                 }}
-                className="min-h-9 rounded-lg border border-indigo-500/30 px-3 text-xs font-semibold text-indigo-200 hover:bg-indigo-500/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
+                className="min-h-[44px] lg:min-h-9 rounded-lg border border-indigo-500/30 px-3 text-xs font-semibold text-indigo-200 hover:bg-indigo-500/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
               >
                 {showBootstrapForm ? 'Cerrar' : 'Crear cuenta'}
               </button>
             </div>
             {showBootstrapForm && (
-              <form onSubmit={handleBootstrapAccount} className="grid min-w-0 gap-3 sm:grid-cols-2">
+              <form id="initial-account-form" onSubmit={handleBootstrapAccount} className="grid min-w-0 gap-3 sm:grid-cols-2">
                 <label className="min-w-0 text-xs text-obsidian-muted">
                   Usuario
                   <input
@@ -561,12 +600,13 @@ export const OperatorAuthSection: React.FC = () => {
                 <p className="text-[11px] leading-relaxed text-obsidian-muted sm:col-span-2">
                   Esta cuenta se crea una sola vez. Para añadir más personas después, se requiere una cuenta autorizada.
                 </p>
+                {bootstrapError && <p role="alert" className="text-xs text-rose-300 sm:col-span-2">{bootstrapError}</p>}
                 <button
                   type="submit"
                   disabled={bootstrapLoading}
                   className="min-h-10 rounded-lg bg-indigo-600 px-4 text-xs font-semibold text-white hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60 sm:col-span-2"
                 >
-                  {bootstrapLoading ? 'Creando cuenta…' : 'Crear cuenta de uso diario'}
+                  {bootstrapLoading ? 'Creando cuenta…' : 'Crear cuenta administradora'}
                 </button>
               </form>
             )}
@@ -575,6 +615,11 @@ export const OperatorAuthSection: React.FC = () => {
         </>
       ) : (
         <div className="space-y-4">
+          {bootstrapAvailable && (
+            <p role="status" className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200">
+              Para crear la cuenta administradora inicial, cierra esta sesión y selecciona Crear cuenta.
+            </p>
+          )}
           <div className="flex flex-wrap items-center justify-between gap-2 text-xs pb-3 border-b border-obsidian-border/70">
             <div className="space-y-0.5 min-w-0">
               <div className="font-semibold text-white break-words">
@@ -609,16 +654,27 @@ export const OperatorAuthSection: React.FC = () => {
                 <label htmlFor="op-pwd-current" className="sr-only">
                   Contraseña actual
                 </label>
-                <input
-                  id="op-pwd-current"
-                  type="password"
-                  autoComplete="current-password"
-                  value={currentPwd}
-                  onChange={(e) => setCurrentPwd(e.target.value)}
-                  maxLength={INPUT_LIMITS.PASSWORD}
-                  placeholder="Contraseña actual"
-                  className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-cyan-500"
-                />
+                <div className="relative flex items-center">
+                  <input
+                    id="op-pwd-current"
+                    type={showPwdChangePwd ? 'text' : 'password'}
+                    autoComplete="current-password"
+                    value={currentPwd}
+                    onChange={(e) => setCurrentPwd(e.target.value)}
+                    maxLength={INPUT_LIMITS.PASSWORD}
+                    placeholder="Contraseña actual"
+                    className="w-full min-h-[44px] lg:min-h-9 pl-3 pr-11 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-cyan-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPwdChangePwd((v) => !v)}
+                    aria-label={showPwdChangePwd ? 'Ocultar contraseñas' : 'Mostrar contraseñas'}
+                    aria-pressed={showPwdChangePwd}
+                    className="absolute right-0.5 inline-flex items-center justify-center min-w-[44px] min-h-[44px] lg:min-w-9 lg:min-h-9 text-obsidian-muted hover:text-white rounded-lg"
+                  >
+                    {showPwdChangePwd ? <EyeOff size={14} aria-hidden="true" /> : <Eye size={14} aria-hidden="true" />}
+                  </button>
+                </div>
               </div>
               <div>
                 <label htmlFor="op-pwd-new" className="sr-only">
@@ -626,13 +682,13 @@ export const OperatorAuthSection: React.FC = () => {
                 </label>
                 <input
                   id="op-pwd-new"
-                  type="password"
+                  type={showPwdChangePwd ? 'text' : 'password'}
                   autoComplete="new-password"
                   value={newPwd}
                   onChange={(e) => setNewPwd(e.target.value)}
                   maxLength={INPUT_LIMITS.PASSWORD}
                   placeholder="Nueva contraseña (mín. 8 caracteres)"
-                  className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-cyan-500"
+                  className="w-full min-h-[44px] lg:min-h-9 px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-cyan-500"
                 />
               </div>
               <div className="flex gap-2">
@@ -649,14 +705,14 @@ export const OperatorAuthSection: React.FC = () => {
                       onChange={(e) => setPwdTotp(e.target.value)}
                       maxLength={8}
                       placeholder="Código 2FA"
-                      className="w-32 px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-cyan-500"
+                      className="w-32 min-h-[44px] lg:min-h-9 px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-cyan-500"
                     />
                   </>
                 )}
                 <button
                   type="submit"
                   disabled={pwdLoading}
-                  className="px-3.5 py-2 rounded-xl bg-obsidian-surface hover:bg-obsidian-border border border-obsidian-border text-white text-xs font-semibold disabled:opacity-50"
+                  className="min-h-[44px] lg:min-h-9 px-3.5 py-2 rounded-xl bg-obsidian-surface hover:bg-obsidian-border border border-obsidian-border text-white text-xs font-semibold disabled:opacity-50"
                 >
                   {pwdLoading ? 'Actualizando...' : 'Actualizar contraseña'}
                 </button>
@@ -682,7 +738,7 @@ export const OperatorAuthSection: React.FC = () => {
                     onChange={(e) => setTotpConfirmPwd(e.target.value)}
                     maxLength={INPUT_LIMITS.PASSWORD}
                     placeholder="Contraseña actual para rotar 2FA"
-                    className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-emerald-500"
+                    className="w-full min-h-[44px] lg:min-h-9 px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-emerald-500"
                   />
                 </div>
               )}
@@ -690,7 +746,7 @@ export const OperatorAuthSection: React.FC = () => {
                 type="button"
                 onClick={handleStart2FA}
                 disabled={totpLoading}
-                className="px-3.5 py-2 rounded-xl bg-obsidian-surface hover:bg-obsidian-border border border-obsidian-border text-white text-xs font-semibold disabled:opacity-50"
+                className="min-h-[44px] lg:min-h-9 px-3.5 py-2 rounded-xl bg-obsidian-surface hover:bg-obsidian-border border border-obsidian-border text-white text-xs font-semibold disabled:opacity-50"
               >
                 {currentUser.is_totp_enabled ? 'Regenerar secreto 2FA' : 'Configurar 2FA'}
               </button>
@@ -776,6 +832,8 @@ export const OperatorAuthSection: React.FC = () => {
                   <label htmlFor="op-new-username" className="sr-only">Nombre de usuario</label>
                   <input
                     id="op-new-username"
+                    required
+                    minLength={3}
                     type="text"
                     value={newUsername}
                     onChange={(e) => setNewUsername(e.target.value)}
@@ -788,6 +846,7 @@ export const OperatorAuthSection: React.FC = () => {
                   <label htmlFor="op-new-email" className="sr-only">Correo electrónico</label>
                   <input
                     id="op-new-email"
+                    required
                     type="email"
                     value={newEmail}
                     onChange={(e) => setNewEmail(e.target.value)}
@@ -800,6 +859,8 @@ export const OperatorAuthSection: React.FC = () => {
                   <label htmlFor="op-new-fullname" className="sr-only">Nombre completo</label>
                   <input
                     id="op-new-fullname"
+                    required
+                    minLength={2}
                     type="text"
                     value={newFullName}
                     onChange={(e) => setNewFullName(e.target.value)}
@@ -833,6 +894,8 @@ export const OperatorAuthSection: React.FC = () => {
                 </form>
               </fieldset>
 
+              {createUserError && <p role="alert" className="text-xs text-rose-300">{createUserError}</p>}
+
               {createdTempPassword && (
                 <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs">
                   <span className="text-emerald-200 break-words">
@@ -856,7 +919,7 @@ export const OperatorAuthSection: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => loadUsersIfOwner(currentUser)}
-                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-rose-500/20 hover:bg-rose-500/30 text-white font-semibold"
+                    className="inline-flex items-center gap-1 min-h-[44px] lg:min-h-8 px-3 py-1.5 rounded bg-rose-500/20 hover:bg-rose-500/30 text-white font-semibold"
                   >
                     <RefreshCw size={12} aria-hidden="true" />
                     <span>Reintentar</span>
@@ -876,7 +939,7 @@ export const OperatorAuthSection: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setUserSearch('')}
-                    className="px-2.5 py-1 rounded bg-obsidian-surface border border-obsidian-border text-white hover:bg-obsidian-border"
+                    className="min-h-[44px] lg:min-h-8 px-3 py-1.5 rounded bg-obsidian-surface border border-obsidian-border text-white hover:bg-obsidian-border"
                   >
                     Limpiar búsqueda
                   </button>
@@ -886,7 +949,7 @@ export const OperatorAuthSection: React.FC = () => {
                   {filteredUsers.map((u) => {
                     const isSelf = u.id === currentUser.id;
                     return (
-                      <div key={u.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
+                      <div key={u.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5">
                         <div className="min-w-0">
                           <span className="font-semibold text-white">{u.full_name}</span>{' '}
                           <span className="text-obsidian-muted font-mono">@{u.username}</span>{' '}
@@ -898,7 +961,7 @@ export const OperatorAuthSection: React.FC = () => {
                             aria-label={`Rol de ${u.username}`}
                             disabled={isSelf || userMgmtLoading}
                             onChange={(e) => handleUpdateUser(u.id, { role: e.target.value as CoreUserRole })}
-                            className="px-2 py-1 rounded bg-obsidian-bg border border-obsidian-border text-white text-[11px] disabled:opacity-50"
+                            className="min-h-[44px] lg:min-h-8 px-2.5 py-1.5 rounded bg-obsidian-bg border border-obsidian-border text-white text-[11px] disabled:opacity-50"
                           >
                             <option value="owner">Propietario</option>
                             <option value="business_admin">Administrador</option>
@@ -909,7 +972,7 @@ export const OperatorAuthSection: React.FC = () => {
                             type="button"
                             disabled={isSelf || userMgmtLoading}
                             onClick={() => handleUpdateUser(u.id, { is_active: !u.is_active })}
-                            className={`px-2 py-1 rounded text-[11px] font-semibold disabled:opacity-50 ${
+                            className={`min-h-[44px] lg:min-h-8 px-3 py-1.5 rounded text-[11px] font-semibold disabled:opacity-50 ${
                               u.is_active ? 'bg-emerald-500/15 text-emerald-300' : 'bg-red-500/15 text-red-300'
                             }`}
                           >
@@ -919,7 +982,7 @@ export const OperatorAuthSection: React.FC = () => {
                             type="button"
                             disabled={userMgmtLoading}
                             onClick={() => handleUpdateUser(u.id, { unlock: true })}
-                            className="inline-flex items-center gap-1 px-2 py-1 rounded bg-obsidian-surface hover:bg-obsidian-border text-[11px] text-obsidian-text"
+                            className="inline-flex items-center gap-1 min-h-[44px] lg:min-h-8 px-3 py-1.5 rounded bg-obsidian-surface hover:bg-obsidian-border text-[11px] text-obsidian-text"
                             title="Desbloquear intentos fallidos"
                           >
                             <Unlock size={11} aria-hidden="true" />

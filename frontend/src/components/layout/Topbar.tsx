@@ -36,6 +36,19 @@ export const Topbar: React.FC<TopbarProps> = ({ onMenuClick, menuTriggerRef, isM
     settings_team: { title: 'Ajustes', compactTitle: 'Ajustes' },
     security_audit: { title: 'Nivel de Seguridad', compactTitle: 'Seguridad', tooltip: 'Revisión automática para detectar cuentas con la misma contraseña, contraseñas fáciles de adivinar o correos sin protección.' },
     audit_logs: { title: 'Historial de Actividad', compactTitle: 'Historial', tooltip: 'Registro cronológico de todos los movimientos y cambios realizados en tu sistema.' },
+    c2_hosts: { title: 'C2 · Hosts y Descubrimiento', compactTitle: 'Hosts C2', tooltip: 'Barrido ARP de la red local y selección de objetivos.' },
+    c2_topo: { title: 'C2 · Topología de Red', compactTitle: 'Topología C2', tooltip: 'Mapa visual de dispositivos OT/IT, routers, PLCs y enlaces de tráfico.' },
+    c2_ports: { title: 'C2 · Escaneo de Puertos', compactTitle: 'Puertos C2', tooltip: 'Escaneo TCP connect / SYN stealth, banners y búsqueda de exploits.' },
+    c2_mitm: { title: 'C2 · MITM (ARP Spoofing)', compactTitle: 'MITM C2', tooltip: 'Envenenamiento ARP bidireccional entre objetivo y gateway.' },
+    c2_sniff: { title: 'C2 · Sniffer de Paquetes', compactTitle: 'Sniffer C2', tooltip: 'Captura de tráfico en vivo con soporte de filtros BPF.' },
+    c2_dns: { title: 'C2 · DNS Spoofing', compactTitle: 'DNS C2', tooltip: 'Redirección de consultas DNS durante sesiones MITM.' },
+    c2_creds: { title: 'C2 · Captura de Credenciales', compactTitle: 'Creds C2', tooltip: 'Extracción en memoria de credenciales HTTP, cookies, Bearer, FTP y NTLMSSP.' },
+    c2_http: { title: 'C2 · HTTP Inject y SSLStrip', compactTitle: 'HTTP C2', tooltip: 'Proxy de inyección HTML/JS en claro y degradación de cabeceras.' },
+    c2_poison: { title: 'C2 · Poisoners y WPAD', compactTitle: 'Poison C2', tooltip: 'Suplantación LLMNR, NBT-NS, mDNS y servidor WPAD/PAC.' },
+    c2_mitm6: { title: 'C2 · mitm6 (IPv6)', compactTitle: 'mitm6 C2', tooltip: 'Anuncio Router Advertisement IPv6 y DNS spoofing.' },
+    c2_wifi: { title: 'C2 · Wi-Fi (802.11)', compactTitle: 'Wi-Fi C2', tooltip: 'Modo monitor, escaneo, deauth dirigido, PMKID, handshakes y hashcat.' },
+    c2_camera: { title: 'C2 · Auditoría de Cámaras', compactTitle: 'Cámaras C2', tooltip: 'Descubrimiento y auditoría RTSP, ONVIF, HTTP, P2P y CVEs de firmware.' },
+    c2_opsec: { title: 'C2 · Identidad OPSEC', compactTitle: 'OPSEC C2', tooltip: 'Cambio reversible de hostname y dirección MAC con OUI real.' },
   };
 
   const currentInfo = sectionTitles[activeSection] || { title: 'LESSSO', compactTitle: 'Inicio' };

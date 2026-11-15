@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database import get_db
 from app.models import EmailAccount, PlatformAccount, PasswordHistory
+from app.models.core import User
 from app.schemas import validate_email_input, validate_nonblank_input, validate_web_url_input
 from app.security.crypto import encrypt_secret, encrypt_note, calculate_entropy
 from app.security.tokens import require_vault_unlocked
@@ -58,7 +59,14 @@ async def batch_import_vault(payload: BatchImportRequest, db: AsyncSession = Dep
     default_email = existing_emails[0] if existing_emails else None
     if not default_email:
         from app.config import settings
-        fallback_address = settings.DEFAULT_IMPORT_EMAIL.strip() or settings.INITIAL_OWNER_EMAIL
+        fallback_address = settings.DEFAULT_IMPORT_EMAIL.strip() or settings.INITIAL_OWNER_EMAIL.strip()
+        if not fallback_address:
+            fallback_address = await db.scalar(
+                select(User.email).where(User.role == "owner", User.is_active.is_(True))
+                .order_by(User.created_at, User.id).limit(1)
+            )
+        if not fallback_address:
+            raise HTTPException(status_code=400, detail="Crea una cuenta administradora o configura un correo de importación antes de importar.")
         default_email = EmailAccount(
             address=fallback_address,
             provider="Custom",

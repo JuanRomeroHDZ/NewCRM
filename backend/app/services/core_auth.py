@@ -1,7 +1,7 @@
 import secrets
 import hashlib
 from datetime import datetime, timedelta, timezone
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import HTTPException, status, Depends, Request
 from app.config import settings
@@ -20,26 +20,6 @@ def generate_temporary_password(length: int = 16) -> str:
     alphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*"
     return "".join(secrets.choice(alphabet) for _ in range(length))
 
-async def get_or_create_initial_owner(session: AsyncSession) -> User:
-    """Ensures at least one owner user exists in the database."""
-    res = await session.execute(select(User).where(User.role == "owner"))
-    owner = res.scalar_one_or_none()
-    if not owner:
-        initial_pwd = hash_master_password(settings.INITIAL_OWNER_PASSWORD)
-        owner = User(
-            username=settings.INITIAL_OWNER_USERNAME,
-            email=settings.INITIAL_OWNER_EMAIL,
-            full_name=settings.INITIAL_OWNER_NAME,
-            role="owner",
-            hashed_password=initial_pwd,
-            is_active=True,
-            must_change_password=True
-        )
-        session.add(owner)
-        await session.commit()
-        await session.refresh(owner)
-    return owner
-
 async def authenticate_user(
     session: AsyncSession,
     username_or_email: str,
@@ -52,12 +32,17 @@ async def authenticate_user(
     """
     # Constant error message to prevent account enumeration
     GENERIC_AUTH_ERROR = "Credenciales incorrectas o cuenta bloqueada"
-    
+    normalized_identifier = username_or_email.strip().lower()
+
     stmt = select(User).where(
-        (User.username == username_or_email) | (User.email == username_or_email)
+        (func.lower(User.username) == normalized_identifier)
+        | (func.lower(User.email) == normalized_identifier)
     )
-    res = await session.execute(stmt)
-    user = res.scalar_one_or_none()
+    # Los datos históricos pueden contener identificadores que solo difieren
+    # en mayúsculas. Nunca elegir una cuenta arbitraria para autenticarlos.
+    res = await session.execute(stmt.limit(2))
+    matches = res.scalars().all()
+    user = matches[0] if len(matches) == 1 else None
 
     now = utc_now()
 

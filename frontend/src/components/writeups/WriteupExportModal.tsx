@@ -122,7 +122,12 @@ export const WriteupExportModal: React.FC<WriteupExportModalProps> = ({ writeup,
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center overflow-y-auto bg-black/75 p-2 sm:p-4">
+    <div
+      className="fixed inset-0 z-50 flex items-start sm:items-center justify-center overflow-y-auto bg-black/75 p-2 sm:p-4"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) requestClose();
+      }}
+    >
       <div
         ref={dialogRef}
         aria-busy={exporting}
@@ -130,6 +135,7 @@ export const WriteupExportModal: React.FC<WriteupExportModalProps> = ({ writeup,
         aria-modal="true"
         aria-labelledby={titleId}
         aria-describedby={descriptionId}
+        onClick={(e) => e.stopPropagation()}
         className="my-auto flex max-h-[calc(100dvh-1rem)] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl"
       >
         <div className="flex items-start justify-between gap-2 px-3 py-3 sm:px-5 sm:py-4 border-b border-slate-800">

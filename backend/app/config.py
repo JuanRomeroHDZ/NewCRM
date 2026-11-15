@@ -16,10 +16,9 @@ class Settings(BaseSettings):
 
     # Required installation secrets. There are deliberately no in-code fallbacks.
     SERVER_SECRET_KEY: str = Field(min_length=32)
-    INITIAL_OWNER_PASSWORD: str = Field(min_length=16)
-    INITIAL_OWNER_USERNAME: str = "propietario"
-    INITIAL_OWNER_EMAIL: str = "admin@lessso.local"
-    INITIAL_OWNER_NAME: str = "Propietario LESSSO"
+    # Opcionales para reconocer una cuenta provisional de instalaciones previas.
+    INITIAL_OWNER_USERNAME: str = ""
+    INITIAL_OWNER_EMAIL: str = ""
     LEGACY_SERVER_SECRET_KEYS: str = ""
 
     # Vault and login security policies.
@@ -95,6 +94,11 @@ class Settings(BaseSettings):
     WRITEUP_MAX_VIDEO_SECONDS: int = Field(default=45, ge=1, le=300)
     WRITEUP_WATERMARK_DEFAULT: str = "CONFIDENCIAL — SOLO USO AUTORIZADO"
     WRITEUP_ORGANIZATION_NAME: str = "LESSSO"
+
+    # Módulo C2 (auditoría de red y modo demo)
+    LESSSO_DEMO: bool = False
+    C2_STATE_DIR: str = "/var/lib/lessso"
+    C2_CAPTURE_DIR: str = "/tmp/lessso_captures"
 
     model_config = SettingsConfigDict(case_sensitive=True, env_file="../.env", env_file_encoding="utf-8", extra="ignore")
 

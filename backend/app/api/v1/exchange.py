@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import math
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -36,8 +37,9 @@ async def get_exchange_rate(db: AsyncSession = Depends(get_db)):
 
 @router.post("/manual", response_model=ExchangeRateResponse)
 async def set_manual_exchange_rate(payload: ExchangeRateUpdate, db: AsyncSession = Depends(get_db)):
-    if payload.rate <= 0 or payload.rate > 1000:
-        raise HTTPException(status_code=400, detail="Ingresa un tipo de cambio válido mayor a 0.")
+    rounded_rate = round(float(payload.rate), 4)
+    if not math.isfinite(payload.rate) or payload.rate < 0.0001 or payload.rate > 1000:
+        raise HTTPException(status_code=400, detail="Ingresa un tipo de cambio válido entre 0.0001 y 1000.")
 
     stmt = select(ExchangeRate).where(
         ExchangeRate.base_currency == "USD",
@@ -50,7 +52,7 @@ async def set_manual_exchange_rate(payload: ExchangeRateUpdate, db: AsyncSession
         record = ExchangeRate(base_currency="USD", target_currency="MXN")
         db.add(record)
 
-    record.rate = round(float(payload.rate), 4)
+    record.rate = rounded_rate
     record.is_manual = payload.is_manual
     record.updated_at = now_utc
     await log_audit_event(

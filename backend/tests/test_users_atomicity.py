@@ -97,3 +97,31 @@ async def test_temporary_owner_password_cannot_manage_users(client, db_session):
 
     assert response.status_code == 403
     assert response.json()["detail"] == "Cambia tu contraseña temporal antes de continuar."
+
+
+@pytest.mark.asyncio
+async def test_legacy_identifier_collision_rejected_without_server_error(client, db_session):
+    """Colisiones antiguas no deben escoger cuenta ni romper creación de usuarios."""
+    password = 'TestPasswordCollision123!'
+    users = [
+        User(username='Legacy', email='first@example.test', full_name='First User',
+             role='owner', hashed_password=hash_master_password(password), is_active=True,
+             must_change_password=False),
+        User(username='legacy', email='second@example.test', full_name='Second User',
+             role='owner', hashed_password=hash_master_password(password), is_active=True,
+             must_change_password=False),
+    ]
+    db_session.add_all(users)
+    await db_session.commit()
+    response = await client.post('/api/v1/auth/login', json={
+        'username_or_email': 'LEGACY', 'password': password,
+    })
+    assert response.status_code == 401
+    assert response.json()['detail'] == 'Credenciales incorrectas o cuenta bloqueada'
+
+    token, _ = await create_user_session(db_session, users[0])
+    duplicate = await client.post('/api/v1/users', headers={'Authorization': f'Bearer {token}'}, json={
+        'username': 'legacy', 'email': 'second@example.test',
+        'full_name': 'New User', 'role': 'seller',
+    })
+    assert duplicate.status_code == 400

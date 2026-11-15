@@ -6,7 +6,7 @@ export const ToastViewport: React.FC = () => {
 
   return (
     <div
-      className="pointer-events-none fixed bottom-4 right-4 z-50 flex w-[calc(100vw-2rem)] max-w-sm flex-col gap-2 sm:bottom-6 sm:right-6"
+      className="pointer-events-none fixed top-16 right-4 z-50 flex w-[calc(100vw-2rem)] max-w-sm flex-col gap-2 sm:top-20 sm:right-6"
       aria-atomic="false"
     >
       {toasts.map((toast) => (
@@ -23,14 +23,14 @@ export const ToastViewport: React.FC = () => {
               : 'bg-obsidian-panel/95 border-obsidian-borderLight text-white'
           }`}
         >
-          <span>{toast.message}</span>
+          <span className="min-w-0 break-words">{toast.message}</span>
           <button
             type="button"
             onClick={() => dismissToast(toast.id)}
             aria-label="Cerrar notificación"
-            className="shrink-0 rounded p-1 text-white/50 hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+            className="shrink-0 inline-flex items-center justify-center min-w-[44px] min-h-[44px] lg:min-w-8 lg:min-h-8 rounded-lg p-1 text-white/60 hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
           >
-            <span aria-hidden="true" className="text-sm font-bold">&times;</span>
+            <span aria-hidden="true" className="text-base font-bold leading-none">&times;</span>
           </button>
         </div>
       ))}

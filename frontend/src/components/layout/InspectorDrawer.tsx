@@ -329,61 +329,68 @@ export const InspectorDrawer: React.FC = () => {
     supportedCurrencies.find((c) => c.code === code)?.symbol || '$';
 
   return (
-    <div
-      ref={drawerRef}
-      role="dialog"
-      aria-modal="true"
-      aria-busy={loading}
-      aria-labelledby={titleId}
-      tabIndex={-1}
-      className="fixed inset-y-0 right-0 z-40 flex w-full max-w-lg flex-col border-l border-obsidian-border bg-obsidian-panel shadow-2xl outline-none animate-slideLeft"
-    >
-      {/* Top Header */}
-      <div className="flex items-center justify-between gap-2 border-b border-obsidian-border bg-obsidian-card p-4">
-        <div className="flex min-w-0 items-center gap-3">
-          <PlatformIcon
-            name={title || 'Item'}
-            iconUrl={isPlatform ? platformData?.icon_url : undefined}
-            size="md"
-          />
-          <div className="min-w-0">
-            <h2 id={titleId} className="truncate text-sm font-bold tracking-tight text-white">
-              {title || (loading ? 'Cargando...' : 'Detalle')}
-            </h2>
-            <p className="truncate text-[11px] text-obsidian-muted">{subtitle}</p>
+    <>
+      <button
+        type="button"
+        aria-label="Cerrar inspector lateral"
+        onClick={closeInspector}
+        className="fixed inset-0 z-30 bg-black/45 backdrop-blur-[1px]"
+      />
+      <div
+        ref={drawerRef}
+        role="dialog"
+        aria-modal="true"
+        aria-busy={loading}
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        className="fixed inset-y-0 right-0 z-40 flex w-full max-w-lg flex-col border-l border-obsidian-border bg-obsidian-panel shadow-2xl outline-none animate-slideLeft"
+      >
+        {/* Top Header */}
+        <div className="flex items-center justify-between gap-2 border-b border-obsidian-border bg-obsidian-card p-4">
+          <div className="flex min-w-0 items-center gap-3">
+            <PlatformIcon
+              name={title || 'Item'}
+              iconUrl={isPlatform ? platformData?.icon_url : undefined}
+              size="md"
+            />
+            <div className="min-w-0">
+              <h2 id={titleId} className="truncate text-sm font-bold tracking-tight text-white">
+                {title || (loading ? 'Cargando...' : 'Detalle')}
+              </h2>
+              <p className="truncate text-[11px] text-obsidian-muted">{subtitle}</p>
+            </div>
+          </div>
+
+          <div className="flex flex-shrink-0 items-center gap-1">
+            <button
+              type="button"
+              onClick={handleEdit}
+              title="Editar datos"
+              aria-label="Editar datos"
+              className="inline-flex min-h-[44px] min-w-[44px] lg:min-h-9 lg:min-w-9 items-center justify-center rounded-lg text-obsidian-muted transition-colors hover:bg-obsidian-surface hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+            >
+              <Edit3 size={15} aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              onClick={handleDelete}
+              title="Enviar a papelera"
+              aria-label="Enviar a papelera"
+              className="inline-flex min-h-[44px] min-w-[44px] lg:min-h-9 lg:min-w-9 items-center justify-center rounded-lg text-obsidian-muted transition-colors hover:bg-obsidian-surface hover:text-rose-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
+            >
+              <Trash2 size={15} aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              onClick={closeInspector}
+              title="Cerrar inspector"
+              aria-label="Cerrar inspector"
+              className="inline-flex min-h-[44px] min-w-[44px] lg:min-h-9 lg:min-w-9 items-center justify-center rounded-lg text-obsidian-muted transition-colors hover:bg-obsidian-surface hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+            >
+              <X size={17} aria-hidden="true" />
+            </button>
           </div>
         </div>
-
-        <div className="flex flex-shrink-0 items-center gap-1">
-          <button
-            type="button"
-            onClick={handleEdit}
-            title="Editar datos"
-            aria-label="Editar datos"
-            className="inline-flex min-h-[36px] min-w-[36px] items-center justify-center rounded-lg text-obsidian-muted transition-colors hover:bg-obsidian-surface hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
-          >
-            <Edit3 size={15} aria-hidden="true" />
-          </button>
-          <button
-            type="button"
-            onClick={handleDelete}
-            title="Enviar a papelera"
-            aria-label="Enviar a papelera"
-            className="inline-flex min-h-[36px] min-w-[36px] items-center justify-center rounded-lg text-obsidian-muted transition-colors hover:bg-obsidian-surface hover:text-rose-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
-          >
-            <Trash2 size={15} aria-hidden="true" />
-          </button>
-          <button
-            type="button"
-            onClick={closeInspector}
-            title="Cerrar inspector"
-            aria-label="Cerrar inspector"
-            className="inline-flex min-h-[36px] min-w-[36px] items-center justify-center rounded-lg text-obsidian-muted transition-colors hover:bg-obsidian-surface hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
-          >
-            <X size={17} aria-hidden="true" />
-          </button>
-        </div>
-      </div>
 
       {/* Tabs */}
       <div
@@ -953,5 +960,6 @@ export const InspectorDrawer: React.FC = () => {
         )}
       </div>
     </div>
+    </>
   );
 };

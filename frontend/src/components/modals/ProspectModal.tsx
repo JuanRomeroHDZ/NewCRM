@@ -384,7 +384,7 @@ export const ProspectModal: React.FC = () => {
             type="button"
             onClick={closeProspectModal}
             aria-label="Cerrar formulario"
-            className="p-1.5 text-obsidian-muted hover:text-white rounded-lg hover:bg-obsidian-surface flex-shrink-0"
+            className="inline-flex min-w-[44px] min-h-[44px] lg:min-w-9 lg:min-h-9 items-center justify-center p-2 text-obsidian-muted hover:text-white rounded-lg hover:bg-obsidian-surface flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
           >
             <X size={18} aria-hidden="true" />
           </button>
@@ -553,11 +553,11 @@ export const ProspectModal: React.FC = () => {
               </div>
 
               <div>
-                <label className="text-obsidian-muted flex items-center gap-1.5 mb-1">
+                <label htmlFor="prospect-whatsapp" className="text-obsidian-muted flex items-center gap-1.5 mb-1">
                   <MessageCircle size={12} className="text-emerald-400" />
                   <span>Número de WhatsApp (Con código de país)</span>
                 </label>
-                <input
+                <input id="prospect-whatsapp"
                   type="text"
                   maxLength={INPUT_LIMITS.PHONE}
                   value={whatsapp}
@@ -568,11 +568,11 @@ export const ProspectModal: React.FC = () => {
               </div>
 
               <div>
-                <label className="text-obsidian-muted flex items-center gap-1.5 mb-1">
+                <label htmlFor="prospect-phones" className="text-obsidian-muted flex items-center gap-1.5 mb-1">
                   <Phone size={12} className="text-cyan-400" />
                   <span>Teléfono(s) Fijo o Móvil</span>
                 </label>
-                <input
+                <input id="prospect-phones"
                   type="text"
                   maxLength={INPUT_LIMITS.PHONES_LIST}
                   value={phones}
@@ -583,11 +583,11 @@ export const ProspectModal: React.FC = () => {
               </div>
 
               <div>
-                <label className="text-obsidian-muted flex items-center gap-1.5 mb-1">
+                <label htmlFor="prospect-maps" className="text-obsidian-muted flex items-center gap-1.5 mb-1">
                   <MapPin size={12} className="text-amber-400" />
                   <span>Enlace a Ubicación en Google Maps</span>
                 </label>
-                <input
+                <input id="prospect-maps"
                   type="text"
                   maxLength={INPUT_LIMITS.URL}
                   value={mapsUrl}
@@ -598,11 +598,11 @@ export const ProspectModal: React.FC = () => {
               </div>
 
               <div>
-                <label className="text-obsidian-muted flex items-center gap-1.5 mb-1">
+                <label htmlFor="prospect-social" className="text-obsidian-muted flex items-center gap-1.5 mb-1">
                   <Share2 size={12} className="text-indigo-400" />
                   <span>Redes Sociales o Sitio Web Actual</span>
                 </label>
-                <input
+                <input id="prospect-social"
                   type="text"
                   maxLength={INPUT_LIMITS.SOCIAL_LINKS}
                   value={socialLinks}
@@ -616,12 +616,12 @@ export const ProspectModal: React.FC = () => {
             {/* Valor Estimado & Tipo de Cobro (Pipeline Comercial) */}
             <div className="pt-2 border-t border-obsidian-border/70 grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
-                <label className="text-obsidian-text font-medium flex items-center gap-1 mb-1">
+                <div className="text-obsidian-text font-medium flex items-center gap-1 mb-1">
                   <DollarSign size={12} className="text-emerald-400" />
-                  <span>Valor Estimado / Cotización</span>
+                  <label htmlFor="prospect-value">Valor Estimado / Cotización</label>
                   <InfoTooltip content="Se suma a tus proyectos en negociación o cerrados en el Resumen Ejecutivo y en Suscripciones y Finanzas." />
-                </label>
-                <input
+                </div>
+                <input id="prospect-value"
                   type="text"
                   inputMode="decimal"
                   maxLength={12}
@@ -805,11 +805,11 @@ export const ProspectModal: React.FC = () => {
               </div>
 
               <div>
-                <label className="text-obsidian-muted block mb-1">
+                <label htmlFor="prospect-sla" className="text-obsidian-muted block mb-1">
                   Tiempo Límite de Respuesta (Horas) *
                 </label>
                 <div className="flex items-center gap-2">
-                  <input
+                  <input id="prospect-sla"
                     type="text"
                     inputMode="decimal"
                     maxLength={10}
@@ -846,16 +846,17 @@ export const ProspectModal: React.FC = () => {
             {/* Secondary Follow-up Cadence & Max Attempts */}
             <div className="pt-2 border-t border-obsidian-border/70 grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="text-obsidian-muted block mb-1">
+                <p id="prospect-followup-label" className="text-obsidian-muted block mb-1">
                   Plazo de Espera por Mensaje de Seguimiento
-                </label>
-                <div className="flex items-center gap-1.5">
+                </p>
+                <div role="group" aria-labelledby="prospect-followup-label" className="flex items-center gap-1.5">
                   {[24, 48, 72].map((h) => (
                     <button
                       key={h}
                       type="button"
                       onClick={() => setFollowupSlaHours(h)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-mono border transition-all ${
+                      aria-pressed={followupSlaHours === h}
+                      className={`min-h-[44px] px-3 py-1.5 rounded-lg text-xs font-mono border transition-all ${
                         followupSlaHours === h
                           ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40 font-semibold'
                           : 'bg-obsidian-bg text-obsidian-muted border-obsidian-border hover:text-white'
@@ -868,17 +869,18 @@ export const ProspectModal: React.FC = () => {
               </div>
 
               <div>
-                <label className="text-obsidian-muted flex items-center gap-1 mb-1">
+                <div id="prospect-attempts-label" className="text-obsidian-muted flex items-center gap-1 mb-1">
                   <span>Límite de Intentos Sin Respuesta</span>
                   <InfoTooltip content="Al cumplir este número de seguimientos y vencer el último plazo sin respuesta, el prospecto pasa automáticamente a 'Archivado / Frío'." />
-                </label>
-                <div className="flex items-center gap-1.5">
+                </div>
+                <div role="group" aria-labelledby="prospect-attempts-label" className="flex items-center gap-1.5">
                   {[3, 4].map((limit) => (
                     <button
                       key={limit}
                       type="button"
                       onClick={() => setMaxFollowupAttempts(limit)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-mono border transition-all ${
+                      aria-pressed={maxFollowupAttempts === limit}
+                      className={`min-h-[44px] px-3 py-1.5 rounded-lg text-xs font-mono border transition-all ${
                         maxFollowupAttempts === limit
                           ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 font-semibold'
                           : 'bg-obsidian-bg text-obsidian-muted border-obsidian-border hover:text-white'

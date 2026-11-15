@@ -8,6 +8,9 @@ services:
     ports:
       - "${HOST_BIND_IP:-127.0.0.1}:${PORT:-8080}:80"
       - "${HOST_BIND_IP:-127.0.0.1}:${HTTPS_PORT:-8443}:443"
+    environment:
+      HTTPS_PORT_SUFFIX: ":${HTTPS_PORT:-8443}"
+      NGINX_ENVSUBST_FILTER: "HTTPS_PORT_SUFFIX"
     volumes:
       - ./nginx/certs:/etc/nginx/certs:ro
     networks:
@@ -41,6 +44,8 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+    group_add:
+      - "${C2_SOCKET_GID:-1000}"
     restart: unless-stopped
     env_file:
       - .env
@@ -49,10 +54,8 @@ services:
       REDIS_URL: redis://redis:6379/0
       SERVER_NAME: ${SERVER_NAME:-lessso-srv}
       SERVER_SECRET_KEY: ${SERVER_SECRET_KEY:?Genera SERVER_SECRET_KEY en .env}
-      INITIAL_OWNER_USERNAME: ${INITIAL_OWNER_USERNAME:-propietario}
-      INITIAL_OWNER_EMAIL: ${INITIAL_OWNER_EMAIL:-admin@lessso.local}
-      INITIAL_OWNER_NAME: ${INITIAL_OWNER_NAME:-Propietario LESSSO}
-      INITIAL_OWNER_PASSWORD: ${INITIAL_OWNER_PASSWORD:?Genera INITIAL_OWNER_PASSWORD en .env}
+      INITIAL_OWNER_USERNAME: ${INITIAL_OWNER_USERNAME:-}
+      INITIAL_OWNER_EMAIL: ${INITIAL_OWNER_EMAIL:-}
       LEGACY_SERVER_SECRET_KEYS: ${LEGACY_SERVER_SECRET_KEYS:-}
       VAULT_SESSION_TIMEOUT_MINUTES: ${VAULT_SESSION_TIMEOUT_MINUTES:-10}
       CLIPBOARD_CLEAR_SECONDS: ${CLIPBOARD_CLEAR_SECONDS:-30}
@@ -74,6 +77,9 @@ services:
       EXCHANGE_RATE_SECONDARY_URL: ${EXCHANGE_RATE_SECONDARY_URL:-https://api.exchangerate-api.com/v4/latest/USD}
       EXCHANGE_RATE_TERTIARY_URL: ${EXCHANGE_RATE_TERTIARY_URL:-https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json}
       FALLBACK_USD_MXN_RATE: ${FALLBACK_USD_MXN_RATE:?Configura FALLBACK_USD_MXN_RATE en .env}
+      LESSSO_DEMO: ${LESSSO_DEMO:-false}
+      C2_WORKER_SOCKET: /run/lessso-c2/worker.sock
+      C2_WORKER_SECRET: ${C2_WORKER_SECRET:-}
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
       interval: 10s
@@ -90,6 +96,7 @@ services:
         condition: service_healthy
     volumes:
       - ./backend:/app
+      - ./c2-runtime:/run/lessso-c2
       - vault_media:/app/media
       - backup_data:${BACKUP_LOCAL_PATH:-/app/backups}
 

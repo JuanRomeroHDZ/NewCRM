@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+# Controles locales de CRM y C2; nunca borra volúmenes ni datos.
+set -euo pipefail
+cd "$(dirname "${BASH_SOURCE[0]}")"
+
+if (( EUID == 0 )); then
+  echo 'Abre ./lessso con tu usuario habitual, sin sudo.' >&2
+  exit 1
+fi
+
+session() (
+  local before after service
+  local startup_finished=0
+  local -a started=()
+  before="$(docker compose ps --services --filter status=running)" || exit 1
+  capture_started() {
+    if ! after="$(docker compose ps --services --filter status=running)"; then
+      echo 'No se pudo comprobar qué servicios cerrar; revisa docker compose ps.' >&2
+      return 1
+    fi
+    while IFS= read -r service; do
+      [[ -n "$service" ]] || continue
+      if ! printf '%s\n' "$before" | grep -Fxq "$service"; then started+=("$service"); fi
+    done <<< "$after"
+  }
+  cleanup_session() {
+    local exit_status=$?
+    trap - EXIT
+    if (( ! startup_finished )); then
+      capture_started || return 1
+    fi
+    if ((${#started[@]})); then
+      echo 'Cerrando los servicios iniciados por esta sesión...'
+      docker compose stop "${started[@]}" || return 1
+    else
+      echo 'Los servicios ya estaban abiertos; permanecen activos.'
+    fi
+    return "$exit_status"
+  }
+  trap cleanup_session EXIT
+  trap 'exit 130' INT TERM HUP
+  ./scripts/up.sh --no-recreate || exit 1
+  capture_started || exit 1
+  startup_finished=1
+  if [[ ${1:-crm} == demo ]]; then
+    ./c2 demo
+  else
+    echo 'Sesión abierta. Pulsa Intro o Ctrl+C para cerrarla.'
+    read -r || true
+  fi
+)
+
+service_menu() {
+  printf '\nServicios\n1) Detener CRM\n2) Ver estado del CRM\n3) Preparar C2 por primera vez\n4) Elegir puertos e iniciar CRM\n0) Volver\n\n'
+  local choice
+  read -r -p 'Elige una opción: ' choice || return 0
+  case "$choice" in
+    1) docker compose stop ;;
+    2) docker compose ps ;;
+    3) ./c2 setup ;;
+    4) ./scripts/up.sh --choose-ports ;;
+    0) return 0 ;;
+    *) echo 'Opción no válida.' ;;
+  esac
+}
+
+if [[ ! -t 0 ]]; then
+  echo 'Ejecuta ./lessso en una terminal para abrir el menú.'
+  exit 0
+fi
+while true; do
+  printf '\nLESSSO\n\n1) Abrir CRM\n2) Abrir CRM con C2 de demostración\n3) Abrir CRM y activar C2 real\n4) Administrar servicios\n5) Abrir CRM temporal (se apaga al terminar)\n0) Salir\n\n'
+  read -r -p 'Elige una opción: ' choice || exit 0
+  case "$choice" in
+    1|'') ./scripts/up.sh || echo 'El CRM no pudo iniciarse.' ;;
+    2) session demo || echo 'La sesión de demostración se cerró o no pudo iniciarse.' ;;
+    3) ./scripts/up.sh --no-recreate && ./c2 start || echo 'No se pudo iniciar el CRM o C2.' ;;
+    4) service_menu || echo 'No se pudo completar la acción.' ;;
+    5) session || echo 'La sesión del CRM se cerró o no pudo iniciarse.' ;;
+    0) exit 0 ;;
+    *) echo 'Opción no válida.' ;;
+  esac
+done

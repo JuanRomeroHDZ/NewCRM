@@ -160,7 +160,7 @@ export const PaymentModal: React.FC = () => {
           <button
             type="button"
             onClick={requestClose}
-            className="p-1.5 text-obsidian-muted hover:text-white rounded-lg hover:bg-obsidian-surface flex-shrink-0"
+            className="inline-flex min-w-[44px] min-h-[44px] lg:min-w-9 lg:min-h-9 items-center justify-center p-2 text-obsidian-muted hover:text-white rounded-lg hover:bg-obsidian-surface flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
             aria-label="Cerrar modal"
           >
             <X size={18} aria-hidden="true" />

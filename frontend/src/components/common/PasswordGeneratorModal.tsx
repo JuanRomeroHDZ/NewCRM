@@ -91,8 +91,13 @@ export const PasswordGeneratorModal: React.FC = () => {
   };
 
   return (
-    <div className="responsive-overlay fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/75 backdrop-blur-md animate-fadeIn">
-      <div 
+    <div
+      className="responsive-overlay fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/75 backdrop-blur-md animate-fadeIn"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) closePasswordGen();
+      }}
+    >
+      <div
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
@@ -121,7 +126,7 @@ export const PasswordGeneratorModal: React.FC = () => {
             type="button"
             onClick={closePasswordGen}
             aria-label="Cerrar generador"
-            className="p-1.5 text-obsidian-muted hover:text-white rounded-lg hover:bg-obsidian-surface transition-colors"
+            className="inline-flex min-w-[44px] min-h-[44px] lg:min-w-9 lg:min-h-9 items-center justify-center p-2 text-obsidian-muted hover:text-white rounded-lg hover:bg-obsidian-surface transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
           >
             <X size={18} />
           </button>

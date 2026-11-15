@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Path, status
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models.core import User
@@ -29,10 +30,14 @@ async def create_user(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role(["owner"]))
 ):
-    # Check if username or email exists
-    stmt = select(User).where((User.username == payload.username) | (User.email == payload.email))
+    username_clean = payload.username.strip().lower()
+    email_clean = payload.email.strip().lower()
+    # Check if username or email exists case-insensitively
+    stmt = select(User).where(
+        (func.lower(User.username) == username_clean) | (func.lower(User.email) == email_clean)
+    )
     res = await db.execute(stmt)
-    if res.scalar_one_or_none():
+    if res.scalars().first():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="El nombre de usuario o correo ya se encuentra registrado."
@@ -42,8 +47,8 @@ async def create_user(
     hashed_pwd = hash_master_password(temp_password)
 
     new_user = User(
-        username=payload.username,
-        email=payload.email,
+        username=username_clean,
+        email=email_clean,
         full_name=payload.full_name,
         role=payload.role,
         hashed_password=hashed_pwd,
@@ -51,6 +56,14 @@ async def create_user(
         must_change_password=True
     )
     db.add(new_user)
+    try:
+        await db.flush()
+    except IntegrityError as error:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="El nombre de usuario o correo ya se encuentra registrado.",
+        ) from error
     await record_event(
         db,
         module="system",

@@ -41,3 +41,5 @@ markdown==3.7
 nh3==0.2.21
 python-docx==1.1.2
 weasyprint==63.1
+scapy>=2.6,<2.7
+netifaces2>=0.0.22

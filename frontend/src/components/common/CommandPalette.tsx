@@ -1,9 +1,12 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Search, Shield, Mail, Globe, Lock, Sparkles, Network, ArrowRight,
-  X, Briefcase, Plus, MapPin, BookOpen, AlertCircle, RefreshCw
+  X, Briefcase, Plus, MapPin, BookOpen, AlertCircle, RefreshCw,
+  Server, ScanSearch, ArrowLeftRight, Activity, Route, KeyRound,
+  Code2, Radio, Waypoints, Wifi, Camera, UserCheck, AlertOctagon,
 } from 'lucide-react';
 import { useVault } from '../../context/VaultContext';
+import { useC2 } from '../../context/C2Context';
 import { api } from '../../lib/api';
 import { PlatformAccount, EmailAccount, Prospect, WriteupSummary } from '../../types';
 import { getSlaBadgeMeta } from '../../lib/prospectUtils';
@@ -15,6 +18,7 @@ export const CommandPalette: React.FC = () => {
     openInspector, openPasswordGen, openProspectModal, isUnlocked, openUnlockModal, 
     lockVault, searchHotkey 
   } = useVault();
+  const { triggerPanic } = useC2();
 
   const [query, setQuery] = useState('');
   const [platforms, setPlatforms] = useState<PlatformAccount[]>([]);
@@ -221,7 +225,50 @@ export const CommandPalette: React.FC = () => {
           openUnlockModal();
         }
       }
-    }
+    },
+    ...(
+      [
+        ['c2_hosts', 'C2 · Hosts y Descubrimiento', 'Barrido ARP y selección de objetivo en red', Server],
+        ['c2_topo', 'C2 · Topología de Red', 'Mapa visual de planta OT/IT y enlaces', Network],
+        ['c2_ports', 'C2 · Escaneo de Puertos', 'Puertos TCP/SYN stealth, banners y exploits', ScanSearch],
+        ['c2_mitm', 'C2 · MITM (ARP Spoofing)', 'Interceptación ARP entre objetivo y gateway', ArrowLeftRight],
+        ['c2_sniff', 'C2 · Sniffer de Paquetes', 'Captura en vivo con filtros BPF', Activity],
+        ['c2_dns', 'C2 · DNS Spoofing', 'Redirección de consultas DNS', Route],
+        ['c2_creds', 'C2 · Captura de Credenciales', 'Buffer en memoria de credenciales HTTP/FTP/NTLM', KeyRound],
+        ['c2_http', 'C2 · HTTP Inject y SSLStrip', 'Inyección HTML/JS y degradación HTTPS', Code2],
+        ['c2_poison', 'C2 · Poisoners y WPAD', 'LLMNR, NBT-NS, mDNS y proxy WPAD', Radio],
+        ['c2_mitm6', 'C2 · mitm6 (IPv6)', 'Anuncio Router Advertisement y DNS IPv6', Waypoints],
+        ['c2_wifi', 'C2 · Wi-Fi (802.11)', 'Monitor, escaneo, deauth, PMKID y handshakes', Wifi],
+        ['c2_camera', 'C2 · Auditoría de Cámaras', 'Descubrimiento y auditoría RTSP/ONVIF/CVEs', Camera],
+        ['c2_opsec', 'C2 · Identidad OPSEC', 'Hostname y MAC reversible con OUI real', UserCheck],
+      ] as const
+    ).map(([sectionId, title, subtitle, Icon]) => ({
+      id: `cmd_${sectionId}`,
+      title,
+      subtitle,
+      icon: Icon,
+      color: 'text-amber-300',
+      action: () => {
+        closeCommandPalette();
+        setActiveSection(sectionId);
+        if (!isUnlocked) openUnlockModal();
+      },
+    })),
+    {
+      id: 'cmd_c2_panic',
+      title: 'C2 · PÁNICO (Kill Switch)',
+      subtitle: 'Detener todos los módulos, limpiar iptables y restaurar identidad OPSEC',
+      icon: AlertOctagon,
+      color: 'text-red-400',
+      action: () => {
+        closeCommandPalette();
+        if (!isUnlocked) {
+          openUnlockModal();
+          return;
+        }
+        void triggerPanic();
+      },
+    },
   ].filter(c => cleanQ === '' || c.title.toLowerCase().includes(cleanQ) || c.subtitle.toLowerCase().includes(cleanQ));
 
   const totalResultsCount =
@@ -361,7 +408,7 @@ export const CommandPalette: React.FC = () => {
               type="button"
               onClick={closeCommandPalette}
               aria-label="Cerrar paleta de comandos"
-              className="inline-flex min-h-[36px] items-center gap-1 rounded-lg border border-obsidian-border bg-obsidian-surface px-2.5 py-1 text-xs font-medium text-obsidian-muted hover:text-white hover:border-obsidian-borderLight focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
+              className="inline-flex min-h-[44px] lg:min-h-9 items-center gap-1 rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-1 text-xs font-medium text-obsidian-muted hover:text-white hover:border-obsidian-borderLight focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
             >
               <X size={14} aria-hidden="true" />
               <span>Cerrar</span>

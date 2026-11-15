@@ -13,9 +13,11 @@ export function useFormModalFocus(open: boolean, titleId: string, onClose: () =>
     const timer = window.setTimeout(() => { if (!dialog.contains(document.activeElement)) elements()[0]?.focus(); }, 0);
     const onKeyDown = (event: KeyboardEvent) => {
       // A separately mounted child dialog owns its keyboard events, regardless of DOM order.
-      if (!(event.target instanceof Node) || !dialog.contains(event.target)) return;
+      const targetDialog = event.target instanceof Element ? event.target.closest('[role="dialog"]') : null;
+      if (targetDialog && targetDialog !== dialog) return;
       if (event.key === 'Escape') { event.preventDefault(); event.stopImmediatePropagation(); closeRef.current(); }
       if (event.key !== 'Tab') return;
+      if (!(event.target instanceof Node) || !dialog.contains(event.target)) return;
       const targets = elements();
       const first = targets[0], last = targets[targets.length - 1];
       if (!first) { event.preventDefault(); return; }

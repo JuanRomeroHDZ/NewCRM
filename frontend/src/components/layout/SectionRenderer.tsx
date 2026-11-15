@@ -2,6 +2,7 @@ import React, { lazy, Suspense } from 'react';
 import { SectionType, useVault } from '../../context/VaultContext';
 
 const SettingsView = lazy(() => import('../views/SettingsView').then((module) => ({ default: module.SettingsView })));
+const C2WorkspaceShell = lazy(() => import('../c2/C2WorkspaceShell').then((module) => ({ default: module.C2WorkspaceShell })));
 
 const sectionViews: Record<SectionType, React.LazyExoticComponent<React.ComponentType>> = {
   dashboard: lazy(() => import('../views/DashboardView').then((module) => ({ default: module.DashboardView }))),
@@ -25,6 +26,19 @@ const sectionViews: Record<SectionType, React.LazyExoticComponent<React.Componen
   settings_team: SettingsView,
   security_audit: lazy(() => import('../views/SecurityAuditView').then((module) => ({ default: module.SecurityAuditView }))),
   audit_logs: lazy(() => import('../views/AuditLogsView').then((module) => ({ default: module.AuditLogsView }))),
+  c2_hosts: C2WorkspaceShell,
+  c2_topo: C2WorkspaceShell,
+  c2_ports: C2WorkspaceShell,
+  c2_mitm: C2WorkspaceShell,
+  c2_sniff: C2WorkspaceShell,
+  c2_dns: C2WorkspaceShell,
+  c2_creds: C2WorkspaceShell,
+  c2_http: C2WorkspaceShell,
+  c2_poison: C2WorkspaceShell,
+  c2_mitm6: C2WorkspaceShell,
+  c2_wifi: C2WorkspaceShell,
+  c2_camera: C2WorkspaceShell,
+  c2_opsec: C2WorkspaceShell,
 };
 
 export const SectionRenderer: React.FC = () => {

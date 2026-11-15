@@ -89,8 +89,21 @@ export const EnvExportModal: React.FC = () => {
   };
 
   return (
-    <div className="responsive-overlay fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
-      <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="env-export-title" className="relative max-h-[calc(100dvh-2rem)] w-full max-w-2xl overflow-y-auto rounded-2xl border border-obsidian-border bg-obsidian-panel p-4 shadow-2xl space-y-5 sm:p-6">
+    <div
+      className="responsive-overlay fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) closeEnvExport();
+      }}
+    >
+      <div
+        ref={dialogRef}
+        tabIndex={-1}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="env-export-title"
+        onClick={(e) => e.stopPropagation()}
+        className="relative max-h-[calc(100dvh-2rem)] w-full max-w-2xl overflow-y-auto rounded-2xl border border-obsidian-border bg-obsidian-panel p-4 shadow-2xl space-y-5 sm:p-6"
+      >
         {/* Header */}
         <div className="flex items-center justify-between pb-4 border-b border-obsidian-border">
           <div className="flex min-w-0 items-start gap-3">
@@ -104,11 +117,11 @@ export const EnvExportModal: React.FC = () => {
               </p>
             </div>
           </div>
-          <button 
+          <button
             type="button"
             aria-label="Cerrar exportador"
-            onClick={closeEnvExport} 
-            className="p-2 rounded-lg text-white/40 hover:text-white hover:bg-white/5 transition-all"
+            onClick={closeEnvExport}
+            className="inline-flex min-w-[44px] min-h-[44px] lg:min-w-9 lg:min-h-9 items-center justify-center p-2 rounded-lg text-white/50 hover:text-white hover:bg-white/5 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
           >
             <X className="w-5 h-5" />
           </button>

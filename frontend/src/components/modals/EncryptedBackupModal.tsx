@@ -122,14 +122,20 @@ export const EncryptedBackupModal: React.FC = () => {
   };
 
   return (
-    <div className="responsive-overlay fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
-      <div 
+    <div
+      className="responsive-overlay fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) closeWhenIdle();
+      }}
+    >
+      <div
         ref={dialogRef}
         tabIndex={-1}
         aria-busy={busy}
         role="dialog"
         aria-modal="true"
         aria-labelledby="backup-modal-title"
+        onClick={(e) => e.stopPropagation()}
         className="relative max-h-[calc(100dvh-2rem)] w-full max-w-xl overflow-y-auto rounded-2xl border border-obsidian-border bg-obsidian-panel p-4 sm:p-6 shadow-2xl space-y-6"
       >
         {/* Header */}
@@ -148,7 +154,7 @@ export const EncryptedBackupModal: React.FC = () => {
             disabled={busy}
             aria-label="Cerrar respaldo"
             onClick={closeWhenIdle}
-            className="p-2 rounded-lg text-white/40 hover:text-white hover:bg-white/5 transition-all flex-shrink-0"
+            className="inline-flex min-w-[44px] min-h-[44px] lg:min-w-9 lg:min-h-9 items-center justify-center p-2 rounded-lg text-white/50 hover:text-white hover:bg-white/5 transition-all flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 disabled:opacity-50"
           >
             <X className="w-5 h-5" />
           </button>

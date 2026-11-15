@@ -5,6 +5,16 @@ from app.security.pwned import check_pwned_password
 from app.config import settings
 
 
+@pytest.mark.asyncio
+async def test_manual_exchange_rate_never_stores_zero_after_rounding(client, auth_token):
+    headers = {"X-Vault-Token": auth_token}
+    rejected = await client.post("/api/v1/exchange/manual", json={"rate": 0.00001}, headers=headers)
+    assert rejected.status_code == 400
+    accepted = await client.post("/api/v1/exchange/manual", json={"rate": 0.0001}, headers=headers)
+    assert accepted.status_code == 200
+    assert accepted.json()["rate"] == 0.0001
+
+
 def test_settings_reject_unsafe_color_and_background_values():
     assert SettingsUpdate(accent_color="#f43f5e", canvas_style="plain")
     with pytest.raises(ValidationError):

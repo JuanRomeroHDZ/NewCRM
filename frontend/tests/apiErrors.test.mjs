@@ -36,7 +36,7 @@ test('normaliza el fallo de conexión sin exponer el mensaje del navegador', () 
   const error = apiErrors.normalizeTransportError(new TypeError('Failed to fetch'));
   assert.equal(error.code, 'network');
   assert.equal(error.retryable, true);
-  assert.match(error.message, /No se pudo conectar con LESSO/);
+  assert.match(error.message, /No se pudo conectar con LESSSO/);
   assert.doesNotMatch(error.message, /Failed to fetch/i);
 });
 
@@ -80,7 +80,7 @@ test('las consultas de la API convierten fallos de red en mensajes recuperables'
   try {
     await assert.rejects(apiClient.api.getEmails(), (error) => {
       assert.equal(error.code, 'network');
-      assert.match(error.message, /No se pudo conectar con LESSO/);
+      assert.match(error.message, /No se pudo conectar con LESSSO/);
       assert.doesNotMatch(error.message, /Failed to fetch/i);
       return true;
     });
@@ -123,6 +123,25 @@ test('las respuestas de validación no muestran excepciones internas', async () 
       return true;
     });
   } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('alta inicial conserva el motivo del conflicto y distingue la bóveda vencida', async () => {
+  const originalFetch = globalThis.fetch;
+  const payload = { username: 'usuario', email: 'a@example.test', full_name: 'Usuario', password: 'PruebaTemporal123' };
+  try {
+    const detail = 'El nombre de usuario o correo está reservado para la cuenta inicial del sistema.';
+    globalThis.fetch = async () => Response.json({ detail }, { status: 409 });
+    await assert.rejects(apiClient.api.bootstrapAccount(payload), { message: detail });
+    apiClient.setApiVaultToken('vault-test');
+    apiClient.setApiUserToken('user-test');
+    globalThis.fetch = async () => new Response(null, { status: 401 });
+    await assert.rejects(apiClient.api.bootstrapAccount(payload), /La bóveda se bloqueó/);
+    assert.equal(apiClient.getApiVaultToken(), null);
+    assert.equal(apiClient.getApiUserToken(), 'user-test');
+  } finally {
+    apiClient.setApiUserToken(null);
     globalThis.fetch = originalFetch;
   }
 });

@@ -1,12 +1,24 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Lock, ShieldAlert, KeyRound, ArrowRight, X } from 'lucide-react';
+import { Lock, ShieldAlert, KeyRound, ArrowRight, X, Eye, EyeOff } from 'lucide-react';
 import { useAuditedDialog } from './useAuditedDialog';
 import { useVault } from '../../context/VaultContext';
 import { INPUT_LIMITS } from '../../lib/validation';
 
 export const VaultUnlockModal: React.FC = () => {
-  const { isUnlockModalOpen, closeUnlockModal, unlockVault, isSetup, setupMasterPassword } = useVault();
+  const {
+    isUnlockModalOpen,
+    closeUnlockModal,
+    unlockVault,
+    isSetup,
+    setupMasterPassword,
+    vaultStatusError,
+    refreshVaultStatus,
+    timeoutMinutes,
+  } = useVault();
+
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -14,13 +26,18 @@ export const VaultUnlockModal: React.FC = () => {
   useEffect(() => {
     if (isUnlockModalOpen) {
       setPassword('');
+      setConfirmPassword('');
+      setShowPassword(false);
       setError(null);
+      refreshVaultStatus();
       const timer = window.setTimeout(() => inputRef.current?.focus(), 100);
       return () => window.clearTimeout(timer);
     }
-  }, [isUnlockModalOpen]);
+  }, [isUnlockModalOpen, refreshVaultStatus]);
 
-  const requestClose = () => { if (!isLoading) closeUnlockModal(); };
+  const requestClose = () => {
+    if (!isLoading) closeUnlockModal();
+  };
   const dialogRef = useAuditedDialog(isUnlockModalOpen, requestClose, isLoading);
 
   if (!isUnlockModalOpen) return null;
@@ -34,6 +51,10 @@ export const VaultUnlockModal: React.FC = () => {
     }
     if (!isSetup && password.trim().length < 8) {
       setError('La contraseña de acceso debe tener al menos 8 caracteres.');
+      return;
+    }
+    if (!isSetup && password !== confirmPassword) {
+      setError('Las contraseñas no coinciden. Verifica ambos campos.');
       return;
     }
 
@@ -53,9 +74,11 @@ export const VaultUnlockModal: React.FC = () => {
   };
 
   return (
-    <div 
+    <div
       className="responsive-overlay fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-fadeIn"
-
+      onClick={(e) => {
+        if (e.target === e.currentTarget) requestClose();
+      }}
     >
       <div
         ref={dialogRef}
@@ -67,20 +90,20 @@ export const VaultUnlockModal: React.FC = () => {
         className="relative w-full max-w-md bg-obsidian-panel border border-obsidian-borderLight rounded-2xl shadow-2xl p-4 sm:p-6 max-h-[calc(100dvh-2rem)] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Subtle accent glow */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-48 h-1 bg-gradient-to-r from-transparent via-indigo-500 to-transparent" />
+        {/* Subtle brand accent bar */}
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-48 h-1 bg-gradient-to-r from-transparent via-obsidian-gold to-transparent" />
 
-        <div className="flex items-center justify-between mb-5">
+        <div className="flex items-center justify-between mb-5 gap-3">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="p-2.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex-shrink-0">
-              <Lock size={22} />
+            <div className="p-2.5 rounded-xl bg-obsidian-gold/10 border border-obsidian-gold/25 text-obsidian-gold flex-shrink-0">
+              <Lock size={22} aria-hidden="true" />
             </div>
             <div className="min-w-0">
-              <h2 id="vault-modal-title" className="text-lg font-semibold text-white tracking-tight break-words">
-                {isSetup ? 'Desbloquear espacio seguro' : 'Inicializar espacio seguro'}
+              <h2 id="vault-modal-title" className="text-lg font-heading font-semibold text-white tracking-tight break-words">
+                {isSetup ? 'Desbloquear bóveda' : 'Inicializar bóveda'}
               </h2>
               <p className="text-xs text-obsidian-muted">
-                Protege el acceso a tus datos
+                Acceso cifrado para operaciones C2 y writeups
               </p>
             </div>
           </div>
@@ -89,15 +112,31 @@ export const VaultUnlockModal: React.FC = () => {
             onClick={requestClose}
             disabled={isLoading}
             aria-label="Cerrar desbloqueo de bóveda"
-            className="p-1.5 text-obsidian-muted hover:text-white rounded-lg hover:bg-obsidian-surface transition-colors flex-shrink-0"
+            className="inline-flex items-center justify-center min-w-[44px] min-h-[44px] lg:min-w-9 lg:min-h-9 p-2 text-obsidian-muted hover:text-white rounded-lg hover:bg-obsidian-surface transition-colors flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-gold"
           >
-            <X size={18} />
+            <X size={18} aria-hidden="true" />
           </button>
         </div>
 
+        {vaultStatusError && (
+          <div role="status" className="mb-4 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-start justify-between gap-2.5 text-amber-300 text-xs">
+            <div className="flex items-start gap-2 min-w-0">
+              <ShieldAlert size={16} className="flex-shrink-0 mt-0.5" aria-hidden="true" />
+              <span className="break-words">Sin conexión con el servidor ({vaultStatusError}). Verifica que el backend esté encendido.</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => { refreshVaultStatus(); }}
+              className="flex-shrink-0 px-3 py-1.5 rounded-md border border-amber-500/40 text-amber-200 hover:bg-amber-500/20 text-[11px] font-medium min-h-[44px] lg:min-h-9 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+            >
+              Reintentar
+            </button>
+          </div>
+        )}
+
         {error && (
           <div role="alert" className="mb-4 p-3 rounded-lg bg-rose-500/10 border border-rose-500/30 flex items-center gap-2.5 text-rose-400 text-xs animate-shake">
-            <ShieldAlert size={16} className="flex-shrink-0" />
+            <ShieldAlert size={16} className="flex-shrink-0" aria-hidden="true" />
             <span className="break-words">{error}</span>
           </div>
         )}
@@ -105,54 +144,91 @@ export const VaultUnlockModal: React.FC = () => {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label htmlFor="vault-unlock-password" className="block text-xs font-medium text-obsidian-text/80 mb-1.5">
-              {isSetup ? 'contraseña de acceso de la Bóveda' : 'Define tu contraseña de acceso (mínimo 8 caracteres)'}
+              {isSetup ? 'Contraseña de acceso de la bóveda' : 'Define tu contraseña maestra (mínimo 8 caracteres)'}
             </label>
-            <div className="relative">
+            <div className="relative flex items-center">
+              <KeyRound size={16} className="absolute left-3.5 text-obsidian-muted pointer-events-none" aria-hidden="true" />
               <input
                 ref={inputRef}
                 id="vault-unlock-password"
                 aria-invalid={Boolean(error)}
-                type="password"
+                type={showPassword ? 'text' : 'password'}
                 maxLength={INPUT_LIMITS.MASTER_PASSWORD}
                 value={password}
                 onChange={(e) => {
                   setPassword(e.target.value);
                   if (error) setError(null);
                 }}
-                placeholder={isSetup ? 'Ingresa tu contraseña de acceso...' : 'Crea una contraseña de acceso...'}
-                className="w-full px-3.5 py-2.5 pl-10 rounded-xl bg-obsidian-bg border border-obsidian-border text-white placeholder-obsidian-muted/50 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-sm font-mono tracking-wider transition-all"
+                placeholder={isSetup ? 'Ingresa tu contraseña de bóveda...' : 'Crea una contraseña de al menos 8 caracteres...'}
+                className="w-full min-h-[44px] pl-10 pr-12 py-2.5 rounded-xl bg-obsidian-bg border border-obsidian-border text-white placeholder-obsidian-muted/50 focus:outline-none focus:border-obsidian-gold focus:ring-1 focus:ring-obsidian-gold text-sm font-mono tracking-wider transition-all"
                 autoComplete={isSetup ? 'current-password' : 'new-password'}
                 disabled={isLoading}
               />
-              <KeyRound size={16} className="absolute left-3.5 top-3 text-obsidian-muted" />
+              <button
+                type="button"
+                onClick={() => setShowPassword((prev) => !prev)}
+                aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                aria-pressed={showPassword}
+                disabled={isLoading}
+                className="absolute right-1 inline-flex items-center justify-center min-w-[44px] min-h-[44px] text-obsidian-muted hover:text-white rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-gold"
+              >
+                {showPassword ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}
+              </button>
             </div>
-            <p className="mt-1.5 text-[11px] text-obsidian-muted leading-relaxed">
-              {isSetup
-                ? 'Ingresa la contraseña de acceso que definiste al inicializar la bóveda.'
-                : 'Crea una contraseña de acceso de al menos 8 caracteres. Esta llave cifra tus contraseñas, claves API y tarjetas.'}
-            </p>
           </div>
 
-          <div className="pt-2 flex items-center justify-end gap-2.5">
+          {!isSetup && (
+            <div>
+              <label htmlFor="vault-unlock-password-confirm" className="block text-xs font-medium text-obsidian-text/80 mb-1.5">
+                Confirmar contraseña maestra
+              </label>
+              <div className="relative flex items-center">
+                <KeyRound size={16} className="absolute left-3.5 text-obsidian-muted pointer-events-none" aria-hidden="true" />
+                <input
+                  id="vault-unlock-password-confirm"
+                  aria-invalid={Boolean(error && confirmPassword && password !== confirmPassword)}
+                  type={showPassword ? 'text' : 'password'}
+                  maxLength={INPUT_LIMITS.MASTER_PASSWORD}
+                  value={confirmPassword}
+                  onChange={(e) => {
+                    setConfirmPassword(e.target.value);
+                    if (error) setError(null);
+                  }}
+                  placeholder="Repite tu contraseña maestra..."
+                  className="w-full min-h-[44px] pl-10 pr-3.5 py-2.5 rounded-xl bg-obsidian-bg border border-obsidian-border text-white placeholder-obsidian-muted/50 focus:outline-none focus:border-obsidian-gold focus:ring-1 focus:ring-obsidian-gold text-sm font-mono tracking-wider transition-all"
+                  autoComplete="new-password"
+                  disabled={isLoading}
+                />
+              </div>
+            </div>
+          )}
+
+          <p className="text-[11px] text-obsidian-muted leading-relaxed">
+            {isSetup
+              ? `Ingresa la llave que definiste al inicializar la bóveda. Se bloqueará automáticamente tras ${timeoutMinutes} min de inactividad.`
+              : `Esta llave cifra localmente tus credenciales, registros operativos, informes y el laboratorio C2. No tiene recuperación si la olvidas (auto-bloqueo: ${timeoutMinutes} min).`}
+          </p>
+
+          <div className="pt-2 flex flex-wrap items-center justify-end gap-2.5">
             <button
               type="button"
               onClick={requestClose}
               disabled={isLoading}
-              className="px-4 py-2 text-xs font-medium text-obsidian-muted hover:text-white transition-colors"
+              className="min-h-[44px] lg:min-h-9 px-4 py-2 text-xs font-medium text-obsidian-muted hover:text-white rounded-xl hover:bg-obsidian-surface transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-gold"
             >
               Cancelar
             </button>
             <button
               type="submit"
-              disabled={isLoading || !password}
-              className="inline-flex items-center gap-2 px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white text-xs font-semibold shadow-lg shadow-indigo-600/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={isLoading || !password || (!isSetup && !confirmPassword)}
+              className="min-h-[44px] lg:min-h-9 inline-flex items-center justify-center gap-2 px-5 py-2 rounded-xl bg-obsidian-gold hover:brightness-110 active:scale-95 text-black text-xs font-semibold shadow-lg shadow-obsidian-gold/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-gold"
             >
               {isLoading ? (
-                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                <div className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
               ) : (
                 <>
-                  <span>{isSetup ? 'Desbloquear Bóveda' : 'Configurar Bóveda'}</span>
-                  <ArrowRight size={14} />
+                  <span>{isSetup ? 'Desbloquear bóveda' : 'Configurar bóveda'}</span>
+                  <ArrowRight size={14} aria-hidden="true" />
                 </>
               )}
             </button>

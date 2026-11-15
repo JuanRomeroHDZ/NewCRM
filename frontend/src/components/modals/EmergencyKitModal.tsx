@@ -42,18 +42,31 @@ export const EmergencyKitModal: React.FC = () => {
   if (!isEmergencyKitOpen) return null;
 
   return (
-    <div className="recovery-overlay responsive-overlay fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-2 backdrop-blur-md sm:p-4">
-      <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="emergency-kit-title" className="recovery-print relative flex max-h-[92dvh] w-full max-w-2xl min-w-0 flex-col overflow-hidden rounded-2xl border border-obsidian-borderLight bg-obsidian-panel p-4 shadow-2xl sm:p-6">
+    <div
+      className="recovery-overlay responsive-overlay fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-2 backdrop-blur-md sm:p-4"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) closeEmergencyKit();
+      }}
+    >
+      <div
+        ref={dialogRef}
+        tabIndex={-1}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="emergency-kit-title"
+        onClick={(e) => e.stopPropagation()}
+        className="recovery-print relative flex max-h-[92dvh] w-full max-w-2xl min-w-0 flex-col overflow-hidden rounded-2xl border border-obsidian-borderLight bg-obsidian-panel p-4 shadow-2xl sm:p-6"
+      >
         <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 border-b border-obsidian-border pb-4 print:hidden">
           <div className="flex min-w-0 items-center gap-2.5">
             <Shield size={20} className="shrink-0 text-indigo-400" />
             <h2 id="emergency-kit-title" className="min-w-0 text-base font-bold text-white">Hoja de recuperación</h2>
           </div>
           <div className="flex max-w-full flex-wrap items-center gap-2">
-            <button type="button" disabled={!kit || loading || error} onClick={() => window.print()} className="inline-flex min-h-10 max-w-full items-center gap-2 rounded-xl bg-indigo-600 px-3 py-2 text-left text-xs font-semibold text-white hover:bg-indigo-500 disabled:opacity-50">
+            <button type="button" disabled={!kit || loading || error} onClick={() => window.print()} className="inline-flex min-h-[44px] lg:min-h-10 max-w-full items-center gap-2 rounded-xl bg-indigo-600 px-3 py-2 text-left text-xs font-semibold text-white hover:bg-indigo-500 disabled:opacity-50">
               <Printer size={14} className="shrink-0" /> Imprimir o guardar PDF
             </button>
-            <button type="button" onClick={closeEmergencyKit} aria-label="Cerrar" className="rounded-lg p-2 text-obsidian-muted hover:bg-obsidian-surface hover:text-white"><X size={18} /></button>
+            <button type="button" onClick={closeEmergencyKit} aria-label="Cerrar" className="inline-flex min-w-[44px] min-h-[44px] lg:min-w-9 lg:min-h-9 items-center justify-center rounded-lg p-2 text-obsidian-muted hover:bg-obsidian-surface hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"><X size={18} /></button>
           </div>
         </div>
         <div className="min-h-0 flex-1 space-y-5 overflow-y-auto py-4 text-sm text-obsidian-text print:overflow-visible print:text-black">

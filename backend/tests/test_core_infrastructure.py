@@ -7,8 +7,16 @@ from app.security.crypto import hash_master_password, verify_master_password
 from app.security.totp import generate_random_totp_secret, generate_totp_code, verify_totp_code
 from app.services.core_auth import (
     authenticate_user, create_user_session, generate_temporary_password,
-    get_or_create_initial_owner, hash_token
+    hash_token
 )
+async def get_or_create_initial_owner(session):
+    owner = User(username="test_owner", email="owner@example.test", full_name="Test Owner",
+                 role="owner", is_active=True, must_change_password=True,
+                 hashed_password=hash_master_password("TemporaryPassword123!"))
+    session.add(owner)
+    await session.commit()
+    return owner
+
 from app.services.config_service import (
     initialize_default_catalogs, get_config_parameter, set_config_parameter,
     export_sanitized_config, DEFAULT_CATALOGS
@@ -24,7 +32,7 @@ async def test_owner_initialization_and_argon2id(db_session):
     owner = await get_or_create_initial_owner(db_session)
     assert owner is not None
     assert owner.role == "owner"
-    assert verify_master_password(owner.hashed_password, settings.INITIAL_OWNER_PASSWORD)
+    assert verify_master_password(owner.hashed_password, "TemporaryPassword123!")
     assert owner.must_change_password is True
 
 @pytest.mark.asyncio

@@ -151,7 +151,7 @@ export const SecureResourceEditor: React.FC<SecureResourceEditorProps> = ({ reso
               <p className="text-[11px] text-obsidian-muted">Los datos se protegen en esta bóveda</p>
             </div>
           </div>
-          <button type="button" aria-label="Cerrar editor" disabled={saving} onClick={onClose} className="shrink-0 rounded-lg p-2 text-obsidian-muted hover:bg-obsidian-surface hover:text-white disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300">
+          <button type="button" aria-label="Cerrar editor" disabled={saving} onClick={onClose} className="inline-flex min-h-[44px] min-w-[44px] lg:min-h-9 lg:min-w-9 shrink-0 items-center justify-center rounded-lg p-2 text-obsidian-muted hover:bg-obsidian-surface hover:text-white disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300">
             <X size={16} aria-hidden="true" />
           </button>
         </div>

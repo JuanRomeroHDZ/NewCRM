@@ -37,7 +37,7 @@ export function normalizeTransportError(error: unknown): ApiError {
   }
 
   return new ApiError(
-    'No se pudo conectar con LESSO. Comprueba tu conexión e inténtalo de nuevo.',
+    'No se pudo conectar con LESSSO. Comprueba tu conexión e inténtalo de nuevo.',
     'network',
     { retryable: true }
   );

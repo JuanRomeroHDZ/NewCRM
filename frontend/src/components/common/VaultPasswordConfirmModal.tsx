@@ -38,7 +38,13 @@ export const VaultPasswordConfirmModal: React.FC<VaultPasswordConfirmModalProps>
   };
 
   return createPortal((
-    <div className="responsive-overlay fixed inset-0 z-[70] flex items-center justify-center bg-black/75 p-4" role="presentation">
+    <div
+      className="responsive-overlay fixed inset-0 z-[70] flex items-center justify-center bg-black/75 p-4"
+      role="presentation"
+      onClick={(e) => {
+        if (e.target === e.currentTarget && !loading) onCancel();
+      }}
+    >
       <section
         ref={dialogRef}
         tabIndex={-1}
@@ -47,6 +53,7 @@ export const VaultPasswordConfirmModal: React.FC<VaultPasswordConfirmModalProps>
         aria-modal="true"
         aria-labelledby="copy-confirm-title"
         aria-describedby="copy-confirm-description"
+        onClick={(e) => e.stopPropagation()}
         className="max-h-[calc(100dvh-2rem)] overflow-y-auto w-full max-w-sm rounded-2xl border border-obsidian-borderLight bg-obsidian-panel p-5 shadow-2xl"
       >
         <div className="mb-4 flex items-start justify-between gap-3">
@@ -66,7 +73,7 @@ export const VaultPasswordConfirmModal: React.FC<VaultPasswordConfirmModalProps>
             onClick={onCancel}
             disabled={loading}
             aria-label="Cancelar copia"
-            className="inline-flex min-h-9 min-w-9 items-center justify-center rounded-lg text-obsidian-muted hover:bg-obsidian-surface hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 disabled:opacity-50"
+            className="inline-flex min-h-[44px] min-w-[44px] lg:min-h-9 lg:min-w-9 items-center justify-center rounded-lg text-obsidian-muted hover:bg-obsidian-surface hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 disabled:opacity-50"
           >
             <X size={16} aria-hidden="true" />
           </button>

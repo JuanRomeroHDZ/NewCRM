@@ -4,6 +4,8 @@ import {
   LayoutDashboard, Mail, Globe, Key, Network, CreditCard, Trash2, Settings, UserRound,
   Lock, Unlock, Search, ChevronLeft, ChevronRight, ChevronDown, Clock,
   Shield, ShieldCheck, FileText, Rocket, MapPinned, Briefcase, X, BookOpen,
+  Radar, Server, ScanSearch, ArrowLeftRight, Activity, Route, KeyRound,
+  Code2, Radio, Waypoints, Wifi, Camera, UserCheck,
 } from 'lucide-react';
 import { useVault, SectionType } from '../../context/VaultContext';
 
@@ -17,6 +19,7 @@ interface NavItem {
   label: string;
   icon: LucideIcon;
   requiresVault?: boolean;
+  subgroup?: string;
 }
 
 interface NavGroup {
@@ -69,6 +72,26 @@ const navGroups: NavGroup[] = [
     ],
   },
   {
+    id: 'c2',
+    label: 'Red y Lab (C2)',
+    icon: Radar,
+    items: [
+      { id: 'c2_hosts', label: 'Hosts', icon: Server, requiresVault: true, subgroup: 'Reconocimiento' },
+      { id: 'c2_topo', label: 'Topología', icon: Network, requiresVault: true },
+      { id: 'c2_ports', label: 'Puertos', icon: ScanSearch, requiresVault: true },
+      { id: 'c2_mitm', label: 'MITM (ARP)', icon: ArrowLeftRight, requiresVault: true, subgroup: 'MITM y Tráfico' },
+      { id: 'c2_sniff', label: 'Sniffer', icon: Activity, requiresVault: true },
+      { id: 'c2_dns', label: 'DNS Spoof', icon: Route, requiresVault: true },
+      { id: 'c2_creds', label: 'Credenciales', icon: KeyRound, requiresVault: true },
+      { id: 'c2_http', label: 'HTTP Inject', icon: Code2, requiresVault: true },
+      { id: 'c2_poison', label: 'Poisoners', icon: Radio, requiresVault: true },
+      { id: 'c2_mitm6', label: 'mitm6', icon: Waypoints, requiresVault: true },
+      { id: 'c2_wifi', label: 'Wi-Fi', icon: Wifi, requiresVault: true, subgroup: 'Wireless y OPSEC' },
+      { id: 'c2_camera', label: 'Cámaras', icon: Camera, requiresVault: true },
+      { id: 'c2_opsec', label: 'OPSEC', icon: UserCheck, requiresVault: true },
+    ],
+  },
+  {
     id: 'actividad',
     label: 'Actividad y papelera',
     icon: FileText,
@@ -104,17 +127,27 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onCloseMobile })
     searchHotkey,
   } = useVault();
   const [collapsed, setCollapsed] = useState(false);
-  const [profileImage, setProfileImage] = useState(() => localStorage.getItem('lessso-profile-image') || '');
+  const [profileImage, setProfileImage] = useState(() => {
+    try { return localStorage.getItem('lessso-profile-image') || ''; } catch { return ''; }
+  });
+  const [imageError, setImageError] = useState('');
   const imageInput = useRef<HTMLInputElement>(null);
   const chooseImage = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = '';
-    if (!file || !['image/png', 'image/jpeg', 'image/webp'].includes(file.type) || file.size > 1024 * 1024) return;
+    if (!file) return;
+    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type) || file.size > 1024 * 1024) {
+      setImageError('Elige una imagen PNG, JPEG o WebP de hasta 1 MB.');
+      return;
+    }
+    setImageError('');
     const reader = new FileReader();
     reader.onload = () => {
       if (typeof reader.result !== 'string') return;
-      try { localStorage.setItem('lessso-profile-image', reader.result); setProfileImage(reader.result); } catch { /* Storage may be full. */ }
+      try { localStorage.setItem('lessso-profile-image', reader.result); setProfileImage(reader.result); }
+      catch { setImageError('No se pudo guardar la imagen. Revisa el espacio disponible.'); }
     };
+    reader.onerror = () => setImageError('No se pudo leer la imagen. Inténtalo de nuevo.');
     reader.readAsDataURL(file);
   };
   const [isDesktop, setIsDesktop] = useState(() => typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches);
@@ -161,7 +194,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onCloseMobile })
     if (!isMobileOpen || isDesktop || event.key !== 'Tab' || !asideRef.current) return;
     const focusable = Array.from(asideRef.current.querySelectorAll<HTMLElement>(
       'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
-    ));
+    )).filter((element) => element.getClientRects().length > 0);
     if (!focusable.length) return;
     const first = focusable[0];
     const last = focusable[focusable.length - 1];
@@ -179,6 +212,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onCloseMobile })
       ref={asideRef}
       id="primary-navigation"
       aria-label="Navegación principal"
+      role={!isDesktop && isMobileOpen ? "dialog" : undefined}
+      aria-modal={!isDesktop && isMobileOpen ? true : undefined}
       aria-hidden={!isDesktop && !isMobileOpen ? true : undefined}
       onKeyDown={handleMobileTab}
       className={`responsive-sidebar fixed inset-y-0 left-0 z-50 flex h-[100dvh] w-72 max-w-[calc(100vw-2rem)] shrink-0 flex-col border-r border-obsidian-border bg-obsidian-panel transition-transform duration-200 ease-out lg:static lg:h-[100dvh] lg:max-w-none ${collapsed ? 'lg:w-16' : 'lg:w-64'} ${isMobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}
@@ -199,13 +234,15 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onCloseMobile })
           <span className="sr-only">LESSSO</span>
         )}
 
-        <button type="button" onClick={onCloseMobile} className="rounded-lg p-2 text-obsidian-muted hover:bg-obsidian-surface hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 lg:hidden" aria-label="Cerrar menú">
+        <button type="button" onClick={onCloseMobile} className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg p-2 text-obsidian-muted hover:bg-obsidian-surface hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 lg:hidden" aria-label="Cerrar menú">
           <X size={18} />
         </button>
         <button type="button" onClick={() => setCollapsed((value) => !value)} className={`hidden rounded-lg p-1.5 text-obsidian-muted hover:bg-obsidian-surface hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 lg:inline-flex ${compact ? 'mx-auto shrink-0' : ''}`} title={collapsed ? 'Expandir menú' : 'Colapsar menú'} aria-label={collapsed ? 'Expandir menú' : 'Colapsar menú'}>
           {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
         </button>
       </div>
+
+      {imageError && !compact && <p role="alert" className="px-4 pb-2 text-xs leading-relaxed text-rose-300">{imageError}</p>}
 
       <div className={`shrink-0 pb-2 ${compact ? 'px-2' : 'px-3'}`}>
         <button type="button" onClick={() => { openCommandPalette(); onCloseMobile(); }} className={`group flex min-h-10 w-full items-center rounded-xl border border-obsidian-border bg-obsidian-bg text-xs text-obsidian-muted transition-colors hover:bg-obsidian-surface hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 ${compact ? 'justify-center px-2' : 'justify-between gap-2 px-3'}`} title={compact ? 'Buscador rápido' : undefined} aria-label="Abrir buscador rápido">
@@ -233,13 +270,22 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onCloseMobile })
                     const Icon = item.icon;
                     const active = activeSection === item.id;
                     const locked = Boolean(item.requiresVault && !isUnlocked);
-                    return <li key={item.id}>
-                      <button type="button" onClick={() => selectSection(item)} aria-current={active ? 'page' : undefined} title={compact ? item.label : undefined} aria-label={compact ? item.label : undefined} className={`flex min-h-10 w-full items-center rounded-lg text-left text-xs font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 ${compact ? 'justify-center px-2' : 'gap-2.5 px-3'} ${active ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-950/30' : 'text-obsidian-text hover:bg-obsidian-surface hover:text-white'}`}>
-                        <Icon size={15} className={`shrink-0 ${active ? 'text-white' : 'text-obsidian-muted'}`} />
-                        {!compact && <span className="min-w-0 flex-1 truncate">{item.label}</span>}
-                        {!compact && locked && <Lock size={11} className="shrink-0 text-amber-400/80" aria-label="Requiere desbloquear la bóveda" />}
-                      </button>
-                    </li>;
+                    return (
+                      <React.Fragment key={item.id}>
+                        {!compact && item.subgroup && (
+                          <li role="presentation" className="px-3 pt-2 pb-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-obsidian-muted/75">
+                            {item.subgroup}
+                          </li>
+                        )}
+                        <li>
+                          <button type="button" onClick={() => selectSection(item)} aria-current={active ? 'page' : undefined} title={compact ? item.label : undefined} aria-label={compact ? item.label : undefined} className={`flex min-h-10 w-full items-center rounded-lg text-left text-xs font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 ${compact ? 'justify-center px-2' : 'gap-2.5 px-3'} ${active ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-950/30' : 'text-obsidian-text hover:bg-obsidian-surface hover:text-white'}`}>
+                            <Icon size={15} className={`shrink-0 ${active ? 'text-white' : 'text-obsidian-muted'}`} />
+                            {!compact && <span className="min-w-0 flex-1 truncate">{item.label}</span>}
+                            {!compact && locked && <Lock size={11} className="shrink-0 text-amber-400/80" aria-label="Requiere desbloquear la bóveda" />}
+                          </button>
+                        </li>
+                      </React.Fragment>
+                    );
                   })}
                 </ul>
               </li>
@@ -255,22 +301,22 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onCloseMobile })
               type="button"
               onClick={toggleVault}
               className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-current hover:bg-obsidian-border/60 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
-              title={isUnlocked ? `Bóveda desbloqueada (${formatTimer(remainingSeconds)})` : 'Bóveda bloqueada'}
+              title={isUnlocked ? `Bóveda activa (${formatTimer(remainingSeconds)})` : 'Bóveda bloqueada'}
               aria-label={isUnlocked ? 'Bloquear bóveda' : 'Desbloquear bóveda'}
             >
-              {isUnlocked ? <Unlock size={15} className="text-obsidian-muted" /> : <Lock size={15} className="text-obsidian-muted" />}
+              {isUnlocked ? <Unlock size={15} className="text-emerald-400" /> : <Lock size={15} className="text-obsidian-muted" />}
             </button>
           </div>
         ) : (
           <div className={`flex items-center justify-between gap-2 rounded-xl border p-2.5 transition-colors ${isUnlocked ? 'border-obsidian-border bg-obsidian-panel text-obsidian-muted' : 'border-obsidian-border bg-obsidian-surface text-obsidian-muted'}`}>
             <div className="flex min-w-0 items-center gap-2">
-              {isUnlocked ? <Unlock size={16} className="shrink-0 text-obsidian-muted" /> : <Lock size={16} className="shrink-0 text-obsidian-muted" />}
+              {isUnlocked ? <Unlock size={15} className="shrink-0 text-emerald-400" /> : <Lock size={15} className="shrink-0 text-obsidian-muted" />}
               <div className="min-w-0">
-                <div className="truncate text-[11px] font-semibold text-white">{isUnlocked ? 'Bóveda desbloqueada' : 'Bóveda bloqueada'}</div>
-                <div className="truncate text-[10px] text-obsidian-muted">{isUnlocked ? `Se bloquea en ${formatTimer(remainingSeconds)}` : 'Protegida con contraseña de acceso'}</div>
+                <div className="truncate text-[11px] font-semibold text-white">{isUnlocked ? 'Bóveda activa' : 'Bóveda bloqueada'}</div>
+                <div className="truncate font-mono text-[10px] text-obsidian-muted">{isUnlocked ? `Cierre ${formatTimer(remainingSeconds)}` : 'Acceso cifrado'}</div>
               </div>
             </div>
-            <button type="button" onClick={toggleVault} className={`min-h-10 shrink-0 rounded-lg px-2.5 text-[10px] font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 ${isUnlocked ? 'bg-obsidian-surface text-white hover:bg-obsidian-borderLight' : 'bg-obsidian-surface text-white hover:bg-obsidian-borderLight'}`}>
+            <button type="button" onClick={toggleVault} className="min-h-[44px] lg:min-h-9 shrink-0 rounded-lg bg-obsidian-surface px-2.5 text-[10px] font-semibold text-white transition-colors hover:bg-obsidian-borderLight focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300">
               {isUnlocked ? 'Bloquear' : 'Desbloquear'}
             </button>
           </div>

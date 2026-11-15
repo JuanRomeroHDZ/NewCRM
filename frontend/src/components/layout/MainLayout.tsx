@@ -1,5 +1,6 @@
 import React, { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { useVault } from '../../context/VaultContext';
+import { C2Provider } from '../../context/C2Context';
 import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
 import { SectionRenderer } from './SectionRenderer';
@@ -41,41 +42,43 @@ export const MainLayout: React.FC = () => {
   }, [mobileNavOpen]);
 
   return (
-    <div
-      className={`brand-theme flex h-[100dvh] min-h-[100dvh] w-full overflow-hidden bg-obsidian-bg text-obsidian-text ${canvasClass}`}
-      style={{
-        ['--brand-accent' as any]: accentColor,
-        ['--brand-accent-contrast' as any]: getAccentTextColor(accentColor),
-      }}
-    >
-      <Sidebar isMobileOpen={mobileNavOpen} onCloseMobile={() => setMobileNavOpen(false)} />
-      {mobileNavOpen && (
-        <button
-          type="button"
-          aria-label="Cerrar menú de navegación"
-          onClick={() => setMobileNavOpen(false)}
-          className="fixed inset-0 z-40 bg-black/65 backdrop-blur-[2px] lg:hidden"
-        />
-      )}
+    <C2Provider>
+      <div
+        className={`brand-theme flex h-[100dvh] min-h-[100dvh] w-full overflow-hidden bg-obsidian-bg text-obsidian-text ${canvasClass}`}
+        style={{
+          ['--brand-accent' as any]: accentColor,
+          ['--brand-accent-contrast' as any]: getAccentTextColor(accentColor),
+        }}
+      >
+        <Sidebar isMobileOpen={mobileNavOpen} onCloseMobile={() => setMobileNavOpen(false)} />
+        {mobileNavOpen && (
+          <button
+            type="button"
+            aria-label="Cerrar menú de navegación"
+            onClick={() => setMobileNavOpen(false)}
+            className="fixed inset-0 z-40 bg-black/65 backdrop-blur-[2px] lg:hidden"
+          />
+        )}
 
-      <div className="flex min-w-0 min-h-0 flex-1 flex-col overflow-hidden">
-        <Topbar
-          onMenuClick={() => setMobileNavOpen(true)}
-          menuTriggerRef={menuTriggerRef}
-          isMenuOpen={mobileNavOpen}
-        />
-        <main className="min-w-0 min-h-0 flex-1 overflow-y-auto overscroll-contain">
-          <SectionRenderer />
-        </main>
+        <div className="flex min-w-0 min-h-0 flex-1 flex-col overflow-hidden">
+          <Topbar
+            onMenuClick={() => setMobileNavOpen(true)}
+            menuTriggerRef={menuTriggerRef}
+            isMenuOpen={mobileNavOpen}
+          />
+          <main className="min-w-0 min-h-0 flex-1 overflow-y-auto overscroll-contain">
+            <SectionRenderer />
+          </main>
+        </div>
+
+        {selectedEntity && (
+          <Suspense fallback={null}>
+            <InspectorDrawer />
+          </Suspense>
+        )}
+        <ModalHost />
+        <ToastViewport />
       </div>
-
-      {selectedEntity && (
-        <Suspense fallback={null}>
-          <InspectorDrawer />
-        </Suspense>
-      )}
-      <ModalHost />
-      <ToastViewport />
-    </div>
+    </C2Provider>
   );
 };

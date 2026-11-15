@@ -17,6 +17,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Plus,
+  Radar,
   RefreshCw,
   RotateCcw,
   Save,
@@ -28,6 +29,7 @@ import {
   X,
 } from 'lucide-react';
 import { useVault } from '../../context/VaultContext';
+import { useC2 } from '../../context/C2Context';
 import { EmptyState } from '../common/EmptyState';
 import { api } from '../../lib/api';
 import {
@@ -79,6 +81,20 @@ type WorkspaceMode = 'markdown' | 'whiteboard' | 'dual' | 'findings' | 'assets';
 
 export const WriteupsView: React.FC = () => {
   const { isUnlocked, openUnlockModal, showToast, confirm, prompt, systemLocale } = useVault();
+  const {
+    selectedIface: c2Iface,
+    gateway: c2Gateway,
+    hosts: c2Hosts,
+    hostOsMap: c2HostOsMap,
+    portScanIp: c2PortIp,
+    portResults: c2Ports,
+    exploitResults: c2Exploits,
+    creds: c2Creds,
+    wifiAps: c2WifiAps,
+    cameraDiscovered: c2Cameras,
+    cameraFindings: c2CameraFindings,
+    demoMode: c2DemoMode,
+  } = useC2();
   const [items, setItems] = useState<WriteupSummary[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<WriteupDetail | null>(null);
@@ -454,6 +470,151 @@ export const WriteupsView: React.FC = () => {
       showToast('Informe creado con una pizarra', 'success');
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'No se pudo crear el informe', 'error');
+    } finally {
+      creationInProgressRef.current = false;
+      setCreatingWriteup(false);
+    }
+  };
+
+  const handleCreateFromC2Session = async () => {
+    if (creationInProgressRef.current) return;
+    creationInProgressRef.current = true;
+    try {
+      const targetLabel = c2PortIp || c2Hosts[0]?.ip || c2Gateway?.ip || c2Iface || 'Red Lab';
+      const defaultTitle = `Auditoría C2 - ${targetLabel}`;
+      const newTitle = await prompt({
+        title: 'Importar sesión C2 a informe',
+        message: `Se generará un borrador con ${c2Hosts.length} host(s), ${c2Ports.length} puerto(s) y ${c2Creds.length} credencial(es) capturadas en esta sesión.`,
+        defaultValue: defaultTitle,
+        confirmLabel: 'Importar borrador',
+        required: true,
+        maxLength: MAX_REPORT_TITLE_LENGTH,
+      });
+      if (newTitle === null) return;
+      const cleanTitle = newTitle.trim();
+      if (cleanTitle.length < 2) {
+        showToast('El título debe tener al menos 2 caracteres.', 'warning');
+        return;
+      }
+      if (!(await confirmDiscardDraft('importas la sesión C2')) || !isUnlocked) return;
+
+      const sections: string[] = [
+        `# ${cleanTitle} {#c2-resumen}`,
+        '',
+        '## Alcance y entorno {#alcance}',
+        `- **Interfaz:** \`${c2Iface || 'N/A'}\``,
+        `- **Gateway:** \`${c2Gateway?.ip || 'N/A'}\``,
+        `- **Objetivo principal:** \`${c2PortIp || c2Hosts[0]?.ip || 'Por definir'}\``,
+        `- **Modo:** ${c2DemoMode ? 'Laboratorio simulado (Demo)' : 'Operación real'}`,
+      ];
+
+      if (c2Hosts.length > 0) {
+        sections.push('', '## Hosts descubiertos {#hosts}', '| IP | MAC | Fabricante | SO estimado |', '| --- | --- | --- | --- |');
+        for (const h of c2Hosts.slice(0, 40)) {
+          const osInfo = c2HostOsMap[h.ip]?.os || h.os || '-';
+          sections.push(`| ${h.ip} | ${h.mac} | ${h.vendor || '-'} | ${osInfo} |`);
+        }
+      }
+
+      if (c2Ports.length > 0) {
+        sections.push('', `## Puertos abiertos (${c2PortIp || 'objetivo'}) {#puertos}`, '| Puerto | Servicio | Banner / Versión |', '| --- | --- | --- |');
+        for (const p of c2Ports.slice(0, 50)) {
+          sections.push(`| ${p.port} | ${p.service || '-'} | ${(p.banner || '-').replace(/\|/g, '/')} |`);
+        }
+      }
+
+      if (c2Exploits.length > 0) {
+        sections.push('', '## Coincidencias Exploit-DB / Searchsploit {#exploits}');
+        for (const svc of c2Exploits) {
+          sections.push(`- **Puerto ${svc.port} (${svc.service}):** ${svc.exploits.map((e) => e.title).join('; ') || 'Sin coincidencias'}`);
+        }
+      }
+
+      if (c2Creds.length > 0) {
+        sections.push('', '## Credenciales observadas {#credenciales}', `- Total capturado en búfer: ${c2Creds.length} registro(s). Sanitiza antes de entregar.`);
+        for (const c of c2Creds.slice(0, 20)) {
+          sections.push(`- \`${c.proto}\` (${c.src} -> ${c.dst}): \`${c.data}\``);
+        }
+      }
+
+      if (c2Cameras.length > 0 || c2CameraFindings.length > 0) {
+        sections.push('', '## Cámaras y dispositivos IP {#camaras}');
+        sections.push(`- Descubiertas: ${c2Cameras.length} | Hallazgos de auditoría: ${c2CameraFindings.length}`);
+      }
+
+      if (c2WifiAps.length > 0) {
+        sections.push('', '## Puntos de acceso Wi-Fi observados {#wifi}');
+        sections.push(`- Total SSIDs/BSSIDs detectados: ${c2WifiAps.length}`);
+      }
+
+      if (c2Hosts.length === 0 && c2Ports.length === 0 && c2Creds.length === 0 && c2CameraFindings.length === 0) {
+        sections.push('', '## Notas de laboratorio {#notas}', 'Aún no había escaneos activos en memoria. Ejecuta Reconocimiento o Escaneo de puertos en Red y Lab (C2) y documenta tus hallazgos aquí.');
+      }
+
+      const structuredFindings: WriteupStructuredFinding[] = [];
+      for (const f of c2CameraFindings.slice(0, 25)) {
+        const sevMap: Record<string, WriteupSeverity> = {
+          critical: 'critica',
+          high: 'alta',
+          medium: 'media',
+          low: 'baja',
+          info: 'informativa',
+        };
+        structuredFindings.push({
+          id: `c2-cam-${structuredFindings.length + 1}`,
+          title: f.title || `Hallazgo ${f.module}`,
+          severity: sevMap[(f.severity || '').toLowerCase()] || 'media',
+          affected_target: c2Cameras[0]?.ip || targetLabel,
+          status: 'abierta',
+          summary: f.detail || f.title || 'Hallazgo de auditoría de cámara IP.',
+          remediation: 'Restringir acceso de red, cambiar credenciales por defecto y deshabilitar servicios innecesarios.',
+        });
+      }
+      for (const svc of c2Exploits) {
+        if (svc.exploits.length > 0 && structuredFindings.length < 30) {
+          structuredFindings.push({
+            id: `c2-exp-${svc.port}-${structuredFindings.length + 1}`,
+            title: `Superficie conocida en puerto ${svc.port}/${svc.service}`,
+            severity: 'alta',
+            affected_target: c2PortIp || targetLabel,
+            status: 'abierta',
+            summary: `Se detectaron ${svc.exploits.length} referencia(s) pública(s) para ${svc.banner || svc.service}.`,
+            remediation: 'Actualizar servicio a versión parcheada o limitar exposición por firewall.',
+          });
+        }
+      }
+
+      const maxSev: WriteupSeverity = structuredFindings.some((f) => f.severity === 'critica')
+        ? 'critica'
+        : structuredFindings.some((f) => f.severity === 'alta')
+        ? 'alta'
+        : c2Creds.length > 0 || structuredFindings.length > 0
+        ? 'media'
+        : 'informativa';
+
+      setCreatingWriteup(true);
+      const created = await api.createWriteup({
+        title: cleanTitle,
+        severity: maxSev,
+        status: 'borrador',
+        target_scope: targetLabel,
+        tags: ['c2-import', ...(c2DemoMode ? ['lab-demo'] : ['pentest'])],
+        markdown_content: `${sections.join('\n')}\n`,
+        executive_summary: `Borrador generado desde la sesión C2 (${c2Hosts.length} hosts, ${c2Ports.length} puertos, ${structuredFindings.length} hallazgos).`,
+        findings: structuredFindings,
+      });
+      detailRequestVersion.current += 1;
+      selectedIdRef.current = created.id;
+      setSelectedId(created.id);
+      clearAssetUrlCache();
+      hydrateDraft(created);
+      await loadList();
+      if (typeof window !== 'undefined' && window.innerWidth < 1280) {
+        setShowList(false);
+      }
+      showToast('Sesión C2 importada en un nuevo borrador de informe', 'success');
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'No se pudo importar la sesión C2', 'error');
     } finally {
       creationInProgressRef.current = false;
       setCreatingWriteup(false);
@@ -923,24 +1084,24 @@ export const WriteupsView: React.FC = () => {
                   type="button"
                   onClick={handleCreateWriteup}
                   disabled={creatingWriteup}
-                  className="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium flex items-center gap-1 disabled:cursor-wait disabled:opacity-60"
+                  className="inline-flex min-h-[44px] lg:min-h-8 items-center gap-1 rounded-lg bg-indigo-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-indigo-500 disabled:cursor-wait disabled:opacity-60"
                 >
-                  <Plus className="w-3.5 h-3.5" />
+                  <Plus className="w-3.5 h-3.5" aria-hidden="true" />
                   {creatingWriteup ? 'Creando…' : 'Nuevo'}
                 </button>
                 <button
                   type="button"
                   onClick={() => setShowList(false)}
-                  className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800"
+                  className="inline-flex min-h-[44px] min-w-[44px] lg:min-h-8 lg:min-w-8 items-center justify-center rounded-lg p-1 text-slate-400 hover:bg-slate-800 hover:text-white"
                   aria-label="Cerrar panel"
                 >
-                  <X className="w-4 h-4" />
+                  <X className="w-4 h-4" aria-hidden="true" />
                 </button>
               </div>
             </div>
 
             <div className="relative">
-              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" aria-hidden="true" />
               <input
                 type="text"
                 value={searchQuery}
@@ -948,7 +1109,7 @@ export const WriteupsView: React.FC = () => {
                 onChange={(e) => setSearchQuery(e.target.value)}
                 aria-label="Buscar informes"
                 placeholder="Buscar…"
-                className="w-full pl-8 pr-2.5 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-xs text-slate-100"
+                className="w-full min-h-[44px] lg:min-h-8 pl-8 pr-2.5 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-xs text-slate-100"
               />
             </div>
 
@@ -957,7 +1118,7 @@ export const WriteupsView: React.FC = () => {
               value={severityFilter}
               onChange={(e) => setSeverityFilter(e.target.value)}
               aria-label="Filtrar informes por severidad"
-              className="w-full appearance-none bg-slate-950 border border-slate-800 rounded-lg pl-2 pr-8 py-1.5 text-xs text-slate-200"
+              className="w-full min-h-[44px] lg:min-h-8 appearance-none bg-slate-950 border border-slate-800 rounded-lg pl-2 pr-8 py-1.5 text-xs text-slate-200"
             >
               <option value="">Todas las severidades</option>
               <option value="critica">Crítica</option>
@@ -979,22 +1140,15 @@ export const WriteupsView: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => void loadList()}
-                  className="min-h-9 rounded-lg border border-rose-500/30 px-3 text-rose-200 hover:bg-rose-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                  className="min-h-[44px] lg:min-h-9 rounded-lg border border-rose-500/30 px-3 text-rose-200 hover:bg-rose-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
                 >
                   Reintentar
                 </button>
               </div>
             ) : items.length === 0 ? (
               <div className="text-center p-4 text-xs text-slate-400 space-y-2">
-                <p>Aún no hay informes.</p>
-                <button
-                  type="button"
-                  onClick={handleCreateWriteup}
-                  disabled={creatingWriteup}
-                  className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-indigo-300 disabled:cursor-wait disabled:opacity-60"
-                >
-                  {creatingWriteup ? 'Creando…' : 'Crear primero'}
-                </button>
+                <p>No hay informes guardados todavía.</p>
+                <p className="text-[11px] text-slate-500">Crea un informe vacío o importa datos desde Red y Lab (C2).</p>
               </div>
             ) : (
               items.map((item) => {
@@ -1031,7 +1185,7 @@ export const WriteupsView: React.FC = () => {
                   onClick={handleLoadMore}
                   disabled={loadingMore}
                   aria-label="Cargar más informes"
-                  className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-slate-700 bg-slate-900 px-3 text-xs font-medium text-slate-200 hover:border-indigo-400/60 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 disabled:cursor-wait disabled:opacity-60"
+                  className="inline-flex min-h-[44px] lg:min-h-9 items-center justify-center gap-2 rounded-lg border border-slate-700 bg-slate-900 px-3 text-xs font-medium text-slate-200 hover:border-indigo-400/60 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 disabled:cursor-wait disabled:opacity-60"
                 >
                   {loadingMore && <RefreshCw className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />}
                   {loadingMore ? 'Cargando…' : loadMoreError ? 'Reintentar carga' : 'Cargar más'}
@@ -1053,31 +1207,51 @@ export const WriteupsView: React.FC = () => {
           <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
             <p role="alert" className="max-w-md text-sm text-rose-300">{detailError}</p>
             <div className="flex flex-wrap justify-center gap-2">
-              {selectedId && <button type="button" onClick={() => void loadDetail(selectedId)} className="min-h-9 rounded-lg bg-indigo-600 px-3 text-xs font-medium text-white hover:bg-indigo-500">Reintentar</button>}
-              <button type="button" onClick={() => setShowList(true)} className="min-h-9 rounded-lg bg-slate-800 px-3 text-xs font-medium text-slate-200 hover:bg-slate-700">Ver lista</button>
+              {selectedId && <button type="button" onClick={() => void loadDetail(selectedId)} className="min-h-[44px] lg:min-h-9 rounded-lg bg-indigo-600 px-3 text-xs font-medium text-white hover:bg-indigo-500">Reintentar</button>}
+              {!showList && <button type="button" onClick={() => setShowList(true)} className="min-h-[44px] lg:min-h-9 rounded-lg bg-slate-800 px-3 text-xs font-medium text-slate-200 hover:bg-slate-700">Ver lista</button>}
             </div>
           </div>
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center text-slate-400 p-6 text-center gap-3">
-            <BookOpen className="w-10 h-10 text-slate-600" />
-            <p className="text-sm">Selecciona un informe o crea uno nuevo.</p>
-            <div className="flex flex-wrap items-center justify-center gap-2">
-              <button
-                type="button"
-                onClick={() => setShowList(true)}
-                className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium flex items-center gap-1.5"
-              >
-                <PanelLeftOpen className="w-4 h-4" />
-                Ver lista ({total})
-              </button>
+            <BookOpen className="w-10 h-10 text-slate-600" aria-hidden="true" />
+            <p className="text-sm max-w-md">
+              {total > 0
+                ? 'Selecciona un informe de la lista o crea un nuevo borrador.'
+                : 'Inicia un writeup desde cero o importa hosts, puertos y credenciales de tu sesión C2.'}
+            </p>
+            <div className="flex flex-wrap items-center justify-center gap-2.5">
+              {!showList && (
+                <button
+                  type="button"
+                  onClick={() => setShowList(true)}
+                  className="inline-flex min-h-[44px] lg:min-h-9 items-center gap-1.5 rounded-xl bg-slate-800 px-3.5 py-2 text-xs font-medium text-slate-200 hover:bg-slate-700"
+                >
+                  <PanelLeftOpen className="w-4 h-4" aria-hidden="true" />
+                  Ver lista ({total})
+                </button>
+              )}
               <button
                 type="button"
                 onClick={handleCreateWriteup}
                 disabled={creatingWriteup}
-                className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-1.5 disabled:cursor-wait disabled:opacity-60"
+                className="inline-flex min-h-[44px] lg:min-h-9 items-center gap-1.5 rounded-xl bg-obsidian-gold px-4 py-2 text-xs font-semibold text-black hover:brightness-110 disabled:cursor-wait disabled:opacity-60"
               >
-                <Plus className="w-4 h-4" />
+                <Plus className="w-4 h-4" aria-hidden="true" />
                 {creatingWriteup ? 'Creando…' : 'Nuevo informe'}
+              </button>
+              <button
+                type="button"
+                onClick={handleCreateFromC2Session}
+                disabled={creatingWriteup}
+                className="inline-flex min-h-[44px] lg:min-h-9 items-center gap-1.5 rounded-xl border border-obsidian-borderLight bg-obsidian-panel px-4 py-2 text-xs font-semibold text-white hover:border-obsidian-gold disabled:cursor-wait disabled:opacity-60"
+              >
+                <Radar className="w-4 h-4 text-obsidian-gold" aria-hidden="true" />
+                <span>
+                  Importar sesión C2
+                  {(c2Hosts.length + c2Ports.length + c2Creds.length) > 0
+                    ? ` (${c2Hosts.length}h / ${c2Ports.length}p)`
+                    : ''}
+                </span>
               </button>
             </div>
           </div>

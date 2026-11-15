@@ -5,6 +5,7 @@ __pycache__/
 *.so
 .Python
 backend/.venv/
+backend/.venv-c2/
 .venv/
 env/
 venv/
@@ -70,3 +71,4 @@ Thumbs.db
 Modelfile*
 summary.md
 .env.runtime
+c2-runtime/
