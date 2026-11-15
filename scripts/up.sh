@@ -11,10 +11,15 @@ fi
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 RUNTIME_FILE=".env.runtime"
 CHOOSE_PORTS=false
-if [[ "${1:-}" == "--choose-ports" ]]; then
-  CHOOSE_PORTS=true
+CHOOSE_ADDRESS=false
+while [[ "${1:-}" == --choose-* ]]; do
+  case "$1" in
+    --choose-ports) CHOOSE_PORTS=true ;;
+    --choose-address) CHOOSE_ADDRESS=true ;;
+    *) echo "Opción desconocida: $1" >&2; exit 1 ;;
+  esac
   shift
-fi
+done
 
 # Lee solo una variable simple de .env; no ejecuta ni muestra sus secretos.
 dotenv_value() {
@@ -81,6 +86,7 @@ if [ -f "$RUNTIME_FILE" ]; then
     case "$key" in
       PORT) [ -n "${PORT:-}" ] || PORT="$value" ;;
       HTTPS_PORT) [ -n "${HTTPS_PORT:-}" ] || HTTPS_PORT="$value" ;;
+      HOST_BIND_IP) [ -n "${HOST_BIND_IP:-}" ] || HOST_BIND_IP="$value" ;;
     esac
   done < "$RUNTIME_FILE"
 fi
@@ -89,6 +95,38 @@ PORT="${PORT:-$(dotenv_value PORT)}"
 HTTPS_PORT="${HTTPS_PORT:-$(dotenv_value HTTPS_PORT)}"
 PORT="${PORT:-8080}"
 HTTPS_PORT="${HTTPS_PORT:-8443}"
+HOST_BIND_IP="${HOST_BIND_IP:-$(dotenv_value HOST_BIND_IP)}"
+HOST_BIND_IP="${HOST_BIND_IP:-127.0.0.1}"
+
+if $CHOOSE_ADDRESS; then
+  [[ -t 0 ]] || { echo 'Elige la dirección desde una terminal.' >&2; exit 1; }
+  echo 'Direcciones detectadas en este equipo:'
+  hostname -I 2>/dev/null || true
+  echo 'Usa 127.0.0.1 para acceso solo en este equipo, o una IPv4 privada de este equipo para acceso desde la red local.'
+  read -r -p "Dirección IPv4 [$HOST_BIND_IP]: " selected_address
+  HOST_BIND_IP="${selected_address:-$HOST_BIND_IP}"
+fi
+
+python3 - "$HOST_BIND_IP" <<'PY'
+import ipaddress, socket, sys
+try:
+    address = ipaddress.IPv4Address(sys.argv[1])
+    private_networks = [ipaddress.IPv4Network(net) for net in ('10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16')]
+    if address != ipaddress.IPv4Address('127.0.0.1') and not any(address in network for network in private_networks):
+        raise ValueError('elige 127.0.0.1 o una dirección IPv4 privada (10.x, 172.16-31.x o 192.168.x)')
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind((str(address), 0))
+except (ValueError, OSError) as exc:
+    raise SystemExit(f'Dirección de acceso no válida o no asignada a este equipo: {exc}')
+PY
+
+# Reutiliza la CA instalada en los clientes y renueva solo el certificado del servidor
+# si la dirección seleccionada aún no figura entre sus nombres alternativos.
+CERT_RENEWED=false
+if ! openssl x509 -in nginx/certs/local/server.crt -noout -checkip "$HOST_BIND_IP" 2>/dev/null | grep -q 'does match certificate'; then
+  HOST_BIND_IP="$HOST_BIND_IP" ./scripts/generate_certs.sh
+  CERT_RENEWED=true
+fi
 
 if $CHOOSE_PORTS; then
   [[ -t 0 ]] || { echo 'Elige los puertos desde una terminal.' >&2; exit 1; }
@@ -114,20 +152,28 @@ else
   PORT="$(pick_port "$PORT")"
   HTTPS_PORT="$(pick_port "$HTTPS_PORT" "$PORT")"
 fi
-export PORT HTTPS_PORT
+export PORT HTTPS_PORT HOST_BIND_IP
 
 docker compose up -d --build --wait "$@"
+if $CERT_RENEWED; then
+  # Un proxy que ya estaba ejecutándose necesita recargar el certificado nuevo.
+  docker compose restart proxy
+fi
 
 cat > "$RUNTIME_FILE" <<EOF
 # Generado por scripts/up.sh
 PORT=${PORT}
 HTTPS_PORT=${HTTPS_PORT}
+HOST_BIND_IP=${HOST_BIND_IP}
 EOF
 
 echo
 echo "LESSSO CRM listo:"
-echo "  HTTP:  http://localhost:${PORT}"
-echo "  HTTPS: https://localhost:${HTTPS_PORT}"
+echo "  HTTP:  http://${HOST_BIND_IP}:${PORT}"
+echo "  HTTPS: https://${HOST_BIND_IP}:${HTTPS_PORT}"
+if [[ "$HOST_BIND_IP" != 127.0.0.1 ]]; then
+  echo 'Para acceder desde otro equipo, instala allí nginx/certs/local/ca.crt como autoridad de confianza.'
+fi
 echo
-echo "Puertos guardados en ${RUNTIME_FILE}; se reutilizan si siguen libres."
+echo "Dirección y puertos guardados en ${RUNTIME_FILE}; los puertos se reutilizan si siguen libres."
 echo "Estado: docker compose ps"

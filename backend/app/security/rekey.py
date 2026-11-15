@@ -42,7 +42,7 @@ NOTE_FIELDS = {
     Writeup: ("encrypted_markdown", "encrypted_executive_summary", "encrypted_findings_json"),
     WriteupBoard: ("encrypted_scene_json", "encrypted_svg_snapshot"),
     WriteupCitation: ("quoted_text", "note"),
-    WriteupRevision: ("encrypted_markdown",),
+    WriteupRevision: ("encrypted_markdown", "encrypted_snapshot"),
 }
 MODELS = tuple(dict.fromkeys((*SECRET_FIELDS, *NOTE_FIELDS, WriteupAsset)))
 

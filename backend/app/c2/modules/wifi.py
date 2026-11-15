@@ -37,6 +37,7 @@ except ImportError:  # pragma: no cover - entorno mínimo sin scapy
 
 from app.config import settings
 from app.c2.core.bus import bus
+from app.c2.core.system_tools import tool_environment
 
 CAPTURE_DIR = Path(settings.C2_CAPTURE_DIR)
 CAPTURE_DIR.mkdir(parents=True, exist_ok=True)
@@ -65,7 +66,10 @@ _killed: list[str] = []
 
 
 def _run(cmd: list[str]) -> subprocess.CompletedProcess:
-    return subprocess.run(cmd, capture_output=True, text=True)
+    try:
+        return subprocess.run(cmd, capture_output=True, text=True, env=tool_environment())
+    except FileNotFoundError:
+        return subprocess.CompletedProcess(cmd, 127, "", f"{cmd[0]} no está instalado")
 
 
 def iface_mode(iface: str) -> str:
@@ -199,7 +203,8 @@ def prepare_monitor(iface: str) -> dict:
 def set_channel(iface: str, channel: int) -> None:
     try:
         subprocess.run(["iw", "dev", iface, "set", "channel", str(channel)],
-                       check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                       check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                       env=tool_environment())
     except Exception:
         pass
 
@@ -412,7 +417,7 @@ def convert_to_22000(pcap_path) -> dict:
     try:
         proc = subprocess.run(
             ["hcxpcapngtool", "-o", str(out), str(pcap_path)],
-            capture_output=True, text=True,
+            capture_output=True, text=True, env=tool_environment(),
         )
     except FileNotFoundError:
         raise RuntimeError(

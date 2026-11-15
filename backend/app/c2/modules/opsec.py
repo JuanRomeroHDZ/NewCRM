@@ -8,13 +8,13 @@ import json
 import os
 import random
 import re
-import shutil
 import socket
 import subprocess
 from pathlib import Path
 
 from app.config import settings
 from app.c2.core.bus import bus
+from app.c2.core.system_tools import find_tool, tool_environment
 
 STATE_PATH = Path(settings.C2_STATE_DIR) / ".opsec_state.json"
 
@@ -36,7 +36,7 @@ _MAC_RE = re.compile(r"^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$")
 
 def _run(cmd: list[str]) -> subprocess.CompletedProcess:
     try:
-        return subprocess.run(cmd, capture_output=True, text=True, timeout=20)
+        return subprocess.run(cmd, capture_output=True, text=True, timeout=20, env=tool_environment())
     except FileNotFoundError:
         # Binario no instalado en esta imagen: devolvemos fallo controlado
         # en vez de reventar el endpoint (pasa con dhclient, ethtool...).
@@ -288,15 +288,15 @@ def renew_dhcp(iface: str) -> None:
     y NetworkManager (el cliente interno de Kali moderno). Nunca revienta:
     si no hay forma de renovar, solo avisa."""
     try:
-        if shutil.which("dhclient"):
+        if find_tool("dhclient"):
             _run(["dhclient", "-r", iface])
             if _run(["dhclient", iface]).returncode == 0:
                 return
-        elif shutil.which("dhcpcd"):
+        elif find_tool("dhcpcd"):
             _run(["dhcpcd", "-k", iface])
             if _run(["dhcpcd", iface]).returncode == 0:
                 return
-        if shutil.which("nmcli"):
+        if find_tool("nmcli"):
             _run(["nmcli", "device", "disconnect", iface])
             if _run(["nmcli", "device", "connect", iface]).returncode == 0:
                 return

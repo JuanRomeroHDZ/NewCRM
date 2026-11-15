@@ -608,6 +608,15 @@ export interface WriteupRevision {
   change_note?: string | null;
   content_hash: string;
   markdown_content: string;
+  snapshot?: {
+    version: number;
+    fields: Record<string, string | number | null>;
+    executive_summary: string | null;
+    findings: WriteupStructuredFinding[];
+    boards: WriteupBoard[];
+    citations: WriteupCitation[];
+    assets?: WriteupAsset[];
+  } | null;
   created_at: string;
 }
 

@@ -60,6 +60,8 @@ Necesitas Linux para el modo real de C2, Docker Engine con Compose v2, Python 3 
 
 5. Configura la contraseña de la bóveda. En **Cuentas del equipo**, crea tu cuenta administradora con una contraseña provisional y cámbiala cuando se solicite. Desde esa cuenta puedes agregar usuarios y asignar roles.
 
+Para acceder desde otro equipo de la red privada, abre **Administrar servicios → Elegir acceso local o de red e iniciar CRM** y elige una IPv4 privada asignada al servidor, por ejemplo `192.168.1.20`. Abre desde el otro equipo la dirección HTTPS que muestra el programa e instala `nginx/certs/local/ca.crt` como autoridad de confianza en ese dispositivo. El acceso queda asociado a esa dirección concreta; para volver al acceso exclusivo desde el servidor, elige `127.0.0.1`. Compartir el acceso en la red permite a otros dispositivos alcanzar la pantalla de inicio de sesión, por lo que debe usarse en una red de confianza.
+
 Para usar C2 real, ejecuta `./lessso` y selecciona **Abrir CRM y activar C2 real**. La primera vez se preparan sus dependencias. El sistema solicitará tu contraseña mediante `sudo` cuando corresponda. Mantén abierta esa terminal mientras uses C2 y pulsa Ctrl+C para cerrarlo.
 
 Si ya tienes una sesión de Ventas y la cuenta administradora anterior sigue con su contraseña provisional, cierra la sesión de Ventas para crear tu cuenta administradora. Si ya existe un propietario que cambió su contraseña, inicia sesión con él para administrar las cuentas.
@@ -77,7 +79,7 @@ Si el sistema anterior usaba la clave de cifrado por defecto, configura esa clav
 - `SERVER_SECRET_KEY`: clave de firma y de cifrado de respaldo del servidor. Guárdala fuera del repositorio y conserva una copia segura.
 - `LEGACY_SERVER_SECRET_KEYS`: lista separada por comas para una rotación deliberada. Si una base existente depende de una clave anterior, consérvala aquí mientras se completa la migración; no borres los volúmenes de PostgreSQL para resolver un error de clave.
 - `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`: acceso interno a la base.
-- `PORT`, `HTTPS_PORT`, `HOST_BIND_IP`: publicación local del proxy.
+- `PORT`, `HTTPS_PORT`, `HOST_BIND_IP`: publicación del proxy; el menú guarda las opciones elegidas en `.env.runtime`, que tiene prioridad sobre `.env` al iniciar con `./lessso`.
 - `VITE_API_PROXY_TARGET`, `VITE_DEV_HOST`, `VITE_DEV_PORT`: conexión local del servidor de desarrollo de Vite. Solo se usan al ejecutar el frontend fuera de Docker; las variables `VITE_*` son públicas y no deben contener secretos.
 - `BACKUP_LOCAL_PATH`: destino persistente de los respaldos.
 - `OSM_OVERPASS_URL`, `OSM_TILE_URL_TEMPLATE`, `OSM_OBJECT_URL_TEMPLATE`: servicios cartográficos configurables. La atribución a OpenStreetMap se mantiene visible en el mapa.

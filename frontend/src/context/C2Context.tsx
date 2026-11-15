@@ -11,6 +11,7 @@ import { useVault } from './VaultContext';
 import { c2Api, buildC2WsUrl, buildC2WsProtocols } from '../lib/c2Api';
 import { ApiError } from '../lib/apiErrors';
 import { createC2SessionGuard } from '../lib/c2SessionGuard';
+import { selectC2Interface } from '../lib/c2Interfaces';
 import { C2Lang, getStoredC2Lang, setStoredC2Lang, tC2 } from '../lib/c2I18n';
 import type {
   C2CameraDiscovered,
@@ -335,10 +336,7 @@ export const C2Provider: React.FC<{ children: React.ReactNode }> = ({ children }
       const list = data.interfaces || [];
       setInterfaces(list);
       setGateway(data.gateway || null);
-      setSelectedIface((prev) => {
-        if (prev && list.some((i) => i.name === prev)) return prev;
-        return list[0]?.name || '';
-      });
+      setSelectedIface((prev) => selectC2Interface(list, data.gateway, prev));
       if (data.gateway?.ip) {
         setArpGateway((prev) => prev || data.gateway!.ip);
       }

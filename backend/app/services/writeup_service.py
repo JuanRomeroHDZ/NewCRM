@@ -146,7 +146,25 @@ async def create_revision_snapshot(
     user_id: str | None,
     change_note: str | None = None,
 ) -> WriteupRevision | None:
-    content_hash = hashlib.sha256((markdown_text or "").encode("utf-8")).hexdigest()
+    await db.flush()
+    # Serialize revision numbering and snapshot creation across workers on PostgreSQL.
+    await db.execute(select(Writeup.id).where(Writeup.id == writeup.id).with_for_update())
+    boards = (await db.execute(select(WriteupBoard).where(WriteupBoard.writeup_id == writeup.id).order_by(WriteupBoard.id))).scalars().all()
+    citations = (await db.execute(select(WriteupCitation).where(WriteupCitation.writeup_id == writeup.id).order_by(WriteupCitation.id))).scalars().all()
+    assets = (await db.execute(select(WriteupAsset).where(WriteupAsset.writeup_id == writeup.id, WriteupAsset.is_deleted == False).order_by(WriteupAsset.id))).scalars().all()  # noqa: E712
+    snapshot = {
+        "version": 1,
+        "fields": {field: getattr(writeup, field) for field in (
+            "title", "status", "severity", "cvss_score", "cvss_vector", "cwe_id", "cve_id",
+            "target_scope", "tags_json", "prospect_id", "project_id", "engagement_id")},
+        "executive_summary": decrypt_note(writeup.encrypted_executive_summary),
+        "findings": _load_json_list(decrypt_note(writeup.encrypted_findings_json)),
+        "boards": [{k: v for k, v in serialize_board(board).items() if k not in ("created_at", "updated_at")} for board in boards],
+        "citations": [{k: v for k, v in serialize_citation(cit, markdown_text).items() if k not in ("created_at", "updated_at", "is_stale")} for cit in citations],
+        "assets": [{k: v for k, v in serialize_asset(asset).items() if k != "created_at"} for asset in assets],
+    }
+    snapshot_json = json.dumps(snapshot, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    content_hash = hashlib.sha256((markdown_text + "\0" + snapshot_json).encode("utf-8")).hexdigest()
     latest = (
         await db.execute(
             select(WriteupRevision)
@@ -164,6 +182,7 @@ async def create_revision_snapshot(
         change_note=change_note or f"Revisión #{next_num}",
         content_hash=content_hash,
         encrypted_markdown=encrypt_note(markdown_text),
+        encrypted_snapshot=encrypt_note(snapshot_json),
         created_by_id=user_id,
     )
     db.add(rev)
@@ -188,7 +207,7 @@ async def build_writeup_detail_dict(db: AsyncSession, writeup: Writeup) -> dict:
     ).scalars().all()
     assets = (
         await db.execute(
-            select(WriteupAsset).where(WriteupAsset.writeup_id == writeup.id).order_by(WriteupAsset.created_at)
+            select(WriteupAsset).where(WriteupAsset.writeup_id == writeup.id, WriteupAsset.is_deleted == False).order_by(WriteupAsset.created_at)  # noqa: E712
         )
     ).scalars().all()
     export_logs = (
@@ -252,7 +271,7 @@ async def build_export_context(
 ) -> ExportBundleContext:
     detail = await build_writeup_detail_dict(db, writeup)
     assets_rows = (
-        await db.execute(select(WriteupAsset).where(WriteupAsset.writeup_id == writeup.id))
+        await db.execute(select(WriteupAsset).where(WriteupAsset.writeup_id == writeup.id, WriteupAsset.is_deleted == False))  # noqa: E712
     ).scalars().all()
     assets_by_id = {
         a.id: {
@@ -304,7 +323,7 @@ async def build_export_context(
 
 async def count_related_entities(db: AsyncSession, writeup_id: str) -> tuple[int, int, int]:
     boards = (await db.execute(select(func.count(WriteupBoard.id)).where(WriteupBoard.writeup_id == writeup_id))).scalar_one()
-    assets = (await db.execute(select(func.count(WriteupAsset.id)).where(WriteupAsset.writeup_id == writeup_id))).scalar_one()
+    assets = (await db.execute(select(func.count(WriteupAsset.id)).where(WriteupAsset.writeup_id == writeup_id, WriteupAsset.is_deleted == False))).scalar_one()  # noqa: E712
     cits = (await db.execute(select(func.count(WriteupCitation.id)).where(WriteupCitation.writeup_id == writeup_id))).scalar_one()
     return int(boards), int(assets), int(cits)
 

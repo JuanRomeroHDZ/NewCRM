@@ -10,6 +10,7 @@ from pathlib import Path
 
 from app.config import settings
 from app.c2.core import fw
+from app.c2.core.system_tools import tool_environment
 
 STATE_FILE = Path(settings.C2_STATE_DIR) / "state.json"
 LEGACY_STATE_FILE = Path("/var/lib/netpwn/state.json")
@@ -39,7 +40,7 @@ def load() -> dict | None:
 
 
 def _run(cmd: list[str]) -> subprocess.CompletedProcess:
-    return subprocess.run(cmd, capture_output=True, text=True)
+    return subprocess.run(cmd, capture_output=True, text=True, env=tool_environment())
 
 
 def _read(path: str) -> str | None:

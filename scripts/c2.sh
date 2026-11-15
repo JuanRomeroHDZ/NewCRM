@@ -12,25 +12,32 @@ if (( EUID == 0 )) && [[ "$MODE" != _run_real ]]; then
 fi
 
 show_crm() {
-  local port
-  port="$(python3 - "$PROJECT_DIR" <<'PY'
+  local address
+  address="$(python3 - "$PROJECT_DIR" <<'PY'
 from pathlib import Path
+import ipaddress
 import sys
 root = Path(sys.argv[1])
+values = {}
 for name in ('.env.runtime', '.env'):
     path = root / name
     if path.exists():
         for line in path.read_text().splitlines():
             key, sep, value = line.partition('=')
-            if sep and key.strip() == 'HTTPS_PORT':
+            if sep and key.strip() in ('HTTPS_PORT', 'HOST_BIND_IP') and key.strip() not in values:
                 value = value.strip().strip("\"'")
-                if value.isdigit() and 1 <= int(value) <= 65535:
-                    print(value)
-                    raise SystemExit
-print('8443')
+                values[key.strip()] = value
+port = values.get('HTTPS_PORT', '8443')
+if not port.isdigit() or not 1 <= int(port) <= 65535:
+    port = '8443'
+try:
+    host = str(ipaddress.IPv4Address(values.get('HOST_BIND_IP', '127.0.0.1')))
+except ValueError:
+    host = '127.0.0.1'
+print(f'{host}:{port}')
 PY
 )"
-  printf '\nDirección del CRM (cuando esté encendido): https://localhost:%s\n' "$port"
+  printf '\nDirección del CRM (cuando esté encendido): https://%s\n' "$address"
 }
 
 if [[ "$MODE" == menu ]]; then

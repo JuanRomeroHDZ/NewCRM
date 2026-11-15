@@ -652,7 +652,7 @@ export const api = {
     }
   ) => request<WriteupDetail>(`/writeups/${writeupId}`, { method: 'PATCH', body: JSON.stringify(payload) }),
   deleteWriteup: (writeupId: string) => request<void>(`/writeups/${writeupId}`, { method: 'DELETE' }),
-  listWriteupRevisions: (writeupId: string) => request<WriteupRevision[]>(`/writeups/${writeupId}/revisions`),
+  listWriteupRevisions: (writeupId: string, offset = 0) => request<WriteupRevision[]>(`/writeups/${writeupId}/revisions?offset=${offset}&limit=40`),
   restoreWriteupRevision: (writeupId: string, revisionId: string) =>
     request<WriteupDetail>(`/writeups/${writeupId}/revisions/${revisionId}/restore`, { method: 'POST' }),
 

@@ -133,6 +133,8 @@ async def run_additive_schema_migrations(database_engine=None):
         "ALTER TABLE domain_renewals ADD COLUMN IF NOT EXISTS business_share_percent FLOAT DEFAULT 100.0",
         "ALTER TABLE domain_renewals ADD COLUMN IF NOT EXISTS client_charge_amount FLOAT DEFAULT 0.0",
         "ALTER TABLE domain_renewals ALTER COLUMN service_type TYPE VARCHAR(64)",
+        "ALTER TABLE writeup_revisions ADD COLUMN IF NOT EXISTS encrypted_snapshot TEXT",
+        "ALTER TABLE writeup_assets ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT FALSE NOT NULL",
     ]
     current_migration = "schema-change"
     try:

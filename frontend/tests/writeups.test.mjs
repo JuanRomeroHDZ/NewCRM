@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { build } from 'esbuild';
 import fs from 'node:fs';
 import path from 'node:path';
+import { Worker } from 'node:worker_threads';
 
 async function loadModule(entryPoint) {
   const compiled = await build({
@@ -197,5 +198,81 @@ test('Componentes de writeups están completamente libres de emojis Unicode', ()
   for (const file of files) {
     const content = fs.readFileSync(path.join(dir, file), 'utf8');
     assert.equal(emojiRegex.test(content), false, `Emoji inesperado detectado en ${file}`);
+  }
+});
+
+
+test('la comparación conserva todas las líneas y alinea inserciones y eliminaciones', () => {
+  const diff = pentestUtils.computeLineDiff('inicio\nse elimina\nfin', 'inicio\nse añade\nfin');
+  assert.deepEqual(diff, [
+    { kind: 'same', text: 'inicio' },
+    { kind: 'removed', text: 'se elimina' },
+    { kind: 'added', text: 'se añade' },
+    { kind: 'same', text: 'fin' },
+  ]);
+  const oldText = Array.from({ length: 1000 }, (_, i) => `antes ${i}`).join('\n');
+  const newText = Array.from({ length: 1000 }, (_, i) => `después ${i}`).join('\n');
+  const large = pentestUtils.computeLineDiff(oldText, newText);
+  assert.equal(large.filter(line => line.kind === 'removed').length, 1000);
+  assert.equal(large.filter(line => line.kind === 'added').length, 1000);
+});
+
+test('la comparación encuentra la secuencia común óptima incluso con líneas repetidas y cambios distantes', () => {
+  let seed = 12345;
+  const random = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed; };
+  for (let trial = 0; trial < 200; trial++) {
+    const a = Array.from({ length: 1 + random() % 12 }, () => String(random() % 5));
+    const b = Array.from({ length: 1 + random() % 12 }, () => String(random() % 5));
+    const diff = pentestUtils.computeLineDiff(a.join('\n'), b.join('\n'));
+    assert.deepEqual(diff.filter(line => line.kind !== 'added').map(line => line.text), a);
+    assert.deepEqual(diff.filter(line => line.kind !== 'removed').map(line => line.text), b);
+    const dp = Array.from({ length: a.length + 1 }, () => Array(b.length + 1).fill(0));
+    for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++) {
+      dp[i][j] = a[i - 1] === b[j - 1] ? dp[i - 1][j - 1] + 1 : Math.max(dp[i - 1][j], dp[i][j - 1]);
+    }
+    assert.equal(diff.filter(line => line.kind === 'same').length, dp[a.length][b.length]);
+  }
+  const original = ['encabezado', ...Array.from({ length: 3000 }, (_, i) => `línea ${i}`), 'final'];
+  const changed = ['encabezado', ...Array.from({ length: 100 }, (_, i) => `nueva ${i}`), ...original.slice(1)];
+  const diff = pentestUtils.computeLineDiff(original.join('\n'), changed.join('\n'));
+  assert.equal(diff.filter(line => line.kind === 'same').length, original.length);
+  assert.equal(diff.filter(line => line.kind === 'added').length, 100);
+});
+
+test('la comparación procesa informes grandes sin líneas comunes', () => {
+  const count = 50000;
+  const oldText = Array.from({ length: count }, (_, i) => `anterior ${i}`).join('\n');
+  const newText = Array.from({ length: count }, (_, i) => `nuevo ${i}`).join('\n');
+  const diff = pentestUtils.computeLineDiff(oldText, newText);
+  assert.equal(diff.length, 2 * count);
+  assert.equal(diff[0].kind, 'removed');
+  assert.equal(diff[count].kind, 'added');
+});
+
+test('el worker calcula la comparación fuera del hilo principal y conserva el resultado exacto', async () => {
+  const compiled = await build({
+    entryPoints: ['src/components/writeups/revisionDiff.worker.ts'],
+    bundle: true, format: 'iife', platform: 'browser', write: false,
+  });
+  const source = Buffer.from(compiled.outputFiles[0].contents).toString();
+  const worker = new Worker(`
+    const { parentPort } = require('node:worker_threads');
+    globalThis.self = { postMessage: value => parentPort.postMessage(value) };
+    ${source}
+    parentPort.on('message', data => self.onmessage({ data }));
+  `, { eval: true });
+  try {
+    const response = new Promise((resolve, reject) => {
+      worker.once('message', resolve);
+      worker.once('error', reject);
+    });
+    const oldText = Array.from({ length: 5000 }, (_, i) => `línea ${i}`).join('\n');
+    const newText = `inicio\n${oldText}\nfin`;
+    worker.postMessage({ oldText, newText });
+    const diff = await response;
+    assert.equal(diff.filter(line => line.kind === 'same').length, 5000);
+    assert.deepEqual(diff.filter(line => line.kind === 'added').map(line => line.text), ['inicio', 'fin']);
+  } finally {
+    await worker.terminate();
   }
 });

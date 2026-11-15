@@ -25,6 +25,10 @@
 @tailwind utilities;
 
 @layer base {
+  ::selection {
+    background-color: #d5bc8f;
+    color: #080a0a;
+  }
   * {
     border-color: #182226;
   }
@@ -219,12 +223,11 @@
   line-height: 1.7;
   max-width: 75ch;
   word-wrap: break-word;
-  selection-background: rgba(99, 102, 241, 0.35);
 }
 
 .writeup-prose ::selection {
-  background: rgba(99, 102, 241, 0.38);
-  color: #ffffff;
+  background: #d5bc8f;
+  color: #080a0a;
 }
 
 .writeup-prose > *:first-child {

@@ -6,7 +6,7 @@ from PIL import Image
 import pytest
 from sqlalchemy import func, select
 from app.models.core import User
-from app.models.writeups import Writeup, WriteupAsset
+from app.models.writeups import Writeup, WriteupAsset, WriteupRevision
 from app.security.crypto import BYTES_ENC_PREFIX, NOTE_ENC_PREFIX, hash_master_password
 from app.services.core_auth import create_user_session
 
@@ -181,6 +181,57 @@ async def test_writeups_crud_encryption_and_revisions(client, db_session, auth_t
     )
     assert restore_res.status_code == 200
     assert "SECRET_API_KEY_99" in restore_res.json()["markdown_content"]
+
+
+@pytest.mark.asyncio
+async def test_revision_restores_metadata_findings_boards_and_prior_state(client, db_session, auth_token):
+    headers = {"X-Vault-Token": auth_token}
+    created = (await client.post("/api/v1/writeups", headers=headers, json={"title": "Original", "markdown_content": "# Original", "severity": "alta"})).json()
+    wid = created["id"]
+    bid = created["boards"][0]["id"]
+    board = await client.patch(f"/api/v1/writeups/{wid}/boards/{bid}", headers=headers, json={"title": "Mapa original", "scene_json": '{"elements":[]}'})
+    assert board.status_code == 200
+    citation = await client.post(f"/api/v1/writeups/{wid}/citations", headers=headers, json={"board_id": bid, "anchor_id": "anchor-1", "quoted_text": "Original"})
+    assert citation.status_code == 201
+    upload = await client.post(f"/api/v1/writeups/{wid}/assets", headers=headers, files={"file": ("capture.jpg", _make_jpeg_with_exif(40, 40), "image/jpeg")})
+    assert upload.status_code == 201
+    aid = upload.json()["id"]
+    saved = await client.patch(f"/api/v1/writeups/{wid}", headers=headers, json={"title": "Versión completa", "severity": "critica", "findings": [{"id": "F1", "title": "Hallazgo secreto", "severity": "alta", "status": "abierta"}], "markdown_content": "# Primera", "save_revision": True})
+    assert saved.status_code == 200
+    revisions = (await client.get(f"/api/v1/writeups/{wid}/revisions", headers=headers)).json()
+    target = revisions[0]
+    stored = (await db_session.execute(select(WriteupRevision).where(WriteupRevision.id == target["id"]))).scalar_one()
+    assert stored.encrypted_snapshot.startswith(NOTE_ENC_PREFIX)
+    assert "Hallazgo secreto" not in stored.encrypted_snapshot
+    assert (await client.patch(f"/api/v1/writeups/{wid}/boards/{bid}", headers=headers, json={"title": "Mapa cambiado"})).status_code == 200
+    assert (await client.delete(f"/api/v1/writeups/{wid}/citations/{citation.json()['id']}", headers=headers)).status_code == 204
+    assert (await client.delete(f"/api/v1/writeups/{wid}/assets/{aid}", headers=headers)).status_code == 204
+    assert (await client.patch(f"/api/v1/writeups/{wid}", headers=headers, json={"title": "Cambio posterior", "markdown_content": "# Cambio"})).status_code == 200
+    restored = await client.post(f"/api/v1/writeups/{wid}/revisions/{target['id']}/restore", headers=headers)
+    assert restored.status_code == 200, restored.text
+    data = restored.json()
+    assert data["title"] == "Versión completa"
+    assert data["severity"] == "critica"
+    assert data["findings"][0]["title"] == "Hallazgo secreto"
+    assert data["boards"][0]["id"] == bid and data["boards"][0]["title"] == "Mapa original"
+    assert data["citations"][0]["id"] == citation.json()["id"]
+    assert data["citations"][0]["board_id"] == bid
+    assert data["assets"][0]["id"] == aid
+    assert (await client.get(f"/api/v1/writeups/{wid}/assets/{aid}", headers=headers)).status_code == 200
+    history = (await client.get(f"/api/v1/writeups/{wid}/revisions", headers=headers)).json()
+    prior = next(item for item in history if item["change_note"] == "Antes de restaurar")
+    assert prior["snapshot"]["fields"]["title"] == "Cambio posterior"
+    assert (await client.get(f"/api/v1/writeups/{wid}/revisions?limit=1&offset=1", headers=headers)).json()[0]["id"] == history[1]["id"]
+
+    # A legacy row only contains Markdown; restoring it must leave newer fields intact.
+    legacy = (await db_session.execute(select(WriteupRevision).where(WriteupRevision.id == target["id"]))).scalar_one()
+    legacy.encrypted_snapshot = None
+    await db_session.commit()
+    assert (await client.patch(f"/api/v1/writeups/{wid}", headers=headers, json={"title": "No reemplazar"})).status_code == 200
+    legacy_restore = await client.post(f"/api/v1/writeups/{wid}/revisions/{target['id']}/restore", headers=headers)
+    assert legacy_restore.status_code == 200
+    assert legacy_restore.json()["title"] == "No reemplazar"
+    assert legacy_restore.json()["markdown_content"] == "# Primera"
 
 
 @pytest.mark.asyncio

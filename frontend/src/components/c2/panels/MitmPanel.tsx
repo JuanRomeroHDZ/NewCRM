@@ -163,7 +163,7 @@ export const MitmPanel: React.FC = () => {
           <button
             type="button"
             onClick={() => void handleStop()}
-            disabled={busy || !running}
+            disabled={busy}
             className="inline-flex min-h-[44px] items-center gap-2 rounded-lg border border-red-500/40 bg-obsidian-dangerBg px-4 py-2 text-xs font-semibold text-red-200 transition-colors hover:border-red-400 hover:text-white disabled:cursor-not-allowed disabled:opacity-45 focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-gold"
           >
             {busy && running ? (

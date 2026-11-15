@@ -174,6 +174,7 @@ class WriteupRevisionOut(BaseModel):
     change_note: str | None = None
     content_hash: str
     markdown_content: str
+    snapshot: dict | None = None
     created_at: datetime
 
 

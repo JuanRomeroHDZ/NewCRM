@@ -28,6 +28,8 @@ Si los datos cifrados se escribieron con una clave anterior, agrégala a `LEGACY
 
 `./lessso` genera automáticamente una CA privada y el certificado del servidor dentro de `nginx/certs/local/`. Copia únicamente `ca.crt` a los dispositivos cliente e instálalo como autoridad de confianza. Nunca compartas `ca.key` ni `server.key`. Los certificados se vuelven a generar en el servidor y no se incluyen en la imagen ni en Git.
 
+Para publicar en una red privada, selecciona **Administrar servicios → Elegir acceso local o de red e iniciar CRM** e introduce una de las IPv4 privadas asignadas al servidor. El programa guarda la dirección en `.env.runtime`, incorpora esa IP al certificado del servidor usando la CA existente y muestra la URL para los clientes. Instala `ca.crt` en cada cliente. Si la IP cambia, repite la selección; para cerrar el acceso por red, selecciona `127.0.0.1`. La dirección elegida reemplaza el enlace local: utiliza la URL mostrada también en el servidor. La interfaz solo admite direcciones privadas concretas o `127.0.0.1`, no `0.0.0.0`.
+
 Si cambia `SERVER_NAME`, vuelve a generar el certificado del servidor y asegúrate de que el nombre resuelva al equipo dentro de la red local.
 
 ## Datos y respaldos

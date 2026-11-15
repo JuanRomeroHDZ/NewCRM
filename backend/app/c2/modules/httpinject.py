@@ -54,6 +54,7 @@ class HttpInjector:
         self.port = port
         self._server: asyncio.base_events.Server | None = None
         self._task: asyncio.Task | None = None
+        self._loop: asyncio.AbstractEventLoop | None = None
         self.hits = 0
 
     # ----------------------------------------------------------------- utilidades
@@ -153,13 +154,13 @@ class HttpInjector:
                     pass
 
     async def _serve(self):
-        self._server = await asyncio.start_server(self._handle, "0.0.0.0", self.port)
-        _iptables_add(self.port)
-        bus.emit({"type": "inject", "msg": f"Proxy HTTP MITM activo en :{self.port} "
-                  f"(sslstrip={'si' if self.sslstrip else 'no'})"})
         try:
             async with self._server:
                 await self._server.serve_forever()
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            bus.emit({"type": "error", "msg": f"Proxy HTTP MITM interrumpido: {e}"})
         finally:
             # Si el servidor muere inesperadamente, quitamos el redirect para no
             # dejar a las victimas mandando trafico a un puerto muerto.
@@ -169,11 +170,42 @@ class HttpInjector:
                 pass
 
     # ----------------------------------------------------------------- ciclo de vida
-    def start(self, loop: asyncio.AbstractEventLoop):
-        self._task = loop.create_task(self._serve())
+    @property
+    def running(self) -> bool:
+        return self._server is not None and self._server.is_serving() and self._task is not None and not self._task.done()
+
+    async def start(self):
+        self._loop = asyncio.get_running_loop()
+        self._server = await asyncio.start_server(self._handle, "0.0.0.0", self.port)
+        try:
+            _iptables_add(self.port)
+        except Exception:
+            self._server.close()
+            await self._server.wait_closed()
+            self._server = None
+            raise
+        self._task = self._loop.create_task(self._serve())
+        bus.emit({"type": "inject", "msg": f"Proxy HTTP MITM activo en :{self.port} "
+                  f"(sslstrip={'si' if self.sslstrip else 'no'})"})
 
     def stop(self):
         _iptables_del()
-        if self._server:
-            self._server.close()
+        def close():
+            if self._server:
+                self._server.close()
+            if self._task and not self._task.done():
+                self._task.cancel()
+        if self._loop and self._loop.is_running():
+            self._loop.call_soon_threadsafe(close)
+        else:
+            close()
         bus.emit({"type": "inject", "msg": "Proxy HTTP MITM detenido"})
+
+    async def wait_stopped(self):
+        if self._task:
+            try:
+                await self._task
+            except asyncio.CancelledError:
+                pass
+        if self._server:
+            await self._server.wait_closed()

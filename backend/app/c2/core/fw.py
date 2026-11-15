@@ -8,6 +8,7 @@ import re
 import subprocess
 
 from app.c2.core.bus import bus
+from app.c2.core.system_tools import tool_environment
 
 TAG = "lessso"
 _LEGACY_TAG = "netpwn"
@@ -24,7 +25,7 @@ _TABLES = ("nat", "mangle", "filter")
 
 def _run(binary: str, args: list[str]) -> subprocess.CompletedProcess:
     try:
-        return subprocess.run([binary, *args], capture_output=True, text=True, timeout=5)
+        return subprocess.run([binary, *args], capture_output=True, text=True, timeout=5, env=tool_environment())
     except (FileNotFoundError, PermissionError):
         # iptables/ip6tables no existen (p.ej. Windows/macOS o modo demo):
         # fingir "command not found" para que la limpieza siga su curso.
@@ -39,8 +40,9 @@ def add_redirect(to_port: int, dport: int = 80, table: str = "nat",
             "-m", "comment", "--comment", TAG]
     proc = _run(_BIN[family], args)
     if proc.returncode != 0:
-        bus.emit({"type": "error",
-                  "msg": f"{_BIN[family]} fallo: {(proc.stderr or '').strip()}"})
+        message = f"{_BIN[family]} falló: {(proc.stderr or '').strip() or 'no se pudo instalar la regla'}"
+        bus.emit({"type": "error", "msg": message})
+        raise RuntimeError(message)
 
 
 def _tagged_rules(family: str) -> list[tuple[str, str]]:

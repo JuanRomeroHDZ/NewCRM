@@ -16,8 +16,25 @@ if [[ ! "$SERVER_NAME" =~ ^[A-Za-z0-9.-]+$ ]]; then
     echo "SERVER_NAME debe contener solo letras, números, puntos y guiones." >&2
     exit 1
 fi
+HOST_BIND_IP="${HOST_BIND_IP:-127.0.0.1}"
+python3 - "$HOST_BIND_IP" <<'PY'
+import ipaddress, sys
+try:
+    address = ipaddress.IPv4Address(sys.argv[1])
+    private_networks = [ipaddress.IPv4Network(net) for net in ('10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16')]
+    if address != ipaddress.IPv4Address('127.0.0.1') and not any(address in network for network in private_networks):
+        raise ValueError('se requiere 127.0.0.1 o una dirección IPv4 privada')
+except ValueError as exc:
+    raise SystemExit(f'Dirección de certificado no válida: {exc}')
+PY
 
 echo "Generando Autoridad Certificadora Privada en: $CERTS_DIR"
+
+# Nunca sustituir una CA incompleta: los clientes pueden confiar en ella.
+if [[ -f "$CERTS_DIR/ca.key" && ! -f "$CERTS_DIR/ca.crt" ]] || [[ ! -f "$CERTS_DIR/ca.key" && -f "$CERTS_DIR/ca.crt" ]]; then
+    echo 'Falta la clave o el certificado de la CA existente. Recupera el archivo faltante antes de continuar.' >&2
+    exit 1
+fi
 
 # 1. Generar clave privada de la CA
 if [ ! -f "$CERTS_DIR/ca.key" ]; then
@@ -36,8 +53,13 @@ if [ ! -f "$CERTS_DIR/server.key" ]; then
     openssl genrsa -out "$CERTS_DIR/server.key" 2048
 fi
 
+# Generar los archivos temporales junto al certificado para no dejarlo incompleto
+# si falla la firma. La clave y la CA existentes se conservan.
+TEMP_DIR="$(mktemp -d "$CERTS_DIR/.server.XXXXXX")"
+trap 'rm -rf "$TEMP_DIR"' EXIT
+
 # 4. Crear archivo de configuración SAN (Subject Alternative Names)
-cat > "$CERTS_DIR/server.ext" <<EOF
+cat > "$TEMP_DIR/server.ext" <<EOF
 authorityKeyIdentifier=keyid,issuer
 basicConstraints=CA:FALSE
 keyUsage = digitalSignature, nonRepudiation, keyEncipherment, dataEncipherment
@@ -48,20 +70,20 @@ DNS.1 = ${SERVER_NAME}
 DNS.2 = ${SERVER_NAME}.local
 DNS.3 = localhost
 IP.1 = 127.0.0.1
+IP.2 = ${HOST_BIND_IP}
 EOF
 
 # 5. Generar CSR del servidor
-openssl req -new -key "$CERTS_DIR/server.key" -out "$CERTS_DIR/server.csr" \
+openssl req -new -key "$CERTS_DIR/server.key" -out "$TEMP_DIR/server.csr" \
     -subj "/C=MX/ST=Baja California/L=Tijuana/O=LESSSO/OU=Produccion Local/CN=${SERVER_NAME}"
 
 # 6. Firmar el certificado del servidor con la CA privada (válido por 2 años)
-openssl x509 -req -in "$CERTS_DIR/server.csr" -CA "$CERTS_DIR/ca.crt" -CAkey "$CERTS_DIR/ca.key" \
-    -CAcreateserial -out "$CERTS_DIR/server.crt" -days 730 -sha256 \
-    -extfile "$CERTS_DIR/server.ext"
-
-rm -f "$CERTS_DIR/server.csr" "$CERTS_DIR/server.ext"
+openssl x509 -req -in "$TEMP_DIR/server.csr" -CA "$CERTS_DIR/ca.crt" -CAkey "$CERTS_DIR/ca.key" \
+    -CAcreateserial -out "$TEMP_DIR/server.crt" -days 730 -sha256 \
+    -extfile "$TEMP_DIR/server.ext"
+mv "$TEMP_DIR/server.crt" "$CERTS_DIR/server.crt"
 
 chmod 600 "$CERTS_DIR"/*.key
 chmod 644 "$CERTS_DIR"/*.crt
 
-echo "Certificados locales generados exitosamente para $SERVER_NAME y localhost."
+echo "Certificado local generado para $SERVER_NAME, localhost y $HOST_BIND_IP."

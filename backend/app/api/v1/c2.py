@@ -7,6 +7,7 @@ bóveda en `?token=<vault_token>` (o cabecera `x-vault-token`) mediante
 código 4401 cuando es inválido o la bóveda está bloqueada.
 """
 import asyncio
+import ipaddress
 import json
 import time
 from pathlib import Path
@@ -43,6 +44,7 @@ from app.security.tokens import require_vault_unlocked, verify_vault_token
 
 router = APIRouter(prefix="/c2", tags=["c2"])
 http_router = APIRouter(dependencies=[Depends(require_vault_unlocked)])
+_httpinject_lock = asyncio.Lock()
 
 
 def _require_real_mode() -> None:
@@ -136,7 +138,7 @@ class TopologyReq(BaseModel):
 class HttpInjectReq(BaseModel):
     inject: str = ""
     sslstrip: bool = True
-    port: int = 8080
+    port: int = Field(default=8080, ge=1, le=65535)
 
 
 class WifiScanReq(BaseModel):
@@ -173,8 +175,8 @@ class PoisonReq(BaseModel):
 
 class WpadReq(BaseModel):
     interface: str
-    pac_port: int = 80
-    proxy_port: int = 3128
+    pac_port: int = Field(default=80, ge=1, le=65535)
+    proxy_port: int = Field(default=3128, ge=1, le=65535)
 
 
 class Mitm6Req(BaseModel):
@@ -182,7 +184,7 @@ class Mitm6Req(BaseModel):
     interval: float = 10.0
     jitter: float = 2.0
     mapping: dict[str, str] = {}
-    redirect_http_port: int | None = None
+    redirect_http_port: int | None = Field(default=None, ge=1, le=65535)
 
 
 class HandshakeReq(BaseModel):
@@ -205,6 +207,21 @@ class ArpReq(BaseModel):
     interface: str
     target_ip: str
     gateway_ip: str
+
+    @field_validator("target_ip", "gateway_ip")
+    @classmethod
+    def validate_ipv4(cls, value):
+        try:
+            return str(ipaddress.IPv4Address(value.strip()))
+        except ValueError:
+            raise ValueError("Introduce una dirección IPv4 válida.")
+
+    @field_validator("interface")
+    @classmethod
+    def validate_interface(cls, value):
+        if not value.strip():
+            raise ValueError("Selecciona una interfaz de red.")
+        return value.strip()
 
 
 class SniffReq(BaseModel):
@@ -371,20 +388,27 @@ async def api_topology(req: TopologyReq):
 # --------------------------------------------------------------------------- #
 @http_router.post("/arp/start", dependencies=[Depends(_require_real_mode)])
 def api_arp_start(req: ArpReq):
+    if req.target_ip == req.gateway_ip:
+        raise HTTPException(status_code=400, detail="El objetivo y el gateway deben ser distintos.")
     spoofer = ArpSpoofer(req.target_ip, req.gateway_ip, req.interface)
     with manager.lock:
         if manager.arp:
             manager.arp.stop()
-        spoofer.start()
+            manager.arp = None
+        try:
+            spoofer.start()
+        except (RuntimeError, OSError) as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
         manager.arp = spoofer
     return {"status": "started"}
 
 
 @http_router.post("/arp/stop", dependencies=[Depends(_require_real_mode)])
 def api_arp_stop():
-    if manager.arp:
-        manager.arp.stop()
-        manager.arp = None
+    with manager.lock:
+        if manager.arp:
+            manager.arp.stop()
+            manager.arp = None
     return {"status": "stopped"}
 
 
@@ -477,20 +501,27 @@ def api_creds_clear():
 # --------------------------------------------------------------------------- #
 @http_router.post("/httpinject/start", dependencies=[Depends(_require_real_mode)])
 async def api_httpinject_start(req: HttpInjectReq):
-    injector = HttpInjector(req.inject, req.sslstrip, req.port)
-    with manager.lock:
+    async with _httpinject_lock:
         if manager.httpinject:
             manager.httpinject.stop()
-        injector.start(asyncio.get_running_loop())
+            await manager.httpinject.wait_stopped()
+            manager.httpinject = None
+        injector = HttpInjector(req.inject, req.sslstrip, req.port)
+        try:
+            await injector.start()
+        except (RuntimeError, OSError) as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
         manager.httpinject = injector
     return {"status": "started"}
 
 
 @http_router.post("/httpinject/stop", dependencies=[Depends(_require_real_mode)])
-def api_httpinject_stop():
-    if manager.httpinject:
-        manager.httpinject.stop()
-        manager.httpinject = None
+async def api_httpinject_stop():
+    async with _httpinject_lock:
+        if manager.httpinject:
+            manager.httpinject.stop()
+            await manager.httpinject.wait_stopped()
+            manager.httpinject = None
     return {"status": "stopped"}
 
 
@@ -693,6 +724,8 @@ def api_pmkid_stop():
 
 @http_router.get("/wifi/captures")
 def api_wifi_captures():
+    if demo.is_demo():
+        return {"captures": []}
     return {"captures": wifi.list_captures()}
 
 
@@ -774,25 +807,32 @@ def api_wpad_stop():
 # --------------------------------------------------------------------------- #
 @http_router.post("/mitm6/start", dependencies=[Depends(_require_real_mode)])
 def api_mitm6_start(req: Mitm6Req):
-    if manager.mitm6:
-        manager.mitm6.stop()
     try:
         attacker = Mitm6(req.interface, req.interval, req.jitter, req.mapping, req.redirect_http_port)
-    except RuntimeError as e:
+    except (RuntimeError, ValueError, OSError) as e:
         raise HTTPException(status_code=400, detail=str(e))
     with manager.lock:
         if manager.mitm6:
             manager.mitm6.stop()
-        attacker.start()
+            manager.mitm6 = None
+        try:
+            attacker.start()
+        except (RuntimeError, ValueError, OSError) as e:
+            try:
+                attacker.stop()
+            except Exception as cleanup_error:
+                bus.emit({"type": "error", "msg": f"No se pudo limpiar MITM6: {cleanup_error}"})
+            raise HTTPException(status_code=400, detail=str(e)) from e
         manager.mitm6 = attacker
     return {"status": "started"}
 
 
 @http_router.post("/mitm6/stop", dependencies=[Depends(_require_real_mode)])
 def api_mitm6_stop():
-    if manager.mitm6:
-        manager.mitm6.stop()
-        manager.mitm6 = None
+    with manager.lock:
+        if manager.mitm6:
+            manager.mitm6.stop()
+            manager.mitm6 = None
     return {"status": "stopped"}
 
 
@@ -887,12 +927,12 @@ def api_panic():
 
 @http_router.get("/cleanup")
 def api_cleanup_status():
-    return {"tagged_rules": fw.peek()}
+    return {"tagged_rules": 0 if demo.is_demo() else fw.peek()}
 
 
 @http_router.post("/cleanup")
 def api_cleanup_run():
-    return {"removed": fw.cleanup_all()}
+    return {"removed": 0 if demo.is_demo() else fw.cleanup_all()}
 
 
 @http_router.get("/envcheck")

@@ -3,6 +3,7 @@ import os
 import subprocess
 
 from app.c2.core import fw
+from app.c2.core.system_tools import tool_environment
 
 # Procesos que suelen indicar monitorizacion/deteccion en la red o el host.
 _DETECTORS = ("arpwatch", "zeek", "suricata", "snort", "ossec", "p0f", "bro")
@@ -10,7 +11,7 @@ _DETECTORS = ("arpwatch", "zeek", "suricata", "snort", "ossec", "p0f", "bro")
 
 def _proc_names() -> str:
     try:
-        out = subprocess.run(["ps", "-eo", "comm"], capture_output=True, text=True)
+        out = subprocess.run(["ps", "-eo", "comm"], capture_output=True, text=True, env=tool_environment())
         return (out.stdout or "").lower()
     except Exception:
         return ""

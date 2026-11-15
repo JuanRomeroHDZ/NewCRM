@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   BarChart3,
@@ -32,10 +32,12 @@ import { useVault } from '../../context/VaultContext';
 import { useC2 } from '../../context/C2Context';
 import { EmptyState } from '../common/EmptyState';
 import { api } from '../../lib/api';
+import { formatApiDateTime } from '../../lib/dates';
 import {
   InternalProject,
   Prospect,
   WriteupAsset,
+  WriteupBoard,
   WriteupCitation,
   WriteupDetail,
   WriteupExportFormat,
@@ -48,9 +50,10 @@ import {
 import { PentestWhiteboard } from './PentestWhiteboard';
 import { WriteupExportModal } from './WriteupExportModal';
 import { WriteupMarkdownSplitEditor } from './WriteupMarkdownSplitEditor';
+import { MarkdownRichPreview } from './MarkdownRichPreview';
 import {
   calculateCvss31,
-  computeLineDiff,
+  type DiffLine,
   Cvss31Metrics,
   DEFAULT_CVSS31_METRICS,
   parseCvss31Vector,
@@ -122,12 +125,54 @@ export const WriteupsView: React.FC = () => {
   const [convertingAssetId, setConvertingAssetId] = useState<string | null>(null);
   const [convertUploadToGif, setConvertUploadToGif] = useState(true);
   const [dirty, setDirty] = useState(false);
+  const [saveError, setSaveError] = useState('');
+  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
+  const [editVersion, setEditVersion] = useState(0);
+  const draftVersion = useRef(0);
+  const saveInFlight = useRef(false);
+  const lastAutoRevision = useRef(0);
+  const autoSaveRef = useRef<() => void>(() => {});
+  const markDirty = () => { draftVersion.current += 1; setEditVersion(draftVersion.current); setDirty(true); };
   const [showExportModal, setShowExportModal] = useState(false);
   const [lightboxAsset, setLightboxAsset] = useState<WriteupAsset | null>(null);
   const [diffRevision, setDiffRevision] = useState<WriteupRevision | null>(null);
+  const [revisionView, setRevisionView] = useState<'diff' | 'preview'>('diff');
   const [findingCvssEditorIdx, setFindingCvssEditorIdx] = useState<number | null>(null);
   const [findingCvssMetrics, setFindingCvssMetrics] = useState<Cvss31Metrics>(DEFAULT_CVSS31_METRICS);
   const [revisions, setRevisions] = useState<WriteupRevision[]>([]);
+  const [revisionLoading, setRevisionLoading] = useState(false);
+  const [revisionEnd, setRevisionEnd] = useState(false);
+  const [diffPage, setDiffPage] = useState(0);
+  useEffect(() => { setDiffPage(0); }, [diffRevision?.id]);
+  useEffect(() => { setRevisionEnd(false); }, [selectedId]);
+  const loadMoreRevisions = async () => {
+    if (!detail || revisionLoading) return;
+    const id = detail.id;
+    setRevisionLoading(true);
+    try {
+      const more = await api.listWriteupRevisions(id, revisions.length);
+      if (selectedIdRef.current === id) {
+        setRevisions(previous => [...previous, ...more.filter(item => !previous.some(existing => existing.id === item.id))]);
+        setRevisionEnd(more.length < 40);
+      }
+    } catch (err) { showToast(err instanceof Error ? err.message : 'No se pudo cargar el historial', 'error'); }
+    finally { setRevisionLoading(false); }
+  };
+  const openRevisionHistory = async () => {
+    if (!detail || revisionLoading) return;
+    const id = detail.id;
+    setRevisionLoading(true);
+    try {
+      const latest = await api.listWriteupRevisions(id);
+      if (selectedIdRef.current === id) {
+        setRevisions(latest);
+        setRevisionEnd(false);
+        if (latest.length) { setRevisionView('diff'); setDiffRevision(latest[0]); }
+        else showToast('Todavía no hay versiones para este informe.', 'info');
+      }
+    } catch (err) { showToast(err instanceof Error ? err.message : 'No se pudo cargar el historial', 'error'); }
+    finally { setRevisionLoading(false); }
+  };
   const [prospects, setProspects] = useState<Prospect[]>([]);
   const [projects, setProjects] = useState<InternalProject[]>([]);
   const [assetUrls, setAssetUrls] = useState<Record<string, string>>({});
@@ -174,9 +219,62 @@ export const WriteupsView: React.FC = () => {
   const [targetScope, setTargetScope] = useState('');
   const [execSummary, setExecSummary] = useState('');
   const [markdown, setMarkdown] = useState('');
+  const [revisionDiff, setRevisionDiff] = useState<DiffLine[]>([]);
+  const [diffLoading, setDiffLoading] = useState(false);
+  const [diffError, setDiffError] = useState('');
+  const [diffAttempt, setDiffAttempt] = useState(0);
+  useEffect(() => {
+    if (!diffRevision || revisionView !== 'diff') {
+      setRevisionDiff([]);
+      setDiffLoading(false);
+      setDiffError('');
+      return;
+    }
+    setRevisionDiff([]);
+    setDiffPage(0);
+    setDiffLoading(true);
+    setDiffError('');
+    let worker: Worker | undefined;
+    try {
+      worker = new Worker(new URL('./revisionDiff.worker.ts', import.meta.url), { type: 'module' });
+      const activeWorker = worker;
+      worker.onmessage = (event: MessageEvent<DiffLine[]>) => {
+        setRevisionDiff(event.data);
+        setDiffLoading(false);
+        activeWorker.terminate();
+      };
+      worker.onerror = () => {
+        setDiffLoading(false);
+        setDiffError('No se pudo calcular la comparación. Inténtalo de nuevo.');
+        activeWorker.terminate();
+      };
+      worker.postMessage({ oldText: diffRevision.markdown_content, newText: markdown });
+    } catch {
+      worker?.terminate();
+      setDiffLoading(false);
+      setDiffError('No se pudo iniciar la comparación. Inténtalo de nuevo.');
+      return;
+    }
+    return () => {
+      if (worker) { worker.onmessage = null; worker.onerror = null; worker.terminate(); }
+    };
+  }, [diffRevision, markdown, revisionView, diffAttempt]);
   const [findings, setFindings] = useState<WriteupStructuredFinding[]>([]);
   const [prospectId, setProspectId] = useState('');
   const [projectId, setProjectId] = useState('');
+  const changedRevisionSections = useMemo(() => {
+    const snapshot = diffRevision?.snapshot;
+    if (!snapshot || !detail) return [];
+    const fields = snapshot.fields;
+    const metadataChanged = fields.title !== title || fields.status !== statusVal || fields.severity !== severity ||
+      (fields.cvss_score ?? '') !== (cvssScore === '' ? '' : Number(cvssScore)) || (fields.cvss_vector ?? '') !== cvssVector ||
+      (fields.cwe_id ?? '') !== cweId || (fields.cve_id ?? '') !== cveId || (fields.target_scope ?? '') !== targetScope ||
+      (fields.prospect_id ?? '') !== prospectId || (fields.project_id ?? '') !== projectId || (snapshot.executive_summary ?? '') !== execSummary;
+    const boardContent = (boards: WriteupBoard[]) => boards.map(({ id, title: boardTitle, scene_json, svg_snapshot, element_count }) => ({ id, title: boardTitle, scene_json, svg_snapshot, element_count })).sort((a, b) => a.id.localeCompare(b.id));
+    const assetIds = (assets: WriteupAsset[]) => assets.map(asset => asset.id).sort();
+    const citationContent = (citations: WriteupCitation[]) => citations.map(({ id, board_id, anchor_id, board_element_id, heading_path, line_start, line_end, quoted_text, color, note }) => ({ id, board_id, anchor_id, board_element_id, heading_path, line_start, line_end, quoted_text, color, note })).sort((a, b) => a.id.localeCompare(b.id));
+    return [metadataChanged && 'Datos del informe', JSON.stringify(snapshot.findings) !== JSON.stringify(findings) && 'Hallazgos', JSON.stringify(boardContent(snapshot.boards)) !== JSON.stringify(boardContent(detail.boards)) && 'Pizarras', JSON.stringify(citationContent(snapshot.citations)) !== JSON.stringify(citationContent(detail.citations)) && 'Citas', snapshot.assets && JSON.stringify(assetIds(snapshot.assets)) !== JSON.stringify(assetIds(detail.assets)) && 'Evidencias'].filter(Boolean) as string[];
+  }, [diffRevision, detail, title, statusVal, severity, cvssScore, cvssVector, cweId, cveId, targetScope, prospectId, projectId, execSummary, findings]);
 
   useEffect(() => {
     return () => {
@@ -287,6 +385,12 @@ export const WriteupsView: React.FC = () => {
     });
   }, [isUnlocked]);
 
+  useEffect(() => {
+    if (detail && diffRevision?.snapshot?.assets) {
+      void preloadAssetUrls({ ...detail, assets: diffRevision.snapshot.assets }, detailRequestVersion.current);
+    }
+  }, [detail, diffRevision, preloadAssetUrls]);
+
   const loadList = useCallback(async () => {
     if (!isUnlocked) return;
     const version = ++listRequestVersion.current;
@@ -360,6 +464,9 @@ export const WriteupsView: React.FC = () => {
   const loadDetail = useCallback(async (id: string) => {
     if (!isUnlocked) return;
     const version = ++detailRequestVersion.current;
+    lastAutoRevision.current = 0;
+    setLastSavedAt(null);
+    setSaveError('');
     setLoadingDetail(true);
     setDetailError('');
     try {
@@ -370,6 +477,7 @@ export const WriteupsView: React.FC = () => {
         const revs = await api.listWriteupRevisions(id);
         if (version !== detailRequestVersion.current) return;
         setRevisions(revs);
+        setRevisionEnd(false);
       } catch {
         if (version === detailRequestVersion.current) setRevisions([]);
       }
@@ -621,25 +729,30 @@ export const WriteupsView: React.FC = () => {
     }
   };
 
-  const handleSaveWriteup = async (saveRevision = false, markdownOverride?: string) => {
-    if (!detail) return false;
+  const handleSaveWriteup = async (saveRevision = false, markdownOverride?: string, automatic = false) => {
+    if (!detail || saveInFlight.current) return false;
+    const savedVersion = draftVersion.current;
+    const reportValidationError = (message: string) => {
+      setSaveError(message);
+      if (!automatic) showToast(message, 'warning');
+    };
     const cleanTitle = title.trim();
     if (cleanTitle.length < 2) {
-      showToast('El título debe tener al menos 2 caracteres.', 'warning');
+      reportValidationError('El título debe tener al menos 2 caracteres.');
       return false;
     }
     if (cleanTitle.length > MAX_REPORT_TITLE_LENGTH) {
-      showToast(`El título no puede superar ${MAX_REPORT_TITLE_LENGTH} caracteres.`, 'warning');
+      reportValidationError(`El título no puede superar ${MAX_REPORT_TITLE_LENGTH} caracteres.`);
       return false;
     }
 
     const parsedCvss = cvssScore.trim() ? Number(cvssScore) : null;
     if (parsedCvss !== null && (!Number.isFinite(parsedCvss) || parsedCvss < 0 || parsedCvss > 10)) {
-      showToast('El puntaje CVSS debe estar entre 0 y 10.', 'warning');
+      reportValidationError('El puntaje CVSS debe estar entre 0 y 10.');
       return false;
     }
     if (findings.length > MAX_FINDINGS_COUNT) {
-      showToast(`Un informe puede tener hasta ${MAX_FINDINGS_COUNT} hallazgos.`, 'warning');
+      reportValidationError(`Un informe puede tener hasta ${MAX_FINDINGS_COUNT} hallazgos.`);
       return false;
     }
     if (
@@ -652,7 +765,7 @@ export const WriteupsView: React.FC = () => {
         (finding.cve_id || '').length > 64 || (finding.affected_target || '').length > 255
       )
     ) {
-      showToast('Uno o más campos superan el límite permitido. Acorta el texto antes de guardar.', 'warning');
+      reportValidationError('Uno o más campos superan el límite permitido. Acorta el texto antes de guardar.');
       return false;
     }
     const invalidFinding = findings.find((finding) =>
@@ -660,10 +773,12 @@ export const WriteupsView: React.FC = () => {
       (finding.cvss_score != null && (!Number.isFinite(finding.cvss_score) || finding.cvss_score < 0 || finding.cvss_score > 10))
     );
     if (invalidFinding) {
-      showToast('Revisa el identificador, el título y el puntaje de cada hallazgo.', 'warning');
+      reportValidationError('Revisa el identificador, el título y el puntaje de cada hallazgo.');
       return false;
     }
+    saveInFlight.current = true;
     setSaving(true);
+    setSaveError('');
     try {
       const updated = await api.updateWriteup(detail.id, {
         title: cleanTitle,
@@ -680,26 +795,65 @@ export const WriteupsView: React.FC = () => {
         prospect_id: prospectId || null,
         project_id: projectId || null,
         save_revision: saveRevision,
-        revision_note: saveRevision ? 'Instantánea manual del editor' : undefined,
+        revision_note: saveRevision ? (automatic ? 'Guardado automático' : 'Instantánea manual del editor') : undefined,
       });
-      hydrateDraft(updated);
+      // Keep edits made while the request was in flight.
+      if (selectedIdRef.current === detail.id) {
+        if (draftVersion.current === savedVersion) hydrateDraft(updated);
+        else setDetail(updated);
+        setLastSavedAt(new Date());
+      }
       if (saveRevision) {
+        if (automatic) lastAutoRevision.current = Date.now();
         try {
-          setRevisions(await api.listWriteupRevisions(detail.id));
+          const refreshedRevisions = await api.listWriteupRevisions(detail.id);
+          if (selectedIdRef.current === detail.id) { setRevisions(refreshedRevisions); setRevisionEnd(false); }
         } catch {
-          showToast('El informe se guardó, pero no se pudo actualizar la lista de revisiones.', 'warning');
+          if (selectedIdRef.current === detail.id) showToast('El informe se guardó, pero no se pudo actualizar la lista de revisiones.', 'warning');
         }
       }
-      await loadList();
-      showToast(saveRevision ? 'Informe guardado con una revisión' : 'Cambios del informe guardados', 'success');
+      if (!automatic) {
+        await loadList();
+        showToast(saveRevision ? 'Informe guardado con una revisión' : 'Cambios del informe guardados', 'success');
+      }
       return true;
     } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Error al guardar el informe', 'error');
+      const message = err instanceof Error ? err.message : 'Error al guardar el informe';
+      if (selectedIdRef.current === detail.id) {
+        setSaveError(message);
+        if (!automatic) showToast(message, 'error');
+      }
       return false;
     } finally {
+      saveInFlight.current = false;
       setSaving(false);
     }
   };
+
+  autoSaveRef.current = () => {
+    if (dirty && !saveInFlight.current) {
+      void handleSaveWriteup(Date.now() - lastAutoRevision.current >= 60_000, undefined, true);
+    }
+  };
+
+  useEffect(() => {
+    if (!dirty || !detail || !isUnlocked) return;
+    const delay = window.setTimeout(() => autoSaveRef.current(), 2500);
+    return () => window.clearTimeout(delay);
+  }, [dirty, detail?.id, isUnlocked, editVersion]);
+
+  useEffect(() => {
+    if (!dirty || !detail || !isUnlocked) return;
+    const interval = window.setInterval(() => autoSaveRef.current(), 10_000);
+    return () => window.clearInterval(interval);
+  }, [dirty, detail?.id, isUnlocked]);
+
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ''; };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [dirty]);
 
   const handleDeleteWriteup = async () => {
     if (!detail) return;
@@ -846,6 +1000,10 @@ export const WriteupsView: React.FC = () => {
   };
 
   const handleRestoreRevision = async (rev: WriteupRevision, closeDiffModal = false) => {
+    if (saveInFlight.current) {
+      showToast('Espera a que termine el guardado antes de restaurar.', 'warning');
+      return;
+    }
     if (!detail) return;
     const confirmed = await confirm({
       title: `Restaurar revisión v${rev.revision_number}`,
@@ -854,16 +1012,29 @@ export const WriteupsView: React.FC = () => {
       tone: 'warning',
     });
     if (!confirmed) return;
+    if (saveInFlight.current) {
+      showToast('Espera a que termine el guardado antes de restaurar.', 'warning');
+      return;
+    }
+    const restoredVersion = draftVersion.current;
+    saveInFlight.current = true;
+    setSaving(true);
     try {
       const restored = await api.restoreWriteupRevision(detail.id, rev.id);
-      hydrateDraft(restored);
-      setRevisions(await api.listWriteupRevisions(detail.id));
-      if (closeDiffModal) {
-        setDiffRevision(null);
+      if (selectedIdRef.current === detail.id) {
+        if (draftVersion.current === restoredVersion) hydrateDraft(restored);
+        else setDetail(restored);
+        void preloadAssetUrls(restored, detailRequestVersion.current);
+        const refreshedRevisions = await api.listWriteupRevisions(detail.id);
+        if (selectedIdRef.current === detail.id) { setRevisions(refreshedRevisions); setRevisionEnd(false); }
+        if (closeDiffModal) setDiffRevision(null);
+        showToast(`Restaurado desde v${rev.revision_number}`, 'success');
       }
-      showToast(`Restaurado desde v${rev.revision_number}`, 'success');
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'No se pudo restaurar la revisión', 'error');
+    } finally {
+      saveInFlight.current = false;
+      setSaving(false);
     }
   };
 
@@ -1275,7 +1446,7 @@ export const WriteupsView: React.FC = () => {
                   value={title}
                   onChange={(e) => {
                     setTitle(e.target.value);
-                    setDirty(true);
+                    markDirty();
                   }}
                   aria-label="Título del informe"
                   maxLength={MAX_REPORT_TITLE_LENGTH}
@@ -1287,7 +1458,7 @@ export const WriteupsView: React.FC = () => {
                   aria-label="Severidad"
                   onChange={(e) => {
                     setSeverity(e.target.value as WriteupSeverity);
-                    setDirty(true);
+                    markDirty();
                   }}
                   className="bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-slate-200"
                 >
@@ -1303,7 +1474,7 @@ export const WriteupsView: React.FC = () => {
                   aria-label="Estado"
                   onChange={(e) => {
                     setStatusVal(e.target.value as WriteupStatus);
-                    setDirty(true);
+                    markDirty();
                   }}
                   className="bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-slate-200"
                 >
@@ -1346,7 +1517,20 @@ export const WriteupsView: React.FC = () => {
                     title="Guardar cambios protegidos"
                   >
                     <Save className="w-3.5 h-3.5" />
-                    <span>{saving ? '…' : dirty ? 'Guardar*' : 'Guardado'}</span>
+                    <span>{saving ? 'Guardando…' : dirty ? 'Guardar*' : 'Guardado'}</span>
+                  </button>
+                  <span role="status" className={saveError ? 'text-xs text-rose-300' : 'text-xs text-slate-400'}>
+                    {saveError ? `No se pudo guardar: ${saveError}` : lastSavedAt && !dirty ? `Guardado a las ${lastSavedAt.toLocaleTimeString(systemLocale || 'es-MX', { hour: '2-digit', minute: '2-digit' })}` : dirty ? 'Guardado automático activado' : ''}
+                  </span>
+
+                  <button
+                    type="button"
+                    disabled={revisionLoading}
+                    onClick={() => void openRevisionHistory()}
+                    className="px-2 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-200 text-xs flex items-center gap-1"
+                    title="Explorar historial de versiones"
+                  >
+                    <History className="w-3.5 h-3.5" /> Historial
                   </button>
 
                   <button
@@ -1416,7 +1600,7 @@ export const WriteupsView: React.FC = () => {
                     value={cvssScore}
                     onChange={(e) => {
                       setCvssScore(e.target.value);
-                      setDirty(true);
+                      markDirty();
                     }}
                     placeholder="CVSS (0-10)"
                     aria-label="Puntaje de riesgo CVSS, de 0 a 10"
@@ -1428,7 +1612,7 @@ export const WriteupsView: React.FC = () => {
                     maxLength={32}
                     onChange={(e) => {
                       setCweId(e.target.value);
-                      setDirty(true);
+                      markDirty();
                     }}
                     placeholder="Identificador CWE"
                     aria-label="Identificador CWE"
@@ -1440,7 +1624,7 @@ export const WriteupsView: React.FC = () => {
                     maxLength={64}
                     onChange={(e) => {
                       setCveId(e.target.value);
-                      setDirty(true);
+                      markDirty();
                     }}
                     placeholder="Identificador CVE"
                     aria-label="Identificador CVE"
@@ -1452,7 +1636,7 @@ export const WriteupsView: React.FC = () => {
                     maxLength={500}
                     onChange={(e) => {
                       setTargetScope(e.target.value);
-                      setDirty(true);
+                      markDirty();
                     }}
                     placeholder="Alcance o dirección del sitio"
                     aria-label="Alcance o dirección del sitio"
@@ -1463,7 +1647,7 @@ export const WriteupsView: React.FC = () => {
                     aria-label="Vincular prospecto"
                     onChange={(e) => {
                       setProspectId(e.target.value);
-                      setDirty(true);
+                      markDirty();
                     }}
                     className="bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-slate-200"
                   >
@@ -1477,7 +1661,7 @@ export const WriteupsView: React.FC = () => {
                     aria-label="Vincular proyecto"
                     onChange={(e) => {
                       setProjectId(e.target.value);
-                      setDirty(true);
+                      markDirty();
                     }}
                     className="bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-slate-200"
                   >
@@ -1537,7 +1721,7 @@ export const WriteupsView: React.FC = () => {
                   markdown={markdown}
                   onChange={(next) => {
                     setMarkdown(next);
-                    setDirty(true);
+                    markDirty();
                   }}
                   boards={detail.boards}
                   assets={detail.assets}
@@ -1550,7 +1734,7 @@ export const WriteupsView: React.FC = () => {
                     setCvssScore(score.toFixed(1));
                     setCvssVector(vector);
                     setSeverity(sev);
-                    setDirty(true);
+                    markDirty();
                     showToast(`CVSS ${score.toFixed(1)} aplicado`, 'success');
                   }}
                   jumpTarget={jumpTarget}
@@ -1571,7 +1755,7 @@ export const WriteupsView: React.FC = () => {
                   onDeleteCitation={handleDeleteCitation}
                   onInsertBoardIntoMarkdown={(bId, bTitle) => {
                     setMarkdown((prev) => `${prev}\n![${bTitle}](board://${bId})\n`);
-                    setDirty(true);
+                    markDirty();
                       showToast('Diagrama añadido al informe', 'success');
                   }}
                 />
@@ -1583,7 +1767,7 @@ export const WriteupsView: React.FC = () => {
                     markdown={markdown}
                     onChange={(next) => {
                       setMarkdown(next);
-                      setDirty(true);
+                      markDirty();
                     }}
                     boards={detail.boards}
                     assets={detail.assets}
@@ -1596,7 +1780,7 @@ export const WriteupsView: React.FC = () => {
                       setCvssScore(score.toFixed(1));
                       setCvssVector(vector);
                       setSeverity(sev);
-                      setDirty(true);
+                      markDirty();
                     }}
                     jumpTarget={jumpTarget}
                     compactMode
@@ -1615,7 +1799,7 @@ export const WriteupsView: React.FC = () => {
                       onDeleteCitation={handleDeleteCitation}
                       onInsertBoardIntoMarkdown={(bId, bTitle) => {
                         setMarkdown((prev) => `${prev}\n![${bTitle}](board://${bId})\n`);
-                        setDirty(true);
+                        markDirty();
                         showToast('Diagrama añadido al informe', 'success');
                       }}
                     />
@@ -1670,7 +1854,7 @@ export const WriteupsView: React.FC = () => {
                       maxLength={25000}
                       onChange={(e) => {
                         setExecSummary(e.target.value);
-                        setDirty(true);
+                        markDirty();
                       }}
                       placeholder="Resumen del proyecto y sus conclusiones principales…"
                       className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-xs text-slate-100"
@@ -1698,7 +1882,7 @@ export const WriteupsView: React.FC = () => {
                             remediation: '',
                           },
                         ]);
-                        setDirty(true);
+                        markDirty();
                       }}
                       className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
                       title={`Máximo ${MAX_FINDINGS_COUNT} hallazgos por informe`}
@@ -1720,7 +1904,7 @@ export const WriteupsView: React.FC = () => {
                               const next = [...findings];
                               next[idx] = { ...f, id: e.target.value };
                               setFindings(next);
-                              setDirty(true);
+                              markDirty();
                             }}
                             placeholder="ID (H-01)"
                             className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-100 font-mono"
@@ -1733,7 +1917,7 @@ export const WriteupsView: React.FC = () => {
                               const next = [...findings];
                               next[idx] = { ...f, title: e.target.value };
                               setFindings(next);
-                              setDirty(true);
+                              markDirty();
                             }}
                             placeholder="Título del hallazgo"
                             className="sm:col-span-2 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-100 font-semibold"
@@ -1744,7 +1928,7 @@ export const WriteupsView: React.FC = () => {
                               const next = [...findings];
                               next[idx] = { ...f, severity: e.target.value as WriteupSeverity };
                               setFindings(next);
-                              setDirty(true);
+                              markDirty();
                             }}
                             className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-100"
                           >
@@ -1760,7 +1944,7 @@ export const WriteupsView: React.FC = () => {
                               const next = [...findings];
                               next[idx] = { ...f, status: e.target.value as WriteupStructuredFinding['status'] };
                               setFindings(next);
-                              setDirty(true);
+                              markDirty();
                             }}
                             className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-100"
                           >
@@ -1780,7 +1964,7 @@ export const WriteupsView: React.FC = () => {
                                 const next = [...findings];
                                 next[idx] = { ...f, cvss_score: e.target.value ? Number(e.target.value) : null };
                                 setFindings(next);
-                                setDirty(true);
+                                markDirty();
                               }}
                               placeholder="CVSS"
                               className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-100"
@@ -1808,7 +1992,7 @@ export const WriteupsView: React.FC = () => {
                               type="button"
                               onClick={() => {
                                 setFindings(findings.filter((_, i) => i !== idx));
-                                setDirty(true);
+                                markDirty();
                               }}
                               className="p-1.5 rounded text-rose-400 hover:bg-rose-950/40"
                             >
@@ -1834,7 +2018,7 @@ export const WriteupsView: React.FC = () => {
                                 severity: res.severity,
                               };
                               setFindings(next);
-                              setDirty(true);
+                              markDirty();
                               showToast(`Taxonomía ${preset.cwe} / ${preset.mitre} aplicada`, 'success');
                             }}
                             className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-200"
@@ -1854,7 +2038,7 @@ export const WriteupsView: React.FC = () => {
                               const next = [...findings];
                               next[idx] = { ...f, cwe_id: e.target.value };
                               setFindings(next);
-                              setDirty(true);
+                              markDirty();
                             }}
                             placeholder="CWE / OWASP / MITRE ATT&CK"
                             className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-200 font-mono text-[11px]"
@@ -1867,7 +2051,7 @@ export const WriteupsView: React.FC = () => {
                               const next = [...findings];
                               next[idx] = { ...f, affected_target: e.target.value };
                               setFindings(next);
-                              setDirty(true);
+                              markDirty();
                             }}
                             placeholder="Endpoint / Host afectado"
                             className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-200 font-mono text-[11px]"
@@ -1896,7 +2080,7 @@ export const WriteupsView: React.FC = () => {
                                           severity: calc.severity,
                                         };
                                         setFindings(next);
-                                        setDirty(true);
+                                        markDirty();
                                         setFindingCvssEditorIdx(null);
                                       }}
                                       className="px-2 py-0.5 rounded bg-emerald-600 hover:bg-emerald-500 text-white text-[11px]"
@@ -1946,7 +2130,7 @@ export const WriteupsView: React.FC = () => {
                               const next = [...findings];
                               next[idx] = { ...f, summary: e.target.value };
                               setFindings(next);
-                              setDirty(true);
+                              markDirty();
                             }}
                             placeholder="Resumen técnico ({{redact:...}})"
                             className="bg-slate-900 border border-slate-700 rounded p-2 text-slate-100"
@@ -1959,7 +2143,7 @@ export const WriteupsView: React.FC = () => {
                               const next = [...findings];
                               next[idx] = { ...f, remediation: e.target.value };
                               setFindings(next);
-                              setDirty(true);
+                              markDirty();
                             }}
                             placeholder="Remediación recomendada…"
                             className="bg-slate-900 border border-slate-700 rounded p-2 text-slate-100"
@@ -2068,7 +2252,7 @@ export const WriteupsView: React.FC = () => {
                               type="button"
                               onClick={() => {
                                 setMarkdown((prev) => `${prev}\n![${asset.filename}](asset://${asset.id})\n`);
-                                setDirty(true);
+                                markDirty();
                                 showToast('Referencia añadida al informe', 'success');
                               }}
                               className="p-1.5 rounded bg-slate-800 hover:bg-slate-700 text-indigo-300"
@@ -2150,7 +2334,7 @@ export const WriteupsView: React.FC = () => {
                                 v{rev.revision_number} · {rev.change_note || 'Revisión'}
                               </div>
                               <div className="text-[10px] text-slate-400 font-mono">
-                                {new Date(rev.created_at).toLocaleString(systemLocale || 'es-MX')} · {rev.content_hash.slice(0, 12)}
+                                {formatApiDateTime(rev.created_at, systemLocale || 'es-MX')} · {rev.content_hash.slice(0, 12)}
                               </div>
                             </div>
                             <div className="flex items-center gap-1.5">
@@ -2284,7 +2468,7 @@ export const WriteupsView: React.FC = () => {
                   type="button"
                   onClick={() => {
                     setMarkdown((prev) => `${prev}\n![${lightboxAsset.filename}](asset://${lightboxAsset.id})\n`);
-                    setDirty(true);
+                    markDirty();
                     setLightboxAsset(null);
                     showToast('Evidencia añadida al informe', 'success');
                   }}
@@ -2318,7 +2502,7 @@ export const WriteupsView: React.FC = () => {
                   Revisión v{diffRevision.revision_number} frente al borrador actual
                 </h3>
                 <p className="text-[11px] text-slate-400">
-                  Guardada el {new Date(diffRevision.created_at).toLocaleString(systemLocale || 'es-MX')}
+                  Guardada el {formatApiDateTime(diffRevision.created_at, systemLocale || 'es-MX')}
                 </p>
               </div>
               <div className="flex max-w-full flex-wrap items-center gap-2">
@@ -2341,8 +2525,26 @@ export const WriteupsView: React.FC = () => {
                 </button>
               </div>
             </div>
-            <div className="flex-1 overflow-auto p-3 bg-slate-950 font-mono text-xs space-y-0.5">
-              {computeLineDiff(diffRevision.markdown_content, markdown).map((ln, i) => (
+            <div className="flex flex-wrap gap-2 px-4 py-2 border-b border-slate-800">
+              <button type="button" onClick={() => setRevisionView('diff')} aria-pressed={revisionView === 'diff'} className={`px-3 py-1.5 rounded text-xs ${revisionView === 'diff' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-200'}`}>Cambios</button>
+              <button type="button" onClick={() => setRevisionView('preview')} aria-pressed={revisionView === 'preview'} className={`px-3 py-1.5 rounded text-xs ${revisionView === 'preview' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-200'}`}>Vista previa</button>
+            </div>
+            <div className="flex flex-1 min-h-0 flex-col sm:flex-row overflow-auto">
+              <nav aria-label="Versiones del informe" className="sm:w-52 shrink-0 border-b sm:border-b-0 sm:border-r border-slate-800 p-3 overflow-auto">
+                <p className="text-xs font-semibold text-slate-300 mb-2">Versiones</p>
+                {revisions.map(rev => <button key={rev.id} type="button" onClick={() => setDiffRevision(rev)} aria-current={rev.id === diffRevision.id ? 'true' : undefined} className={`w-full text-left px-3 py-2 border-l-2 text-xs ${rev.id === diffRevision.id ? 'border-indigo-400 bg-slate-800 text-white' : 'border-slate-700 text-slate-300 hover:bg-slate-800'}`}>
+                  <span className="block font-medium">v{rev.revision_number} · {rev.change_note || 'Revisión'}</span>
+                  <span className="block text-slate-400 mt-1">{formatApiDateTime(rev.created_at, systemLocale || 'es-MX')}</span>
+                </button>)}
+                {revisions.length >= 40 && !revisionEnd && <button type="button" onClick={() => void loadMoreRevisions()} disabled={revisionLoading} className="w-full mt-2 px-3 py-2 text-xs text-slate-200 bg-slate-800 rounded">{revisionLoading ? 'Cargando…' : 'Cargar versiones anteriores'}</button>}
+              </nav>
+              {revisionView === 'preview' ? <div className="flex-1 overflow-auto p-4 bg-slate-950">
+                {diffRevision.snapshot ? <section className="mb-6 text-sm text-slate-200"><h3 className="text-lg font-semibold text-white">{diffRevision.snapshot.fields.title}</h3><p className="mt-1">Estado: {diffRevision.snapshot.fields.status} · Severidad: {diffRevision.snapshot.fields.severity}</p><p className="mt-1">{diffRevision.snapshot.boards.length} pizarras · {diffRevision.snapshot.findings.length} hallazgos</p>{diffRevision.snapshot.executive_summary && <p className="mt-3 whitespace-pre-wrap">{diffRevision.snapshot.executive_summary}</p>}{diffRevision.snapshot.findings.map((finding, index) => <p key={`${finding.id}-${index}`} className="mt-2">{finding.title} · {finding.severity}</p>)}</section> : <p className="mb-4 text-sm text-amber-300">Esta versión antigua solo conserva el Markdown.</p>}
+                <MarkdownRichPreview markdown={diffRevision.markdown_content} redactPreview={false} boards={diffRevision.snapshot?.boards ?? detail.boards} assets={diffRevision.snapshot?.assets ?? detail.assets} assetObjectUrls={assetUrls} /></div> : <div className="flex-1 overflow-auto p-3 bg-slate-950 font-mono text-xs space-y-0.5">
+              {changedRevisionSections.length > 0 && <p className="mb-3 rounded bg-amber-950/50 p-2 font-sans text-amber-200">También cambiaron: {changedRevisionSections.join(', ')}. Abre Vista previa para consultar la versión guardada.</p>}
+              {diffLoading && <p role="status" className="py-3 font-sans text-slate-300">Calculando cambios…</p>}
+              {diffError && <div role="alert" className="py-3 font-sans text-rose-300">{diffError} <button type="button" onClick={() => setDiffAttempt(value => value + 1)} className="rounded bg-slate-800 px-3 py-2 text-slate-100">Reintentar</button></div>}
+              {revisionDiff.slice(diffPage * 300, (diffPage + 1) * 300).map((ln, i) => (
                 <div
                   key={i}
                   className={`px-2 py-0.5 rounded whitespace-pre-wrap break-all ${
@@ -2359,6 +2561,8 @@ export const WriteupsView: React.FC = () => {
                   {ln.text || ' '}
                 </div>
               ))}
+              {revisionDiff.length > 300 && <div className="flex items-center gap-3 py-3 font-sans text-slate-200"><button type="button" disabled={diffPage === 0} onClick={() => setDiffPage(page => page - 1)} className="px-3 py-2 bg-slate-800 rounded disabled:opacity-40">Anterior</button><span>Bloque {diffPage + 1} de {Math.ceil(revisionDiff.length / 300)}</span><button type="button" disabled={(diffPage + 1) * 300 >= revisionDiff.length} onClick={() => setDiffPage(page => page + 1)} className="px-3 py-2 bg-slate-800 rounded disabled:opacity-40">Siguiente</button></div>}
+              </div>}
             </div>
           </div>
         </div>

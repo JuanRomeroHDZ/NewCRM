@@ -1,6 +1,6 @@
 import json
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, Response, UploadFile, status
-from sqlalchemy import desc, func, or_, select
+from sqlalchemy import delete, desc, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models import utc_now
@@ -204,8 +204,7 @@ async def create_writeup(
                 element_count=0,
             )
         )
-    if payload.markdown_content.strip():
-        await create_revision_snapshot(db, writeup, payload.markdown_content, current_user.id if current_user else None, "Versión inicial")
+    await create_revision_snapshot(db, writeup, payload.markdown_content, current_user.id if current_user else None, "Versión inicial")
 
     await record_event(
         db,
@@ -263,14 +262,8 @@ async def update_writeup(
         writeup.encrypted_findings_json = encrypt_note(json.dumps(findings_payload, ensure_ascii=False))
     if "markdown_content" in updates:
         writeup.encrypted_markdown = encrypt_note(updates["markdown_content"])
-        if updates.get("save_revision"):
-            await create_revision_snapshot(
-                db,
-                writeup,
-                updates["markdown_content"],
-                current_user.id if current_user else None,
-                updates.get("revision_note"),
-            )
+    if updates.get("save_revision"):
+        await create_revision_snapshot(db, writeup, decrypt_note(writeup.encrypted_markdown) or "", current_user.id if current_user else None, updates.get("revision_note"))
 
     writeup.updated_at = utc_now()
     await db.commit()
@@ -304,6 +297,8 @@ async def delete_writeup(
 @router.get("/{writeup_id}/revisions", response_model=list[WriteupRevisionOut])
 async def list_revisions(
     writeup_id: str,
+    offset: int = Query(0, ge=0),
+    limit: int = Query(40, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
     current_user: User | None = Depends(require_writeup_access),
 ):
@@ -313,7 +308,7 @@ async def list_revisions(
             select(WriteupRevision)
             .where(WriteupRevision.writeup_id == writeup_id)
             .order_by(desc(WriteupRevision.revision_number))
-            .limit(40)
+            .offset(offset).limit(limit)
         )
     ).scalars().all()
     return [
@@ -324,6 +319,7 @@ async def list_revisions(
             "change_note": r.change_note,
             "content_hash": r.content_hash,
             "markdown_content": decrypt_note(r.encrypted_markdown) or "",
+            "snapshot": json.loads(decrypt_note(r.encrypted_snapshot)) if r.encrypted_snapshot else None,
             "created_at": r.created_at,
         }
         for r in rows
@@ -345,7 +341,34 @@ async def restore_revision(
     ).scalar_one_or_none()
     if not rev:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Revisión no encontrada.")
+    # Preserve the current state before any destructive restoration, including unsnapshotted changes.
+    await create_revision_snapshot(db, writeup, decrypt_note(writeup.encrypted_markdown) or "", current_user.id if current_user else None, "Antes de restaurar")
+    await db.flush()
     restored_md = decrypt_note(rev.encrypted_markdown) or ""
+    if rev.encrypted_snapshot:
+        snapshot = json.loads(decrypt_note(rev.encrypted_snapshot))
+        fields = snapshot["fields"]
+        await validate_optional_links(db, fields.get("prospect_id"), fields.get("project_id"), fields.get("engagement_id"))
+        for field, value in fields.items():
+            setattr(writeup, field, value)
+        writeup.slug = slugify_title(writeup.title)
+        writeup.encrypted_executive_summary = encrypt_note(snapshot.get("executive_summary")) if snapshot.get("executive_summary") else None
+        writeup.encrypted_findings_json = encrypt_note(json.dumps(snapshot.get("findings", []), ensure_ascii=False))
+        if "assets" in snapshot:
+            asset_ids = [asset["id"] for asset in snapshot["assets"]]
+            existing_ids = set((await db.execute(select(WriteupAsset.id).where(WriteupAsset.writeup_id == writeup_id, WriteupAsset.id.in_(asset_ids)))).scalars().all())
+            if existing_ids != set(asset_ids):
+                raise HTTPException(status_code=409, detail="No se puede restaurar: falta evidencia de esta versión.")
+            await db.execute(update(WriteupAsset).where(WriteupAsset.writeup_id == writeup_id).values(is_deleted=True))
+            if asset_ids:
+                await db.execute(update(WriteupAsset).where(WriteupAsset.writeup_id == writeup_id, WriteupAsset.id.in_(asset_ids)).values(is_deleted=False))
+        await db.execute(delete(WriteupCitation).where(WriteupCitation.writeup_id == writeup_id))
+        await db.execute(delete(WriteupBoard).where(WriteupBoard.writeup_id == writeup_id))
+        for board in snapshot.get("boards", []):
+            db.add(WriteupBoard(id=board["id"], writeup_id=writeup_id, title=board["title"], encrypted_scene_json=encrypt_note(board["scene_json"]), encrypted_svg_snapshot=encrypt_note(board["svg_snapshot"]) if board.get("svg_snapshot") else None, element_count=board["element_count"]))
+        await db.flush()
+        for citation in snapshot.get("citations", []):
+            db.add(WriteupCitation(**{**citation, "quoted_text": encrypt_note(citation["quoted_text"]), "note": encrypt_note(citation["note"]) if citation.get("note") else None}))
     writeup.encrypted_markdown = encrypt_note(restored_md)
     writeup.updated_at = utc_now()
     await create_revision_snapshot(db, writeup, restored_md, current_user.id if current_user else None, f"Restaurado desde revisión #{rev.revision_number}")
@@ -363,7 +386,7 @@ async def upload_writeup_asset(
     db: AsyncSession = Depends(get_db),
     current_user: User | None = Depends(require_writeup_access),
 ):
-    await get_writeup_or_404(db, writeup_id)
+    writeup = await get_writeup_or_404(db, writeup_id)
     upload_limit = max(settings.WRITEUP_MAX_IMAGE_BYTES, settings.WRITEUP_MAX_VIDEO_BYTES)
     raw_bytes = await read_upload_limited(file, upload_limit)
     optimized = optimize_and_encrypt_media(raw_bytes, file.filename, convert_to_gif=convert_to_gif)
@@ -381,6 +404,7 @@ async def upload_writeup_asset(
         caption=caption.strip() if caption else None,
     )
     db.add(asset)
+    await create_revision_snapshot(db, writeup, decrypt_note(writeup.encrypted_markdown) or "", current_user.id if current_user else None, "Evidencia añadida")
     await db.commit()
     await db.refresh(asset)
     return serialize_asset(asset)
@@ -395,7 +419,7 @@ async def convert_writeup_video_to_gif(
     db: AsyncSession = Depends(get_db),
     current_user: User | None = Depends(require_writeup_access),
 ):
-    await get_writeup_or_404(db, writeup_id)
+    writeup = await get_writeup_or_404(db, writeup_id)
     source = (
         await db.execute(select(WriteupAsset).where(WriteupAsset.id == asset_id, WriteupAsset.writeup_id == writeup_id))
     ).scalar_one_or_none()
@@ -419,6 +443,7 @@ async def convert_writeup_video_to_gif(
         caption=source.caption or f"GIF generado desde {source.filename}",
     )
     db.add(gif_asset)
+    await create_revision_snapshot(db, writeup, decrypt_note(writeup.encrypted_markdown) or "", current_user.id if current_user else None, "Evidencia convertida")
     await db.commit()
     await db.refresh(gif_asset)
     return serialize_asset(gif_asset)
@@ -456,13 +481,14 @@ async def delete_writeup_asset(
     db: AsyncSession = Depends(get_db),
     current_user: User | None = Depends(require_writeup_access),
 ):
-    await get_writeup_or_404(db, writeup_id)
+    writeup = await get_writeup_or_404(db, writeup_id)
     asset = (
         await db.execute(select(WriteupAsset).where(WriteupAsset.id == asset_id, WriteupAsset.writeup_id == writeup_id))
     ).scalar_one_or_none()
     if not asset:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evidencia visual no encontrada.")
-    await db.delete(asset)
+    asset.is_deleted = True
+    await create_revision_snapshot(db, writeup, decrypt_note(writeup.encrypted_markdown) or "", current_user.id if current_user else None, "Evidencia retirada")
     await db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -474,7 +500,7 @@ async def create_writeup_board(
     db: AsyncSession = Depends(get_db),
     current_user: User | None = Depends(require_writeup_access),
 ):
-    await get_writeup_or_404(db, writeup_id)
+    writeup = await get_writeup_or_404(db, writeup_id)
     clean_svg = sanitize_board_svg(payload.svg_snapshot)
     board = WriteupBoard(
         writeup_id=writeup_id,
@@ -484,6 +510,7 @@ async def create_writeup_board(
         element_count=payload.element_count,
     )
     db.add(board)
+    await create_revision_snapshot(db, writeup, decrypt_note(writeup.encrypted_markdown) or "", current_user.id if current_user else None, "Pizarra creada")
     await db.commit()
     await db.refresh(board)
     return serialize_board(board)
@@ -497,7 +524,7 @@ async def update_writeup_board(
     db: AsyncSession = Depends(get_db),
     current_user: User | None = Depends(require_writeup_access),
 ):
-    await get_writeup_or_404(db, writeup_id)
+    writeup = await get_writeup_or_404(db, writeup_id)
     board = (
         await db.execute(select(WriteupBoard).where(WriteupBoard.id == board_id, WriteupBoard.writeup_id == writeup_id))
     ).scalar_one_or_none()
@@ -514,6 +541,7 @@ async def update_writeup_board(
     if "element_count" in updates:
         board.element_count = updates["element_count"]
     board.updated_at = utc_now()
+    await create_revision_snapshot(db, writeup, decrypt_note(writeup.encrypted_markdown) or "", current_user.id if current_user else None, "Pizarra actualizada")
     await db.commit()
     await db.refresh(board)
     return serialize_board(board)
@@ -526,13 +554,14 @@ async def delete_writeup_board(
     db: AsyncSession = Depends(get_db),
     current_user: User | None = Depends(require_writeup_access),
 ):
-    await get_writeup_or_404(db, writeup_id)
+    writeup = await get_writeup_or_404(db, writeup_id)
     board = (
         await db.execute(select(WriteupBoard).where(WriteupBoard.id == board_id, WriteupBoard.writeup_id == writeup_id))
     ).scalar_one_or_none()
     if not board:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pizarra no encontrada.")
     await db.delete(board)
+    await create_revision_snapshot(db, writeup, decrypt_note(writeup.encrypted_markdown) or "", current_user.id if current_user else None, "Pizarra eliminada")
     await db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -564,6 +593,7 @@ async def create_writeup_citation(
         note=encrypt_note(payload.note) if payload.note else None,
     )
     db.add(citation)
+    await create_revision_snapshot(db, writeup, decrypt_note(writeup.encrypted_markdown) or "", current_user.id if current_user else None, "Cita creada")
     await db.commit()
     await db.refresh(citation)
     return serialize_citation(citation, decrypt_note(writeup.encrypted_markdown) or "")
@@ -595,6 +625,7 @@ async def update_writeup_citation(
     if "note" in updates:
         citation.note = encrypt_note(updates["note"]) if updates["note"] else None
     citation.updated_at = utc_now()
+    await create_revision_snapshot(db, writeup, decrypt_note(writeup.encrypted_markdown) or "", current_user.id if current_user else None, "Cita actualizada")
     await db.commit()
     await db.refresh(citation)
     return serialize_citation(citation, decrypt_note(writeup.encrypted_markdown) or "")
@@ -607,7 +638,7 @@ async def delete_writeup_citation(
     db: AsyncSession = Depends(get_db),
     current_user: User | None = Depends(require_writeup_access),
 ):
-    await get_writeup_or_404(db, writeup_id)
+    writeup = await get_writeup_or_404(db, writeup_id)
     citation = (
         await db.execute(
             select(WriteupCitation).where(WriteupCitation.id == citation_id, WriteupCitation.writeup_id == writeup_id)
@@ -616,6 +647,7 @@ async def delete_writeup_citation(
     if not citation:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Citación no encontrada.")
     await db.delete(citation)
+    await create_revision_snapshot(db, writeup, decrypt_note(writeup.encrypted_markdown) or "", current_user.id if current_user else None, "Cita eliminada")
     await db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 

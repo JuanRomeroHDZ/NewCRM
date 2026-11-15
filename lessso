@@ -98,13 +98,14 @@ session() (
 )
 
 service_menu() {
-  printf '\nServicios\n1) Detener CRM\n2) Ver estado del CRM\n3) Elegir puertos e iniciar CRM\n0) Volver\n\n'
+  printf '\nServicios\n1) Detener CRM\n2) Ver estado del CRM\n3) Elegir puertos e iniciar CRM\n4) Elegir acceso local o de red e iniciar CRM\n0) Volver\n\n'
   local choice
   read -r -p 'Elige una opción: ' choice || return 0
   case "$choice" in
     1) docker compose stop ;;
     2) docker compose ps ;;
     3) prepare_installation && ./scripts/up.sh --choose-ports ;;
+    4) prepare_installation && ./scripts/up.sh --choose-address ;;
     0) return 0 ;;
     *) echo 'Opción no válida.' ;;
   esac
@@ -115,7 +116,7 @@ if [[ ! -t 0 ]]; then
   exit 0
 fi
 while true; do
-  printf '\nLESSSO\n\n1) Abrir CRM\n2) Abrir CRM con C2 de demostración\n3) Abrir CRM y activar C2 real\n4) Administrar servicios\n5) Abrir CRM temporal (se apaga al terminar)\n0) Salir\n\n'
+  printf '\nLESSSO\n\n1) Abrir CRM\n2) Abrir CRM con C2 de demostración\n3) Abrir CRM y activar C2 real\n4) Administrar servicios\n5) Abrir CRM temporal (se apaga al terminar)\n6) Elegir acceso local o de red e iniciar CRM\n0) Salir\n\n'
   read -r -p 'Elige una opción: ' choice || exit 0
   case "$choice" in
     1|'') prepare_installation && ./scripts/up.sh || echo 'El CRM no pudo iniciarse.' ;;
@@ -123,6 +124,7 @@ while true; do
     3) prepare_installation && prepare_c2 && ./scripts/up.sh && ./scripts/c2.sh start || echo 'No se pudo iniciar el CRM o C2.' ;;
     4) service_menu || echo 'No se pudo completar la acción.' ;;
     5) prepare_installation && session || echo 'La sesión del CRM se cerró o no pudo iniciarse.' ;;
+    6) prepare_installation && ./scripts/up.sh --choose-address || echo 'El CRM no pudo iniciarse.' ;;
     0) exit 0 ;;
     *) echo 'Opción no válida.' ;;
   esac

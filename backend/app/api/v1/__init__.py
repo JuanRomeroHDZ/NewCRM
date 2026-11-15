@@ -15,7 +15,6 @@ from app.api.v1 import (
     importer,
     audit,
     vault_backup,
-    c2,
 )
 
 __all__ = [
@@ -33,5 +32,4 @@ __all__ = [
     "importer",
     "audit",
     "vault_backup",
-    "c2",
 ]

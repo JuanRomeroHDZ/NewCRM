@@ -115,6 +115,7 @@ class WriteupAsset(Base):
     sha256: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     exif_stripped: Mapped[bool] = mapped_column(Boolean, default=True)
     encrypted_blob: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     caption: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
 
@@ -132,6 +133,7 @@ class WriteupRevision(Base):
     change_note: Mapped[str | None] = mapped_column(String(255), nullable=True)
     content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     encrypted_markdown: Mapped[str | None] = mapped_column(Text, nullable=True)
+    encrypted_snapshot: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_by_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("core_users.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
 
