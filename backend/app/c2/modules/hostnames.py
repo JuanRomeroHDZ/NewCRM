@@ -17,7 +17,7 @@ from concurrent.futures import ThreadPoolExecutor
 try:
     from scapy.all import IP, UDP, DNS, DNSQR, DNSRR, send, sniff
     _SCAPY_AVAILABLE = True
-except ImportError:  # pragma: no cover - entorno mínimo sin scapy
+except (ImportError, OSError):  # pragma: no cover - scapy ausente o sin permisos de socket
     IP = UDP = DNS = DNSQR = DNSRR = send = sniff = None  # type: ignore[assignment]
     _SCAPY_AVAILABLE = False
 
@@ -96,7 +96,7 @@ def mdns_names(interface: str, timeout: float = 2.5) -> dict[str, str]:
 
     try:
         from scapy.all import AsyncSniffer
-    except ImportError:
+    except (ImportError, OSError):
         return names
     questions = [(svc, "PTR", "IN") for svc in _MDNS_SERVICES]
     query = (

@@ -10,6 +10,7 @@ export interface PromptDialogOptions {
   cancelLabel?: string;
   required?: boolean;
   maxLength?: number;
+  inputType?: 'text' | 'password';
 }
 
 interface PromptDialogProps extends PromptDialogOptions {
@@ -28,6 +29,7 @@ export const PromptDialog: React.FC<PromptDialogProps> = ({
   cancelLabel = 'Cancelar',
   required = true,
   maxLength = 240,
+  inputType = 'text',
   onSubmit,
   onCancel,
 }) => {
@@ -138,7 +140,7 @@ export const PromptDialog: React.FC<PromptDialogProps> = ({
           <input
             ref={inputRef}
             id={inputId}
-            type="text"
+            type={inputType}
             value={value}
             maxLength={safeMaxLength}
             aria-invalid={Boolean(error)}

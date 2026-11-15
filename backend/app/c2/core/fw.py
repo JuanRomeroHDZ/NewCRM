@@ -33,9 +33,13 @@ def _run(binary: str, args: list[str]) -> subprocess.CompletedProcess:
 
 
 def add_redirect(to_port: int, dport: int = 80, table: str = "nat",
-                 chain: str = "PREROUTING", family: str = "ipv4") -> None:
-    """Regla REDIRECT etiquetada (p.ej. TCP/80 de la victima -> proxy local)."""
-    args = ["-t", table, "-A", chain, "-p", "tcp", "--dport", str(dport),
+                 chain: str = "PREROUTING", family: str = "ipv4",
+                 source: str | None = None) -> None:
+    """Install a tagged redirect, optionally constrained to one source range."""
+    args = ["-t", table, "-A", chain, "-p", "tcp", "--dport", str(dport)]
+    if source:
+        args.extend(["-s", source])
+    args += [
             "-j", "REDIRECT", "--to-port", str(to_port),
             "-m", "comment", "--comment", TAG]
     proc = _run(_BIN[family], args)

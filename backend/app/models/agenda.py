@@ -72,6 +72,7 @@ class PentestEngagement(Base):
     title: Mapped[str] = mapped_column(String(180), nullable=False)
     scope_written_summary: Mapped[str] = mapped_column(Text, nullable=False)  # Obligatorio por escrito
     authorized_targets: Mapped[str] = mapped_column(Text, nullable=False)  # IPs or domains strictly authorized
+    authorized_ipv6_targets: Mapped[str] = mapped_column(Text, nullable=False, default="")
     window_start: Mapped[datetime] = mapped_column(DateTime, index=True, nullable=False)
     window_end: Mapped[datetime] = mapped_column(DateTime, index=True, nullable=False)
     status: Mapped[str] = mapped_column(String(32), default="autorizado", index=True)  # autorizado, en_ejecucion, finalizado, cancelado

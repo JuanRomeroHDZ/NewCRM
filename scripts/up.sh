@@ -43,21 +43,22 @@ PY
 }
 
 free_port() {
-  python3 - <<'PY'
+  python3 - "$HOST_BIND_IP" <<'PY'
 import socket
+import sys
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-s.bind(("0.0.0.0", 0))
+s.bind((sys.argv[1], 0))
 print(s.getsockname()[1])
 s.close()
 PY
 }
 
 is_free() {
-  python3 - "$1" <<'PY'
+  python3 - "$HOST_BIND_IP" "$1" <<'PY'
 import socket, sys
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 try:
-    s.bind(("0.0.0.0", int(sys.argv[1])))
+    s.bind((sys.argv[1], int(sys.argv[2])))
 except OSError:
     sys.exit(1)
 finally:
@@ -100,25 +101,43 @@ HOST_BIND_IP="${HOST_BIND_IP:-127.0.0.1}"
 
 if $CHOOSE_ADDRESS; then
   [[ -t 0 ]] || { echo 'Elige la dirección desde una terminal.' >&2; exit 1; }
-  echo 'Direcciones detectadas en este equipo:'
-  hostname -I 2>/dev/null || true
+  suggested_address="$(python3 scripts/lan_address.py --suggest 2>/dev/null || true)"
+  if ! python3 scripts/lan_address.py --validate "$HOST_BIND_IP" >/dev/null 2>&1; then
+    if [[ -n "$suggested_address" ]]; then
+      echo "La dirección guardada (${HOST_BIND_IP}) ya no está en este equipo."
+      HOST_BIND_IP="$suggested_address"
+    else
+      echo "La dirección guardada (${HOST_BIND_IP}) ya no está en este equipo."
+      HOST_BIND_IP="127.0.0.1"
+    fi
+  fi
+  echo 'Direcciones privadas detectadas en este equipo:'
+  python3 scripts/lan_address.py --list || true
   echo 'Usa 127.0.0.1 para acceso solo en este equipo, o una IPv4 privada de este equipo para acceso desde la red local.'
   read -r -p "Dirección IPv4 [$HOST_BIND_IP]: " selected_address
   HOST_BIND_IP="${selected_address:-$HOST_BIND_IP}"
 fi
 
-python3 - "$HOST_BIND_IP" <<'PY'
-import ipaddress, socket, sys
-try:
-    address = ipaddress.IPv4Address(sys.argv[1])
-    private_networks = [ipaddress.IPv4Network(net) for net in ('10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16')]
-    if address != ipaddress.IPv4Address('127.0.0.1') and not any(address in network for network in private_networks):
-        raise ValueError('elige 127.0.0.1 o una dirección IPv4 privada (10.x, 172.16-31.x o 192.168.x)')
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        sock.bind((str(address), 0))
-except (ValueError, OSError) as exc:
-    raise SystemExit(f'Dirección de acceso no válida o no asignada a este equipo: {exc}')
-PY
+if ! python3 scripts/lan_address.py --validate "$HOST_BIND_IP"; then
+  if ! $CHOOSE_ADDRESS; then
+    suggested_address="$(python3 scripts/lan_address.py --suggest 2>/dev/null || true)"
+    if [[ -n "$suggested_address" ]]; then
+      if python3 scripts/lan_address.py --validate "$suggested_address" >/dev/null 2>&1; then
+        echo "La dirección guardada (${HOST_BIND_IP}) ya no está asignada; usaré la dirección privada activa ${suggested_address}."
+        HOST_BIND_IP="$suggested_address"
+      else
+        echo "La dirección guardada (${HOST_BIND_IP}) ya no está asignada. Abre ./lessso y elige la opción 6 para seleccionar la dirección privada actual." >&2
+        exit 1
+      fi
+    else
+      echo 'Abre ./lessso y elige la opción 6 para seleccionar una dirección local válida.' >&2
+      exit 1
+    fi
+  else
+    echo 'La dirección indicada no está asignada a este equipo. Elige una dirección privada de la lista mostrada.' >&2
+    exit 1
+  fi
+fi
 
 # Reutiliza la CA instalada en los clientes y renueva solo el certificado del servidor
 # si la dirección seleccionada aún no figura entre sus nombres alternativos.

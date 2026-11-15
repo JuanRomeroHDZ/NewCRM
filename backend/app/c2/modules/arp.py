@@ -7,7 +7,7 @@ import threading
 try:
     from scapy.all import ARP, Ether, sendp, srp
     _SCAPY_AVAILABLE = True
-except ImportError:  # pragma: no cover - entorno mínimo sin scapy
+except (ImportError, OSError):  # pragma: no cover - scapy ausente o sin permisos de socket
     ARP = Ether = sendp = srp = None  # type: ignore[assignment]
     _SCAPY_AVAILABLE = False
 
@@ -75,7 +75,7 @@ class ArpSpoofer:
 
     def start(self) -> None:
         if not _SCAPY_AVAILABLE:
-            raise RuntimeError("Scapy no está instalado en el entorno C2")
+            raise RuntimeError("Scapy o los permisos para inicializar sockets no están disponibles en el entorno C2")
         self.target_mac = self._resolve_mac(self.target_ip)
         self.gateway_mac = self._resolve_mac(self.gateway_ip)
         if not self.target_mac or not self.gateway_mac:

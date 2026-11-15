@@ -20,6 +20,7 @@ import {
 import { useVault } from '../../context/VaultContext';
 import { useC2 } from '../../context/C2Context';
 import { api, getApiUserToken } from '../../lib/api';
+import { c2Api } from '../../lib/c2Api';
 import type { C2LogType, C2SectionId } from '../../types/c2';
 
 const HostsPanel = lazy(() => import('./panels/HostsPanel').then((m) => ({ default: m.HostsPanel })));
@@ -94,6 +95,11 @@ export const C2WorkspaceShell: React.FC = () => {
     wsConnected,
     serviceState,
     retryService,
+    engagements,
+    engagementClients,
+    activeEngagementId,
+    setActiveEngagementId,
+    refreshEngagements,
     interfaces,
     gateway,
     selectedIface,
@@ -102,6 +108,9 @@ export const C2WorkspaceShell: React.FC = () => {
     activeModuleNames,
     opsecState,
     envWarnings,
+    preflight,
+    preflightState,
+    refreshEnvCheck,
     consoleLogs,
     clearLogs,
     triggerPanic,
@@ -112,6 +121,15 @@ export const C2WorkspaceShell: React.FC = () => {
   const [modulesOpen, setModulesOpen] = useState(false);
   const [mobileOpsOpen, setMobileOpsOpen] = useState(false);
   const [accountStatus, setAccountStatus] = useState<'unknown' | 'checking' | 'signed_out' | 'owner' | 'other' | 'password_change' | 'error'>('unknown');
+  const [createScopeOpen, setCreateScopeOpen] = useState(false);
+  const [createScopePending, setCreateScopePending] = useState(false);
+  const [createScopeError, setCreateScopeError] = useState('');
+  const [scopeDraft, setScopeDraft] = useState(() => {
+    const now = new Date();
+    const later = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+    const localInput = (date: Date) => new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    return { client_id: '', title: '', scope_written_summary: '', authorized_targets: '', authorized_ipv6_targets: '', window_start: localInput(now), window_end: localInput(later) };
+  });
   const logContainerRef = useRef<HTMLDivElement>(null);
   const modulesContainerRef = useRef<HTMLDivElement>(null);
 
@@ -142,6 +160,28 @@ export const C2WorkspaceShell: React.FC = () => {
   const opsecHost = opsecState?.hostname || '-';
   const opsecMac = selectedLink?.mac || '-';
   const isSpoofed = Boolean(opsecState?.spoofed || selectedLink?.spoofed);
+  const selectedEngagement = engagements.find((item) => item.id === activeEngagementId) || null;
+
+  const createEngagement = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setCreateScopePending(true);
+    setCreateScopeError('');
+    try {
+      const created = await c2Api.createEngagement({
+        ...scopeDraft,
+        window_start: new Date(scopeDraft.window_start).toISOString(),
+        window_end: new Date(scopeDraft.window_end).toISOString(),
+      });
+      await refreshEngagements();
+      setActiveEngagementId(created.id);
+      setScopeDraft((current) => ({ ...current, title: '', scope_written_summary: '', authorized_targets: '', authorized_ipv6_targets: '' }));
+      setCreateScopeOpen(false);
+    } catch (error) {
+      setCreateScopeError(error instanceof Error ? error.message : t('scope.createError'));
+    } finally {
+      setCreateScopePending(false);
+    }
+  };
 
   const filteredLogs = useMemo(() => {
     if (logFilter === 'all') return consoleLogs;
@@ -510,6 +550,104 @@ export const C2WorkspaceShell: React.FC = () => {
             </div>
           </div>
         )}
+
+        <section aria-label={t('scope.label')} className="mt-2.5 border-t border-obsidian-border/80 pt-2.5">
+          <div className="flex flex-wrap items-start gap-2">
+            <label className="flex min-h-[44px] min-w-0 flex-1 items-center gap-2 rounded-lg border border-obsidian-border bg-obsidian-surface px-2.5 py-1.5 text-xs focus-within:border-obsidian-gold sm:max-w-2xl">
+              <span className="shrink-0 font-medium text-obsidian-muted">{t('scope.label')}</span>
+              <select
+                value={activeEngagementId || ''}
+                onChange={(event) => setActiveEngagementId(event.target.value || null)}
+                aria-label={t('scope.label')}
+                className="min-w-0 flex-1 bg-transparent font-mono text-xs text-white focus:outline-none"
+              >
+                <option value="" className="bg-obsidian-panel">{t('scope.choose')}</option>
+                {engagements.map((item) => (
+                  <option key={item.id} value={item.id} disabled={!item.active_now} className="bg-obsidian-panel">
+                    {item.title} · {item.active_now ? t('scope.active') : t('scope.inactive')}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              onClick={() => {
+                setCreateScopeError('');
+                setCreateScopeOpen((current) => !current);
+                void refreshEngagements();
+              }}
+              className="inline-flex min-h-[44px] items-center rounded-lg border border-obsidian-borderLight bg-obsidian-surface px-3 text-xs font-medium text-white hover:border-obsidian-gold/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-gold"
+            >
+              {createScopeOpen ? t('scope.cancel') : t('scope.create')}
+            </button>
+            <button
+              type="button"
+              onClick={() => void refreshEngagements()}
+              aria-label={t('scope.refresh')}
+              title={t('scope.refresh')}
+              className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg border border-obsidian-border bg-obsidian-surface text-obsidian-muted hover:border-obsidian-gold/60 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-gold"
+            >
+              <RefreshCw size={14} aria-hidden="true" />
+            </button>
+            {demoMode ? (
+              <p role="status" className="basis-full text-[11px] text-amber-200">{t('scope.demoOptional')}</p>
+            ) : (
+              <p role="status" className={`basis-full text-[11px] ${selectedEngagement?.active_now ? 'text-emerald-300' : 'text-amber-200'}`}>
+                {selectedEngagement?.active_now
+                  ? `${t('scope.targets')}: ${selectedEngagement.authorized_targets}${selectedEngagement.authorized_ipv6_targets ? ` · IPv6: ${selectedEngagement.authorized_ipv6_targets}` : ''}`
+                  : engagements.length === 0 ? t('scope.empty') : t('scope.required')}
+              </p>
+            )}
+          </div>
+
+          {createScopeOpen && (
+            <form onSubmit={(event) => void createEngagement(event)} className="mt-3 grid gap-2 rounded-lg border border-obsidian-border bg-obsidian-bg/50 p-3 sm:grid-cols-2">
+              <h3 className="sm:col-span-2 text-sm font-semibold text-white">{t('scope.createTitle')}</h3>
+              {engagementClients.length > 0 ? (
+                <label className="grid gap-1 text-xs text-obsidian-muted">
+                  <span>{t('scope.client')}</span>
+                  <select required value={scopeDraft.client_id} onChange={(event) => setScopeDraft((current) => ({ ...current, client_id: event.target.value }))} className="min-h-[40px] rounded-md border border-obsidian-border bg-obsidian-surface px-2 text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-gold">
+                    <option value="" className="bg-obsidian-panel">—</option>
+                    {engagementClients.map((client) => <option key={client.id} value={client.id} className="bg-obsidian-panel">{client.company_name}</option>)}
+                  </select>
+                </label>
+              ) : (
+                <p role="status" className="sm:col-span-2 text-xs text-amber-200">{t('scope.noClients')}</p>
+              )}
+              <label className="grid gap-1 text-xs text-obsidian-muted">
+                <span>{t('scope.name')}</span>
+                <input required minLength={2} maxLength={180} value={scopeDraft.title} onChange={(event) => setScopeDraft((current) => ({ ...current, title: event.target.value }))} className="min-h-[40px] rounded-md border border-obsidian-border bg-obsidian-surface px-2 text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-gold" />
+              </label>
+              <label className="grid gap-1 text-xs text-obsidian-muted">
+                <span>{t('scope.targets')} ({t('scope.targetsHint')})</span>
+                <input required minLength={3} maxLength={5000} value={scopeDraft.authorized_targets} onChange={(event) => setScopeDraft((current) => ({ ...current, authorized_targets: event.target.value }))} className="min-h-[40px] rounded-md border border-obsidian-border bg-obsidian-surface px-2 font-mono text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-gold" placeholder="192.168.100.0/24" />
+              </label>
+              <label className="grid gap-1 text-xs text-obsidian-muted">
+                <span>{t('scope.ipv6Targets')}</span>
+                <input maxLength={5000} value={scopeDraft.authorized_ipv6_targets} onChange={(event) => setScopeDraft((current) => ({ ...current, authorized_ipv6_targets: event.target.value }))} className="min-h-[40px] rounded-md border border-obsidian-border bg-obsidian-surface px-2 font-mono text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-gold" placeholder="fd00:100::/64" aria-describedby="c2-scope-ipv6-help" />
+                <span id="c2-scope-ipv6-help" className="text-[11px] leading-relaxed">{t('scope.ipv6TargetsHint')}</span>
+              </label>
+              <label className="grid gap-1 text-xs text-obsidian-muted sm:col-span-2">
+                <span>{t('scope.summary')}</span>
+                <textarea required minLength={10} maxLength={10000} rows={2} value={scopeDraft.scope_written_summary} onChange={(event) => setScopeDraft((current) => ({ ...current, scope_written_summary: event.target.value }))} className="rounded-md border border-obsidian-border bg-obsidian-surface px-2 py-1.5 text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-gold" />
+              </label>
+              <label className="grid gap-1 text-xs text-obsidian-muted">
+                <span>{t('scope.start')}</span>
+                <input required type="datetime-local" value={scopeDraft.window_start} onChange={(event) => setScopeDraft((current) => ({ ...current, window_start: event.target.value }))} className="min-h-[40px] rounded-md border border-obsidian-border bg-obsidian-surface px-2 text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-gold" />
+              </label>
+              <label className="grid gap-1 text-xs text-obsidian-muted">
+                <span>{t('scope.end')}</span>
+                <input required type="datetime-local" value={scopeDraft.window_end} onChange={(event) => setScopeDraft((current) => ({ ...current, window_end: event.target.value }))} className="min-h-[40px] rounded-md border border-obsidian-border bg-obsidian-surface px-2 text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-gold" />
+              </label>
+              {createScopeError && <p role="alert" className="sm:col-span-2 text-xs text-red-300">{createScopeError}</p>}
+              <div className="sm:col-span-2 flex justify-end">
+                <button type="submit" disabled={createScopePending || engagementClients.length === 0} className="min-h-[44px] rounded-lg bg-obsidian-gold px-4 text-xs font-semibold text-obsidian-bg hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white">
+                  {createScopePending ? '…' : t('scope.submit')}
+                </button>
+              </div>
+            </form>
+          )}
+        </section>
       </div>
 
       {/* Environment check warning strip when warnings exist */}
@@ -524,6 +662,32 @@ export const C2WorkspaceShell: React.FC = () => {
             ))}
         </div>
       )}
+
+      <details className="rounded-lg border border-obsidian-border bg-obsidian-panel px-4 py-3 text-sm">
+        <summary className="cursor-pointer font-medium text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-gold">
+          {lang === 'es' ? 'Comprobación previa del módulo' : 'Module preflight check'}
+        </summary>
+        <div className="mt-3 space-y-2 text-xs text-slate-300">
+          {preflightState === 'loading' && <p role="status">{lang === 'es' ? 'Comprobando entorno…' : 'Checking environment…'}</p>}
+          {preflightState === 'error' && <p role="alert">{lang === 'es' ? 'No se pudo comprobar el entorno. Vuelve a intentarlo.' : 'Could not check the environment. Try again.'}</p>}
+          {preflightState === 'ready' && demoMode && <p>{lang === 'es' ? 'Demostración: no se comprueban permisos ni herramientas del equipo.' : 'Demo: host permissions and tools are not checked.'}</p>}
+          {preflightState === 'ready' && !demoMode && !preflight && <p>{lang === 'es' ? 'El servicio no proporcionó datos de comprobación. Actualiza o reinicia C2.' : 'The service did not provide preflight data. Update or restart C2.'}</p>}
+          {preflightState === 'ready' && !demoMode && preflight && <>
+            <p>{lang === 'es' ? 'Privilegios del servicio' : 'Service privileges'}: {preflight.root ? 'root' : (lang === 'es' ? 'sin root; algunas operaciones no estarán disponibles' : 'not root; some operations will be unavailable')}</p>
+            <p>{lang === 'es' ? 'Interfaz seleccionada' : 'Selected interface'}: {selectedIface || (lang === 'es' ? 'ninguna; selecciona una interfaz arriba' : 'none; select an interface above')}</p>
+            {activeSection === 'c2_wifi' && selectedIface && !interfaces.find((iface) => iface.name === selectedIface)?.wireless && <p role="alert">{lang === 'es' ? 'La interfaz seleccionada no se identifica como Wi‑Fi. Selecciona un adaptador inalámbrico.' : 'The selected interface is not identified as Wi-Fi. Select a wireless adapter.'}</p>}
+            {(({
+              c2_wifi: ['ip', 'iw'], c2_http: ['iptables'], c2_mitm6: ['ip6tables'], c2_opsec: ['ip'],
+            } as Partial<Record<C2SectionId, string[]>>)[activeSection as C2SectionId] || []).map((tool) => (
+              <p key={tool}>{tool}: {preflight.tools[tool] === undefined ? (lang === 'es' ? 'sin comprobar' : 'not checked') : preflight.tools[tool] ? (lang === 'es' ? 'disponible' : 'available') : (lang === 'es' ? 'no encontrado; instálalo en el equipo C2' : 'not found; install it on the C2 host')}</p>
+            ))}
+            {activeSection === 'c2_wifi' && <p>{lang === 'es' ? 'Conversión de capturas (opcional)' : 'Capture conversion (optional)'}: {preflight.tools.hcxpcapngtool ? (lang === 'es' ? 'disponible' : 'available') : (lang === 'es' ? 'requiere hcxpcapngtool' : 'requires hcxpcapngtool')}</p>}
+            {activeSection === 'c2_ports' && <p>{lang === 'es' ? 'Búsqueda local de exploits (opcional)' : 'Local exploit lookup (optional)'}: {preflight.tools.searchsploit ? (lang === 'es' ? 'disponible' : 'available') : (lang === 'es' ? 'requiere searchsploit' : 'requires searchsploit')}</p>}
+            <p className="text-slate-400">{lang === 'es' ? 'La presencia de herramientas no garantiza compatibilidad del hardware ni permisos para cada operación.' : 'Tool availability does not guarantee hardware compatibility or permissions for each operation.'}</p>
+          </>}
+          <button type="button" onClick={() => void refreshEnvCheck()} disabled={preflightState === 'loading'} className="min-h-[44px] rounded-md border border-obsidian-border px-3 text-white hover:bg-obsidian-surface disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-gold">{lang === 'es' ? 'Volver a comprobar' : 'Check again'}</button>
+        </div>
+      </details>
 
       {/* Active C2 Panel Body */}
       <div className="min-h-0 flex-1">

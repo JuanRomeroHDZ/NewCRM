@@ -31,11 +31,13 @@ def test_arp_failed_restart_clears_stopped_instance(monkeypatch):
             raise RuntimeError("No se pudo resolver la MAC")
 
     old = OldModule()
+    # Keep this lifecycle test independent of the runner's raw-socket privileges.
+    monkeypatch.setattr(c2.arp_module, "_SCAPY_AVAILABLE", True)
     monkeypatch.setattr(c2.manager, "arp", old)
     monkeypatch.setattr(c2, "ArpSpoofer", FailedModule)
     with pytest.raises(HTTPException) as exc:
         c2.api_arp_start(c2.ArpReq(interface="eth0", target_ip="10.0.0.2", gateway_ip="10.0.0.1"))
-    assert exc.value.status_code == 400
+    assert exc.value.status_code == 503
     assert "MAC" in exc.value.detail
     assert old.stopped and c2.manager.arp is None
 

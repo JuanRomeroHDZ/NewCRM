@@ -17,7 +17,7 @@ from collections import Counter
 try:
     from scapy.all import AsyncSniffer, IP as IP_LAYER
     _SCAPY_AVAILABLE = True
-except ImportError:  # pragma: no cover - entorno mínimo sin scapy
+except (ImportError, OSError):  # pragma: no cover - scapy ausente o sin permisos de socket
     AsyncSniffer = IP_LAYER = None  # type: ignore[assignment]
     _SCAPY_AVAILABLE = False
 

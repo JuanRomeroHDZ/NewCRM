@@ -127,7 +127,10 @@ async def scan(
 # --------------------------------------------------------------------------- #
 def _syn_sync(ip: str, ports: list[int], timeout: float,
               batch: int, delay: float, jitter: float) -> list[int]:
-    from scapy.all import IP, TCP, RandShort, sr
+    try:
+        from scapy.all import IP, TCP, RandShort, sr
+    except (ImportError, OSError) as exc:
+        raise RuntimeError("El escaneo SYN requiere Scapy disponible en el entorno C2") from exc
 
     open_ports: list[int] = []
     for i in range(0, len(ports), batch):
@@ -135,6 +138,8 @@ def _syn_sync(ip: str, ports: list[int], timeout: float,
         try:
             ans, _ = sr(IP(dst=ip) / TCP(dport=chunk, sport=RandShort(), flags="S"),
                         timeout=timeout, verbose=0)
+        except PermissionError as exc:
+            raise RuntimeError("El escaneo SYN requiere permisos de root/cap_net_raw") from exc
         except Exception:
             break
         for _snd, rcv in ans:

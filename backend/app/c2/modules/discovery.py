@@ -5,7 +5,7 @@ from app.c2.core.targets import bounded_network
 try:
     from scapy.all import ARP, Ether, conf, srp
     _SCAPY_AVAILABLE = True
-except ImportError:  # pragma: no cover - entorno mínimo sin scapy
+except (ImportError, OSError):  # pragma: no cover - scapy ausente o sin permisos de socket
     ARP = Ether = conf = srp = None  # type: ignore[assignment]
     _SCAPY_AVAILABLE = False
 
@@ -32,6 +32,8 @@ def scan(interface: str, cidr: str, timeout: float = 2.0) -> list[dict]:
     pasada para los que no contestaron la primera vez.
     """
     net = bounded_network(cidr, ipv4_only=True)
+    if not _SCAPY_AVAILABLE:
+        raise RuntimeError("Scapy o los permisos para inicializar sockets no están disponibles en el entorno C2")
 
     def _arp_for(ip: str):
         return Ether(dst="ff:ff:ff:ff:ff:ff") / ARP(pdst=ip)

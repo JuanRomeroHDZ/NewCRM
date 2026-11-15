@@ -33,8 +33,8 @@ def full_cleanup(reason: str = "salida") -> list[str]:
         from app.c2.modules import opsec
         opsec.restore()
         actions.append("identidad OPSEC restaurada")
-    except Exception:
-        pass  # sin cambios de identidad pendientes
+    except Exception as e:
+        actions.append(f"identidad OPSEC no restaurada: {e}")
     try:
         actions.extend(state.restore()["restored"])
     except Exception as e:

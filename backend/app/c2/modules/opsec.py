@@ -14,9 +14,11 @@ from pathlib import Path
 
 from app.config import settings
 from app.c2.core.bus import bus
-from app.c2.core.system_tools import find_tool, tool_environment
+from app.c2.core.network_safety import inspect_offline_interface
+from app.c2.core.system_tools import tool_environment
 
 STATE_PATH = Path(settings.C2_STATE_DIR) / ".opsec_state.json"
+SYS_NET_PATH = Path("/sys/class/net")
 
 # OUI publicos conocidos. El resto de la MAC se randomiza.
 VENDORS = {
@@ -39,7 +41,7 @@ def _run(cmd: list[str]) -> subprocess.CompletedProcess:
         return subprocess.run(cmd, capture_output=True, text=True, timeout=20, env=tool_environment())
     except FileNotFoundError:
         # Binario no instalado en esta imagen: devolvemos fallo controlado
-        # en vez de reventar el endpoint (pasa con dhclient, ethtool...).
+        # en vez de reventar el endpoint.
         return subprocess.CompletedProcess(cmd, returncode=127, stdout="", stderr="no encontrado")
     except subprocess.TimeoutExpired:
         return subprocess.CompletedProcess(cmd, returncode=124, stdout="",
@@ -283,34 +285,14 @@ def _patch_hosts(new_name: str) -> None:
         pass
 
 
-def renew_dhcp(iface: str) -> None:
-    """Renueva la concesion DHCP tras cambiar la MAC. Prueba dhclient, dhcpcd
-    y NetworkManager (el cliente interno de Kali moderno). Nunca revienta:
-    si no hay forma de renovar, solo avisa."""
-    try:
-        if find_tool("dhclient"):
-            _run(["dhclient", "-r", iface])
-            if _run(["dhclient", iface]).returncode == 0:
-                return
-        elif find_tool("dhcpcd"):
-            _run(["dhcpcd", "-k", iface])
-            if _run(["dhcpcd", iface]).returncode == 0:
-                return
-        if find_tool("nmcli"):
-            _run(["nmcli", "device", "disconnect", iface])
-            if _run(["nmcli", "device", "connect", iface]).returncode == 0:
-                return
-    except FileNotFoundError as e:
-        bus.emit({"type": "error", "msg": f"Renovando DHCP: {e}"})
-    bus.emit({"type": "opsec", "msg": f"MAC cambiada; DHCP no se renovo solo ({iface})"})
-
-
 def set_mac(iface: str, mac: str | None = None, vendor: str | None = None,
             dhcp: bool = False) -> dict:
-    if not iface or "/" in iface or iface == "lo":
-        raise ValueError("Interfaz invalida")
-    if not Path(f"/sys/class/net/{iface}").exists():
-        raise ValueError(f"No existe la interfaz {iface}")
+    inspect_offline_interface(iface, _run, SYS_NET_PATH)
+    if dhcp:
+        raise ValueError(
+            "La renovación DHCP automática está desactivada para evitar reconectar "
+            "el adaptador y alterar rutas. Cambia la MAC en un adaptador dedicado y abajo."
+        )
     if mac:
         mac = mac.strip().lower()
         if not _MAC_RE.match(mac):
@@ -320,20 +302,15 @@ def set_mac(iface: str, mac: str | None = None, vendor: str | None = None,
         gen = generate_mac(vendor)
         mac, vendor_name = gen["mac"], gen["vendor"]
     _remember_originals(iface)
-    # Bajar, cambiar, subir. El enlace se cae un segundo. try/finally:
-    # si algo falla, la interfaz vuelve a quedar UP.
-    try:
-        for cmd in (
-            ["ip", "link", "set", iface, "down"],
-            ["ip", "link", "set", iface, "address", mac],
-        ):
-            proc = _run(cmd)
-            if proc.returncode != 0:
-                raise RuntimeError((proc.stderr or proc.stdout or "ip link fallo").strip())
-    finally:
-        _run(["ip", "link", "set", iface, "up"])
-    if dhcp:
-        renew_dhcp(iface)
+    # Keep the interface down after mutation: bringing it up could reconnect
+    # NetworkManager or install a default route without an explicit user action.
+    for cmd in (
+        ["ip", "link", "set", iface, "down"],
+        ["ip", "link", "set", iface, "address", mac],
+    ):
+        proc = _run(cmd)
+        if proc.returncode != 0:
+            raise RuntimeError((proc.stderr or proc.stdout or "ip link fallo").strip())
     bus.emit({"type": "opsec", "msg": f"MAC {iface} -> {mac} ({vendor_name})"})
     return identity()
 
@@ -341,6 +318,14 @@ def set_mac(iface: str, mac: str | None = None, vendor: str | None = None,
 def apply_identity(iface: str, hostname: str, mac: str | None = None,
                    vendor: str | None = None, pretty: str | None = None,
                    dhcp: bool = False) -> dict:
+    # Validate before changing the hostname so an unsafe interface cannot leave
+    # the operation half applied.
+    inspect_offline_interface(iface, _run, SYS_NET_PATH)
+    if dhcp:
+        raise ValueError(
+            "La renovación DHCP automática está desactivada para evitar reconectar "
+            "el adaptador y alterar rutas. Cambia la MAC en un adaptador dedicado y abajo."
+        )
     set_hostname(hostname, pretty)
     set_mac(iface, mac, vendor, dhcp)
     return identity()
@@ -362,40 +347,40 @@ def restore(iface: str | None = None) -> dict:
     state = _load_state()
     errors = []
     original_host = state.get("hostname")
+    hostname_restored = not original_host
     if original_host:
         try:
             set_hostname(original_host, state.get("pretty") or None)
+            hostname_restored = True
         except Exception as e:
             errors.append(str(e))
     macs = state.get("macs", {})
     targets = [iface] if iface else list(macs)
+    restored_names: set[str] = set()
     for name in targets:
         original = macs.get(name, {}).get("original")
         if not original:
             continue
         try:
-            # No re-guardar el spoof como original. try/finally para dejar
-            # la interfaz UP aunque algo falle a mitad.
-            try:
-                for cmd in (
-                    ["ip", "link", "set", name, "down"],
-                    ["ip", "link", "set", name, "address", original],
-                ):
-                    proc = _run(cmd)
-                    if proc.returncode != 0:
-                        raise RuntimeError((proc.stderr or "").strip())
-            finally:
-                _run(["ip", "link", "set", name, "up"])
+            inspect_offline_interface(name, _run, SYS_NET_PATH)
+            # No re-guardar el spoof como original, and never reconnect it
+            # automatically after restoring the MAC.
+            for cmd in (
+                ["ip", "link", "set", name, "down"],
+                ["ip", "link", "set", name, "address", original],
+            ):
+                proc = _run(cmd)
+                if proc.returncode != 0:
+                    raise RuntimeError((proc.stderr or "").strip())
+            restored_names.add(name)
             bus.emit({"type": "opsec", "msg": f"MAC {name} restaurada ({original})"})
         except Exception as e:
             errors.append(f"{name}: {e}")
-    if original_host:
+    if original_host and hostname_restored:
         state["hostname"] = None
         state["pretty"] = None
-    if iface:
-        state.get("macs", {}).pop(iface, None)
-    else:
-        state["macs"] = {}
+    for name in restored_names:
+        state.get("macs", {}).pop(name, None)
     _save_state(state)
     if errors:
         raise RuntimeError("; ".join(errors))

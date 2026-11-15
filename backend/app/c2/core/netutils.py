@@ -28,6 +28,22 @@ def list_interfaces() -> list[dict]:
         inet = inet[0] if inet else {}
         link = addrs.get(netifaces.AF_LINK, [{}])
         link = link[0] if link else {}
+        ipv6_cidrs: list[str] = []
+        for address in addrs.get(getattr(netifaces, "AF_INET6", -1), []):
+            raw_address = address.get("addr")
+            prefix_length = address.get("prefixlen")
+            if not raw_address or prefix_length is None:
+                continue
+            try:
+                interface6 = ipaddress.IPv6Interface(f"{raw_address.split('%', 1)[0]}/{int(prefix_length)}")
+            except (TypeError, ValueError):
+                continue
+            # Link-local networks are implicit on every interface and do not
+            # establish authorization for an IPv6 RA/DNS operation.
+            if not interface6.network.network_address.is_link_local:
+                cidr = str(interface6.network)
+                if cidr not in ipv6_cidrs:
+                    ipv6_cidrs.append(cidr)
         ip = inet.get("addr")
         # netifaces original usa "netmask"; netifaces2 usa "mask".
         netmask = inet.get("netmask") or inet.get("mask")
@@ -37,7 +53,7 @@ def list_interfaces() -> list[dict]:
         # Loopback fuera. Sin IPv4 solo mostramos Wi-Fi (modo monitor no tiene IP).
         if iface == "lo" or (ip or "").startswith("127."):
             continue
-        if not ip and not wireless:
+        if not ip and not wireless and not ipv6_cidrs:
             continue
         result.append(
             {
@@ -46,6 +62,7 @@ def list_interfaces() -> list[dict]:
                 "netmask": netmask,
                 "mac": link.get("addr"),
                 "cidr": to_cidr(ip, netmask),
+                "ipv6_cidrs": ipv6_cidrs,
                 "wireless": wireless,
             }
         )

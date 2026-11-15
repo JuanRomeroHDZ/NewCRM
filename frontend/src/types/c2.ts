@@ -43,6 +43,22 @@ export interface C2Meta {
   [key: string]: unknown;
 }
 
+export interface C2Engagement {
+  id: string;
+  title: string;
+  authorized_targets: string;
+  authorized_ipv6_targets: string;
+  status: 'autorizado' | 'en_ejecucion';
+  window_start: string;
+  window_end: string;
+  active_now: boolean;
+}
+
+export interface C2EngagementClient {
+  id: string;
+  company_name: string;
+}
+
 export type C2ModuleKey =
   | 'arp'
   | 'sniffer'
@@ -283,6 +299,11 @@ export interface C2OpsecState {
 export interface C2EnvWarning {
   level: 'ok' | 'warn' | 'error' | (string & {});
   msg: string;
+}
+
+export interface C2Preflight {
+  root: boolean;
+  tools: Record<string, boolean>;
 }
 
 export type C2LogType =

@@ -5,7 +5,7 @@ import {
   OneTimeExpense, InternalProject, SecureResource,
   CoreUser, CoreLoginResponse, CoreUserCreateResponse, TotpSetupResponse, CoreUserRole,
   WriteupSummary, WriteupDetail, WriteupBoard, WriteupCitation, WriteupAsset,
-  WriteupRevision, WriteupExportFormat, WriteupStructuredFinding, WriteupStatus, WriteupSeverity,
+  WriteupRevision, WriteupRevisionAuthor, WriteupExportFormat, WriteupStructuredFinding, WriteupStatus, WriteupSeverity,
   RuntimeConfig
 } from '../types';
 import { ApiError, createHttpApiError, normalizeResponseReadError, normalizeTransportError } from './apiErrors';
@@ -74,6 +74,19 @@ export interface ApiPage<T> {
   items: T[];
   total: number;
   hasMore: boolean;
+}
+
+export interface WriteupRevisionFilters {
+  offset?: number;
+  before_revision_number?: number;
+  limit?: number;
+  search?: string;
+  change_type?: WriteupRevision['change_type'];
+  author_id?: string;
+  created_after?: string;
+  created_before?: string;
+  /** Omit Markdown and the snapshot until the user opens a revision. */
+  include_content?: boolean;
 }
 
 let currentVaultToken: string | null = localStorage.getItem('emailsaver_vault_token');
@@ -225,6 +238,13 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     return undefined as T;
   }
   return readApiJson<T>(response);
+}
+
+async function requestUpdatedAtHeader(endpoint: string, options: RequestInit = {}): Promise<string | null> {
+  const headers = buildAuthHeaders(options.headers as Record<string, string> | undefined, true);
+  const response = await fetchApiResponse(`${API_BASE}${endpoint}`, { ...options, headers });
+  if (!response.ok) await handleApiErrorResponse(endpoint, response, headers);
+  return response.headers.get('X-Writeup-Updated-At');
 }
 
 async function requestPage<T>(endpoint: string, offset: number, limit: number): Promise<ApiPage<T>> {
@@ -397,6 +417,11 @@ export const api = {
     }),
   restoreEncryptedVault: (export_password: string, backup_data: any) =>
     request<any>('/vault/restore-encrypted', {
+      method: 'POST',
+      body: JSON.stringify({ export_password, backup_data })
+    }),
+  verifyEncryptedVault: (export_password: string, backup_data: unknown) =>
+    request<{ valid: boolean; counts: Record<string, number>; partial: boolean }>('/vault/verify-encrypted', {
       method: 'POST',
       body: JSON.stringify({ export_password, backup_data })
     }),
@@ -647,25 +672,48 @@ export const api = {
       findings?: WriteupStructuredFinding[];
       prospect_id?: string | null;
       project_id?: string | null;
+      expected_updated_at?: string;
       save_revision?: boolean;
       revision_note?: string;
+      revision_type?: WriteupRevision['change_type'];
     }
   ) => request<WriteupDetail>(`/writeups/${writeupId}`, { method: 'PATCH', body: JSON.stringify(payload) }),
-  deleteWriteup: (writeupId: string) => request<void>(`/writeups/${writeupId}`, { method: 'DELETE' }),
-  listWriteupRevisions: (writeupId: string, offset = 0) => request<WriteupRevision[]>(`/writeups/${writeupId}/revisions?offset=${offset}&limit=40`),
-  restoreWriteupRevision: (writeupId: string, revisionId: string) =>
-    request<WriteupDetail>(`/writeups/${writeupId}/revisions/${revisionId}/restore`, { method: 'POST' }),
+  deleteWriteup: (writeupId: string, expectedUpdatedAt?: string) =>
+    requestUpdatedAtHeader(`/writeups/${writeupId}${expectedUpdatedAt ? `?expected_updated_at=${encodeURIComponent(expectedUpdatedAt)}` : ''}`, { method: 'DELETE' }),
+  listWriteupRevisions: (writeupId: string, offsetOrFilters: number | WriteupRevisionFilters = 0, extraFilters: WriteupRevisionFilters = {}) => {
+    const filters = typeof offsetOrFilters === 'number'
+      ? { ...extraFilters, offset: offsetOrFilters }
+      : offsetOrFilters;
+    const params = new URLSearchParams({
+      offset: String(filters.offset ?? 0),
+      limit: String(filters.limit ?? 40),
+      include_content: String(filters.include_content ?? true),
+    });
+    if (filters.before_revision_number !== undefined) params.set('before_revision_number', String(filters.before_revision_number));
+    if (filters.search?.trim()) params.set('search', filters.search.trim());
+    if (filters.change_type) params.set('change_type', filters.change_type);
+    if (filters.author_id) params.set('author_id', filters.author_id);
+    if (filters.created_after) params.set('created_after', filters.created_after);
+    if (filters.created_before) params.set('created_before', filters.created_before);
+    return request<WriteupRevision[]>(`/writeups/${writeupId}/revisions?${params.toString()}`);
+  },
+  listWriteupRevisionAuthors: (writeupId: string) => request<WriteupRevisionAuthor[]>(`/writeups/${writeupId}/revisions/authors`),
+  getWriteupRevision: (writeupId: string, revisionId: string) => request<WriteupRevision>(`/writeups/${writeupId}/revisions/${revisionId}`),
+  restoreWriteupRevision: (writeupId: string, revisionId: string, expectedUpdatedAt?: string) =>
+    request<WriteupDetail>(`/writeups/${writeupId}/revisions/${revisionId}/restore${expectedUpdatedAt ? `?expected_updated_at=${encodeURIComponent(expectedUpdatedAt)}` : ''}`, { method: 'POST' }),
 
   uploadWriteupAsset: async (
     writeupId: string,
     file: File,
     caption?: string,
-    convertToGif = false
+    convertToGif = false,
+    expectedUpdatedAt?: string
   ): Promise<WriteupAsset> => {
     const form = new FormData();
     form.append('file', file);
     if (caption) form.append('caption', caption);
     if (convertToGif) form.append('convert_to_gif', 'true');
+    if (expectedUpdatedAt) form.append('expected_updated_at', expectedUpdatedAt);
     const headers = buildAuthHeaders(undefined, false);
     const endpoint = `/writeups/${writeupId}/assets`;
     const response = await fetchApiResponse(`${API_BASE}${endpoint}`, {
@@ -681,11 +729,12 @@ export const api = {
   convertWriteupVideoToGif: (
     writeupId: string,
     assetId: string,
-    opts?: { fps?: number; maxWidth?: number }
+    opts?: { fps?: number; maxWidth?: number; expectedUpdatedAt?: string }
   ) => {
     const params = new URLSearchParams();
     if (opts?.fps) params.set('fps', String(opts.fps));
     if (opts?.maxWidth) params.set('max_width', String(opts.maxWidth));
+    if (opts?.expectedUpdatedAt) params.set('expected_updated_at', opts.expectedUpdatedAt);
     const qs = params.toString() ? `?${params.toString()}` : '';
     return request<WriteupAsset>(`/writeups/${writeupId}/assets/${assetId}/convert-to-gif${qs}`, {
       method: 'POST',
@@ -695,18 +744,18 @@ export const api = {
     const { blob } = await requestBlobResponse(`/writeups/${writeupId}/assets/${assetId}`);
     return blob;
   },
-  deleteWriteupAsset: (writeupId: string, assetId: string) =>
-    request<void>(`/writeups/${writeupId}/assets/${assetId}`, { method: 'DELETE' }),
+  deleteWriteupAsset: (writeupId: string, assetId: string, expectedUpdatedAt?: string) =>
+    requestUpdatedAtHeader(`/writeups/${writeupId}/assets/${assetId}${expectedUpdatedAt ? `?expected_updated_at=${encodeURIComponent(expectedUpdatedAt)}` : ''}`, { method: 'DELETE' }),
 
-  createWriteupBoard: (writeupId: string, payload: { title: string; scene_json?: string; svg_snapshot?: string | null; element_count?: number }) =>
+  createWriteupBoard: (writeupId: string, payload: { title: string; scene_json?: string; svg_snapshot?: string | null; element_count?: number; expected_updated_at?: string }) =>
     request<WriteupBoard>(`/writeups/${writeupId}/boards`, { method: 'POST', body: JSON.stringify(payload) }),
   updateWriteupBoard: (
     writeupId: string,
     boardId: string,
-    payload: { title?: string; scene_json?: string; svg_snapshot?: string | null; element_count?: number }
+    payload: { title?: string; scene_json?: string; svg_snapshot?: string | null; element_count?: number; expected_updated_at?: string }
   ) => request<WriteupBoard>(`/writeups/${writeupId}/boards/${boardId}`, { method: 'PATCH', body: JSON.stringify(payload) }),
-  deleteWriteupBoard: (writeupId: string, boardId: string) =>
-    request<void>(`/writeups/${writeupId}/boards/${boardId}`, { method: 'DELETE' }),
+  deleteWriteupBoard: (writeupId: string, boardId: string, expectedUpdatedAt?: string) =>
+    requestUpdatedAtHeader(`/writeups/${writeupId}/boards/${boardId}${expectedUpdatedAt ? `?expected_updated_at=${encodeURIComponent(expectedUpdatedAt)}` : ''}`, { method: 'DELETE' }),
 
   createWriteupCitation: (
     writeupId: string,
@@ -720,15 +769,16 @@ export const api = {
       quoted_text: string;
       color?: string;
       note?: string | null;
+      expected_updated_at?: string;
     }
   ) => request<WriteupCitation>(`/writeups/${writeupId}/citations`, { method: 'POST', body: JSON.stringify(payload) }),
   updateWriteupCitation: (
     writeupId: string,
     citationId: string,
-    payload: { board_element_id?: string | null; quoted_text?: string; color?: string; note?: string | null; line_start?: number; line_end?: number }
+    payload: { board_element_id?: string | null; quoted_text?: string; color?: string; note?: string | null; line_start?: number; line_end?: number; expected_updated_at?: string }
   ) => request<WriteupCitation>(`/writeups/${writeupId}/citations/${citationId}`, { method: 'PATCH', body: JSON.stringify(payload) }),
-  deleteWriteupCitation: (writeupId: string, citationId: string) =>
-    request<void>(`/writeups/${writeupId}/citations/${citationId}`, { method: 'DELETE' }),
+  deleteWriteupCitation: (writeupId: string, citationId: string, expectedUpdatedAt?: string) =>
+    requestUpdatedAtHeader(`/writeups/${writeupId}/citations/${citationId}${expectedUpdatedAt ? `?expected_updated_at=${encodeURIComponent(expectedUpdatedAt)}` : ''}`, { method: 'DELETE' }),
 
   previewWriteup: (writeupId: string, redactForClient = false) =>
     request<{ sanitized_html: string; redacted_for_client: boolean }>(

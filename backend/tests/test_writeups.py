@@ -2,10 +2,12 @@ import hashlib
 import io
 import json
 import zipfile
+from httpx import ASGITransport, AsyncClient
 from PIL import Image
 import pytest
 from sqlalchemy import func, select
 from app.models.core import User
+from app.main import app
 from app.models.writeups import Writeup, WriteupAsset, WriteupRevision
 from app.security.crypto import BYTES_ENC_PREFIX, NOTE_ENC_PREFIX, hash_master_password
 from app.services.core_auth import create_user_session
@@ -373,6 +375,8 @@ async def test_writeup_board_xss_citations_and_multi_format_exports(client, auth
     assert b"<script>" not in html_res.content
     assert b"INTERNAL_JWT_XYZ" not in html_res.content
     assert b"[REDACTED]" in html_res.content
+    assert b'aria-label="Portada del informe"' in html_res.content
+    assert html_res.content.index(b'aria-label="Portada del informe"') < html_res.content.index(b'<main class="markdown-body">')
 
     zip_res = await client.post(
         f"/api/v1/writeups/{writeup_id}/export",
@@ -394,6 +398,11 @@ async def test_writeup_board_xss_citations_and_multi_format_exports(client, auth
     )
     assert docx_res.status_code == 200
     assert docx_res.content[:2] == b"PK"
+    with zipfile.ZipFile(io.BytesIO(docx_res.content)) as document_zip:
+        document_xml = document_zip.read("word/document.xml")
+        assert b"INFORME DE SEGURIDAD" in document_xml
+        assert b'w:type="page"' in document_xml
+        assert b"INTERNAL_JWT_XYZ" not in document_xml
 
     pdf_res = await client.post(
         f"/api/v1/writeups/{writeup_id}/export",
@@ -657,3 +666,108 @@ async def test_writeup_rendered_mermaid_export_and_clone(client, auth_token):
     assert "flowchart LR" in cjson["markdown_content"]
 
 
+
+
+@pytest.mark.asyncio
+async def test_concurrent_editor_cannot_overwrite_or_restore_newer_report(client, auth_token):
+    headers = {"X-Vault-Token": auth_token}
+    created = await client.post("/api/v1/writeups", headers=headers, json={
+        "title": "Informe concurrente", "markdown_content": "Original", "create_default_board": False,
+    })
+    assert created.status_code == 201
+    report = created.json()
+    report_id = report["id"]
+    original_version = report["updated_at"]
+    first = await client.patch(f"/api/v1/writeups/{report_id}", headers=headers, json={
+        "expected_updated_at": original_version, "markdown_content": "Cambios de la primera sesión",
+    })
+    assert first.status_code == 200
+    stale = await client.patch(f"/api/v1/writeups/{report_id}", headers=headers, json={
+        "expected_updated_at": original_version, "markdown_content": "Cambios obsoletos",
+    })
+    assert stale.status_code == 409
+    revisions = await client.get(f"/api/v1/writeups/{report_id}/revisions", headers=headers)
+    restore = await client.post(
+        f"/api/v1/writeups/{report_id}/revisions/{revisions.json()[-1]['id']}/restore",
+        headers=headers, params={"expected_updated_at": original_version},
+    )
+    assert restore.status_code == 409
+    current = await client.get(f"/api/v1/writeups/{report_id}", headers=headers)
+    assert current.json()["markdown_content"] == "Cambios de la primera sesión"
+    assert (await client.patch(f"/api/v1/writeups/{report_id}", headers=headers, json={
+        "expected_updated_at": current.json()["updated_at"], "markdown_content": "Edición posterior",
+    })).status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_two_writeup_sessions_reject_stale_board_citation_and_evidence_mutations(client, auth_token):
+    """Parent updated_at is an atomic token shared by every mutable writeup resource."""
+    headers = {"X-Vault-Token": auth_token}
+    created = await client.post("/api/v1/writeups", headers=headers, json={
+        "title": "Informe con recursos concurrentes", "markdown_content": "# Evidencia\nTexto citado {#evidence}",
+        "create_default_board": True,
+    })
+    assert created.status_code == 201
+    report = created.json()
+    report_id = report["id"]
+    board_id = report["boards"][0]["id"]
+    stale_version = report["updated_at"]
+
+    # Separate HTTP clients model two browsers that loaded the same report version.
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as second_session:
+        fresh = await client.patch(
+            f"/api/v1/writeups/{report_id}/boards/{board_id}",
+            headers=headers,
+            json={"expected_updated_at": stale_version, "title": "Mapa actualizado"},
+        )
+        assert fresh.status_code == 200
+        current_version = fresh.json()["writeup_updated_at"]
+        assert current_version != stale_version
+
+        stale_citation = await second_session.post(
+            f"/api/v1/writeups/{report_id}/citations",
+            headers=headers,
+            json={
+                "expected_updated_at": stale_version, "board_id": board_id, "anchor_id": "evidence",
+                "line_start": 2, "line_end": 2, "quoted_text": "Texto citado",
+            },
+        )
+        assert stale_citation.status_code == 409
+
+        stale_board_delete = await second_session.delete(
+            f"/api/v1/writeups/{report_id}/boards/{board_id}",
+            headers=headers,
+            params={"expected_updated_at": stale_version},
+        )
+        assert stale_board_delete.status_code == 409
+
+        stale_evidence_upload = await second_session.post(
+            f"/api/v1/writeups/{report_id}/assets",
+            headers=headers,
+            data={"expected_updated_at": stale_version},
+            files={"file": ("capture.jpg", b"stale request must fail before processing", "image/jpeg")},
+        )
+        assert stale_evidence_upload.status_code == 409
+
+        accepted = await second_session.post(
+            f"/api/v1/writeups/{report_id}/citations",
+            headers=headers,
+            json={
+                "expected_updated_at": current_version, "board_id": board_id, "anchor_id": "evidence",
+                "line_start": 2, "line_end": 2, "quoted_text": "Texto citado",
+            },
+        )
+        assert accepted.status_code == 201
+        assert accepted.json()["writeup_updated_at"] != current_version
+
+    # Older API clients remain compatible during rollout; a successful legacy mutation
+    # still advances the parent token, and the current detail exposes it to clients.
+    legacy_board = await client.post(
+        f"/api/v1/writeups/{report_id}/boards", headers=headers,
+        json={"title": "Pizarra de cliente antiguo"},
+    )
+    assert legacy_board.status_code == 201
+    detail = await client.get(f"/api/v1/writeups/{report_id}", headers=headers)
+    assert detail.status_code == 200
+    assert detail.json()["updated_at"] == legacy_board.json()["writeup_updated_at"]
+    assert all(board["writeup_updated_at"] == detail.json()["updated_at"] for board in detail.json()["boards"])

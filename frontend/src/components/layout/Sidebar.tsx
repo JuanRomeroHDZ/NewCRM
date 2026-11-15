@@ -216,15 +216,15 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onCloseMobile })
       aria-modal={!isDesktop && isMobileOpen ? true : undefined}
       aria-hidden={!isDesktop && !isMobileOpen ? true : undefined}
       onKeyDown={handleMobileTab}
-      className={`responsive-sidebar fixed inset-y-0 left-0 z-50 flex h-[100dvh] w-72 max-w-[calc(100vw-2rem)] shrink-0 flex-col border-r border-obsidian-border bg-obsidian-panel transition-transform duration-200 ease-out lg:static lg:h-[100dvh] lg:max-w-none ${collapsed ? 'lg:w-16' : 'lg:w-64'} ${isMobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}
+      className={`responsive-sidebar fixed inset-y-0 left-0 z-50 flex h-[100dvh] w-72 max-w-[calc(100vw-2rem)] shrink-0 flex-col border-r border-obsidian-border bg-obsidian-panel transition-transform duration-200 ease-out lg:static lg:h-[100dvh] lg:max-w-none ${compact ? 'lg:w-10 lg:border-r-0 lg:bg-transparent' : 'lg:w-64'} ${isMobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}
     >
-      <div className={`flex h-16 shrink-0 items-center justify-between border-b border-obsidian-border ${compact ? 'px-1' : 'px-4'}`}>
+      <div className={`flex h-16 shrink-0 items-center justify-between border-b border-obsidian-border ${compact ? 'bg-obsidian-panel/95 px-1' : 'px-4'}`}>
         {!compact ? (
           <div className="flex min-w-0 items-center gap-2.5">
             <button type="button" onClick={() => imageInput.current?.click()} className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-indigo-400/20 bg-indigo-600 text-white" title="Cambiar foto de perfil" aria-label="Cambiar foto de perfil">
               {profileImage ? <img src={profileImage} alt="" className="h-full w-full object-cover" /> : <UserRound size={18} aria-hidden="true" />}
             </button>
-            <input ref={imageInput} type="file" accept="image/png,image/jpeg,image/webp" className="sr-only" tabIndex={-1} onChange={chooseImage} />
+            <input ref={imageInput} type="file" accept="image/png,image/jpeg,image/webp" className="sr-only" tabIndex={-1} aria-label="Seleccionar foto de perfil" onChange={chooseImage} />
             <div className="min-w-0">
               <span className="block truncate text-sm font-bold tracking-tight text-white">LESSSO</span>
               <span className="-mt-0.5 block truncate text-[10px] text-obsidian-muted">Just a leap of faith</span>
@@ -237,15 +237,16 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onCloseMobile })
         <button type="button" onClick={onCloseMobile} className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg p-2 text-obsidian-muted hover:bg-obsidian-surface hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 lg:hidden" aria-label="Cerrar menú">
           <X size={18} />
         </button>
-        <button type="button" onClick={() => setCollapsed((value) => !value)} className={`hidden rounded-lg p-1.5 text-obsidian-muted hover:bg-obsidian-surface hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 lg:inline-flex ${compact ? 'mx-auto shrink-0' : ''}`} title={collapsed ? 'Expandir menú' : 'Colapsar menú'} aria-label={collapsed ? 'Expandir menú' : 'Colapsar menú'}>
+        <button type="button" onClick={() => setCollapsed((value) => !value)} aria-expanded={!collapsed} className={`hidden min-h-10 min-w-8 items-center justify-center rounded-lg p-1.5 text-obsidian-muted hover:bg-obsidian-surface hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 lg:inline-flex ${compact ? 'mx-auto shrink-0' : ''}`} title={collapsed ? 'Expandir menú' : 'Colapsar menú'} aria-label={collapsed ? 'Expandir menú' : 'Colapsar menú'}>
           {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
         </button>
       </div>
 
-      {imageError && !compact && <p role="alert" className="px-4 pb-2 text-xs leading-relaxed text-rose-300">{imageError}</p>}
+      {!compact && <>
+      {imageError && <p role="alert" className="px-4 pb-2 text-xs leading-relaxed text-rose-300">{imageError}</p>}
 
       <div className={`shrink-0 pb-2 ${compact ? 'px-2' : 'px-3'}`}>
-        <button type="button" onClick={() => { openCommandPalette(); onCloseMobile(); }} className={`group flex min-h-10 w-full items-center rounded-xl border border-obsidian-border bg-obsidian-bg text-xs text-obsidian-muted transition-colors hover:bg-obsidian-surface hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 ${compact ? 'justify-center px-2' : 'justify-between gap-2 px-3'}`} title={compact ? 'Buscador rápido' : undefined} aria-label="Abrir buscador rápido">
+        <button type="button" onClick={() => { openCommandPalette(); onCloseMobile(); }} className={`group flex min-h-10 w-full items-center rounded-xl border border-obsidian-border bg-obsidian-bg text-xs text-obsidian-muted transition-colors hover:bg-obsidian-surface hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 ${compact ? 'justify-center px-2' : 'justify-between gap-2 px-3'}`} title={compact ? 'Buscador rápido' : undefined} aria-label={compact ? 'Buscador rápido' : undefined}>
           <span className="flex min-w-0 items-center gap-2"><Search size={14} className="shrink-0 group-hover:text-indigo-300" />{!compact && <span className="truncate">Buscar en LESSSO</span>}</span>
           {!compact && <kbd className="shrink-0 rounded border border-obsidian-border bg-obsidian-panel px-1.5 py-0.5 font-mono text-[10px]">{searchHotkey.toUpperCase()}</kbd>}
         </button>
@@ -322,6 +323,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onCloseMobile })
           </div>
         )}
       </footer>
+      </>}
 
     </aside>
   );

@@ -1,7 +1,9 @@
 import json
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, Response, UploadFile, status
-from sqlalchemy import delete, desc, func, or_, select, update
+from sqlalchemy import case, delete, desc, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.attributes import set_committed_value
 from app.database import get_db
 from app.models import utc_now
 from app.models.core import User
@@ -27,6 +29,7 @@ from app.schemas.writeups import (
     WriteupExportRequest,
     WriteupPreviewOut,
     WriteupRevisionOut,
+    WriteupRevisionAuthorOut,
     WriteupSummaryOut,
     WriteupUpdate,
 )
@@ -48,7 +51,9 @@ from app.services.writeup_service import (
     build_writeup_detail_dict,
     count_related_entities,
     create_revision_snapshot,
+    decrypt_revision_text,
     get_writeup_or_404,
+    infer_revision_type,
     normalize_quote_hash,
     sanitize_board_svg,
     serialize_asset,
@@ -60,6 +65,47 @@ from app.services.writeup_service import (
 
 
 WRITEUP_ROLES = {"owner", "business_admin", "operator"}
+
+
+async def _lock_writeup_for_resource_mutation(
+    db: AsyncSession,
+    writeup_id: str,
+    expected_updated_at: datetime | None,
+) -> Writeup:
+    """Serialize child-resource edits and atomically compare/bump the parent version."""
+    writeup = (await db.execute(
+        select(Writeup)
+        .where(Writeup.id == writeup_id, Writeup.is_deleted == False)  # noqa: E712
+        .with_for_update()
+    )).scalar_one_or_none()
+    if not writeup:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Writeup no encontrado.")
+
+    now = utc_now()
+    if expected_updated_at is not None:
+        expected = expected_updated_at
+        if expected.tzinfo is not None:
+            expected = expected.astimezone(timezone.utc).replace(tzinfo=None)
+        if writeup.updated_at != expected:
+            raise HTTPException(status_code=409, detail="El informe cambió en otra sesión. Actualiza antes de guardar.")
+        # A compare-and-swap also protects databases that do not implement FOR UPDATE.
+        result = await db.execute(
+            update(Writeup)
+            .where(
+                Writeup.id == writeup_id,
+                Writeup.is_deleted == False,  # noqa: E712
+                Writeup.updated_at == expected,
+            )
+            .values(updated_at=now)
+            .execution_options(synchronize_session=False)
+        )
+        if result.rowcount != 1:
+            raise HTTPException(status_code=409, detail="El informe cambió en otra sesión. Actualiza antes de guardar.")
+        set_committed_value(writeup, "updated_at", now)
+    else:
+        # Optional during the compatibility period for older clients.
+        writeup.updated_at = now
+    return writeup
 
 
 async def require_writeup_access(request: Request, db: AsyncSession = Depends(get_db)) -> User | None:
@@ -238,8 +284,11 @@ async def update_writeup(
     db: AsyncSession = Depends(get_db),
     current_user: User | None = Depends(require_writeup_access),
 ):
-    writeup = await get_writeup_or_404(db, writeup_id)
+    # Lock + compare-and-swap before reading mutable data, including on SQLite where
+    # SELECT FOR UPDATE is ignored.
+    writeup = await _lock_writeup_for_resource_mutation(db, writeup_id, payload.expected_updated_at)
     updates = payload.model_dump(exclude_unset=True)
+    updates.pop("expected_updated_at", None)
     await validate_optional_links(
         db,
         updates.get("prospect_id"),
@@ -263,9 +312,18 @@ async def update_writeup(
     if "markdown_content" in updates:
         writeup.encrypted_markdown = encrypt_note(updates["markdown_content"])
     if updates.get("save_revision"):
-        await create_revision_snapshot(db, writeup, decrypt_note(writeup.encrypted_markdown) or "", current_user.id if current_user else None, updates.get("revision_note"))
+        revision_type = updates.get("revision_type") or infer_revision_type(updates.get("revision_note") or "")
+        if revision_type == "edit":
+            revision_type = "manual"
+        await create_revision_snapshot(
+            db,
+            writeup,
+            decrypt_note(writeup.encrypted_markdown) or "",
+            current_user.id if current_user else None,
+            updates.get("revision_note"),
+            revision_type,
+        )
 
-    writeup.updated_at = utc_now()
     await db.commit()
     await db.refresh(writeup)
     return await build_writeup_detail_dict(db, writeup)
@@ -274,10 +332,11 @@ async def update_writeup(
 @router.delete("/{writeup_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_writeup(
     writeup_id: str,
+    expected_updated_at: datetime | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
     current_user: User | None = Depends(require_writeup_access),
 ):
-    writeup = await get_writeup_or_404(db, writeup_id)
+    writeup = await _lock_writeup_for_resource_mutation(db, writeup_id, expected_updated_at)
     writeup.is_deleted = True
     writeup.deleted_at = utc_now()
     await record_event(
@@ -291,49 +350,187 @@ async def delete_writeup(
         user_name=current_user.username if current_user else "Bóveda",
     )
     await db.commit()
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
+    return Response(
+        status_code=status.HTTP_204_NO_CONTENT,
+        headers={"X-Writeup-Updated-At": writeup.updated_at.isoformat()},
+    )
 
 
-@router.get("/{writeup_id}/revisions", response_model=list[WriteupRevisionOut])
-async def list_revisions(
+@router.get("/{writeup_id}/revisions/authors", response_model=list[WriteupRevisionAuthorOut])
+async def list_revision_authors(
     writeup_id: str,
-    offset: int = Query(0, ge=0),
-    limit: int = Query(40, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
     current_user: User | None = Depends(require_writeup_access),
 ):
     await get_writeup_or_404(db, writeup_id)
     rows = (
         await db.execute(
-            select(WriteupRevision)
+            select(User.id, User.username, User.full_name)
+            .join(WriteupRevision, WriteupRevision.created_by_id == User.id)
             .where(WriteupRevision.writeup_id == writeup_id)
-            .order_by(desc(WriteupRevision.revision_number))
-            .offset(offset).limit(limit)
+            .distinct()
+            .order_by(User.full_name.asc(), User.username.asc())
         )
-    ).scalars().all()
+    ).all()
+    authors = [{"id": row.id, "name": row.full_name or row.username} for row in rows]
+    has_system_revisions = await db.scalar(
+        select(WriteupRevision.id)
+        .where(
+            WriteupRevision.writeup_id == writeup_id,
+            WriteupRevision.created_by_id.is_(None),
+        )
+        .limit(1)
+    )
+    if has_system_revisions:
+        # Vault-only edits have no team-account actor. Expose them as a
+        # selectable, stable author so history filters still work for the
+        # common single-user writeup flow.
+        authors.append({"id": "__system__", "name": "Sistema"})
+    return sorted(authors, key=lambda author: author["name"].casefold())
+
+
+@router.get("/{writeup_id}/revisions", response_model=list[WriteupRevisionOut])
+async def list_revisions(
+    writeup_id: str,
+    offset: int = Query(0, ge=0, le=10000),
+    limit: int = Query(40, ge=1, le=100),
+    before_revision_number: int | None = Query(None, gt=0),
+    search: str | None = Query(None, min_length=1, max_length=120),
+    change_type: str | None = Query(None, pattern="^(initial|autosave|manual|milestone|restore|edit|evidence|board|citation)$"),
+    author_id: str | None = Query(None, min_length=1, max_length=36),
+    created_after: datetime | None = Query(None),
+    created_before: datetime | None = Query(None),
+    include_content: bool = Query(True),
+    db: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(require_writeup_access),
+):
+    await get_writeup_or_404(db, writeup_id)
+    if created_after and created_before:
+        after = created_after.astimezone(timezone.utc).replace(tzinfo=None) if created_after.tzinfo else created_after
+        before = created_before.astimezone(timezone.utc).replace(tzinfo=None) if created_before.tzinfo else created_before
+        if after > before:
+            raise HTTPException(status_code=422, detail="La fecha inicial debe ser anterior a la fecha final.")
+    if before_revision_number is not None and offset:
+        raise HTTPException(status_code=422, detail="Usa paginación por cursor o por desplazamiento, no ambas.")
+
+    stmt = (
+        select(WriteupRevision, User.username, User.full_name)
+        .outerjoin(User, User.id == WriteupRevision.created_by_id)
+        .where(WriteupRevision.writeup_id == writeup_id)
+    )
+    if search:
+        # Treat SQL LIKE metacharacters in the user's search as literal text.
+        escaped_search = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        pattern = f"%{escaped_search}%"
+        stmt = stmt.where(
+            or_(
+                WriteupRevision.change_note.ilike(pattern, escape="\\"),
+                User.username.ilike(pattern, escape="\\"),
+                User.full_name.ilike(pattern, escape="\\"),
+            )
+        )
+    if change_type:
+        note = WriteupRevision.change_note
+        legacy_type = case(
+            (note.ilike("%versión inicial%"), "initial"),
+            (note.ilike("%guardado automático%"), "autosave"),
+            (note.ilike("%instantánea manual%"), "manual"),
+            (note.ilike("%restaur%"), "restore"),
+            (note.ilike("%evidencia%"), "evidence"),
+            (note.ilike("%pizarra%"), "board"),
+            (note.ilike("%cita%"), "citation"),
+            else_="edit",
+        )
+        stmt = stmt.where(func.coalesce(WriteupRevision.change_type, legacy_type) == change_type)
+    if author_id:
+        stmt = stmt.where(
+            WriteupRevision.created_by_id.is_(None)
+            if author_id == "__system__"
+            else WriteupRevision.created_by_id == author_id
+        )
+    if before_revision_number is not None:
+        stmt = stmt.where(WriteupRevision.revision_number < before_revision_number)
+    if created_after:
+        created_after = created_after.astimezone(timezone.utc).replace(tzinfo=None) if created_after.tzinfo else created_after
+        stmt = stmt.where(WriteupRevision.created_at >= created_after)
+    if created_before:
+        created_before = created_before.astimezone(timezone.utc).replace(tzinfo=None) if created_before.tzinfo else created_before
+        stmt = stmt.where(WriteupRevision.created_at <= created_before)
+    rows = (
+        await db.execute(
+            stmt.order_by(desc(WriteupRevision.revision_number))
+            .offset(offset)
+            .limit(limit)
+        )
+    ).all()
     return [
         {
             "id": r.id,
             "writeup_id": r.writeup_id,
             "revision_number": r.revision_number,
             "change_note": r.change_note,
+            "change_type": r.change_type or infer_revision_type(r.change_note or ""),
             "content_hash": r.content_hash,
-            "markdown_content": decrypt_note(r.encrypted_markdown) or "",
-            "snapshot": json.loads(decrypt_note(r.encrypted_snapshot)) if r.encrypted_snapshot else None,
+            "markdown_content": (decrypt_revision_text(r.encrypted_markdown) or "") if include_content else None,
+            "snapshot": (json.loads(decrypt_revision_text(r.encrypted_snapshot)) if r.encrypted_snapshot else None) if include_content else None,
+            "created_by_id": r.created_by_id,
+            "created_by_name": full_name or username or "Sistema",
+            "has_content": bool(r.encrypted_markdown or r.encrypted_snapshot),
             "created_at": r.created_at,
         }
-        for r in rows
+        for r, username, full_name in rows
     ]
+
+
+@router.get("/{writeup_id}/revisions/{revision_id}", response_model=WriteupRevisionOut)
+async def get_revision(
+    writeup_id: str,
+    revision_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(require_writeup_access),
+):
+    await get_writeup_or_404(db, writeup_id)
+    row = (
+        await db.execute(
+            select(WriteupRevision, User.username, User.full_name)
+            .outerjoin(User, User.id == WriteupRevision.created_by_id)
+            .where(WriteupRevision.writeup_id == writeup_id, WriteupRevision.id == revision_id)
+        )
+    ).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="La revisión no existe en este informe.")
+    revision, username, full_name = row
+    return {
+        "id": revision.id,
+        "writeup_id": revision.writeup_id,
+        "revision_number": revision.revision_number,
+        "change_note": revision.change_note,
+        "change_type": revision.change_type or infer_revision_type(revision.change_note or ""),
+        "content_hash": revision.content_hash,
+        "markdown_content": decrypt_revision_text(revision.encrypted_markdown) or "",
+        "snapshot": json.loads(decrypt_revision_text(revision.encrypted_snapshot)) if revision.encrypted_snapshot else None,
+        "created_by_id": revision.created_by_id,
+        "created_by_name": full_name or username or "Sistema",
+        "has_content": bool(revision.encrypted_markdown or revision.encrypted_snapshot),
+        "created_at": revision.created_at,
+    }
 
 
 @router.post("/{writeup_id}/revisions/{revision_id}/restore", response_model=WriteupDetailOut)
 async def restore_revision(
     writeup_id: str,
     revision_id: str,
+    expected_updated_at: str | None = Query(None),
     db: AsyncSession = Depends(get_db),
     current_user: User | None = Depends(require_writeup_access),
 ):
-    writeup = await get_writeup_or_404(db, writeup_id)
+    expected: datetime | None = None
+    if expected_updated_at is not None:
+        try:
+            expected = datetime.fromisoformat(expected_updated_at.replace("Z", "+00:00"))
+        except ValueError:
+            raise HTTPException(status_code=422, detail="Fecha de versión no válida.")
+    writeup = await _lock_writeup_for_resource_mutation(db, writeup_id, expected)
     rev = (
         await db.execute(
             select(WriteupRevision).where(WriteupRevision.id == revision_id, WriteupRevision.writeup_id == writeup_id)
@@ -344,9 +541,9 @@ async def restore_revision(
     # Preserve the current state before any destructive restoration, including unsnapshotted changes.
     await create_revision_snapshot(db, writeup, decrypt_note(writeup.encrypted_markdown) or "", current_user.id if current_user else None, "Antes de restaurar")
     await db.flush()
-    restored_md = decrypt_note(rev.encrypted_markdown) or ""
+    restored_md = decrypt_revision_text(rev.encrypted_markdown) or ""
     if rev.encrypted_snapshot:
-        snapshot = json.loads(decrypt_note(rev.encrypted_snapshot))
+        snapshot = json.loads(decrypt_revision_text(rev.encrypted_snapshot))
         fields = snapshot["fields"]
         await validate_optional_links(db, fields.get("prospect_id"), fields.get("project_id"), fields.get("engagement_id"))
         for field, value in fields.items():
@@ -370,7 +567,6 @@ async def restore_revision(
         for citation in snapshot.get("citations", []):
             db.add(WriteupCitation(**{**citation, "quoted_text": encrypt_note(citation["quoted_text"]), "note": encrypt_note(citation["note"]) if citation.get("note") else None}))
     writeup.encrypted_markdown = encrypt_note(restored_md)
-    writeup.updated_at = utc_now()
     await create_revision_snapshot(db, writeup, restored_md, current_user.id if current_user else None, f"Restaurado desde revisión #{rev.revision_number}")
     await db.commit()
     await db.refresh(writeup)
@@ -383,10 +579,11 @@ async def upload_writeup_asset(
     file: UploadFile = File(...),
     caption: str | None = Form(default=None, max_length=255),
     convert_to_gif: bool = Form(default=False),
+    expected_updated_at: datetime | None = Form(default=None),
     db: AsyncSession = Depends(get_db),
     current_user: User | None = Depends(require_writeup_access),
 ):
-    writeup = await get_writeup_or_404(db, writeup_id)
+    writeup = await _lock_writeup_for_resource_mutation(db, writeup_id, expected_updated_at)
     upload_limit = max(settings.WRITEUP_MAX_IMAGE_BYTES, settings.WRITEUP_MAX_VIDEO_BYTES)
     raw_bytes = await read_upload_limited(file, upload_limit)
     optimized = optimize_and_encrypt_media(raw_bytes, file.filename, convert_to_gif=convert_to_gif)
@@ -407,7 +604,7 @@ async def upload_writeup_asset(
     await create_revision_snapshot(db, writeup, decrypt_note(writeup.encrypted_markdown) or "", current_user.id if current_user else None, "Evidencia añadida")
     await db.commit()
     await db.refresh(asset)
-    return serialize_asset(asset)
+    return serialize_asset(asset, writeup.updated_at)
 
 
 @router.post("/{writeup_id}/assets/{asset_id}/convert-to-gif", response_model=WriteupAssetOut, status_code=status.HTTP_201_CREATED)
@@ -416,10 +613,11 @@ async def convert_writeup_video_to_gif(
     asset_id: str,
     fps: int | None = Query(default=None, ge=1, le=30),
     max_width: int | None = Query(default=None, ge=160, le=1920),
+    expected_updated_at: datetime | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
     current_user: User | None = Depends(require_writeup_access),
 ):
-    writeup = await get_writeup_or_404(db, writeup_id)
+    writeup = await _lock_writeup_for_resource_mutation(db, writeup_id, expected_updated_at)
     source = (
         await db.execute(select(WriteupAsset).where(WriteupAsset.id == asset_id, WriteupAsset.writeup_id == writeup_id))
     ).scalar_one_or_none()
@@ -446,7 +644,7 @@ async def convert_writeup_video_to_gif(
     await create_revision_snapshot(db, writeup, decrypt_note(writeup.encrypted_markdown) or "", current_user.id if current_user else None, "Evidencia convertida")
     await db.commit()
     await db.refresh(gif_asset)
-    return serialize_asset(gif_asset)
+    return serialize_asset(gif_asset, writeup.updated_at)
 
 
 @router.get("/{writeup_id}/assets/{asset_id}")
@@ -478,10 +676,11 @@ async def get_writeup_asset_binary(
 async def delete_writeup_asset(
     writeup_id: str,
     asset_id: str,
+    expected_updated_at: datetime | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
     current_user: User | None = Depends(require_writeup_access),
 ):
-    writeup = await get_writeup_or_404(db, writeup_id)
+    writeup = await _lock_writeup_for_resource_mutation(db, writeup_id, expected_updated_at)
     asset = (
         await db.execute(select(WriteupAsset).where(WriteupAsset.id == asset_id, WriteupAsset.writeup_id == writeup_id))
     ).scalar_one_or_none()
@@ -490,7 +689,10 @@ async def delete_writeup_asset(
     asset.is_deleted = True
     await create_revision_snapshot(db, writeup, decrypt_note(writeup.encrypted_markdown) or "", current_user.id if current_user else None, "Evidencia retirada")
     await db.commit()
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
+    return Response(
+        status_code=status.HTTP_204_NO_CONTENT,
+        headers={"X-Writeup-Updated-At": writeup.updated_at.isoformat()},
+    )
 
 
 @router.post("/{writeup_id}/boards", response_model=WriteupBoardOut, status_code=status.HTTP_201_CREATED)
@@ -500,7 +702,7 @@ async def create_writeup_board(
     db: AsyncSession = Depends(get_db),
     current_user: User | None = Depends(require_writeup_access),
 ):
-    writeup = await get_writeup_or_404(db, writeup_id)
+    writeup = await _lock_writeup_for_resource_mutation(db, writeup_id, payload.expected_updated_at)
     clean_svg = sanitize_board_svg(payload.svg_snapshot)
     board = WriteupBoard(
         writeup_id=writeup_id,
@@ -513,7 +715,7 @@ async def create_writeup_board(
     await create_revision_snapshot(db, writeup, decrypt_note(writeup.encrypted_markdown) or "", current_user.id if current_user else None, "Pizarra creada")
     await db.commit()
     await db.refresh(board)
-    return serialize_board(board)
+    return serialize_board(board, writeup.updated_at)
 
 
 @router.patch("/{writeup_id}/boards/{board_id}", response_model=WriteupBoardOut)
@@ -524,13 +726,14 @@ async def update_writeup_board(
     db: AsyncSession = Depends(get_db),
     current_user: User | None = Depends(require_writeup_access),
 ):
-    writeup = await get_writeup_or_404(db, writeup_id)
+    writeup = await _lock_writeup_for_resource_mutation(db, writeup_id, payload.expected_updated_at)
     board = (
         await db.execute(select(WriteupBoard).where(WriteupBoard.id == board_id, WriteupBoard.writeup_id == writeup_id))
     ).scalar_one_or_none()
     if not board:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pizarra no encontrada.")
     updates = payload.model_dump(exclude_unset=True)
+    updates.pop("expected_updated_at", None)
     if "title" in updates:
         board.title = updates["title"]
     if "scene_json" in updates:
@@ -544,17 +747,18 @@ async def update_writeup_board(
     await create_revision_snapshot(db, writeup, decrypt_note(writeup.encrypted_markdown) or "", current_user.id if current_user else None, "Pizarra actualizada")
     await db.commit()
     await db.refresh(board)
-    return serialize_board(board)
+    return serialize_board(board, writeup.updated_at)
 
 
 @router.delete("/{writeup_id}/boards/{board_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_writeup_board(
     writeup_id: str,
     board_id: str,
+    expected_updated_at: datetime | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
     current_user: User | None = Depends(require_writeup_access),
 ):
-    writeup = await get_writeup_or_404(db, writeup_id)
+    writeup = await _lock_writeup_for_resource_mutation(db, writeup_id, expected_updated_at)
     board = (
         await db.execute(select(WriteupBoard).where(WriteupBoard.id == board_id, WriteupBoard.writeup_id == writeup_id))
     ).scalar_one_or_none()
@@ -563,7 +767,10 @@ async def delete_writeup_board(
     await db.delete(board)
     await create_revision_snapshot(db, writeup, decrypt_note(writeup.encrypted_markdown) or "", current_user.id if current_user else None, "Pizarra eliminada")
     await db.commit()
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
+    return Response(
+        status_code=status.HTTP_204_NO_CONTENT,
+        headers={"X-Writeup-Updated-At": writeup.updated_at.isoformat()},
+    )
 
 
 @router.post("/{writeup_id}/citations", response_model=WriteupCitationOut, status_code=status.HTTP_201_CREATED)
@@ -573,7 +780,7 @@ async def create_writeup_citation(
     db: AsyncSession = Depends(get_db),
     current_user: User | None = Depends(require_writeup_access),
 ):
-    writeup = await get_writeup_or_404(db, writeup_id)
+    writeup = await _lock_writeup_for_resource_mutation(db, writeup_id, payload.expected_updated_at)
     board = (
         await db.execute(select(WriteupBoard).where(WriteupBoard.id == payload.board_id, WriteupBoard.writeup_id == writeup_id))
     ).scalar_one_or_none()
@@ -596,7 +803,7 @@ async def create_writeup_citation(
     await create_revision_snapshot(db, writeup, decrypt_note(writeup.encrypted_markdown) or "", current_user.id if current_user else None, "Cita creada")
     await db.commit()
     await db.refresh(citation)
-    return serialize_citation(citation, decrypt_note(writeup.encrypted_markdown) or "")
+    return serialize_citation(citation, decrypt_note(writeup.encrypted_markdown) or "", writeup.updated_at)
 
 
 @router.patch("/{writeup_id}/citations/{citation_id}", response_model=WriteupCitationOut)
@@ -607,7 +814,7 @@ async def update_writeup_citation(
     db: AsyncSession = Depends(get_db),
     current_user: User | None = Depends(require_writeup_access),
 ):
-    writeup = await get_writeup_or_404(db, writeup_id)
+    writeup = await _lock_writeup_for_resource_mutation(db, writeup_id, payload.expected_updated_at)
     citation = (
         await db.execute(
             select(WriteupCitation).where(WriteupCitation.id == citation_id, WriteupCitation.writeup_id == writeup_id)
@@ -616,6 +823,7 @@ async def update_writeup_citation(
     if not citation:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Citación no encontrada.")
     updates = payload.model_dump(exclude_unset=True)
+    updates.pop("expected_updated_at", None)
     for field in ("board_element_id", "heading_path", "line_start", "line_end", "color"):
         if field in updates:
             setattr(citation, field, updates[field])
@@ -628,17 +836,18 @@ async def update_writeup_citation(
     await create_revision_snapshot(db, writeup, decrypt_note(writeup.encrypted_markdown) or "", current_user.id if current_user else None, "Cita actualizada")
     await db.commit()
     await db.refresh(citation)
-    return serialize_citation(citation, decrypt_note(writeup.encrypted_markdown) or "")
+    return serialize_citation(citation, decrypt_note(writeup.encrypted_markdown) or "", writeup.updated_at)
 
 
 @router.delete("/{writeup_id}/citations/{citation_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_writeup_citation(
     writeup_id: str,
     citation_id: str,
+    expected_updated_at: datetime | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
     current_user: User | None = Depends(require_writeup_access),
 ):
-    writeup = await get_writeup_or_404(db, writeup_id)
+    writeup = await _lock_writeup_for_resource_mutation(db, writeup_id, expected_updated_at)
     citation = (
         await db.execute(
             select(WriteupCitation).where(WriteupCitation.id == citation_id, WriteupCitation.writeup_id == writeup_id)
@@ -649,7 +858,10 @@ async def delete_writeup_citation(
     await db.delete(citation)
     await create_revision_snapshot(db, writeup, decrypt_note(writeup.encrypted_markdown) or "", current_user.id if current_user else None, "Cita eliminada")
     await db.commit()
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
+    return Response(
+        status_code=status.HTTP_204_NO_CONTENT,
+        headers={"X-Writeup-Updated-At": writeup.updated_at.isoformat()},
+    )
 
 
 @router.post("/{writeup_id}/preview", response_model=WriteupPreviewOut)

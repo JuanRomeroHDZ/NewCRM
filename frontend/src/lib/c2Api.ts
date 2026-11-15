@@ -3,7 +3,10 @@ import { ApiError, createHttpApiError, normalizeResponseReadError, normalizeTran
 import type {
   C2CameraDiscovered,
   C2CameraFinding,
+  C2Engagement,
+  C2EngagementClient,
   C2EnvWarning,
+  C2Preflight,
   C2ExploitServiceResult,
   C2Host,
   C2InterfacesResponse,
@@ -15,6 +18,12 @@ import type {
   C2WifiCapture,
   C2WifiClient,
 } from '../types/c2';
+
+let activeC2EngagementId: string | null = null;
+
+export function setActiveC2EngagementId(id: string | null): void {
+  activeC2EngagementId = id?.trim() || null;
+}
 
 function buildC2Headers(includeJsonContentType = true): Record<string, string> {
   const headers: Record<string, string> = {};
@@ -28,6 +37,9 @@ function buildC2Headers(includeJsonContentType = true): Record<string, string> {
   const userToken = getApiUserToken();
   if (userToken) {
     headers['Authorization'] = `Bearer ${userToken}`;
+  }
+  if (activeC2EngagementId) {
+    headers['X-C2-Engagement-Id'] = activeC2EngagementId;
   }
   return headers;
 }
@@ -198,6 +210,7 @@ export interface C2CredReq {
 }
 
 export interface C2HttpInjectReq {
+  target_ip: string;
   inject?: string;
   sslstrip?: boolean;
   port?: number;
@@ -248,6 +261,7 @@ export interface C2WifiDeauthReq {
 
 export interface C2WifiHandshakeReq {
   interface: string;
+  bssid: string;
   channel?: number | null;
   auto_convert?: boolean;
   prepare?: boolean;
@@ -321,7 +335,7 @@ export const getInterfaces = () => c2Request<C2InterfacesResponse>('/interfaces'
 
 export const getStatus = () => c2Request<C2ModuleStatus>('/status');
 
-export const getEnvCheck = () => c2Request<{ warnings: C2EnvWarning[] }>('/envcheck');
+export const getEnvCheck = () => c2Request<{ warnings: C2EnvWarning[]; preflight?: C2Preflight | null }>('/envcheck');
 
 export const getCleanupCount = () => c2Request<{ tagged_rules: number }>('/cleanup');
 
@@ -429,10 +443,10 @@ export const stopWifiMonitor = (req: C2WifiMonitorReq) =>
   });
 
 export const killWifiInterferers = () =>
-  c2Request<{ stopped: string[] }>('/wifi/kill', { method: 'POST', body: '{}' });
+  c2Request<{ stopped: string[]; message?: string }>('/wifi/kill', { method: 'POST', body: '{}' });
 
 export const restoreWifiServices = () =>
-  c2Request<{ started: string[] }>('/wifi/restore-services', { method: 'POST', body: '{}' });
+  c2Request<{ started: string[]; message?: string }>('/wifi/restore-services', { method: 'POST', body: '{}' });
 
 export const startWifiScan = (req: C2WifiScanReq) =>
   c2Request<{ status: string; interface: string }>('/wifi/scan/start', {
@@ -570,10 +584,33 @@ export function buildC2WsUrl(): string {
 export function buildC2WsProtocols(): string[] {
   const vault = getApiVaultToken();
   const user = getApiUserToken();
-  return ['lessso-v1', ...(vault ? [`vault.${vault}`] : []), ...(user ? [`user.${user}`] : [])];
+  return [
+    'lessso-v1',
+    ...(vault ? [`vault.${vault}`] : []),
+    ...(user ? [`user.${user}`] : []),
+    ...(activeC2EngagementId ? [`engagement.${activeC2EngagementId}`] : []),
+  ];
 }
 
+const getEngagements = () => c2Request<C2Engagement[]>('/engagements');
+const getEngagementClients = () => c2Request<C2EngagementClient[]>('/clients');
+const createEngagement = (payload: {
+  client_id: string;
+  title: string;
+  scope_written_summary: string;
+  authorized_targets: string;
+  authorized_ipv6_targets: string;
+  window_start: string;
+  window_end: string;
+}) => c2Request<C2Engagement>('/engagements', {
+  method: 'POST',
+  body: JSON.stringify(payload),
+});
+
 export const c2Api = {
+  getEngagements,
+  getEngagementClients,
+  createEngagement,
   getMeta,
   getService,
   getInterfaces,

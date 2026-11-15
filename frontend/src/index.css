@@ -467,6 +467,21 @@
   outline-offset: 2px;
 }
 
+@media (max-width: 639px) {
+  .writeups-view :is(button, select, textarea),
+  .writeups-view input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]) {
+    min-height: 44px;
+  }
+
+  .writeups-view .writeup-markdown-editor button {
+    min-width: 44px;
+  }
+
+  .writeups-view :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]), select, textarea) {
+    font-size: 16px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .mermaid-animated svg .edgePath path,
   .mermaid-animated svg path.flowchart-link {
@@ -551,3 +566,14 @@
 .brand-theme :is(input, textarea, select)::placeholder { color: #b3b9bc; opacity: 1; }
 .brand-theme :is(input, textarea, select):focus-visible { outline: 2px solid #A98242; outline-offset: 2px; }
 .brand-theme :is(button, a[href], summary):focus-visible { outline: 2px solid #A98242; outline-offset: 2px; }
+
+/* Etiquetas semánticas para informes; la paleta está limitada a estos valores. */
+.writeup-label { display: inline-block; border: 1px solid currentColor; border-radius: 0.3rem; padding: 0.08em 0.5em; font-weight: 600; line-height: 1.4; }
+.writeup-label-jade { color: #6ee7b7; background: #063d30; }
+.writeup-label-rojo { color: #fecaca; background: #531c24; }
+.writeup-label-azul { color: #bfdbfe; background: #15395b; }
+.writeup-label-dorado { color: #f4dfaa; background: #473819; }
+.writeup-label-neutro { color: #f1f5f9; background: #334155; }
+.writeup-label-pequena { font-size: 0.75em; }
+.writeup-label-normal { font-size: 0.9em; }
+.writeup-label-grande { font-size: 1.15em; }

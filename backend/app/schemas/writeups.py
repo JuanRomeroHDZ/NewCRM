@@ -9,6 +9,9 @@ from app.schemas import validate_finite_number_input, validate_nonblank_input
 WriteupStatus = Literal["borrador", "en_revision", "finalizado", "entregado"]
 WriteupSeverity = Literal["informativa", "baja", "media", "alta", "critica"]
 ExportFormatType = Literal["md_zip", "md", "html", "docx", "pdf", "sarif", "csv", "json"]
+WriteupRevisionType = Literal[
+    "initial", "autosave", "manual", "milestone", "restore", "edit", "evidence", "board", "citation"
+]
 
 
 class StructuredFindingItem(BaseModel):
@@ -63,6 +66,7 @@ class WriteupCreate(BaseModel):
 
 
 class WriteupUpdate(BaseModel):
+    expected_updated_at: datetime | None = None
     title: str | None = Field(default=None, min_length=2, max_length=200)
     status: WriteupStatus | None = None
     severity: WriteupSeverity | None = None
@@ -80,6 +84,7 @@ class WriteupUpdate(BaseModel):
     engagement_id: str | None = Field(default=None, max_length=36)
     save_revision: bool = False
     revision_note: str | None = Field(default=None, max_length=255)
+    revision_type: WriteupRevisionType | None = None
 
     @field_validator("title")
     @classmethod
@@ -100,9 +105,12 @@ class WriteupAssetOut(BaseModel):
     exif_stripped: bool
     caption: str | None = None
     created_at: datetime
+    # Current parent version lets clients continue a sequence of resource edits safely.
+    writeup_updated_at: datetime | None = None
 
 
 class WriteupBoardCreate(BaseModel):
+    expected_updated_at: datetime | None = None
     title: str = Field(default="Pizarra principal", min_length=2, max_length=180)
     scene_json: str = Field(default="{}", max_length=settings.WRITEUP_MAX_CONTENT_CHARS)
     svg_snapshot: str | None = Field(default=None, max_length=settings.WRITEUP_MAX_SVG_CHARS)
@@ -110,6 +118,7 @@ class WriteupBoardCreate(BaseModel):
 
 
 class WriteupBoardUpdate(BaseModel):
+    expected_updated_at: datetime | None = None
     title: str | None = Field(default=None, min_length=2, max_length=180)
     scene_json: str | None = Field(default=None, max_length=settings.WRITEUP_MAX_CONTENT_CHARS)
     svg_snapshot: str | None = Field(default=None, max_length=settings.WRITEUP_MAX_SVG_CHARS)
@@ -125,9 +134,11 @@ class WriteupBoardOut(BaseModel):
     element_count: int
     created_at: datetime
     updated_at: datetime
+    writeup_updated_at: datetime | None = None
 
 
 class WriteupCitationCreate(BaseModel):
+    expected_updated_at: datetime | None = None
     board_id: str = Field(..., min_length=1, max_length=36)
     anchor_id: str = Field(..., min_length=2, max_length=120, pattern=r"^[a-zA-Z0-9_-]+$")
     board_element_id: str | None = Field(default=None, max_length=120)
@@ -140,6 +151,7 @@ class WriteupCitationCreate(BaseModel):
 
 
 class WriteupCitationUpdate(BaseModel):
+    expected_updated_at: datetime | None = None
     board_element_id: str | None = Field(default=None, max_length=120)
     heading_path: str | None = Field(default=None, max_length=255)
     line_start: int | None = Field(default=None, ge=1, le=200000)
@@ -165,6 +177,7 @@ class WriteupCitationOut(BaseModel):
     note: str | None = None
     created_at: datetime
     updated_at: datetime
+    writeup_updated_at: datetime | None = None
 
 
 class WriteupRevisionOut(BaseModel):
@@ -172,10 +185,19 @@ class WriteupRevisionOut(BaseModel):
     writeup_id: str
     revision_number: int
     change_note: str | None = None
+    change_type: WriteupRevisionType
     content_hash: str
-    markdown_content: str
+    markdown_content: str | None = None
     snapshot: dict | None = None
+    created_by_id: str | None = None
+    created_by_name: str | None = None
+    has_content: bool = True
     created_at: datetime
+
+
+class WriteupRevisionAuthorOut(BaseModel):
+    id: str
+    name: str
 
 
 class WriteupExportLogOut(BaseModel):

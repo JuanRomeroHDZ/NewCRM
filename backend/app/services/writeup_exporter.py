@@ -177,8 +177,26 @@ def _board_to_svg_data_uri(board: dict[str, Any]) -> str:
     return _svg_data_uri(sanitized_svg)
 
 
+_LABEL_OR_CODE = re.compile(r"(```[\s\S]*?```|`[^`\n]*`)|\{etiqueta:(jade|rojo|azul|dorado|neutro):(pequena|normal|grande):([^{}\n]{1,120})\}")
+
+
+def format_writeup_labels_plain(text: str) -> str:
+    """Render fixed-palette label syntax as readable text outside HTML exports."""
+    return _LABEL_OR_CODE.sub(lambda match: match.group(1) or match.group(4), text)
+
+
+def _render_writeup_labels_html(text: str) -> str:
+    def replace(match: re.Match[str]) -> str:
+        if match.group(1):
+            return match.group(1)
+        color, size, label = match.group(2, 3, 4)
+        return f'<span class="writeup-label writeup-label-{color} writeup-label-{size}">{html_lib.escape(label)}</span>'
+    return _LABEL_OR_CODE.sub(replace, text)
+
+
 def _preprocess_markdown_for_html(ctx: ExportBundleContext, *, embed_video: bool = True) -> str:
     text = apply_redaction_markers(ctx.markdown_content, ctx.redact_for_client)
+    text = _render_writeup_labels_html(text)
     text = ANCHOR_PATTERN.sub(
         lambda m: f'<span id="{m.group(1)}" class="writeup-anchor" data-anchor="{m.group(1)}"></span>',
         text,
@@ -243,7 +261,7 @@ def render_sanitized_html_fragment(ctx: ExportBundleContext, *, embed_video: boo
         processed_md = "[TOC]\n\n" + processed_md
     raw_html = md_lib.markdown(
         processed_md,
-        extensions=["extra", "fenced_code", "tables", "toc", "sane_lists"],
+        extensions=["extra", "fenced_code", "tables", "toc", "sane_lists", "nl2br"],
         output_format="html5",
     )
     return nh3.clean(
@@ -261,7 +279,6 @@ def _build_findings_html(ctx: ExportBundleContext) -> str:
     rows = []
     for item in ctx.findings:
         sev = str(item.get("severity", "media")).lower()
-        color = SEVERITY_COLORS.get(sev, "#64748b")
         summary = html_lib.escape(apply_redaction_markers(str(item.get("summary", "")), ctx.redact_for_client))
         target = html_lib.escape(apply_redaction_markers(str(item.get("affected_target") or "-"), ctx.redact_for_client))
         cvss = f"{item['cvss_score']:.1f}" if item.get("cvss_score") is not None else "-"
@@ -269,7 +286,7 @@ def _build_findings_html(ctx: ExportBundleContext) -> str:
             f"<tr>"
             f"<td><code>{html_lib.escape(str(item.get('id', '')))}</code></td>"
             f"<td><strong>{html_lib.escape(str(item.get('title', '')))}</strong><br><small>{summary}</small></td>"
-            f"<td><span class='badge' style='background:{color}'>{html_lib.escape(sev.upper())}</span></td>"
+            f"<td>{html_lib.escape(sev.upper())}</td>"
             f"<td>{cvss}</td>"
             f"<td>{target}</td>"
             f"<td>{html_lib.escape(str(item.get('status', 'abierta')))}</td>"
@@ -311,7 +328,6 @@ def _build_citations_html(ctx: ExportBundleContext) -> str:
 def build_standalone_html_document(ctx: ExportBundleContext, *, embed_video: bool = True) -> str:
     """Produces a zero-external-dependency HTML5 report document."""
     body_html = render_sanitized_html_fragment(ctx, embed_video=embed_video)
-    sev_color = SEVERITY_COLORS.get(ctx.severity.lower(), "#64748b")
     watermark = html_lib.escape(ctx.watermark_text or settings.WRITEUP_WATERMARK_DEFAULT)
     watermark_block = f"<div class='watermark'>{watermark}</div>" if ctx.include_watermark else ""
     exec_text = apply_redaction_markers(ctx.executive_summary or "", ctx.redact_for_client)
@@ -340,43 +356,58 @@ def build_standalone_html_document(ctx: ExportBundleContext, *, embed_video: boo
     size: A4;
     margin: 20mm 16mm 20mm 16mm;
     @bottom-right {{ content: "Página " counter(page) " de " counter(pages); font-size: 9pt; color: #64748b; }}
-    @bottom-left {{ content: "{org_name}"; font-size: 9pt; color: #64748b; }}
+
   }}
-  body {{ font-family: 'DejaVu Sans', system-ui, -apple-system, sans-serif; color: #0f172a; line-height: 1.55; max-width: 960px; margin: 0 auto; padding: 24px; background: #ffffff; }}
-  .watermark {{ background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; padding: 6px 12px; font-size: 11px; font-weight: 700; text-align: center; letter-spacing: 0.08em; border-radius: 6px; margin-bottom: 18px; }}
-  .report-header {{ border-bottom: 2px solid #e2e8f0; padding-bottom: 16px; margin-bottom: 20px; }}
-  .report-header h1 {{ margin: 8px 0; font-size: 24px; color: #0f172a; }}
-  .badge {{ display: inline-block; color: #ffffff; padding: 3px 9px; border-radius: 999px; font-size: 11px; font-weight: 700; }}
-  .mode-pill {{ display: inline-block; padding: 3px 9px; border-radius: 6px; font-size: 11px; font-weight: 700; margin-left: 8px; }}
-  .mode-pill.client {{ background: #dcfce7; color: #166534; }}
-  .mode-pill.internal {{ background: #e0e7ff; color: #3730a3; }}
-  .meta-grid {{ display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; margin-bottom: 20px; font-size: 12px; }}
-  .section-box {{ margin: 22px 0; }}
-  .meta-table, table {{ width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 12.5px; }}
-  th, td {{ border: 1px solid #cbd5e1; padding: 8px 10px; text-align: left; vertical-align: top; }}
-  th {{ background: #f1f5f9; font-weight: 700; }}
-  pre {{ background: #0f172a; color: #f8fafc; padding: 12px; border-radius: 8px; overflow-x: auto; font-size: 12px; white-space: pre-wrap; word-break: break-word; }}
-  code {{ font-family: 'DejaVu Sans Mono', monospace; background: #f1f5f9; padding: 1px 4px; border-radius: 4px; font-size: 0.9em; }}
-  pre code {{ background: transparent; padding: 0; color: inherit; }}
-  kbd {{ background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 4px; padding: 1px 5px; font-size: 0.85em; font-family: monospace; }}
-  mark {{ background: #fef08a; padding: 0 3px; border-radius: 3px; }}
-  details {{ border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 12px; margin: 10px 0; background: #f8fafc; }}
-  summary {{ cursor: pointer; font-weight: 600; }}
-  blockquote {{ border-left: 4px solid #6366f1; margin: 12px 0; padding: 8px 14px; background: #eef2ff; color: #1e293b; }}
-  img, video {{ max-width: 100%; height: auto; border: 1px solid #e2e8f0; border-radius: 6px; margin: 10px 0; display: block; }}
-  .stale {{ background: #fef3c7; color: #92400e; padding: 1px 5px; border-radius: 4px; font-size: 10px; font-weight: 700; }}
+  body {{ font-family: "Liberation Serif", "DejaVu Serif", Georgia, serif; color: #171717; line-height: 1.55; max-width: 850px; margin: 0 auto; padding: 32px; background: white; font-size: 11pt; }}
+  .cover {{ min-height: 70vh; display: flex; flex-direction: column; break-after: page; page-break-after: always; }}
+  .letterhead {{ display: flex; justify-content: space-between; gap: 16px; border-bottom: 2px solid #075c4c; padding-bottom: 12px; color: #075c4c; font: bold 10pt "Liberation Sans", sans-serif; overflow-wrap: anywhere; }}
+  .watermark {{ color: #555; font: 9pt "Liberation Sans", sans-serif; text-align: right; }}
+  .cover-content {{ margin: auto 0; padding: 48px 0; }}
+  .cover h1 {{ margin: 0 0 16px; font-size: 30pt; line-height: 1.15; overflow-wrap: anywhere; }}
+  .cover-subtitle {{ color: #075c4c; font: bold 10pt "Liberation Sans", sans-serif; }}
+  .cover-footer {{ border-top: 1px solid #b8c7c2; padding-top: 12px; color: #555; font: 9pt "Liberation Sans", sans-serif; }}
+  .badge, .mode-pill {{ font: 9pt "Liberation Sans", sans-serif; font-weight: 700; letter-spacing: .02em; }}
+  .mode-pill {{ margin-left: 12px; color: #555; }}
+  .meta-grid {{ display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px 16px; padding: 0 0 14px; border-bottom: 1px solid #bbb; font-size: 10pt; overflow-wrap: anywhere; }}
+  .section-box {{ margin: 28px 0; }}
+  h2 {{ font-size: 16pt; margin: 28px 0 10px; border-bottom: 1px solid #bbb; padding-bottom: 4px; }}
+  h3 {{ font-size: 13pt; }}
+  .meta-table, table {{ width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 9pt; }}
+  th, td {{ border-bottom: 1px solid #bbb; padding: 7px 6px; text-align: left; vertical-align: top; overflow-wrap: anywhere; }}
+  th {{ border-top: 1px solid #555; border-bottom: 1px solid #555; font-weight: 700; }}
+  thead {{ display: table-header-group; }}
+  tr, figure {{ break-inside: avoid; }}
+  pre {{ background: #f4f4f4; border: 1px solid #ccc; color: #171717; padding: 10px; overflow-x: auto; font-size: 9pt; white-space: pre-wrap; overflow-wrap: anywhere; }}
+  code, kbd {{ font-family: "DejaVu Sans Mono", monospace; font-size: .9em; }}
+  pre code {{ padding: 0; }}
+  details {{ border-bottom: 1px solid #ccc; padding: 8px 0; margin: 10px 0; }}
+  summary {{ cursor: pointer; font-weight: 700; }}
+  blockquote {{ border-left: 2px solid #777; margin: 12px 0; padding: 0 14px; color: #444; }}
+  img, video {{ max-width: 100%; height: auto; margin: 10px auto; display: block; }}
+  figcaption {{ color: #555; font-size: 9pt; text-align: center; }}
+  .stale {{ color: #7c2d12; font-size: 9pt; font-weight: 700; }}
+  .writeup-label {{ display: inline-block; font-family: "Liberation Sans", sans-serif; font-weight: 700; padding: .1em .45em; border: 1px solid currentColor; border-radius: 3px; }}
+  .writeup-label-jade {{ color: #075c4c; }}
+  .writeup-label-rojo {{ color: #9b1c1c; }}
+  .writeup-label-azul {{ color: #174d86; }}
+  .writeup-label-dorado {{ color: #74510c; }}
+  .writeup-label-neutro {{ color: #303030; }}
+  .writeup-label-pequena {{ font-size: .8em; }}
+  .writeup-label-normal {{ font-size: .95em; }}
+  .writeup-label-grande {{ font-size: 1.15em; }}
+  @media print {{ body {{ padding: 0; }} .cover {{ min-height: 220mm; }} a {{ color: inherit; }} }}
 </style>
 </head>
 <body>
-  {watermark_block}
-  <header class="report-header">
-    <div>
-      <span class="badge" style="background:{sev_color}">{html_lib.escape(ctx.severity.upper())}</span>
-      {redacted_badge}
+  <section class="cover" aria-label="Portada del informe">
+    <header class="letterhead"><span>{org_name}</span>{watermark_block}</header>
+    <div class="cover-content">
+      <p class="cover-subtitle">INFORME DE SEGURIDAD</p>
+      <h1>{html_lib.escape(ctx.title)}</h1>
+      <p>Alcance: {target_scope}</p>
     </div>
-    <h1>{html_lib.escape(ctx.title)}</h1>
-    <div style="color:#475569;font-size:12px;">Generado: {generated_at} · Estado: {html_lib.escape(ctx.status)}</div>
-  </header>
+    <footer class="cover-footer">{redacted_badge}<br>Generado: {generated_at} · Estado: {html_lib.escape(ctx.status)} · Severidad: {html_lib.escape(ctx.severity.upper())}</footer>
+  </section>
   <div class="meta-grid">
     <div><strong>CVSS:</strong> {f"{ctx.cvss_score:.1f}" if ctx.cvss_score is not None else "N/A"}</div>
     <div><strong>Vector:</strong> {html_lib.escape(ctx.cvss_vector or "N/A")}</div>
@@ -476,18 +507,68 @@ def _add_png_picture(document: Any, png_bytes: bytes, caption: str | None = None
         document.add_paragraph(caption, style="Caption" if "Caption" in style_names else None)
 
 
+def _add_docx_label_runs(paragraph: Any, text: str) -> None:
+    """Format known labels while leaving code spans and other text intact."""
+    colors = {"jade": "075C4C", "rojo": "9B1C1C", "azul": "174D86", "dorado": "74510C", "neutro": "303030"}
+    sizes = {"pequena": 9, "normal": 11, "grande": 14}
+    offset = 0
+    for match in _LABEL_OR_CODE.finditer(text):
+        paragraph.add_run(text[offset:match.start()])
+        if match.group(1):
+            paragraph.add_run(match.group(1))
+        else:
+            color, size, content = match.group(2, 3, 4)
+            run = paragraph.add_run(content)
+            run.bold = True
+            run.font.name = "Liberation Sans"
+            run.font.color.rgb = RGBColor.from_string(colors[color])
+            run.font.size = Pt(sizes[size])
+        offset = match.end()
+    paragraph.add_run(text[offset:])
+
+
 def _build_docx_artifact(ctx: ExportBundleContext) -> tuple[bytes, str, str]:
     document = docx.Document()
+    normal = document.styles["Normal"]
+    normal.font.name = "Liberation Serif"
+    normal.font.size = Pt(11)
+    normal.paragraph_format.space_after = Pt(6)
+    for style_name in ("Title", "Heading 1", "Heading 2", "Heading 3", "Heading 4"):
+        style = document.styles[style_name]
+        style.font.name = "Liberation Serif"
+        style.font.color.rgb = RGBColor(23, 23, 23)
+    letterhead = document.add_paragraph()
+    brand = letterhead.add_run(ctx.organization_name or settings.WRITEUP_ORGANIZATION_NAME)
+    brand.font.name = "Liberation Sans"
+    brand.font.bold = True
+    brand.font.size = Pt(11)
+    brand.font.color.rgb = RGBColor(7, 92, 76)
     if ctx.include_watermark:
-        wm_para = document.add_paragraph(ctx.watermark_text or settings.WRITEUP_WATERMARK_DEFAULT)
-        if wm_para.runs:
-            wm_para.runs[0].font.color.rgb = RGBColor(153, 27, 27)
-            wm_para.runs[0].font.bold = True
-            wm_para.runs[0].font.size = Pt(9)
+        classification = document.add_paragraph(ctx.watermark_text or settings.WRITEUP_WATERMARK_DEFAULT)
+        for run in classification.runs:
+            run.font.size = Pt(9)
+            run.font.color.rgb = RGBColor(85, 85, 85)
 
+    label = document.add_paragraph()
+    label.paragraph_format.space_before = Pt(110)
+    label_run = label.add_run("INFORME DE SEGURIDAD")
+    label_run.font.name = "Liberation Sans"
+    label_run.font.bold = True
+    label_run.font.size = Pt(10)
+    label_run.font.color.rgb = RGBColor(7, 92, 76)
     document.add_heading(ctx.title, level=0)
+    document.add_paragraph("Alcance: " + apply_redaction_markers(ctx.target_scope or "No especificado", ctx.redact_for_client))
+    cover_footer = document.add_paragraph()
+    cover_footer.paragraph_format.space_before = Pt(120)
+    cover_footer.add_run("Modo cliente (censurado)" if ctx.redact_for_client else "Reporte técnico interno")
+    cover_footer.add_run(f"\nGenerado: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')} · Estado: {ctx.status} · Severidad: {ctx.severity.upper()}")
+    for run in cover_footer.runs:
+        run.font.name = "Liberation Sans"
+        run.font.size = Pt(9)
+        run.font.color.rgb = RGBColor(85, 85, 85)
+    document.add_page_break()
+
     meta_table = document.add_table(rows=4, cols=2)
-    meta_table.style = "Table Grid"
     meta_rows = [
         ("Estado / Severidad", f"{ctx.status} · {ctx.severity.upper()}"),
         ("CVSS / Vector", f"{ctx.cvss_score if ctx.cvss_score is not None else 'N/A'} ({ctx.cvss_vector or '-'})"),
@@ -563,13 +644,13 @@ def _build_docx_artifact(ctx: ExportBundleContext) -> tuple[bytes, str, str]:
         heading_match = re.match(r"^(#{1,4})\s+(.*)$", stripped)
         if heading_match:
             level = min(len(heading_match.group(1)), 4)
-            document.add_heading(heading_match.group(2), level=level)
+            _add_docx_label_runs(document.add_heading(level=level), heading_match.group(2))
         elif stripped.startswith(("- ", "* ")):
-            document.add_paragraph(stripped[2:], style="List Bullet")
+            _add_docx_label_runs(document.add_paragraph(style="List Bullet"), stripped[2:])
         elif stripped.startswith("> "):
-            document.add_paragraph(stripped[2:].strip())
+            _add_docx_label_runs(document.add_paragraph(), stripped[2:].strip())
         elif stripped:
-            document.add_paragraph(line)
+            _add_docx_label_runs(document.add_paragraph(), line)
 
     if ctx.findings:
         document.add_heading("Matriz de Hallazgos", level=1)

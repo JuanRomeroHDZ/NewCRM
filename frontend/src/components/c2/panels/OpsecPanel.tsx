@@ -12,14 +12,12 @@ export const OpsecPanel: React.FC = () => {
   const [prettyInput, setPrettyInput] = useState('');
   const [macInput, setMacInput] = useState('');
   const [vendor, setVendor] = useState('');
-  const [dhcp, setDhcp] = useState(true);
   const [busy, setBusy] = useState(false);
 
   const hostnameId = useId();
   const prettyId = useId();
   const macId = useId();
   const vendorId = useId();
-  const dhcpId = useId();
 
   const vendors = opsecState?.vendors ?? [];
   const profiles = opsecState?.profiles ?? [];
@@ -74,7 +72,7 @@ export const OpsecPanel: React.FC = () => {
       await c2Api.applyOpsecProfile({
         interface: activeIfaceName,
         profile: profileId,
-        dhcp,
+        dhcp: false,
       });
       await Promise.all([refreshOpsec(), refreshInterfaces()]);
       showToast(t('opsec.covered'), 'success');
@@ -116,7 +114,7 @@ export const OpsecPanel: React.FC = () => {
         pretty: prettyInput.trim() || null,
         mac: macInput.trim() || null,
         vendor: vendor || null,
-        dhcp,
+        dhcp: false,
       });
       await Promise.all([refreshOpsec(), refreshInterfaces()]);
       showToast(t('opsec.apply'), 'success');
@@ -153,7 +151,7 @@ export const OpsecPanel: React.FC = () => {
         interface: activeIfaceName,
         mac: macInput.trim() || null,
         vendor: vendor || null,
-        dhcp,
+        dhcp: false,
       });
       await Promise.all([refreshOpsec(), refreshInterfaces()]);
       showToast(t('opsec.macOnly'), 'success');
@@ -345,19 +343,9 @@ export const OpsecPanel: React.FC = () => {
             </div>
           </div>
 
-          <label
-            htmlFor={dhcpId}
-            className="flex min-h-[44px] cursor-pointer items-center gap-2.5 rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 text-xs text-white transition-colors hover:border-obsidian-borderLight"
-          >
-            <input
-              id={dhcpId}
-              type="checkbox"
-              checked={dhcp}
-              onChange={(e) => setDhcp(e.target.checked)}
-              className="h-4 w-4 rounded border-obsidian-border bg-obsidian-bg accent-obsidian-gold"
-            />
-            <span>{t('opsec.dhcp')}</span>
-          </label>
+          <p className="rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 text-xs text-obsidian-muted">
+            {t('opsec.networkHint')}
+          </p>
 
           <div className="flex flex-wrap items-center gap-2.5 pt-1">
             <button

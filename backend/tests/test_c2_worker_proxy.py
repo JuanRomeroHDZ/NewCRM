@@ -13,6 +13,22 @@ from app.main import app
 from app.security.tokens import require_vault_unlocked
 
 
+def _socket_unavailable_error(process) -> str:
+    if process.stderr is None:
+        return ""
+    return process.stderr.read().decode(errors="replace")
+
+
+def _skip_when_unix_sockets_are_blocked(process, error: str) -> None:
+    permission_denied = (
+        "PermissionError: [Errno 1] Operation not permitted" in error
+        or "PermissionError: [Errno 13] Permission denied" in error
+    )
+    if permission_denied:
+        process.kill()
+        pytest.skip("El entorno de pruebas bloquea sockets Unix locales")
+
+
 @pytest.fixture
 async def worker(tmp_path, monkeypatch):
     sock = tmp_path / 'worker.sock'
@@ -26,7 +42,9 @@ async def worker(tmp_path, monkeypatch):
     try:
         for _ in range(100):
             if proc.poll() is not None:
-                raise RuntimeError(proc.stderr.read().decode())
+                error = _socket_unavailable_error(proc)
+                _skip_when_unix_sockets_are_blocked(proc, error)
+                raise RuntimeError(error)
             if sock.exists():
                 try:
                     async with httpx.AsyncClient(transport=httpx.AsyncHTTPTransport(uds=str(sock))) as direct:
@@ -128,6 +146,11 @@ async def test_proxy_preserves_binary_request_and_download(client, tmp_path, mon
         msg = await receive()
         body += msg.get("body", b"")
         if not msg.get("more_body", False): break
+    if scope["path"] == "/c2/meta":
+        payload = b'{"demo_mode": true}'
+        await send({"type": "http.response.start", "status": 200, "headers": [(b"content-type", b"application/json")]})
+        await send({"type": "http.response.body", "body": payload})
+        return
     if scope["method"] == "POST":
         data = body
     else:
@@ -136,9 +159,13 @@ async def test_proxy_preserves_binary_request_and_download(client, tmp_path, mon
     await send({"type": "http.response.body", "body": data})
 ''')
     proc = subprocess.Popen([sys.executable, '-m', 'uvicorn', 'stub:app', '--uds', str(sock), '--log-level', 'warning'],
-                            cwd=tmp_path, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                            cwd=tmp_path, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
     try:
         for _ in range(100):
+            if proc.poll() is not None:
+                error = _socket_unavailable_error(proc)
+                _skip_when_unix_sockets_are_blocked(proc, error)
+                raise RuntimeError(error)
             if sock.exists():
                 break
             await asyncio.sleep(.05)
@@ -160,6 +187,8 @@ async def test_proxy_preserves_binary_request_and_download(client, tmp_path, mon
         app.dependency_overrides.pop(c2_proxy.owner, None)
         proc.terminate()
         proc.wait(timeout=10)
+        if proc.stderr:
+            proc.stderr.close()
 
 
 @pytest.mark.asyncio

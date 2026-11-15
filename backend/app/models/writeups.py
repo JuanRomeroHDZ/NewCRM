@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, LargeBinary, String, Text
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, Integer, LargeBinary, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
 from app.models import gen_uuid, utc_now
@@ -126,11 +126,18 @@ class WriteupRevision(Base):
     """Immutable encrypted snapshot for rollback & diff comparison."""
 
     __tablename__ = "writeup_revisions"
+    __table_args__ = (
+        Index("ix_writeup_revisions_writeup_revision", "writeup_id", "revision_number"),
+        Index("ix_writeup_revisions_writeup_created", "writeup_id", "created_at"),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=gen_uuid)
     writeup_id: Mapped[str] = mapped_column(String(36), ForeignKey("writeups.id"), nullable=False, index=True)
     revision_number: Mapped[int] = mapped_column(Integer, default=1)
     change_note: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # A stable category supports history filtering without parsing the display label.
+    # Existing rows are backfilled additively during startup migration.
+    change_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
     content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     encrypted_markdown: Mapped[str | None] = mapped_column(Text, nullable=True)
     encrypted_snapshot: Mapped[str | None] = mapped_column(Text, nullable=True)

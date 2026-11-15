@@ -135,6 +135,73 @@ services:
       retries: 5
       start_period: 5s
 
+  # Optional full encrypted backup. It is not started by the default profile.
+  # The private age identity is never mounted or passed to this service.
+  full_backup:
+    profiles: ["full-backup"]
+    build:
+      context: ./scripts/full_backup
+      dockerfile: Dockerfile
+    restart: on-failure:3
+    user: "0:0"
+    entrypoint: ["python3", "/opt/full_backup/backup.py"]
+    command: ["--schedule"]
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: ${POSTGRES_USER:?Configura POSTGRES_USER en .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Genera POSTGRES_PASSWORD en .env}
+      POSTGRES_DB: ${POSTGRES_DB:?Configura POSTGRES_DB en .env}
+      BACKUP_AGE_RECIPIENT: ${BACKUP_AGE_RECIPIENT:-}
+      BACKUP_ROOT: /var/backups/full
+      BACKUP_MEDIA_SOURCE: /source/vault_media
+      BACKUP_DEPLOYMENT_SOURCE: /source/deployment
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=128m
+    cap_drop: [ALL]
+    cap_add: [DAC_READ_SEARCH]
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - backend_net
+    volumes:
+      - vault_media:/source/vault_media:ro
+      - full_backup_data:/var/backups/full
+      - ./docker-compose.yml:/source/deployment/docker-compose.yml:ro
+      - ./nginx:/source/deployment/nginx:ro
+      - ./scripts:/source/deployment/scripts:ro
+      - ./backend/app:/source/deployment/backend/app:ro
+      - ./backend/alembic.ini:/source/deployment/backend/alembic.ini:ro
+      - ./backend/migrations:/source/deployment/backend/migrations:ro
+      - ./backend/tests:/source/deployment/backend/tests:ro
+      - ./backend/pytest.ini:/source/deployment/backend/pytest.ini:ro
+      - ./backend/requirements.txt:/source/deployment/backend/requirements.txt:ro
+      - ./backend/Dockerfile:/source/deployment/backend/Dockerfile:ro
+      - ./frontend/src:/source/deployment/frontend/src:ro
+      - ./frontend/public:/source/deployment/frontend/public:ro
+      - ./frontend/tests:/source/deployment/frontend/tests:ro
+      - ./frontend/package.json:/source/deployment/frontend/package.json:ro
+      - ./frontend/package-lock.json:/source/deployment/frontend/package-lock.json:ro
+      - ./frontend/Dockerfile:/source/deployment/frontend/Dockerfile:ro
+      - ./frontend/index.html:/source/deployment/frontend/index.html:ro
+      - ./frontend/postcss.config.js:/source/deployment/frontend/postcss.config.js:ro
+      - ./frontend/tailwind.config.js:/source/deployment/frontend/tailwind.config.js:ro
+      - ./frontend/tsconfig.json:/source/deployment/frontend/tsconfig.json:ro
+      - ./frontend/vite.config.ts:/source/deployment/frontend/vite.config.ts:ro
+      - ./pytest.ini:/source/deployment/pytest.ini:ro
+      - ./.env.example:/source/deployment/.env.example:ro
+      - ./README.md:/source/deployment/README.md:ro
+      - ./RUNBOOK.md:/source/deployment/RUNBOOK.md:ro
+      - ./PRODUCT.md:/source/deployment/PRODUCT.md:ro
+      - ./SEGURIDAD.md:/source/deployment/SEGURIDAD.md:ro
+      - ./Recomendations.md:/source/deployment/Recomendations.md:ro
+      - ./docs:/source/deployment/docs:ro
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
+
 networks:
   # Public network exposed to the reverse proxy and frontend
   frontend_net:
@@ -154,3 +221,5 @@ volumes:
     name: ${VAULT_MEDIA_VOLUME_NAME:-emailsaver_vault_media}
   backup_data:
     name: ${BACKUP_VOLUME_NAME:-lessso_backup_data}
+  full_backup_data:
+    name: lessso_full_backup_data

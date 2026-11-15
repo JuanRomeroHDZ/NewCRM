@@ -5,15 +5,16 @@ import { useVault } from '../../../context/VaultContext';
 import { c2Api } from '../../../lib/c2Api';
 
 export const HttpInjectPanel: React.FC = () => {
-  const { t, moduleStatus, httpRequests, clearHttpRequests, addLog, refreshStatus } = useC2();
+  const { t, moduleStatus, httpRequests, clearHttpRequests, addLog, refreshStatus, arpTarget, setArpTarget } = useC2();
   const { showToast } = useVault();
 
   const [injectPayload, setInjectPayload] = useState('');
-  const [sslstrip, setSslstrip] = useState(true);
+  const [sslstrip, setSslstrip] = useState(false);
   const [proxyPort, setProxyPort] = useState('8080');
   const [busy, setBusy] = useState(false);
 
   const injectId = useId();
+  const targetId = useId();
   const sslstripId = useId();
   const portId = useId();
 
@@ -25,6 +26,7 @@ export const HttpInjectPanel: React.FC = () => {
     try {
       const parsedPort = Number.parseInt(proxyPort, 10);
       await c2Api.startHttpInject({
+        target_ip: arpTarget,
         inject: injectPayload,
         sslstrip,
         port: Number.isFinite(parsedPort) && parsedPort > 0 ? parsedPort : 8080,
@@ -81,6 +83,22 @@ export const HttpInjectPanel: React.FC = () => {
         <p className="mt-2 text-xs leading-relaxed text-obsidian-muted">{t('http.hint')}</p>
 
         <form onSubmit={(e) => void handleStart(e)} className="mt-4 max-w-2xl space-y-3.5">
+          <div>
+            <label htmlFor={targetId} className="mb-1.5 block text-xs font-medium text-obsidian-muted">
+              {t('http.target')}
+            </label>
+            <input
+              id={targetId}
+              type="text"
+              inputMode="decimal"
+              required
+              value={arpTarget}
+              onChange={(e) => setArpTarget(e.target.value)}
+              placeholder="192.168.100.17"
+              className="min-h-[44px] w-full rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 font-mono text-xs text-white placeholder:text-slate-500 focus:border-obsidian-gold focus:outline-none"
+            />
+            <p className="mt-1 text-[11px] text-obsidian-muted">{t('http.targetHint')}</p>
+          </div>
           <div>
             <label htmlFor={injectId} className="mb-1.5 block text-xs font-medium text-obsidian-muted">
               {t('http.payload')}

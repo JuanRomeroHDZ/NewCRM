@@ -8,7 +8,7 @@ import React, {
   useState,
 } from 'react';
 import { useVault } from './VaultContext';
-import { c2Api, buildC2WsUrl, buildC2WsProtocols } from '../lib/c2Api';
+import { c2Api, buildC2WsUrl, buildC2WsProtocols, setActiveC2EngagementId } from '../lib/c2Api';
 import { ApiError } from '../lib/apiErrors';
 import { createC2SessionGuard } from '../lib/c2SessionGuard';
 import { selectC2Interface } from '../lib/c2Interfaces';
@@ -16,8 +16,11 @@ import { C2Lang, getStoredC2Lang, setStoredC2Lang, tC2 } from '../lib/c2I18n';
 import type {
   C2CameraDiscovered,
   C2CameraFinding,
+  C2Engagement,
+  C2EngagementClient,
   C2CredItem,
   C2EnvWarning,
+  C2Preflight,
   C2ExploitServiceResult,
   C2Gateway,
   C2HandshakeRow,
@@ -96,6 +99,11 @@ export interface C2ContextValue {
   serviceState: 'idle' | 'checking' | 'running' | 'unavailable' | 'forbidden';
   serviceDetail: string;
   retryService: () => Promise<void>;
+  engagements: C2Engagement[];
+  engagementClients: C2EngagementClient[];
+  activeEngagementId: string | null;
+  setActiveEngagementId: (id: string | null) => void;
+  refreshEngagements: () => Promise<void>;
 
   interfaces: C2Interface[];
   gateway: C2Gateway | null;
@@ -109,6 +117,8 @@ export interface C2ContextValue {
 
   opsecState: C2OpsecState | null;
   envWarnings: C2EnvWarning[];
+  preflight: C2Preflight | null;
+  preflightState: 'loading' | 'ready' | 'error';
 
   // Discovery, ports, exploits & topology
   hosts: C2Host[];
@@ -219,6 +229,14 @@ export const C2Provider: React.FC<{ children: React.ReactNode }> = ({ children }
   const [serviceState, setServiceState] = useState<'idle' | 'checking' | 'running' | 'unavailable' | 'forbidden'>('idle');
   const [serviceDetail, setServiceDetail] = useState('');
   const [enteredC2, setEnteredC2] = useState(false);
+  const [engagements, setEngagements] = useState<C2Engagement[]>([]);
+  const [engagementClients, setEngagementClients] = useState<C2EngagementClient[]>([]);
+  const [activeEngagementId, setActiveEngagementIdState] = useState<string | null>(null);
+  const setActiveEngagementId = useCallback((id: string | null) => {
+    const next = id?.trim() || null;
+    setActiveEngagementIdState(next);
+    setActiveC2EngagementId(next);
+  }, []);
   const inC2Workspace = activeSection.startsWith('c2_');
   const unlockedRef = useRef(isUnlocked);
   const sessionGuardRef = useRef(createC2SessionGuard(isUnlocked));
@@ -249,6 +267,8 @@ export const C2Provider: React.FC<{ children: React.ReactNode }> = ({ children }
   const [moduleStatus, setModuleStatus] = useState<C2ModuleStatus>(DEFAULT_MODULE_STATUS);
   const [opsecState, setOpsecState] = useState<C2OpsecState | null>(null);
   const [envWarnings, setEnvWarnings] = useState<C2EnvWarning[]>([]);
+  const [preflight, setPreflight] = useState<C2Preflight | null>(null);
+  const [preflightState, setPreflightState] = useState<'loading' | 'ready' | 'error'>('loading');
 
   const [hosts, setHosts] = useState<C2Host[]>([]);
   const [hostOsMap, setHostOsMap] = useState<Record<string, { os: string; ttl?: number | null }>>({});
@@ -358,6 +378,26 @@ export const C2Provider: React.FC<{ children: React.ReactNode }> = ({ children }
     }
   }, [isUnlocked]);
 
+  const refreshEngagements = useCallback(async () => {
+    if (!isUnlocked) return;
+    const isCurrentSession = sessionGuardRef.current.capture();
+    try {
+      const [scopeRows, clientRows] = await Promise.all([
+        c2Api.getEngagements(),
+        c2Api.getEngagementClients(),
+      ]);
+      if (!isCurrentSession()) return;
+      setEngagements(scopeRows);
+      setEngagementClients(clientRows);
+      if (activeEngagementId && !scopeRows.some((item) => item.id === activeEngagementId && item.active_now)) {
+        setActiveEngagementId(null);
+      }
+    } catch (err) {
+      if (!isCurrentSession()) return;
+      addLog('error', err instanceof Error ? err.message : 'No se pudieron cargar los ámbitos autorizados.');
+    }
+  }, [isUnlocked, activeEngagementId, setActiveEngagementId, addLog]);
+
   const refreshOpsec = useCallback(async () => {
     if (!isUnlocked) return;
     const isCurrentSession = sessionGuardRef.current.capture();
@@ -374,13 +414,18 @@ export const C2Provider: React.FC<{ children: React.ReactNode }> = ({ children }
   const refreshEnvCheck = useCallback(async () => {
     if (!isUnlocked) return;
     const isCurrentSession = sessionGuardRef.current.capture();
+    setPreflightState('loading');
     try {
       const data = await c2Api.getEnvCheck();
       if (!isCurrentSession()) return;
       setEnvWarnings(data.warnings || []);
+      setPreflight(data.preflight ?? null);
+      setPreflightState('ready');
     } catch {
       if (!isCurrentSession()) return;
       setEnvWarnings([]);
+      setPreflight(null);
+      setPreflightState('error');
     }
   }, [isUnlocked]);
 
@@ -424,6 +469,7 @@ export const C2Provider: React.FC<{ children: React.ReactNode }> = ({ children }
     refreshMeta,
     refreshInterfaces,
     refreshStatus,
+    refreshEngagements,
     refreshOpsec,
     refreshEnvCheck,
     refreshWifiCaptures,
@@ -434,6 +480,7 @@ export const C2Provider: React.FC<{ children: React.ReactNode }> = ({ children }
     refreshMeta,
     refreshInterfaces,
     refreshStatus,
+    refreshEngagements,
     refreshOpsec,
     refreshEnvCheck,
     refreshWifiCaptures,
@@ -748,6 +795,7 @@ export const C2Provider: React.FC<{ children: React.ReactNode }> = ({ children }
     void refreshAllRef.current.refreshOpsec();
     void refreshAllRef.current.refreshEnvCheck();
     void refreshAllRef.current.refreshStatus();
+    void refreshAllRef.current.refreshEngagements();
     void refreshAllRef.current.refreshWifiCaptures();
     void refreshAllRef.current.refreshWifiClients();
     void refreshAllRef.current.refreshWifiIfaces();
@@ -757,9 +805,14 @@ export const C2Provider: React.FC<{ children: React.ReactNode }> = ({ children }
   useEffect(() => {
     if (!isUnlocked) {
       serviceRequestRef.current += 1;
+      setPreflight(null);
+      setPreflightState('loading');
       setEnteredC2(false);
       setServiceState('idle');
       setServiceDetail('');
+      setEngagements([]);
+      setEngagementClients([]);
+      setActiveEngagementId(null);
     } else if (inC2Workspace) {
       setEnteredC2(true);
     }
@@ -771,6 +824,12 @@ export const C2Provider: React.FC<{ children: React.ReactNode }> = ({ children }
     const timer = window.setInterval(() => void retryService(true), 10000);
     return () => window.clearInterval(timer);
   }, [isUnlocked, enteredC2, inC2Workspace, retryService]);
+
+  useEffect(() => {
+    if (!isUnlocked || !enteredC2 || serviceState !== 'running') return;
+    const timer = window.setInterval(() => void refreshEngagements(), 60_000);
+    return () => window.clearInterval(timer);
+  }, [isUnlocked, enteredC2, serviceState, refreshEngagements]);
 
   // Only connect to the engine when the separate service is available.
   useEffect(() => {
@@ -845,7 +904,7 @@ export const C2Provider: React.FC<{ children: React.ReactNode }> = ({ children }
       }
       setWsConnected(false);
     };
-  }, [isUnlocked, serviceState, loadBootstrapData, handleWsEvent]);
+  }, [isUnlocked, serviceState, activeEngagementId, loadBootstrapData, handleWsEvent]);
 
   // Cross-panel actions
   const pinHostTarget = useCallback(
@@ -945,6 +1004,11 @@ export const C2Provider: React.FC<{ children: React.ReactNode }> = ({ children }
     serviceState,
     serviceDetail,
     retryService,
+    engagements,
+    engagementClients,
+    activeEngagementId,
+    setActiveEngagementId,
+    refreshEngagements,
     interfaces,
     gateway,
     selectedIface,
@@ -955,6 +1019,8 @@ export const C2Provider: React.FC<{ children: React.ReactNode }> = ({ children }
     activeModuleNames,
     opsecState,
     envWarnings,
+    preflight,
+    preflightState,
     hosts,
     setHosts,
     hostOsMap,

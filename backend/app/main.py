@@ -62,6 +62,11 @@ async def _apply_schema_statement(connection, statement: str, dialect_name: str)
         )
         return True
 
+    if statement.upper().startswith("CREATE INDEX IF NOT EXISTS "):
+        # SQLite and PostgreSQL both support idempotent non-unique index creation.
+        await connection.execute(text(statement))
+        return True
+
     if " ALTER COLUMN " in statement.upper():
         if " DROP NOT NULL" in statement.upper():
             match = re.search(r"ALTER TABLE ([A-Za-z_][A-Za-z0-9_]*) ALTER COLUMN ([A-Za-z_][A-Za-z0-9_]*)", statement, re.IGNORECASE)
@@ -134,6 +139,10 @@ async def run_additive_schema_migrations(database_engine=None):
         "ALTER TABLE domain_renewals ADD COLUMN IF NOT EXISTS client_charge_amount FLOAT DEFAULT 0.0",
         "ALTER TABLE domain_renewals ALTER COLUMN service_type TYPE VARCHAR(64)",
         "ALTER TABLE writeup_revisions ADD COLUMN IF NOT EXISTS encrypted_snapshot TEXT",
+        "ALTER TABLE writeup_revisions ADD COLUMN IF NOT EXISTS change_type VARCHAR(32)",
+        "ALTER TABLE pentest_engagements ADD COLUMN IF NOT EXISTS authorized_ipv6_targets TEXT NOT NULL DEFAULT ''",
+        "CREATE INDEX IF NOT EXISTS ix_writeup_revisions_writeup_revision ON writeup_revisions (writeup_id, revision_number)",
+        "CREATE INDEX IF NOT EXISTS ix_writeup_revisions_writeup_created ON writeup_revisions (writeup_id, created_at)",
         "ALTER TABLE writeup_assets ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT FALSE NOT NULL",
     ]
     current_migration = "schema-change"

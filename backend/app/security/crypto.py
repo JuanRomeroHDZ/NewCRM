@@ -99,6 +99,29 @@ def get_effective_encryption_key(explicit_key: bytes | None = None) -> bytes:
 
 NOTE_ENC_PREFIX = "enc:v1:"
 
+
+def _is_verified_note_ciphertext(value: str, key: bytes | None = None) -> bool:
+    """Avoid treating user text that merely starts with the storage prefix as encrypted."""
+    if not value.startswith(NOTE_ENC_PREFIX):
+        return False
+    try:
+        raw_data = base64.b64decode(value[len(NOTE_ENC_PREFIX):].encode("utf-8"), validate=True)
+    except (ValueError, UnicodeEncodeError):
+        return False
+    if len(raw_data) < 28:
+        return False
+
+    nonce, ciphertext = raw_data[:12], raw_data[12:]
+    primary_key = get_effective_encryption_key(key)
+    fallback_keys = [get_server_seed_key(), *get_legacy_server_seed_keys()]
+    for candidate in [primary_key, *fallback_keys]:
+        try:
+            AESGCM(candidate).decrypt(nonce, ciphertext, None)
+            return True
+        except Exception:
+            continue
+    return False
+
 def encrypt_secret(plain_text: str | None, key: bytes | None = None) -> str | None:
     """Encrypts plaintext using AES-256-GCM. Returns base64 nonce + ciphertext + tag."""
     if plain_text is None or plain_text == "":
@@ -153,7 +176,7 @@ def encrypt_note(plain_text: str | None, key: bytes | None = None) -> str | None
     cleaned = plain_text.strip()
     if not cleaned:
         return None
-    if cleaned.startswith(NOTE_ENC_PREFIX):
+    if _is_verified_note_ciphertext(cleaned, key):
         return cleaned
     cipher = encrypt_secret(plain_text, key=key)
     return f"{NOTE_ENC_PREFIX}{cipher}" if cipher else None

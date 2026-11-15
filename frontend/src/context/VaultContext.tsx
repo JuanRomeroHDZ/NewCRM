@@ -3,6 +3,8 @@ import { VaultStatus, ExchangeRate, PaymentMethod, ScopeFilter, EntityScope, Run
 import { api, setApiVaultToken, getApiVaultToken } from '../lib/api';
 import { ConfirmDialog, ConfirmDialogOptions } from '../components/common/ConfirmDialog';
 import { PromptDialog, PromptDialogOptions } from '../components/common/PromptDialog';
+import { deriveDraftKey } from '../lib/writeupDraftRecovery';
+import { createRequestSequence } from '../lib/requestSequence';
 
 export type SectionType = 
   | 'dashboard'
@@ -53,6 +55,7 @@ interface VaultContextType {
   // Vault status
   isSetup: boolean;
   isUnlocked: boolean;
+  draftRecoveryKey: CryptoKey | null;
   vaultStatusError: string | null;
   remainingSeconds: number;
   timeoutMinutes: number;
@@ -166,6 +169,8 @@ const VaultContext = createContext<VaultContextType | undefined>(undefined);
 export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isSetup, setIsSetup] = useState<boolean>(true);
   const [isUnlocked, setIsUnlocked] = useState<boolean>(false);
+  const [draftRecoveryKey, setDraftRecoveryKey] = useState<CryptoKey | null>(null);
+  useEffect(() => { if (!isUnlocked) setDraftRecoveryKey(null); }, [isUnlocked]);
   const [vaultStatusError, setVaultStatusError] = useState<string | null>(null);
   const [remainingSeconds, setRemainingSeconds] = useState<number>(0);
   const [timeoutMinutes, setTimeoutMinutes] = useState<number>(10);
@@ -232,6 +237,7 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [runtimeConfigLoading, setRuntimeConfigLoading] = useState(false);
   const [runtimeConfigError, setRuntimeConfigError] = useState<string | null>(null);
   const runtimeConfigRequest = useRef(0);
+  const vaultStatusRequests = useRef(createRequestSequence());
   const [dataVersion, setDataVersion] = useState(0);
 
   // Accessible Dialog state (replaces window.confirm / window.prompt)
@@ -330,8 +336,12 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   // Check vault status
   const refreshVaultStatus = useCallback(async () => {
+    const requestVersion = vaultStatusRequests.current.next();
     try {
       const status = await api.getVaultStatus();
+      // A status read started before a successful unlock/lock must not undo it
+      // when its slower response arrives afterward.
+      if (!vaultStatusRequests.current.isCurrent(requestVersion)) return;
       setVaultStatusError(null);
       setIsSetup(status.is_setup);
       setIsUnlocked(status.is_unlocked);
@@ -347,8 +357,10 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         setApiVaultToken(null);
       }
     } catch (err: any) {
-      setVaultStatusError(err?.message || 'No se pudo conectar con la API de bóveda.');
-      console.error('Error fetching vault status:', err);
+      if (vaultStatusRequests.current.isCurrent(requestVersion)) {
+        setVaultStatusError(err?.message || 'No se pudo conectar con la API de bóveda.');
+        console.error('Error fetching vault status:', err);
+      }
     }
   }, []);
 
@@ -391,6 +403,7 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   useEffect(() => {
     refreshVaultStatus();
     const handleVaultLocked = () => {
+      vaultStatusRequests.current.invalidate();
       setIsUnlocked(false);
       setRemainingSeconds(0);
     };
@@ -433,6 +446,7 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       setRemainingSeconds((prev) => {
         if (prev <= 1) {
           clearInterval(interval);
+          vaultStatusRequests.current.invalidate();
           setApiVaultToken(null);
           setIsUnlocked(false);
           showToast('La bóveda se ha bloqueado automáticamente por inactividad', 'warning');
@@ -487,6 +501,10 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const unlockVault = async (password: string) => {
     const res = await api.unlockVault(password);
+    vaultStatusRequests.current.invalidate();
+    let recoveryKey: CryptoKey | null = null;
+    try { recoveryKey = await deriveDraftKey(password); } catch { showToast('No está disponible la recuperación local cifrada de informes en este navegador.', 'warning'); }
+    setDraftRecoveryKey(recoveryKey);
     setApiVaultToken(res.token);
     setIsUnlocked(true);
     setRemainingSeconds(res.remaining_seconds);
@@ -496,10 +514,12 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const lockVault = async () => {
+    vaultStatusRequests.current.invalidate();
     let serverRevoked = true;
     try {
       await api.lockVault();
     } catch (_) { serverRevoked = false; }
+    vaultStatusRequests.current.invalidate();
     setApiVaultToken(null);
     setIsUnlocked(false);
     setRemainingSeconds(0);
@@ -508,9 +528,11 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const panicLock = async () => {
+    vaultStatusRequests.current.invalidate();
     try {
       await api.lockVault();
     } catch (_) {}
+    vaultStatusRequests.current.invalidate();
     setApiVaultToken(null);
     setIsUnlocked(false);
     setRemainingSeconds(0);
@@ -546,6 +568,10 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const setupMasterPassword = async (password: string) => {
     const res = await api.setupMasterPassword(password);
+    vaultStatusRequests.current.invalidate();
+    let recoveryKey: CryptoKey | null = null;
+    try { recoveryKey = await deriveDraftKey(password); } catch { showToast('No está disponible la recuperación local cifrada de informes en este navegador.', 'warning'); }
+    setDraftRecoveryKey(recoveryKey);
     setApiVaultToken(res.token);
     setIsSetup(true);
     setIsUnlocked(true);
@@ -669,6 +695,7 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       value={{
         isSetup,
         isUnlocked,
+        draftRecoveryKey,
         vaultStatusError,
         remainingSeconds,
         timeoutMinutes,

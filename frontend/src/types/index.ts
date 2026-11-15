@@ -570,6 +570,7 @@ export interface WriteupAsset {
   exif_stripped: boolean;
   caption?: string | null;
   created_at: string;
+  writeup_updated_at?: string | null;
 }
 
 export interface WriteupBoard {
@@ -581,6 +582,7 @@ export interface WriteupBoard {
   element_count: number;
   created_at: string;
   updated_at: string;
+  writeup_updated_at?: string | null;
 }
 
 export interface WriteupCitation {
@@ -599,6 +601,7 @@ export interface WriteupCitation {
   note?: string | null;
   created_at: string;
   updated_at: string;
+  writeup_updated_at?: string | null;
 }
 
 export interface WriteupRevision {
@@ -606,8 +609,9 @@ export interface WriteupRevision {
   writeup_id: string;
   revision_number: number;
   change_note?: string | null;
+  change_type: 'initial' | 'autosave' | 'manual' | 'milestone' | 'restore' | 'edit' | 'evidence' | 'board' | 'citation';
   content_hash: string;
-  markdown_content: string;
+  markdown_content: string | null;
   snapshot?: {
     version: number;
     fields: Record<string, string | number | null>;
@@ -617,7 +621,15 @@ export interface WriteupRevision {
     citations: WriteupCitation[];
     assets?: WriteupAsset[];
   } | null;
+  created_by_id?: string | null;
+  created_by_name?: string | null;
+  has_content: boolean;
   created_at: string;
+}
+
+export interface WriteupRevisionAuthor {
+  id: string;
+  name: string;
 }
 
 export interface WriteupExportLog {

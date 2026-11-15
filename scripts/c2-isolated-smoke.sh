@@ -18,12 +18,15 @@ cd "$project_dir/backend"
 "$python_bin" - <<'PY'
 import threading
 import time
+from pathlib import Path
 from scapy.all import ARP, Ether, AsyncSniffer, get_if_hwaddr, sendp
+from app.c2.modules import arp
 from app.c2.modules.arp import ArpSpoofer
 
 seen = []
 ready = threading.Event()
 peer_mac = get_if_hwaddr('c2test1')
+
 def receive(packet):
     if not packet.haslayer(ARP):
         return
@@ -39,22 +42,45 @@ sniffer = AsyncSniffer(iface='c2test1', prn=receive, started_callback=ready.set,
 sniffer.start()
 if not ready.wait(3):
     raise SystemExit('No se pudo iniciar la captura aislada')
-spoofer = ArpSpoofer('10.254.23.2', '10.254.23.1', 'c2test0')
-spoofer.target_mac = spoofer._resolve_mac(spoofer.target_ip)
-spoofer.gateway_mac = spoofer._resolve_mac(spoofer.gateway_ip)
-if not spoofer.target_mac or not spoofer.gateway_mac:
-    raise SystemExit('No se pudieron resolver las MAC en la red aislada')
-spoofer._poison()
-for _ in range(20):
-    if len(seen) >= 2:
-        break
-    time.sleep(0.05)
-sniffer.stop()
+original_sendp = arp.sendp
+
+def bounded_restore_send(packet, **options):
+    # Keep the test quick while still sending every distinct restore frame.
+    if options.get('count', 1) > 1:
+        options['count'] = 1
+        options['inter'] = 0
+    return original_sendp(packet, **options)
+
+arp.sendp = bounded_restore_send
+ip_forward_path = Path('/proc/sys/net/ipv4/ip_forward')
+forwarding_before = ip_forward_path.read_text().strip()
+spoofer = ArpSpoofer('10.254.23.2', '10.254.23.1', 'c2test0', interval=0.05)
+try:
+    spoofer.start()
+    for _ in range(60):
+        poisoned = {(psrc, pdst) for psrc, pdst, hwsrc, _ in seen if hwsrc.lower() == get_if_hwaddr('c2test0').lower()}
+        if poisoned >= {('10.254.23.1', '10.254.23.2'), ('10.254.23.2', '10.254.23.1')}:
+            break
+        time.sleep(0.05)
+    if not spoofer.running:
+        raise SystemExit('El módulo ARP no mantuvo activo su hilo de prueba')
+    if ip_forward_path.read_text().strip() != '1':
+        raise SystemExit('El módulo no habilitó el reenvío dentro del namespace aislado')
+finally:
+    spoofer.stop()
+    sniffer.stop()
+arp.sendp = original_sendp
+
 local_mac = get_if_hwaddr('c2test0')
-pairs = set(seen)
-expected = {('10.254.23.1', '10.254.23.2', local_mac, local_mac),
-            ('10.254.23.2', '10.254.23.1', local_mac, local_mac)}
-if not expected <= pairs:
-    raise SystemExit(f'Faltan tramas ARP esperadas: {expected - pairs}')
-print('OK: resolución y envío ARP en interfaz aislada; ninguna trama salió a la red habitual.')
+poisoned = {(psrc, pdst) for psrc, pdst, hwsrc, _ in seen if hwsrc.lower() == local_mac.lower()}
+expected_poison = {('10.254.23.1', '10.254.23.2'), ('10.254.23.2', '10.254.23.1')}
+if not expected_poison <= poisoned:
+    raise SystemExit(f'Faltan anuncios ARP MITM esperados: {expected_poison - poisoned}')
+restored = {(psrc, pdst) for psrc, pdst, hwsrc, _ in seen if hwsrc.lower() == peer_mac.lower()}
+expected_restore = {('10.254.23.1', '10.254.23.2'), ('10.254.23.2', '10.254.23.1')}
+if not expected_restore <= restored:
+    raise SystemExit(f'Faltan anuncios ARP de restauración: {expected_restore - restored}')
+if ip_forward_path.read_text().strip() != forwarding_before:
+    raise SystemExit('El módulo no restauró ip_forward dentro del namespace aislado')
+print('OK: inicio, envenenamiento, restauración ARP y reenvío recuperado dentro de un namespace privado; no se usó la red habitual.')
 PY

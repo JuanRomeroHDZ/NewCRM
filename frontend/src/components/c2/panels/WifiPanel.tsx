@@ -48,11 +48,12 @@ export const WifiPanel: React.FC = () => {
   } = useC2();
   const { confirm, showToast } = useVault();
 
-  const [prepare, setPrepare] = useState(true);
+  const [prepare, setPrepare] = useState(false);
   const [lowNoise, setLowNoise] = useState(true);
   const [broadcast, setBroadcast] = useState(false);
   const [pmkidAuto, setPmkidAuto] = useState(false);
   const [hsChannel, setHsChannel] = useState('');
+  const [hsBssid, setHsBssid] = useState('');
   const [hsAuto, setHsAuto] = useState(false);
   const [busyAction, setBusyAction] = useState<string | null>(null);
 
@@ -66,6 +67,7 @@ export const WifiPanel: React.FC = () => {
   const pmkidChannelId = useId();
   const pmkidAutoId = useId();
   const hsChannelId = useId();
+  const hsBssidId = useId();
   const hsAutoId = useId();
 
   const currentWifiMode = useMemo(() => {
@@ -129,7 +131,7 @@ export const WifiPanel: React.FC = () => {
   const handleKillServices = () =>
     void runAction('kill', async () => {
       const res = await c2Api.killWifiInterferers();
-      const msg = t('wifi.stoppedSvcs', { list: (res.stopped || []).join(', ') });
+      const msg = res.message || t('wifi.stoppedSvcs', { list: (res.stopped || []).join(', ') });
       addLog('wifi', msg);
       showToast(msg, 'info');
     });
@@ -137,9 +139,9 @@ export const WifiPanel: React.FC = () => {
   const handleRestoreServices = () =>
     void runAction('restore', async () => {
       const res = await c2Api.restoreWifiServices();
-      const msg = t('wifi.restoredSvcs', { list: (res.started || []).join(', ') });
+      const msg = res.message || t('wifi.restoredSvcs', { list: (res.started || []).join(', ') });
       addLog('wifi', msg);
-      showToast(msg, 'success');
+      showToast(msg, 'info');
     });
 
   const handleScanStart = () =>
@@ -223,6 +225,7 @@ export const WifiPanel: React.FC = () => {
       const ch = Number.parseInt(hsChannel, 10);
       await c2Api.startWifiHandshake({
         interface: selectedIface,
+        bssid: hsBssid.trim(),
         channel: Number.isFinite(ch) ? ch : null,
         auto_convert: hsAuto,
         prepare,
@@ -735,6 +738,21 @@ export const WifiPanel: React.FC = () => {
 
         <form onSubmit={(e) => void handleHandshakeStart(e)} className="mt-3.5 max-w-2xl space-y-3">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:items-end">
+            <div>
+              <label htmlFor={hsBssidId} className="mb-1 block text-xs font-medium text-obsidian-muted">
+                {t('wifi.hsBssid')}
+              </label>
+              <input
+                id={hsBssidId}
+                type="text"
+                value={hsBssid}
+                onChange={(e) => setHsBssid(e.target.value)}
+                placeholder="02:00:00:00:00:01"
+                required
+                pattern="([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}"
+                className="min-h-[44px] w-full rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 font-mono text-xs text-white placeholder:text-slate-500 focus:border-obsidian-gold focus:outline-none"
+              />
+            </div>
             <div>
               <label htmlFor={hsChannelId} className="mb-1 block text-xs font-medium text-obsidian-muted">
                 {t('wifi.hsChannel')}

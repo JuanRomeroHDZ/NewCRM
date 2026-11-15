@@ -76,12 +76,13 @@ Si el sistema anterior usaba la clave de cifrado por defecto, configura esa clav
 
 `.env` es local y está excluido de Git. Los valores más relevantes son:
 
-- `SERVER_SECRET_KEY`: clave de firma y de cifrado de respaldo del servidor. Guárdala fuera del repositorio y conserva una copia segura.
+- `SERVER_SECRET_KEY`: clave de firma de sesiones y de cifrado de ciertos datos del servidor. Guárdala fuera del repositorio y conserva una copia segura; no sustituye la clave age para respaldos completos.
 - `LEGACY_SERVER_SECRET_KEYS`: lista separada por comas para una rotación deliberada. Si una base existente depende de una clave anterior, consérvala aquí mientras se completa la migración; no borres los volúmenes de PostgreSQL para resolver un error de clave.
 - `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`: acceso interno a la base.
 - `PORT`, `HTTPS_PORT`, `HOST_BIND_IP`: publicación del proxy; el menú guarda las opciones elegidas en `.env.runtime`, que tiene prioridad sobre `.env` al iniciar con `./lessso`.
 - `VITE_API_PROXY_TARGET`, `VITE_DEV_HOST`, `VITE_DEV_PORT`: conexión local del servidor de desarrollo de Vite. Solo se usan al ejecutar el frontend fuera de Docker; las variables `VITE_*` son públicas y no deben contener secretos.
-- `BACKUP_LOCAL_PATH`: destino persistente de los respaldos.
+- `BACKUP_LOCAL_PATH`: destino persistente para exportaciones locales de la bóveda; el archivo `.emailsaver` es parcial y no contiene writeups ni evidencias.
+- `BACKUP_AGE_RECIPIENT`: clave pública age opcional para activar el respaldo cifrado completo, descrito en `RUNBOOK.md`. Mantén su identidad privada fuera del servidor.
 - `OSM_OVERPASS_URL`, `OSM_TILE_URL_TEMPLATE`, `OSM_OBJECT_URL_TEMPLATE`: servicios cartográficos configurables. La atribución a OpenStreetMap se mantiene visible en el mapa.
 - `OSM_MAX_RESULTS`, `OSM_REQUEST_TIMEOUT_SECONDS`: límites de cada consulta.
 - `FALLBACK_USD_MXN_RATE`: valor inicial cuando la base aún no tiene una tasa guardada.

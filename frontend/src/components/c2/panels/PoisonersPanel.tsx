@@ -16,10 +16,10 @@ export const PoisonersPanel: React.FC = () => {
   } = useC2();
   const { showToast } = useVault();
 
-  const [llmnr, setLlmnr] = useState(true);
-  const [nbtns, setNbtns] = useState(true);
+  const [llmnr, setLlmnr] = useState(false);
+  const [nbtns, setNbtns] = useState(false);
   const [mdns, setMdns] = useState(false);
-  const [wpad, setWpad] = useState(true);
+  const [wpad, setWpad] = useState(false);
   const [spoofIp, setSpoofIp] = useState('');
   const [proxyPort, setProxyPort] = useState('3128');
   const [busy, setBusy] = useState(false);

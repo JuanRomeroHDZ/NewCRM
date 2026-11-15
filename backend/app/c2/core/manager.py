@@ -20,6 +20,9 @@ class Manager:
         # Clientes Wi-Fi observados pasivamente en el ultimo escaneo.
         # Se conserva al detener el scanner para poder elegir un objetivo.
         self.wifi_clients = {}
+        # Shared with WifiScanner so packet capture callbacks and API reads do
+        # not race while the scanner updates the client map.
+        self.wifi_clients_lock = threading.RLock()
         self.deauth = None
         self.handshake = None
         self.pmkid = None
@@ -48,6 +51,16 @@ class Manager:
                 except Exception:
                     pass
             setattr(self, attr, None)
+
+    def wifi_clients_snapshot(self) -> dict:
+        """Return a stable copy of clients concurrently updated by Scapy."""
+        with self.wifi_clients_lock:
+            return {key: dict(value) for key, value in self.wifi_clients.items()}
+
+    def get_wifi_client(self, key: tuple[str, str]) -> dict | None:
+        with self.wifi_clients_lock:
+            value = self.wifi_clients.get(key)
+            return dict(value) if value is not None else None
 
     def status(self) -> dict:
         out = {}

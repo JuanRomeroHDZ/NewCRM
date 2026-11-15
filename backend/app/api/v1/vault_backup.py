@@ -20,6 +20,11 @@ from app.config import settings
 
 router = APIRouter(prefix="/vault", tags=["vault"], dependencies=[Depends(require_vault_unlocked)])
 
+BACKUP_FORMAT = "emailsaver-encrypted-vault"
+BACKUP_VERSION = "2.0"
+MAX_BACKUP_CIPHERTEXT_BYTES = 20 * 1024 * 1024
+BACKUP_COLLECTIONS = ("emails", "platforms", "payments", "incomes", "renewals", "expenses", "projects", "resources")
+
 class ExportEncryptedRequest(BaseModel):
     export_password: str = Field(..., min_length=8, max_length=256)
 
@@ -202,25 +207,40 @@ async def export_encrypted_vault(
         "created_at": datetime.now(timezone.utc).isoformat()
     }
 
-@router.post("/restore-encrypted")
-async def restore_encrypted_vault(
-    payload: RestoreEncryptedRequest,
-    db: AsyncSession = Depends(get_db)
-):
+def decrypt_backup(payload: RestoreEncryptedRequest) -> dict:
     backup = payload.backup_data
-    if backup.get("format") != "emailsaver-encrypted-vault" or not backup.get("ciphertext"):
+    if backup.get("format") != BACKUP_FORMAT or not backup.get("ciphertext"):
         raise HTTPException(status_code=400, detail="Formato de archivo de respaldo no reconocido o inválido.")
 
     try:
-        salt = base64.b64decode(backup["salt"])
-        nonce = base64.b64decode(backup["nonce"])
-        ciphertext = base64.b64decode(backup["ciphertext"])
+        if backup.get("version") not in (None, BACKUP_VERSION):
+            raise ValueError("Unsupported backup version")
+        salt_value = backup["salt"]
+        nonce_value = backup["nonce"]
+        ciphertext_value = backup["ciphertext"]
+        if (not isinstance(salt_value, str) or len(salt_value) != 24
+                or not isinstance(nonce_value, str) or len(nonce_value) != 16
+                or not isinstance(ciphertext_value, str)):
+            raise ValueError("Invalid encrypted payload")
+        # The browser accepts files up to 20 MiB. Bound decoded input too, so a
+        # direct API caller cannot make Argon2/AES work on an unbounded payload.
+        if len(ciphertext_value) > ((MAX_BACKUP_CIPHERTEXT_BYTES + 2) // 3) * 4:
+            raise ValueError("Backup is too large")
+        salt = base64.b64decode(salt_value, validate=True)
+        nonce = base64.b64decode(nonce_value, validate=True)
+        ciphertext = base64.b64decode(ciphertext_value, validate=True)
+        if len(salt) != 16 or len(nonce) != 12 or not 16 <= len(ciphertext) <= MAX_BACKUP_CIPHERTEXT_BYTES:
+            raise ValueError("Invalid encrypted payload dimensions")
         key = derive_export_key(payload.export_password, salt)
         aesgcm = AESGCM(key)
         decrypted = aesgcm.decrypt(nonce, ciphertext, None)
         expected_checksum = backup.get("checksum")
-        if expected_checksum and hashlib.sha256(decrypted).hexdigest() != expected_checksum:
-            raise ValueError("Checksum mismatch")
+        if expected_checksum is not None:
+            if not isinstance(expected_checksum, str) or len(expected_checksum) != 64:
+                raise ValueError("Invalid checksum")
+            int(expected_checksum, 16)
+            if hashlib.sha256(decrypted).hexdigest() != expected_checksum.lower():
+                raise ValueError("Checksum mismatch")
         vault_dump = json.loads(decrypted.decode("utf-8"))
         if not isinstance(vault_dump, dict):
             raise ValueError("Invalid vault structure")
@@ -229,6 +249,58 @@ async def restore_encrypted_vault(
             status_code=400,
             detail="Contraseña de respaldo incorrecta o archivo de respaldo corrupto."
         )
+    validate_backup_structure(vault_dump)
+    return vault_dump
+
+
+def validate_backup_structure(vault_dump: dict) -> dict[str, int]:
+    """Validate the export envelope's JSON shape before preview or restore."""
+    if not isinstance(vault_dump, dict):
+        raise HTTPException(status_code=400, detail="La estructura del respaldo no es válida.")
+
+    for section in ("metadata", "settings", "exchange_rate"):
+        if section in vault_dump and not isinstance(vault_dump[section], dict):
+            raise HTTPException(status_code=400, detail="La estructura del respaldo no es válida.")
+
+    counts: dict[str, int] = {}
+    for collection in BACKUP_COLLECTIONS:
+        items = vault_dump.get(collection, [])
+        if not isinstance(items, list) or any(not isinstance(item, dict) for item in items):
+            raise HTTPException(status_code=400, detail="La estructura del respaldo no es válida.")
+
+        seen_ids: set[str] = set()
+        for item in items:
+            item_id = item.get("id")
+            if item_id is not None and (not isinstance(item_id, str) or not item_id or len(item_id) > 36):
+                raise HTTPException(status_code=400, detail="La estructura del respaldo no es válida.")
+            if item_id is not None:
+                if item_id in seen_ids:
+                    raise HTTPException(status_code=400, detail="La estructura del respaldo no es válida.")
+                seen_ids.add(item_id)
+        counts[collection] = len(items)
+
+    metadata = vault_dump.get("metadata", {})
+    for collection, count in counts.items():
+        declared_count = metadata.get(f"total_{collection}")
+        if declared_count is not None and (type(declared_count) is not int or declared_count != count):
+            raise HTTPException(status_code=400, detail="La estructura del respaldo no es válida.")
+    return counts
+
+
+@router.post("/verify-encrypted")
+async def verify_encrypted_vault(payload: RestoreEncryptedRequest):
+    """Authenticate and inspect a partial backup without changing stored data."""
+    dump = decrypt_backup(payload)
+    counts = {key: len(dump.get(key, [])) for key in BACKUP_COLLECTIONS}
+    return {"valid": True, "counts": counts, "partial": True}
+
+
+@router.post("/restore-encrypted")
+async def restore_encrypted_vault(
+    payload: RestoreEncryptedRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    vault_dump = decrypt_backup(payload)
 
     # Allowlist schemas for secure deserialization (prevent mass assignment vulnerabilities)
     EMAIL_FIELDS = {

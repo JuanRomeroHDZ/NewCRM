@@ -19,9 +19,11 @@ export const EncryptedBackupModal: React.FC = () => {
   const [backupFileContent, setBackupFileContent] = useState<any | null>(null);
   const [fileName, setFileName] = useState('');
   const [isRestoring, setIsRestoring] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [verification, setVerification] = useState('');
   const [fileLoading, setFileLoading] = useState(false);
   const [error, setError] = useState('');
-  const busy = isExporting || isRestoring || fileLoading;
+  const busy = isExporting || isRestoring || isVerifying || fileLoading;
   const dialogRef = useTransferDialog(isEncryptedBackupOpen, closeEncryptedBackup, busy);
   const closeWhenIdle = () => { if (!busy) closeEncryptedBackup(); };
 
@@ -45,6 +47,7 @@ export const EncryptedBackupModal: React.FC = () => {
 
     if (busy) return;
     setError('');
+    setVerification('');
     setIsExporting(true);
     try {
       const payload = await api.exportEncryptedVault(exportPassword);
@@ -72,6 +75,7 @@ export const EncryptedBackupModal: React.FC = () => {
     setBackupFileContent(null);
     setFileName('');
     setError('');
+    setVerification('');
     if (!file) return;
     if (file.size > 20 * 1024 * 1024) { setError('El respaldo supera el límite de 20 MB.'); return; }
     setFileLoading(true);
@@ -118,6 +122,25 @@ export const EncryptedBackupModal: React.FC = () => {
       setError(err.message || 'Contraseña incorrecta o archivo corrupto.');
     } finally {
       setIsRestoring(false);
+    }
+  };
+
+  const handleVerify = async () => {
+    if (!backupFileContent || !restorePassword || busy) {
+      setError('Selecciona un respaldo e ingresa su contraseña para verificarlo.');
+      return;
+    }
+    setError('');
+    setVerification('');
+    setIsVerifying(true);
+    try {
+      const result = await api.verifyEncryptedVault(restorePassword, backupFileContent);
+      const total = Object.values(result.counts).reduce((sum, count) => sum + count, 0);
+      setVerification(`Cifrado y estructura básica válidos: ${total} registros. Es parcial; esta verificación no prueba una restauración completa.`);
+    } catch (err: any) {
+      setError(err.message || 'No se pudo verificar el respaldo.');
+    } finally {
+      setIsVerifying(false);
     }
   };
 
@@ -187,7 +210,7 @@ export const EncryptedBackupModal: React.FC = () => {
         </div>
 
         {error && <p role="alert" className="rounded-lg border border-rose-500/30 bg-obsidian-dangerBg p-3 text-xs text-rose-200">{error}</p>}
-        {busy && <p role="status" className="text-xs text-obsidian-muted">{fileLoading ? 'Leyendo archivo…' : isExporting ? 'Cifrando respaldo…' : 'Restaurando respaldo…'} Espera a que termine antes de cerrar.</p>}
+        {busy && <p role="status" className="text-xs text-obsidian-muted">{fileLoading ? 'Leyendo archivo…' : isExporting ? 'Cifrando respaldo…' : isVerifying ? 'Verificando respaldo…' : 'Restaurando respaldo…'} Espera a que termine antes de cerrar.</p>}
         {/* Export Form */}
         {tab === 'export' ? (
           <form onSubmit={handleExport} className="space-y-4">
@@ -196,7 +219,7 @@ export const EncryptedBackupModal: React.FC = () => {
                 <Lock className="w-3.5 h-3.5" /> Cifrado de Transporte Autónomo
               </div>
               <p className="text-[11px] leading-relaxed">
-                Este archivo contiene solo una parte de la información. No incluye prospectos ni historial de actividad y no sustituye un respaldo completo de la base de datos.
+                Exporta correos, cuentas, pagos, ingresos, renovaciones, gastos, proyectos, recursos y algunas preferencias. Omite prospectos, informes HTB (incluidas revisiones, hallazgos, pizarras y evidencias), actividad y configuración del servidor. No sustituye un respaldo completo.
               </p>
             </div>
 
@@ -261,7 +284,7 @@ export const EncryptedBackupModal: React.FC = () => {
                 <AlertTriangle className="w-3.5 h-3.5" /> Restauración Transaccional Aditiva
               </div>
               <p className="text-[11px] leading-relaxed">
-                La restauración es parcial y puede modificar cuentas y métodos de pago existentes. Algunos datos exportados no se restauran. Conserva un respaldo completo independiente antes de continuar.
+                Esta restauración parcial puede modificar correos, cuentas de plataforma y métodos de pago existentes; agrega ingresos y renovaciones que no existan. Aunque aparecen en el archivo, no restaura gastos, proyectos, recursos, preferencias ni tipo de cambio. Conserva un respaldo completo independiente antes de continuar.
               </p>
             </div>
 
@@ -294,12 +317,15 @@ export const EncryptedBackupModal: React.FC = () => {
                 maxLength={INPUT_LIMITS.MASTER_PASSWORD}
                 placeholder="Contraseña con la que se creó el respaldo..."
                 value={restorePassword}
-                onChange={(e) => setRestorePassword(e.target.value)}
+                onChange={(e) => { setRestorePassword(e.target.value); setVerification(''); }}
                 className="w-full px-4 py-2.5 rounded-xl bg-obsidian-surface border border-obsidian-border text-xs text-white placeholder-white/30 focus:outline-none focus:border-indigo-500/50"
               />
             </div>
 
+            {verification && <p role="status" className="text-xs text-emerald-300">{verification}</p>}
+
             <div className="flex flex-wrap items-center justify-end gap-3 pt-3">
+              <button type="button" disabled={busy || !backupFileContent} onClick={() => void handleVerify()} className="px-4 py-2 rounded-xl border border-obsidian-border text-xs text-white hover:bg-obsidian-surface disabled:opacity-50">Verificar sin restaurar</button>
               <button
                 type="button"
                 disabled={busy}

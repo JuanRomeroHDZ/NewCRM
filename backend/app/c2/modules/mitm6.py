@@ -18,7 +18,7 @@ try:
                            ICMPv6NDOptRDNSS, ICMPv6NDOptSrcLLAddr, IPv6, UDP,
                            get_if_hwaddr, in6_getifaddr, sendp)
     _SCAPY_AVAILABLE = True
-except ImportError:  # pragma: no cover - entorno mínimo sin scapy
+except (ImportError, OSError):  # pragma: no cover - scapy ausente o sin permisos de socket
     AsyncSniffer = DNS = DNSRR = Ether = ICMPv6ND_RA = None  # type: ignore[assignment]
     ICMPv6NDOptRDNSS = ICMPv6NDOptSrcLLAddr = IPv6 = UDP = None  # type: ignore[assignment]
     get_if_hwaddr = in6_getifaddr = sendp = None  # type: ignore[assignment]
@@ -46,6 +46,8 @@ class Mitm6:
     def __init__(self, iface: str, interval: float = 10.0, jitter: float = 2.0,
                  mapping: dict[str, str] | None = None,
                  redirect_http_port: int | None = None):
+        if not _SCAPY_AVAILABLE:
+            raise RuntimeError("Scapy o los permisos para inicializar sockets no están disponibles en el entorno C2")
         self.iface = iface
         self.interval = interval
         self.jitter = jitter

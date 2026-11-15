@@ -32,6 +32,7 @@ import {
   Sparkles,
   Strikethrough,
   Table,
+  Tag,
 } from 'lucide-react';
 import { WriteupAsset, WriteupBoard, WriteupSeverity } from '../../types';
 import { useVault } from '../../context/VaultContext';
@@ -52,6 +53,7 @@ import {
   extractMarkdownOutline,
 } from './pentestUtils';
 import { MarkdownRichPreview } from './MarkdownRichPreview';
+import { MAX_REPORT_TEXT_LENGTH } from './writeupLimits';
 
 interface JumpTarget {
   line: number;
@@ -78,11 +80,10 @@ interface WriteupMarkdownSplitEditorProps {
   onSave?: () => void;
   onInspectAsset?: (asset: WriteupAsset) => void;
   jumpTarget?: JumpTarget | null;
-  compactMode?: boolean;
 }
 
 type ToolGroupFilter = 'all' | 'text' | 'blocks' | 'media' | 'pentest';
-type InlineTray = 'none' | 'templates' | 'cvss' | 'code' | 'mermaid' | 'outline' | 'pentest_kit';
+type InlineTray = 'none' | 'templates' | 'cvss' | 'code' | 'mermaid' | 'outline' | 'pentest_kit' | 'table' | 'label';
 
 const CODE_LANGUAGES = ['http', 'bash', 'python', 'sql', 'javascript', 'json', 'yaml', 'powershell', 'c', 'xml', 'plaintext'];
 const MAX_CITATION_LENGTH = 5000;
@@ -107,12 +108,11 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
   onSave,
   onInspectAsset,
   jumpTarget,
-  compactMode = false,
 }) => {
   const { showToast } = useVault();
   const [redactPreview, setRedactPreview] = useState(false);
   const [activeTray, setActiveTray] = useState<InlineTray>('none');
-  const [toolFilter, setToolFilter] = useState<ToolGroupFilter>('all');
+  const [toolFilter, setToolFilter] = useState<ToolGroupFilter>('text');
   const [cvssInputs, setCvssInputs] = useState<Cvss31Metrics>(DEFAULT_CVSS31_METRICS);
   const [uploading, setUploading] = useState(false);
   const [convertVideoToGif, setConvertVideoToGif] = useState(true);
@@ -120,13 +120,27 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
   const [codecOutput, setCodecOutput] = useState('');
   const [codecError, setCodecError] = useState('');
   const [portSpec, setPortSpec] = useState('');
+  const [tableColumns, setTableColumns] = useState('Nombre, Descripción');
+  const [tableRows, setTableRows] = useState(2);
+  const [labelColor, setLabelColor] = useState('jade');
+  const [labelSize, setLabelSize] = useState('normal');
   const [kitFeedback, setKitFeedback] = useState('');
-  const [splitView, setSplitView] = useState<'split' | 'edit' | 'preview'>(() => {
-    if (compactMode || (typeof window !== 'undefined' && window.innerWidth < 1024)) return 'edit';
-    return 'split';
-  });
+  const [splitView, setSplitView] = useState<'split' | 'edit' | 'preview'>('edit');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const workspaceRef = useRef<HTMLDivElement>(null);
+  const [sideBySideAvailable, setSideBySideAvailable] = useState(false);
+
+  useEffect(() => {
+    const workspace = workspaceRef.current;
+    if (!workspace || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(([entry]) => {
+      setSideBySideAvailable((entry?.contentRect.width ?? 0) >= 960);
+    });
+    observer.observe(workspace);
+    setSideBySideAvailable(workspace.clientWidth >= 960);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     if (!jumpTarget || !textareaRef.current) return;
@@ -147,22 +161,28 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
     });
   }, [jumpTarget, markdown, splitView]);
 
-  const insertAtCursor = (snippet: string, wrapMode = false, wrapEnd = '', placeholder = 'texto') => {
+  const insertAtCursor = (snippet: string, wrapMode = false, wrapEnd = '', placeholder = 'texto', position?: number) => {
     const ta = textareaRef.current;
     if (!ta) {
       onChange(markdown + snippet);
       return;
     }
-    const start = ta.selectionStart;
-    const end = ta.selectionEnd;
-    const selected = markdown.slice(start, end);
+    const start = position ?? ta.selectionStart;
+    const end = position ?? ta.selectionEnd;
+    const current = ta.value;
+    const selected = current.slice(start, end);
     const insertion = wrapMode ? `${snippet}${selected || placeholder}${wrapEnd}` : snippet;
-    const next = markdown.slice(0, start) + insertion + markdown.slice(end);
+    const next = current.slice(0, start) + insertion + current.slice(end);
     onChange(next);
     requestAnimationFrame(() => {
       ta.focus();
-      const cursor = start + insertion.length;
-      ta.setSelectionRange(cursor, cursor);
+      if (wrapMode) {
+        const innerStart = start + snippet.length;
+        ta.setSelectionRange(innerStart, innerStart + (selected || placeholder).length);
+      } else {
+        const cursor = start + insertion.length;
+        ta.setSelectionRange(cursor, cursor);
+      }
     });
   };
 
@@ -184,12 +204,22 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
   };
 
   const handleMediaFile = async (file: File) => {
+    const original = textareaRef.current?.value ?? markdown;
+    const originalPosition = textareaRef.current?.selectionStart ?? original.length;
     setUploading(true);
     try {
       const isVideo = file.type.startsWith('video/') || /\.(mp4|webm|mov|mkv)$/i.test(file.name);
       const asset = await onUploadMedia(file, isVideo ? convertVideoToGif : false);
       if (asset) {
-        insertAtCursor(`\n![${asset.filename}](asset://${asset.id})\n`);
+        const current = textareaRef.current?.value ?? original;
+        let prefix = 0;
+        while (prefix < original.length && prefix < current.length && original[prefix] === current[prefix]) prefix++;
+        let suffix = 0;
+        while (suffix < original.length - prefix && suffix < current.length - prefix && original[original.length - 1 - suffix] === current[current.length - 1 - suffix]) suffix++;
+        const position = originalPosition <= prefix ? originalPosition : originalPosition >= original.length - suffix
+          ? originalPosition + current.length - original.length
+          : (textareaRef.current?.selectionStart ?? prefix);
+        insertAtCursor(`\n![${asset.filename.replace(/[\[\]]/g, '')}](asset://${asset.id})\n`, false, '', '', position);
       }
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'No se pudo subir el archivo. Inténtalo de nuevo.', 'error');
@@ -325,10 +355,7 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (!(e.ctrlKey || e.metaKey)) return;
     const key = e.key.toLowerCase();
-    if (key === 's') {
-      e.preventDefault();
-      onSave?.();
-    } else if (key === 'b') {
+    if (key === 'b') {
       e.preventDefault();
       insertAtCursor('**', true, '**', 'negrita');
     } else if (key === 'i') {
@@ -340,50 +367,27 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
     }
   };
 
+  const handleWorkspaceKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey || e.key.toLowerCase() !== 's' || !onSave) return;
+    e.preventDefault();
+    onSave();
+  };
+  const sideBySide = splitView === 'split' && sideBySideAvailable;
+
   return (
-    <div className="flex min-w-0 max-w-full flex-col h-full min-h-[300px] bg-slate-950 border border-slate-800 rounded-xl overflow-hidden">
-      {/* Row 1: Category Filter Pills + View Mode Switch */}
-      <div className="flex flex-wrap items-center justify-between gap-2 px-2.5 py-2 bg-slate-900/95 border-b border-slate-800">
-        <label className="relative inline-flex items-center">
-          <span className="sr-only">Categoría de herramientas</span>
-          <select value={toolFilter} onChange={(event) => setToolFilter(event.target.value as ToolGroupFilter)} className="min-h-9 appearance-none rounded-lg border border-slate-700 bg-slate-950 pl-3 pr-9 text-xs text-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300">
-            <option value="all">Todas las herramientas</option>
-            <option value="text">Texto</option><option value="blocks">Bloques</option><option value="media">Multimedia</option><option value="pentest">Seguridad</option>
-          </select>
-          <ChevronDown className="pointer-events-none absolute right-3 h-4 w-4 text-slate-400" aria-hidden="true" />
-        </label>
-
-        <div className="flex items-center gap-1.5 ml-auto">
-          <button
-            type="button"
-            onClick={() => setRedactPreview((v) => !v)}
-            aria-pressed={redactPreview}
-            aria-label={redactPreview ? 'Mostrar vista para cliente' : 'Mostrar vista interna'}
-            className={`min-h-9 px-3 py-1 rounded-lg text-xs flex items-center gap-1.5 border shrink-0 ${
-              redactPreview
-                ? 'bg-emerald-600/20 border-emerald-500/40 text-emerald-300'
-                : 'bg-slate-800 border-slate-700 text-slate-300'
-            }`}
-            title="Alternar vista interna vs cliente censurada"
-          >
-            {redactPreview ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-            <span>{redactPreview ? 'Cliente' : 'Interna'}</span>
-          </button>
-
-          <label className="relative inline-flex items-center">
-            <span className="sr-only">Modo de edición</span>
-            <select value={splitView} onChange={(event) => setSplitView(event.target.value as 'edit' | 'split' | 'preview')} className="min-h-9 appearance-none rounded-lg border border-slate-700 bg-slate-950 pl-3 pr-9 text-xs text-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300">
-              <option value="edit">Editar</option><option value="split">Dos vistas</option><option value="preview">Vista previa</option>
+    <div onKeyDownCapture={handleWorkspaceKeyDown} className="writeup-markdown-editor flex min-w-0 max-w-full flex-col h-full min-h-[300px] bg-slate-950 border border-slate-800 rounded-xl overflow-hidden">
+      {/* Compact toolbar: category, actions and view controls share one row. */}
+      <div className="flex min-w-0 items-center gap-1 border-b border-slate-800 bg-slate-900/95 px-2 py-1.5">
+        {splitView !== 'preview' && <label className="relative inline-flex shrink-0 items-center">
+            <span className="sr-only">Categoría de herramientas</span>
+            <select value={toolFilter} onChange={(event) => setToolFilter(event.target.value as ToolGroupFilter)} className="min-h-9 max-w-28 appearance-none rounded-lg border border-slate-700 bg-slate-950 pl-2 pr-7 text-xs text-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 sm:max-w-44">
+              <option value="text">Texto</option><option value="blocks">Bloques</option><option value="media">Multimedia</option><option value="pentest">Seguridad</option><option value="all">Todas las herramientas</option>
             </select>
-            <ChevronDown className="pointer-events-none absolute right-3 h-4 w-4 text-slate-400" aria-hidden="true" />
-          </label>
-        </div>
-      </div>
-
-      {/* Row 2: Compact Icon Toolbar (filtered cleanly) */}
-      <div className="flex flex-wrap items-center gap-1 px-2.5 py-1.5 bg-slate-900/60 border-b border-slate-800">
+            <ChevronDown className="pointer-events-none absolute right-2 h-4 w-4 text-slate-400" aria-hidden="true" />
+          </label>}
+        {splitView !== 'preview' && <div role="region" tabIndex={0} className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300" aria-label="Herramientas de edición; desplázate horizontalmente para ver más">
         {showGroup('text') && (
-          <div className="flex flex-wrap items-center gap-0.5 pr-1.5 border-r border-slate-800">
+          <div className="flex shrink-0 items-center gap-0.5 pr-1.5 border-r border-slate-800">
             <button type="button" onClick={() => prefixLineAtCursor('# ')} title="Título H1" aria-label="Título H1" className="p-1.5 rounded hover:bg-slate-800 text-slate-300">
               <Heading1 className="w-4 h-4" />
             </button>
@@ -393,6 +397,7 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
             <button type="button" onClick={() => prefixLineAtCursor('### ')} title="Sección H3" aria-label="Sección H3" className="p-1.5 rounded hover:bg-slate-800 text-slate-300">
               <Heading3 className="w-4 h-4" />
             </button>
+            <button type="button" onClick={() => toggleTray('label')} aria-label="Insertar etiqueta de color" aria-expanded={activeTray === 'label'} title="Etiqueta de color" className="rounded p-1.5 text-emerald-300 hover:bg-slate-800"><Tag className="h-4 w-4" /></button>
             <button type="button" onClick={() => insertAtCursor('**', true, '**', 'negrita')} title="Negrita" aria-label="Negrita" className="p-1.5 rounded hover:bg-slate-800 text-slate-300">
               <Bold className="w-4 h-4" />
             </button>
@@ -418,7 +423,7 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
         )}
 
         {showGroup('blocks') && (
-          <div className="flex flex-wrap items-center gap-0.5 pr-1.5 border-r border-slate-800">
+          <div className="flex shrink-0 flex-nowrap items-center gap-0.5 pr-1.5 border-r border-slate-800">
             <button type="button" onClick={() => insertAtCursor('`', true, '`', 'codigo')} title="Código en línea" aria-label="Código en línea" className="p-1.5 rounded hover:bg-slate-800 text-slate-300">
               <Code className="w-4 h-4" />
             </button>
@@ -426,6 +431,7 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
               type="button"
               onClick={() => toggleTray('code')}
               title="Insertar bloque de código con lenguaje"
+              aria-label="Insertar bloque de código con lenguaje"
               className={`px-2 py-1 rounded text-xs flex items-center gap-1 ${
                 activeTray === 'code' ? 'bg-indigo-600 text-white' : 'hover:bg-slate-800 text-slate-200'
               }`}
@@ -439,7 +445,7 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
             </button>
             <button
               type="button"
-              onClick={() => insertAtCursor('\n| Columna 1 | Columna 2 |\n|---|---|\n| Dato | Valor |\n')}
+              onClick={() => toggleTray('table')}
               title="Insertar tabla"
               aria-label="Tabla"
               className="p-1.5 rounded hover:bg-slate-800 text-slate-300"
@@ -450,6 +456,7 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
               type="button"
               onClick={() => insertAtCursor('\n> [!WARNING]\n> Riesgo relevante detectado.\n')}
               title="Insertar Callout de advertencia"
+              aria-label="Insertar llamada de advertencia"
               className="px-2 py-1 rounded hover:bg-slate-800 text-amber-300 text-xs"
             >
               [!]
@@ -458,6 +465,7 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
               type="button"
               onClick={() => insertAtCursor('\n<details>\n<summary>Evidencia extendida</summary>\n\nDetalle técnico aquí\n\n</details>\n')}
               title="Sección colapsable"
+              aria-label="Insertar sección colapsable"
               className="px-2 py-1 rounded hover:bg-slate-800 text-slate-300 text-xs"
             >
               ▸ Detalle
@@ -469,13 +477,14 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
         )}
 
         {showGroup('media') && (
-          <div className="flex flex-wrap items-center gap-1 pr-1.5 border-r border-slate-800">
+          <div className="flex shrink-0 flex-nowrap items-center gap-1 pr-1.5 border-r border-slate-800">
             <button
               type="button"
               disabled={uploading}
               onClick={() => fileInputRef.current?.click()}
               className="px-2 py-1 rounded bg-slate-800/90 hover:bg-slate-700 text-slate-200 text-xs flex items-center gap-1"
               title="Subir Imagen, GIF animado o Video (MP4/WebM)"
+              aria-label="Subir imagen o video"
             >
               <ImagePlus className="w-3.5 h-3.5 text-emerald-400" />
               <span>{uploading ? 'Procesando…' : 'Media'}</span>
@@ -513,6 +522,7 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
               }
               className="px-2 py-1 rounded bg-slate-800/80 hover:bg-slate-700 text-emerald-300 text-xs flex items-center gap-1"
               title="Insertar una animación HTML/CSS independiente"
+              aria-label="Insertar animación HTML"
             >
               <Film className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">HTML Anim</span>
@@ -532,7 +542,7 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
         )}
 
         {showGroup('pentest') && (
-          <div className="flex flex-wrap items-center gap-1">
+          <div className="flex shrink-0 flex-nowrap items-center gap-1">
             <button
               type="button"
               onClick={handleCiteSelection}
@@ -547,6 +557,7 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
               onClick={() => insertAtCursor('{{redact:', true, '}}', 'dato_sensible')}
               className="px-2 py-1 rounded bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-200 text-xs flex items-center gap-1"
               title="Censurar selección para cliente"
+              aria-label="Censurar selección para cliente"
             >
               <ShieldAlert className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Censurar</span>
@@ -589,6 +600,7 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
                 activeTray === 'outline' ? 'bg-indigo-600 text-white' : 'bg-slate-800 hover:bg-slate-700 text-slate-200'
               }`}
               title="Índice del informe y sus medidas"
+              aria-label="Abrir índice del informe"
             >
               <ListTree className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Índice</span>
@@ -606,9 +618,76 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
             </button>
           </div>
         )}
+        </div>}
+        <div className="flex shrink-0 items-center gap-1">
+          <button
+            type="button"
+            onClick={() => setRedactPreview((v) => !v)}
+            aria-pressed={redactPreview}
+            aria-label={redactPreview ? 'Mostrar vista para cliente' : 'Mostrar vista interna'}
+            className={`min-h-9 px-3 py-1 rounded-lg text-xs flex items-center gap-1.5 border shrink-0 ${
+              redactPreview
+                ? 'bg-emerald-600/20 border-emerald-500/40 text-emerald-300'
+                : 'bg-slate-800 border-slate-700 text-slate-300'
+            }`}
+            title="Alternar vista interna vs cliente censurada"
+          >
+            {redactPreview ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+            <span className="hidden sm:inline">{redactPreview ? 'Cliente' : 'Interna'}</span>
+          </button>
+
+          <label className="relative inline-flex items-center">
+            <span className="sr-only">Vista del texto del informe</span>
+            <select value={splitView} onChange={(event) => setSplitView(event.target.value as 'edit' | 'split' | 'preview')} className="min-h-9 appearance-none rounded-lg border border-slate-700 bg-slate-950 pl-3 pr-9 text-xs text-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300">
+              <option value="edit">Editar</option><option value="split">Dos vistas</option><option value="preview">Vista previa</option>
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-3 h-4 w-4 text-slate-400" aria-hidden="true" />
+          </label>
+        </div>
       </div>
+      {splitView !== 'preview' && <>
 
       {/* Inline Collapsible Tool Trays (never clipped on narrow/medium screens!) */}
+      {activeTray === 'label' && (
+        <div className="flex flex-wrap items-end gap-3 border-t border-slate-800 p-3 text-xs text-slate-200">
+          <label className="flex flex-col gap-1">Color
+            <select value={labelColor} onChange={(event) => setLabelColor(event.target.value)} className="min-h-10 rounded border border-slate-700 bg-slate-950 px-3 text-sm text-white">
+              <option value="jade">Jade · desarrollo</option><option value="rojo">Rojo · seguridad</option><option value="azul">Azul · infraestructura</option><option value="dorado">Dorado</option><option value="neutro">Neutro</option>
+            </select>
+          </label>
+          <label className="flex flex-col gap-1">Tamaño
+            <select value={labelSize} onChange={(event) => setLabelSize(event.target.value)} className="min-h-10 rounded border border-slate-700 bg-slate-950 px-3 text-sm text-white">
+              <option value="pequena">Pequeño</option><option value="normal">Normal</option><option value="grande">Grande</option>
+            </select>
+          </label>
+          <button type="button" className="min-h-10 rounded bg-emerald-700 px-4 font-medium text-white hover:bg-emerald-600" onClick={() => {
+            const ta = textareaRef.current;
+            const selected = ta?.value.slice(ta.selectionStart, ta.selectionEnd) || '';
+            if (/[{}\n]/.test(selected) || selected.length > 120) { showToast('Selecciona texto de una sola línea, hasta 120 caracteres y sin llaves.', 'warning'); return; }
+            insertAtCursor(`{etiqueta:${labelColor}:${labelSize}:`, true, '}', 'Texto');
+            setActiveTray('none');
+          }}>Insertar etiqueta</button>
+          <span className="text-slate-400">Selecciona texto antes de abrir la herramienta, o escribe después de insertarla.</span>
+        </div>
+      )}
+      {activeTray === 'table' && (
+        <div className="flex flex-wrap items-end gap-3 border-t border-slate-800 p-3 text-xs text-slate-200">
+          <label className="flex min-w-48 flex-1 flex-col gap-1">Encabezados separados por comas
+            <input value={tableColumns} onChange={(event) => setTableColumns(event.target.value)} maxLength={300} className="min-h-10 rounded border border-slate-700 bg-slate-950 px-3 text-sm text-white" />
+          </label>
+          <label className="flex flex-col gap-1">Filas
+            <input type="number" min={1} max={20} value={tableRows} onChange={(event) => setTableRows(Number(event.target.value))} className="min-h-10 w-20 rounded border border-slate-700 bg-slate-950 px-2 text-sm text-white" />
+          </label>
+          <button type="button" className="min-h-10 rounded bg-indigo-600 px-4 font-medium text-white" onClick={() => {
+            const columns = tableColumns.split(',').map((column) => column.trim().replace(/\|/g, '\\|')).filter(Boolean).slice(0, 10);
+            if (!columns.length) { showToast('Agrega al menos un encabezado.', 'warning'); return; }
+            const row = `| ${columns.map(() => ' ').join(' | ')} |`;
+            const count = Math.max(1, Math.min(20, Math.trunc(tableRows) || 1));
+            insertAtCursor(`\n| ${columns.join(' | ')} |\n| ${columns.map(() => '---').join(' | ')} |\n${Array(count).fill(row).join('\n')}\n`);
+            setActiveTray('none');
+          }}>Insertar tabla</button>
+        </div>
+      )}
       {activeTray === 'code' && (
         <div className="px-3 py-2 bg-slate-900 border-b border-slate-800 flex flex-wrap items-center gap-1.5 text-xs">
           <span className="text-slate-400 text-[11px] mr-1">Lenguaje:</span>
@@ -620,7 +699,7 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
                 insertAtCursor(`\n\`\`\`${lang}\n// Tu código o PoC aquí\n\`\`\`\n`);
                 setActiveTray('none');
               }}
-              className="px-2 py-1 rounded bg-slate-800 hover:bg-indigo-600 text-slate-200 hover:text-white font-mono text-[11px]"
+              className="px-2 py-1 rounded bg-slate-800 hover:bg-indigo-600 text-white font-mono text-[11px]"
             >
               {lang}
             </button>
@@ -926,15 +1005,16 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
           </div>
         </div>
       )}
+      </>}
 
       {/* Editor + Live Preview Panes */}
-      <div className={`flex-1 grid min-h-0 min-w-0 max-w-full ${splitView === 'split' ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1'}`}>
+      <div ref={workspaceRef} className={`flex-1 grid min-h-0 min-w-0 max-w-full ${sideBySide ? 'grid-cols-2' : 'grid-cols-1'} ${splitView === 'split' && !sideBySideAvailable ? 'overflow-y-auto' : ''}`}>
         {splitView !== 'preview' && (
-          <div className="flex min-w-0 flex-col min-h-[280px] md:min-h-[360px] lg:min-h-0 border-b md:border-b-0 md:border-r border-slate-800">
+          <div className={`flex min-w-0 flex-col min-h-[360px] ${splitView === 'split' && !sideBySideAvailable ? 'border-b border-slate-800' : sideBySide ? 'border-r border-slate-800' : ''}`}>
             <textarea
               ref={textareaRef}
               value={markdown}
-              maxLength={200000}
+              maxLength={MAX_REPORT_TEXT_LENGTH}
               onChange={(e) => onChange(e.target.value)}
               onKeyDown={handleKeyDown}
               onPaste={handlePaste}
@@ -943,8 +1023,18 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
               lang="es"
               spellCheck={false}
               placeholder="Escribe el informe. Pega imágenes con Ctrl+V; Ctrl+S guarda; Ctrl+B/I/K aplica formato."
-              className="flex-1 w-full min-h-[240px] bg-slate-950 text-slate-100 font-mono text-sm leading-6 p-3.5 sm:p-4 resize-none focus:outline-none"
+            className="flex-1 w-full min-h-[280px] bg-slate-950 text-slate-100 font-mono text-base sm:text-sm leading-6 p-3.5 sm:p-4 resize-none focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-300"
             />
+            {assets.some((asset) => asset.mime_type.startsWith('image/') && markdown.includes(`asset://${asset.id}`) && assetObjectUrls[asset.id]) && (
+              <div className="flex max-h-32 gap-3 overflow-auto border-t border-slate-800 bg-slate-900/60 p-2" aria-label="Imágenes incluidas en el informe">
+                {assets.filter((asset) => asset.mime_type.startsWith('image/') && markdown.includes(`asset://${asset.id}`) && assetObjectUrls[asset.id]).map((asset) => (
+                  <button type="button" key={asset.id} onClick={() => onInspectAsset?.(asset)} className="shrink-0 text-left text-xs text-slate-300" aria-label={`Abrir imagen ${asset.filename}`}>
+                    <img src={assetObjectUrls[asset.id]} alt={asset.filename} className="h-20 max-w-40 rounded object-contain" />
+                    <span className="block max-w-40 truncate">{asset.filename}</span>
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="px-3 py-1.5 bg-slate-900/60 border-t border-slate-800 text-[11px] text-slate-400 flex flex-wrap items-center justify-between gap-2 tabular-nums">
               <span className="flex min-w-0 flex-wrap items-center gap-1.5">
                 <FileText className="w-3.5 h-3.5 shrink-0" />
@@ -958,7 +1048,7 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
         )}
 
         {splitView !== 'edit' && (
-          <div className="min-w-0 max-w-full overflow-y-auto min-h-[260px] lg:min-h-0 p-4 sm:p-5 bg-slate-900/30">
+          <div className="min-w-0 max-w-full overflow-y-auto min-h-[360px] p-4 sm:p-5 bg-slate-900/30">
             <MarkdownRichPreview
               markdown={markdown}
               redactPreview={redactPreview}

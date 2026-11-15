@@ -28,6 +28,7 @@ import yaml from 'highlight.js/lib/languages/yaml';
 import { Check, Copy, Download, Play, Pause, Sparkles } from 'lucide-react';
 import { WriteupAsset, WriteupBoard } from '../../types';
 import { loadMermaid, sanitizeMermaidSvg } from './mermaidExportHelper';
+import { renderWriteupLabels } from './writeupLabels';
 
 let hljsRegistered = false;
 function ensureHljsLanguages() {
@@ -91,6 +92,9 @@ const CALLOUT_LABELS: Record<string, { label: string; cls: string }> = {
   WARNING: { label: 'Advertencia', cls: 'md-callout md-callout-warning' },
   CAUTION: { label: 'Peligro', cls: 'md-callout md-callout-caution' },
 };
+
+const PREVIEW_DEBOUNCE_MS = 220;
+const MAX_AUTO_HIGHLIGHT_CHARS = 12000;
 
 const MermaidDiagramCard: React.FC<{ code: string; renderId: string }> = ({ code, renderId }) => {
   const cardRef = useRef<HTMLDivElement>(null);
@@ -255,6 +259,13 @@ export const MarkdownRichPreview: React.FC<MarkdownRichPreviewProps> = ({
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [previewMarkdown, setPreviewMarkdown] = useState(markdown);
+
+  useEffect(() => {
+    if (markdown === previewMarkdown) return;
+    const timeoutId = window.setTimeout(() => setPreviewMarkdown(markdown), PREVIEW_DEBOUNCE_MS);
+    return () => window.clearTimeout(timeoutId);
+  }, [markdown, previewMarkdown]);
 
   const assetMap = useMemo(() => {
     const map: Record<string, WriteupAsset> = {};
@@ -263,11 +274,11 @@ export const MarkdownRichPreview: React.FC<MarkdownRichPreviewProps> = ({
   }, [assets]);
 
   const segments = useMemo<PreviewSegment[]>(() => {
-    if (!markdown.trim()) return [];
+    if (!previewMarkdown.trim()) return [];
     const tokens: Array<{ placeholder: string; seg: PreviewSegment }> = [];
     let counter = 0;
 
-    let text = markdown;
+    let text = previewMarkdown;
 
     // 1. Extract Mermaid and html-anim fenced blocks before markdown compilation
     text = text.replace(/```(mermaid|html-anim|anim-html|embed-html)\s*\n([\s\S]*?)```/gi, (_, lang: string, body: string) => {
@@ -290,6 +301,9 @@ export const MarkdownRichPreview: React.FC<MarkdownRichPreviewProps> = ({
       }
       return `<span class="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-200 border border-amber-500/40 font-mono text-xs">${DOMPurify.sanitize(inner)}</span>`;
     });
+
+    // Labels use a fixed palette and escape user text before sanitization.
+    text = renderWriteupLabels(text);
 
     // 3. Anchors
     text = text.replace(/\{#([a-zA-Z0-9_-]{2,120})\}/g, (_, anchor: string) => {
@@ -331,18 +345,21 @@ export const MarkdownRichPreview: React.FC<MarkdownRichPreviewProps> = ({
       let highlighted = '';
       if (language && hljs.getLanguage(language)) {
         highlighted = hljs.highlight(codeBody, { language }).value;
-      } else {
+      } else if (!language && codeBody.length <= MAX_AUTO_HIGHLIGHT_CHARS) {
         highlighted = hljs.highlightAuto(codeBody).value;
+      } else {
+        highlighted = codeBody.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
       }
       const label = language || 'code';
       return `<div class="code-block-wrap relative my-3 rounded-xl border border-slate-800 bg-[#050912] overflow-hidden"><div class="flex items-center justify-between px-3 py-1 bg-slate-900/90 border-b border-slate-800 text-[10px] font-mono uppercase text-slate-400"><span>${escapeHtmlAttr(label)}</span><button type="button" data-copy-code="1" class="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 normal-case font-sans text-[10px]">Copiar</button></div><pre class="!my-0 !border-0 !rounded-none"><code class="hljs language-${escapeHtmlAttr(label)}">${highlighted}</code></pre></div>`;
     };
 
-    const parsed = marked.parse(text, { async: false, gfm: true, breaks: false, renderer }) as string;
+    const parsed = marked.parse(text, { async: false, gfm: true, breaks: true, renderer }) as string;
     const withCallouts = enhanceCallouts(parsed);
     const cleanHtml = DOMPurify.sanitize(withCallouts, {
       ADD_TAGS: ['details', 'summary', 'kbd', 'mark', 'video', 'source', 'figure', 'figcaption', 'input', 'button'],
       ADD_ATTR: ['open', 'controls', 'loop', 'muted', 'playsinline', 'src', 'type', 'checked', 'disabled', 'class', 'id', 'aria-label', 'data-copy-code', 'data-asset-id'],
+      ALLOWED_URI_REGEXP: /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|sms|cid|xmpp|blob):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i,
       FORBID_TAGS: ['script', 'iframe', 'object', 'embed', 'form', 'style'],
       FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover'],
     });
@@ -360,7 +377,7 @@ export const MarkdownRichPreview: React.FC<MarkdownRichPreviewProps> = ({
     }
     if (cursor.trim()) out.push({ kind: 'html', html: cursor });
     return out;
-  }, [markdown, redactPreview, assetObjectUrls, boards, assetMap]);
+  }, [previewMarkdown, redactPreview, assetObjectUrls, boards, assetMap]);
 
   const handleContainerClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const target = e.target as HTMLElement;
@@ -387,12 +404,13 @@ export const MarkdownRichPreview: React.FC<MarkdownRichPreviewProps> = ({
     }
   };
 
-  if (!markdown.trim()) {
-    return <p className="text-slate-500 italic text-sm">Vista previa en tiempo real…</p>;
+  if (!previewMarkdown.trim()) {
+    return <p className="text-slate-500 italic text-sm">La vista previa Markdown aparecerá aquí al escribir.</p>;
   }
 
   return (
     <div ref={containerRef} onClick={handleContainerClick} className="writeup-prose">
+      {previewMarkdown !== markdown && <p className="mb-2 text-xs text-slate-400" aria-hidden="true">Actualizando vista previa…</p>}
       {segments.map((seg, idx) => {
         if (seg.kind === 'html') {
           return <div key={`h-${idx}`} dangerouslySetInnerHTML={{ __html: seg.html }} />;

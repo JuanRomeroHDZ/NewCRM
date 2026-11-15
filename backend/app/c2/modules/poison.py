@@ -7,13 +7,14 @@ clasico "wpad"). Combinalo con el modulo WPAD.
 """
 from __future__ import annotations
 
+import ipaddress
 import socket
 
 try:
     from scapy.all import (AsyncSniffer, DNS, DNSQR, DNSRR, Ether, IP, UDP,
                            get_if_addr, send)
     _SCAPY_AVAILABLE = True
-except ImportError:  # pragma: no cover - entorno mínimo sin scapy
+except (ImportError, OSError):  # pragma: no cover - scapy ausente o sin permisos de socket
     AsyncSniffer = DNS = DNSQR = DNSRR = Ether = IP = UDP = None  # type: ignore[assignment]
     get_if_addr = send = None  # type: ignore[assignment]
     _SCAPY_AVAILABLE = False
@@ -44,8 +45,16 @@ class NamePoisoner:
 
     def __init__(self, iface: str, spoof_ip: str | None = None,
                  llmnr: bool = True, nbtns: bool = True, mdns: bool = True):
+        if not _SCAPY_AVAILABLE:
+            raise RuntimeError("Scapy o los permisos para inicializar sockets no están disponibles en el entorno C2")
+        if not any((llmnr, nbtns, mdns)):
+            raise ValueError("Activa al menos un protocolo de resolución de nombres.")
         self.iface = iface
-        self.spoof_ip = spoof_ip or get_if_addr(iface)
+        try:
+            self.spoof_ip = spoof_ip or get_if_addr(iface)
+            ipaddress.IPv4Address(self.spoof_ip)
+        except (ValueError, OSError, TypeError) as exc:
+            raise ValueError("No se pudo obtener una IPv4 válida de la interfaz.") from exc
         self.protocols = {"LLMNR": llmnr, "NBT-NS": nbtns, "mDNS": mdns}
         self._sniffer: AsyncSniffer | None = None
         self.hits = 0

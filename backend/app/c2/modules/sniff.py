@@ -4,7 +4,7 @@ from __future__ import annotations
 try:
     from scapy.all import DNS, DNSQR, IP, TCP, UDP, AsyncSniffer
     _SCAPY_AVAILABLE = True
-except ImportError:  # pragma: no cover - entorno mínimo sin scapy
+except (ImportError, OSError):  # pragma: no cover - scapy ausente o sin permisos de socket
     DNS = DNSQR = IP = TCP = UDP = AsyncSniffer = None  # type: ignore[assignment]
     _SCAPY_AVAILABLE = False
 
@@ -61,6 +61,8 @@ class Sniffer:
         })
 
     def start(self) -> None:
+        if not _SCAPY_AVAILABLE:
+            raise RuntimeError("Scapy o los permisos para inicializar sockets no están disponibles en el entorno C2")
         self._sniffer = AsyncSniffer(iface=self.iface, filter=self.bpf,
                                      prn=self._process, store=False)
         self._sniffer.start()

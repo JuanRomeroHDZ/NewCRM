@@ -24,13 +24,26 @@
 
 ## Red y servicios externos
 
-- El proxy publica `127.0.0.1` por defecto. Para acceso en LAN, cambia `HOST_BIND_IP` a `0.0.0.0` y restringe el puerto con el firewall.
+- El proxy publica `127.0.0.1` por defecto. Para acceso desde la LAN, usa `./lessso` → opción **6** y selecciona una IPv4 privada asignada a este equipo (10/172.16–31/192.168). El proxy se enlaza a esa dirección concreta; `0.0.0.0` no está permitido. Si la IP guardada deja de estar asignada, el arranque propone automáticamente la dirección privada de la ruta de salida y renueva el certificado local.
 - Nginx termina TLS y limita solicitudes de autenticación. No expongas los puertos del proxy a Internet sin diseñar una configuración de despliegue específica.
+- Para usarlo desde otro dispositivo, instala `nginx/certs/local/ca.crt` como autoridad de confianza en ese dispositivo. Publicar una IP privada permite que otros equipos de esa red alcancen el inicio de sesión; mantén la red y las cuentas bajo control.
 - La API sirve el frontend desde el mismo origen y no habilita CORS global. Si se agrega otro origen, decláralo de forma explícita en `CORS_ORIGINS`.
 - La captación consulta Overpass y carga mosaicos de mapa bajo demanda. Los resultados se identifican como datos de OpenStreetMap y cada registro se guarda manualmente.
+
+## Operaciones C2 y cambios locales de red
+
+- Las operaciones reales del C2 requieren una sesión de propietario y un ámbito de autorización vigente. La pasarela comprueba los objetivos y la ventana antes de enviar cada operación al worker.
+- LESSSO nunca detiene NetworkManager, wpa_supplicant, clientes DHCP ni otros servicios globales. El endpoint antiguo `/wifi/kill` solo muestra esta política y no ejecuta cambios.
+- El modo monitor requiere un adaptador Wi-Fi dedicado, desconectado, abajo, sin ruta por defecto y sin otra interfaz compartiendo su radio. Si el sistema no permite verificarlo, LESSSO rechaza la operación. Al volver a modo managed, el adaptador queda abajo.
+- Los cambios y restauraciones de MAC requieren una interfaz aislada y abajo, sin dirección IP enrutable ni ruta por defecto. LESSSO no renueva DHCP ni vuelve a conectar el adaptador automáticamente. Si una restauración no pasa las verificaciones, conserva la MAC original guardada y muestra el motivo.
 
 ## Datos de prospectos
 
 Los resultados de OpenStreetMap pueden estar incompletos o desactualizados. Antes de contactar un negocio, revisa el enlace fuente y confirma sus datos. Un número publicado no implica que acepte WhatsApp.
 
 Los cambios de rol, acceso, red, certificados o claves deben documentarse con su motivo y conservar una copia de recuperación segura antes de modificar la instalación.
+
+## Respaldos completos
+
+- El respaldo cifrado completo es opcional y no se activa hasta configurar `BACKUP_AGE_RECIPIENT`, una clave pública `age`. La identidad privada se conserva fuera del servidor. El proceso está documentado en `RUNBOOK.md`.
+- La variable `SERVER_SECRET_KEY` protege sesiones y datos del servidor; no reemplaza la clave privada age necesaria para restaurar los respaldos completos.

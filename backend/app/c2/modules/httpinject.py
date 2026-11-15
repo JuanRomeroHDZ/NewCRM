@@ -13,6 +13,7 @@ Solo intercepta HTTP en claro. El trafico HTTPS no se descifra; sslstrip solo
 evita que la victima sea *promovida* a HTTPS desde paginas HTTP.
 """
 import asyncio
+import ipaddress
 import re
 import socket
 import struct
@@ -26,10 +27,11 @@ _HTTPS_RE = re.compile(rb"https://", re.I)
 _HSTS_RE = re.compile(rb"(?im)^(strict-transport-security|upgrade-insecure-requests|content-security-policy).*?\r\n")
 
 
-def _iptables_add(port: int) -> None:
+def _iptables_add(port: int, target_ip: str) -> None:
     """Instala la regla REDIRECT de TCP/80 hacia el proxy, etiquetada con el
     comentario `lessso` para que la limpieza la encuentre incluso tras un crash."""
-    fw.add_redirect(to_port=port, dport=80, table="nat", chain="PREROUTING", family="ipv4")
+    fw.add_redirect(to_port=port, dport=80, table="nat", chain="PREROUTING",
+                    family="ipv4", source=target_ip)
 
 
 def _iptables_del() -> None:
@@ -48,14 +50,32 @@ def _original_dst(sock: socket.socket):
 
 
 class HttpInjector:
-    def __init__(self, inject: str = "", sslstrip: bool = True, port: int = 8080):
+    def __init__(self, inject: str = "", sslstrip: bool = True, port: int = 8080,
+                 target_ip: str | None = None):
         self.inject = (inject or "").encode()
         self.sslstrip = sslstrip
         self.port = port
+        self.target_ip = (target_ip or "").strip()
         self._server: asyncio.base_events.Server | None = None
         self._task: asyncio.Task | None = None
         self._loop: asyncio.AbstractEventLoop | None = None
         self.hits = 0
+        self.listen_host: str | None = None
+
+    def _local_address_for_target(self) -> str:
+        """Resolve the target route's local address without sending a packet."""
+        route_probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            route_probe.connect((self.target_ip, 9))
+            local_address = route_probe.getsockname()[0]
+        except OSError as exc:
+            raise RuntimeError(f"No se pudo resolver la interfaz local para {self.target_ip}: {exc}") from exc
+        finally:
+            route_probe.close()
+        try:
+            return str(ipaddress.IPv4Address(local_address))
+        except ValueError as exc:
+            raise RuntimeError("No se encontró una IPv4 local para la interfaz del objetivo.") from exc
 
     # ----------------------------------------------------------------- utilidades
     def _rewrite_response(self, headers: bytes, body: bytes, ctype: str) -> tuple[bytes, bytes]:
@@ -175,10 +195,15 @@ class HttpInjector:
         return self._server is not None and self._server.is_serving() and self._task is not None and not self._task.done()
 
     async def start(self):
-        self._loop = asyncio.get_running_loop()
-        self._server = await asyncio.start_server(self._handle, "0.0.0.0", self.port)
         try:
-            _iptables_add(self.port)
+            self.target_ip = str(ipaddress.IPv4Address(self.target_ip))
+        except ipaddress.AddressValueError as exc:
+            raise RuntimeError("Selecciona una IPv4 autorizada para limitar la redirección HTTP.") from exc
+        self.listen_host = self._local_address_for_target()
+        self._loop = asyncio.get_running_loop()
+        self._server = await asyncio.start_server(self._handle, self.listen_host, self.port)
+        try:
+            _iptables_add(self.port, self.target_ip)
         except Exception:
             self._server.close()
             await self._server.wait_closed()

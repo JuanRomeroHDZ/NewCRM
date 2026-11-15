@@ -1,16 +1,9 @@
 """Ataques y reconocimiento 802.11 (Wi-Fi).
 
-Requiere una tarjeta en MODO MONITOR. El escaneo escucha beacons y probe
-responses saltando de canal, el deauth envia tramas de desautenticacion a un
-cliente (o a broadcast) para expulsarlo del AP, y el capturador de handshakes
-guarda el 4-way handshake EAPOL a un .pcap y lo convierte al formato de hashcat.
-
-Pon la tarjeta en monitor antes de usar esto, por ejemplo:
-    sudo airmon-ng start wlan0        # crea wlan0mon
-  o bien:
-    sudo ip link set wlan0 down
-    sudo iw dev wlan0 set type monitor
-    sudo ip link set wlan0 up
+Requiere un adaptador Wi-Fi dedicado, sin conexión ni ruta por defecto.
+LESSSO no detiene NetworkManager, wpa_supplicant ni otros servicios globales.
+El cambio a modo monitor se rechaza si no se puede verificar que el adaptador
+está aislado y desconectado.
 """
 from __future__ import annotations
 
@@ -29,7 +22,7 @@ try:
     )
     from scapy.utils import PcapReader
     _SCAPY_AVAILABLE = True
-except ImportError:  # pragma: no cover - entorno mínimo sin scapy
+except (ImportError, OSError):  # pragma: no cover - scapy ausente o sin permisos de socket
     Dot11 = Dot11Beacon = Dot11Deauth = Dot11Elt = Dot11ProbeResp = None  # type: ignore[assignment]
     Dot11ReassoReq = EAPOL = PcapWriter = RadioTap = RandMAC = None  # type: ignore[assignment]
     AsyncSniffer = sendp = PcapReader = None  # type: ignore[assignment]
@@ -37,6 +30,7 @@ except ImportError:  # pragma: no cover - entorno mínimo sin scapy
 
 from app.config import settings
 from app.c2.core.bus import bus
+from app.c2.core.network_safety import inspect_offline_interface
 from app.c2.core.system_tools import tool_environment
 
 CAPTURE_DIR = Path(settings.C2_CAPTURE_DIR)
@@ -51,18 +45,11 @@ KI_MIC = 0x0100
 KI_SECURE = 0x0200
 
 
-# Servicios que suelen impedir el modo monitor (lo mismo que airmon-ng check kill).
-_INTERFERERS = (
-    "NetworkManager",
-    "wpa_supplicant",
-    "wpa_cli",
-    "dhclient",
-    "dhcpcd",
-    "avahi-daemon",
-)
+SYS_NET_PATH = Path("/sys/class/net")
 
-# Que servicios paramos en esta sesion, para poder devolverlos.
-_killed: list[str] = []
+# Solo contendría servicios detenidos expresamente por una operación de LESSSO.
+# Las operaciones actuales no detienen servicios globales, así que comienza vacío.
+_services_stopped_by_app: set[str] = set()
 
 
 def _run(cmd: list[str]) -> subprocess.CompletedProcess:
@@ -93,110 +80,114 @@ def list_wireless() -> list[dict]:
 
 
 def kill_interferers() -> list[str]:
-    """Para NetworkManager, wpa_supplicant y companeros que echan la interfaz
-    del modo monitor. Equivale a `airmon-ng check kill`."""
-    stopped = []
-    for svc in _INTERFERERS:
-        proc = _run(["systemctl", "stop", svc])
-        if proc.returncode == 0 or "not loaded" not in (proc.stderr or "").lower():
-            # pkill por si el unit no existe pero el proceso si
-            _run(["pkill", "-f", svc])
-            if svc not in _killed:
-                _killed.append(svc)
-            stopped.append(svc)
-    # airmon-ng check kill por si hay algo mas (wpa_action, etc.)
-    _run(["airmon-ng", "check", "kill"])
-    bus.emit({"type": "wifi", "msg": "Servicios interferentes detenidos: " + ", ".join(stopped)})
-    return stopped
+    """Retired: LESSSO never stops host-wide network services."""
+    raise RuntimeError(
+        "LESSSO ya no detiene NetworkManager ni otros servicios globales. "
+        "Usa un adaptador Wi-Fi dedicado y desconectado para modo monitor."
+    )
 
 
 def restore_interferers() -> list[str]:
-    """Vuelve a levantar NetworkManager (y el resto) al salir de monitor."""
+    """Restore only services this process explicitly stopped; currently none."""
     started = []
-    # NetworkManager relanza wpa_supplicant solo; no hace falta el resto.
-    for svc in ("NetworkManager", "wpa_supplicant", "avahi-daemon"):
+    for svc in tuple(_services_stopped_by_app):
         proc = _run(["systemctl", "start", svc])
         if proc.returncode == 0:
             started.append(svc)
-    _killed.clear()
-    bus.emit({"type": "wifi", "msg": "Servicios de red restaurados: " + (", ".join(started) or "ninguno")})
+            _services_stopped_by_app.discard(svc)
+    bus.emit({"type": "wifi", "msg": "Servicios gestionados por LESSSO restaurados: " + (", ".join(started) or "ninguno")})
     return started
 
 
-def _parse_airmon_iface(output: str, fallback: str) -> str:
-    # "(mac80211 monitor mode vif enabled for [phy0]wlan0 on [phy0]wlan0mon)"
-    for token in output.replace("[", " ").replace("]", " ").split():
-        if token.endswith("mon") or token.endswith("mon0"):
-            return token
-    return fallback
+def _assert_dedicated_wireless(iface: str, *, require_down: bool) -> str:
+    state = inspect_offline_interface(
+        iface, _run, SYS_NET_PATH, require_down=require_down
+    )
+    interface_path = SYS_NET_PATH / iface
+    phy_path = interface_path / "phy80211"
+    if not phy_path.exists():
+        raise RuntimeError(
+            "No se pudo confirmar que la interfaz pertenezca a un adaptador Wi-Fi dedicado. "
+            "Usa un adaptador dedicado y desconectado."
+        )
+    phy = os.path.realpath(str(phy_path))
+    try:
+        siblings = [
+            name for name in os.listdir(SYS_NET_PATH)
+            if (SYS_NET_PATH / name / "phy80211").exists()
+            and os.path.realpath(str(SYS_NET_PATH / name / "phy80211")) == phy
+        ]
+    except OSError as exc:
+        raise RuntimeError(
+            "No se pudo comprobar si el adaptador comparte radio con otras interfaces. "
+            "Usa un adaptador Wi-Fi dedicado."
+        ) from exc
+    if siblings != [iface]:
+        raise RuntimeError(
+            "El adaptador comparte radio con otra interfaz o no se pudo aislar. "
+            "Usa un adaptador Wi-Fi dedicado y desconectado."
+        )
+    link = _run(["iw", "dev", iface, "link"])
+    if link.returncode != 0 or "not connected" not in (link.stdout or "").lower():
+        raise RuntimeError(
+            "No se pudo confirmar que el adaptador Wi-Fi esté desconectado. "
+            "Usa un adaptador dedicado y desconectado."
+        )
+    return str(state["operstate"])
 
 
 def set_monitor(iface: str, enable: bool = True) -> dict:
-    """Pone o saca la interfaz de modo monitor. Prefiere `iw` para no
-    renombrar a wlan0mon; si falla, usa airmon-ng."""
-    if not iface or "/" in iface or iface == "lo":
-        raise ValueError("Interfaz invalida")
+    """Change mode only on a verified, isolated adapter; never use airmon-ng."""
+    if not isinstance(iface, str) or not iface or "/" in iface or iface == "lo":
+        raise ValueError("Interfaz inválida.")
+    current = iface_mode(iface)
+    if current not in {"managed", "monitor"}:
+        raise RuntimeError(
+            "No se pudo verificar el modo actual de la interfaz. "
+            "Usa un adaptador Wi-Fi dedicado y desconectado."
+        )
     if enable:
-        current = iface_mode(iface)
+        _assert_dedicated_wireless(iface, require_down=(current != "monitor"))
         if current == "monitor":
             bus.emit({"type": "wifi", "msg": f"{iface} ya esta en modo monitor"})
             return {"interface": iface, "mode": "monitor", "created": iface}
-        # Mismo nombre con iw (mas comodo para el selector).
         steps = [
             ["ip", "link", "set", iface, "down"],
             ["iw", "dev", iface, "set", "type", "monitor"],
             ["ip", "link", "set", iface, "up"],
         ]
-        failed = False
-        err = ""
         for cmd in steps:
             proc = _run(cmd)
             if proc.returncode != 0:
-                failed = True
-                err = (proc.stderr or proc.stdout or "").strip()
-                break
-        if not failed and iface_mode(iface) == "monitor":
-            bus.emit({"type": "wifi", "msg": f"{iface} en modo monitor"})
-            return {"interface": iface, "mode": "monitor", "created": iface}
-        # Fallback: airmon-ng start (puede crear wlan0mon).
-        proc = _run(["airmon-ng", "start", iface])
-        created = _parse_airmon_iface((proc.stdout or "") + (proc.stderr or ""), iface)
-        mode = iface_mode(created)
-        if mode != "monitor" and proc.returncode != 0:
-            raise RuntimeError(err or (proc.stderr or "No se pudo activar modo monitor").strip())
-        bus.emit({"type": "wifi", "msg": f"Modo monitor en {created}"})
-        return {"interface": created, "mode": iface_mode(created), "created": created}
+                error = (proc.stderr or proc.stdout or "No se pudo activar modo monitor").strip()
+                # Undo only this interface and leave it down; never reconnect it.
+                _run(["ip", "link", "set", iface, "down"])
+                _run(["iw", "dev", iface, "set", "type", "managed"])
+                raise RuntimeError(error)
+        if iface_mode(iface) != "monitor":
+            _run(["ip", "link", "set", iface, "down"])
+            _run(["iw", "dev", iface, "set", "type", "managed"])
+            raise RuntimeError("No se pudo confirmar el modo monitor; la interfaz quedó abajo.")
+        bus.emit({"type": "wifi", "msg": f"{iface} en modo monitor"})
+        return {"interface": iface, "mode": "monitor", "created": iface}
 
-    # Volver a managed
-    current = iface_mode(iface)
-    if current != "monitor" and not iface.endswith("mon"):
+    if current == "managed":
         bus.emit({"type": "wifi", "msg": f"{iface} ya esta en modo managed"})
-        return {"interface": iface, "mode": current or "managed", "created": iface}
-    if iface.endswith("mon"):
-        proc = _run(["airmon-ng", "stop", iface])
-        # airmon-ng stop wlan0mon suele devolver wlan0
-        restored = iface[:-3] if iface.endswith("mon") else iface
-        for token in ((proc.stdout or "") + " " + (proc.stderr or "")).split():
-            if token.startswith("wlan") and not token.endswith("mon"):
-                restored = token.strip("()[]")
-                break
-        bus.emit({"type": "wifi", "msg": f"{iface} detenida, interfaz {restored}"})
-        return {"interface": restored, "mode": iface_mode(restored), "created": restored}
+        return {"interface": iface, "mode": "managed", "created": iface}
+    _assert_dedicated_wireless(iface, require_down=False)
     for cmd in (
         ["ip", "link", "set", iface, "down"],
         ["iw", "dev", iface, "set", "type", "managed"],
-        ["ip", "link", "set", iface, "up"],
     ):
         proc = _run(cmd)
         if proc.returncode != 0:
-            raise RuntimeError((proc.stderr or "No se pudo volver a managed").strip())
-    bus.emit({"type": "wifi", "msg": f"{iface} de vuelta a modo managed"})
+            raise RuntimeError((proc.stderr or "No se pudo volver a managed; la interfaz permanece aislada.").strip())
+    bus.emit({"type": "wifi", "msg": f"{iface} de vuelta a managed y abajo"})
     return {"interface": iface, "mode": iface_mode(iface), "created": iface}
 
 
 def prepare_monitor(iface: str) -> dict:
-    """Mata interferentes y activa modo monitor. Idempotente."""
-    kill_interferers()
+    """Activate monitor mode without stopping host-wide network services."""
     return set_monitor(iface, True)
 
 
@@ -212,7 +203,8 @@ def set_channel(iface: str, channel: int) -> None:
 class WifiScanner:
     """Descubre APs (y de paso clientes) saltando por los canales 2.4 GHz."""
 
-    def __init__(self, iface: str, channels=None, dwell: float = 0.4):
+    def __init__(self, iface: str, channels=None, dwell: float = 0.4,
+                 clients_lock: threading.RLock | None = None):
         self.iface = iface
         self.channels = channels or list(range(1, 14))
         self.dwell = dwell
@@ -221,6 +213,19 @@ class WifiScanner:
         self._stop = threading.Event()
         self.aps: dict[str, dict] = {}
         self.clients: dict[tuple[str, str], dict] = {}
+        # Scapy invokes _process on a background capture thread while FastAPI
+        # serves /wifi/clients and deauth target validation on request threads.
+        self.clients_lock = clients_lock or threading.RLock()
+
+    def clients_snapshot(self) -> dict[tuple[str, str], dict]:
+        """Return a stable, detached copy for API reads."""
+        with self.clients_lock:
+            return {key: dict(value) for key, value in self.clients.items()}
+
+    def get_client(self, key: tuple[str, str]) -> dict | None:
+        with self.clients_lock:
+            value = self.clients.get(key)
+            return dict(value) if value is not None else None
 
     def _process(self, pkt) -> None:
         if not pkt.haslayer(Dot11):
@@ -272,20 +277,22 @@ class WifiScanner:
             return
         key = (bssid, client)
         now = time.time()
-        known = key in self.clients
-        entry = self.clients.setdefault(key, {
-            "bssid": bssid,
-            "client": client,
-            "channel": self.aps.get(bssid, {}).get("channel") or self._channel(pkt),
-            "signal": self._signal(pkt),
-            "last_seen": now,
-        })
-        entry["last_seen"] = now
         signal = self._signal(pkt)
-        if signal is not None:
-            entry["signal"] = signal
+        with self.clients_lock:
+            known = key in self.clients
+            entry = self.clients.setdefault(key, {
+                "bssid": bssid,
+                "client": client,
+                "channel": self.aps.get(bssid, {}).get("channel") or self._channel(pkt),
+                "signal": signal,
+                "last_seen": now,
+            })
+            entry["last_seen"] = now
+            if signal is not None:
+                entry["signal"] = signal
+            event = dict(entry) if not known else None
         if not known:
-            bus.emit({"type": "wifi_client", **entry})
+            bus.emit({"type": "wifi_client", **event})
 
     def _signal(self, pkt):
         try:
@@ -317,6 +324,8 @@ class WifiScanner:
             time.sleep(self.dwell)
 
     def start(self):
+        if not _SCAPY_AVAILABLE:
+            raise RuntimeError("Scapy o los permisos para inicializar sockets no están disponibles en el entorno C2")
         self._stop.clear()
         self._sniffer = AsyncSniffer(iface=self.iface, prn=self._process, store=False)
         self._sniffer.start()
@@ -389,6 +398,8 @@ class Deauther:
             self._running = False
 
     def start(self):
+        if not _SCAPY_AVAILABLE:
+            raise RuntimeError("Scapy o los permisos para inicializar sockets no están disponibles en el entorno C2")
         self._stop.clear()
         self._running = True
         self._thread = threading.Thread(target=self._run, daemon=True)
@@ -517,8 +528,12 @@ class HandshakeCapturer:
     activo, lo transforma al formato 22000 de hashcat automaticamente.
     """
 
-    def __init__(self, iface: str, channel: int | None = None, auto_convert: bool = False):
+    def __init__(self, iface: str, bssid: str, channel: int | None = None,
+                 auto_convert: bool = False):
         self.iface = iface
+        if not is_unicast_mac(bssid):
+            raise ValueError("Selecciona un BSSID unicast autorizado.")
+        self.bssid = bssid.strip().lower()
         self.channel = channel
         self.auto_convert = auto_convert
         self._sniffer: AsyncSniffer | None = None
@@ -544,7 +559,7 @@ class HandshakeCapturer:
 
     def _record_ap(self, pkt) -> None:
         bssid = pkt[Dot11].addr3
-        if not bssid:
+        if not bssid or bssid.lower() != self.bssid:
             return
         essid = ""
         elt = pkt.getlayer(Dot11Elt)
@@ -565,7 +580,7 @@ class HandshakeCapturer:
     def _handle_eapol(self, pkt) -> None:
         dot11 = pkt[Dot11]
         bssid = dot11.addr3
-        if not bssid:
+        if not bssid or bssid.lower() != self.bssid:
             return
         raw = bytes(pkt[EAPOL])
         if len(raw) < 7:
@@ -611,6 +626,8 @@ class HandshakeCapturer:
             self._handle_eapol(pkt)
 
     def start(self):
+        if not _SCAPY_AVAILABLE:
+            raise RuntimeError("Scapy o los permisos para inicializar sockets no están disponibles en el entorno C2")
         if self.channel:
             set_channel(self.iface, self.channel)
         stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -619,7 +636,7 @@ class HandshakeCapturer:
         _mark_capture(self.pcap_path, True)
         self._sniffer = AsyncSniffer(iface=self.iface, prn=self._process, store=False)
         self._sniffer.start()
-        bus.emit({"type": "wifi", "msg": f"Captura de handshakes en {self.iface} -> {self.pcap_path.name}"})
+        bus.emit({"type": "wifi", "msg": f"Captura de handshakes para {self.bssid} en {self.iface} -> {self.pcap_path.name}"})
 
     def stop(self):
         if self._sniffer:
@@ -725,6 +742,8 @@ class PmkidCapturer:
             bus.emit({"type": "error", "msg": str(e)})
 
     def start(self):
+        if not _SCAPY_AVAILABLE:
+            raise RuntimeError("Scapy o los permisos para inicializar sockets no están disponibles en el entorno C2")
         if self.channel:
             set_channel(self.iface, self.channel)
         stamp = datetime.now().strftime("%Y%m%d-%H%M%S")

@@ -12,7 +12,7 @@ import asyncio
 try:
     from scapy.all import ICMP, IP, sr1
     _SCAPY_AVAILABLE = True
-except ImportError:  # pragma: no cover - entorno mínimo sin scapy
+except (ImportError, OSError):  # pragma: no cover - scapy ausente o sin permisos de socket
     ICMP = IP = sr1 = None  # type: ignore[assignment]
     _SCAPY_AVAILABLE = False
 

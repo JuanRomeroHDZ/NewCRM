@@ -229,7 +229,7 @@ class WpadSpoofer:
     # ------------------------------------------------------------------ ciclo de vida
     def start(self) -> None:
         self._running = True
-        self._pac = _PacServer(("0.0.0.0", self.pac_port), self._make_pac_handler())
+        self._pac = _PacServer((self.our_ip, self.pac_port), self._make_pac_handler())
 
         spoofer = self
 
@@ -237,7 +237,7 @@ class WpadSpoofer:
             def handle(self):
                 spoofer._handle_proxy(self.request, self.client_address)
 
-        self._proxy = _ProxyServer(("0.0.0.0", self.proxy_port), ProxyHandler)
+        self._proxy = _ProxyServer((self.our_ip, self.proxy_port), ProxyHandler)
         threading.Thread(target=self._pac.serve_forever, daemon=True).start()
         threading.Thread(target=self._proxy.serve_forever, daemon=True).start()
         bus.emit({"type": "wpad", "msg": f"WPAD activo: PAC en :{self.pac_port}, "

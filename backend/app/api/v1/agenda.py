@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response, status
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -11,6 +11,7 @@ from app.schemas.validators import validate_calendar_date
 from app.services.core_auth import get_current_user_from_token, require_role
 from app.models.core import User
 from app.models.agenda import AgendaEvent, OperationTask, ClientAsset, PentestEngagement, PentestFinding
+from app.services.c2_scope import parse_authorized_ipv6_targets
 from app.models.crm_sales import Client, Sale
 from app.models import Prospect
 from app.services.agenda_service import AgendaService
@@ -58,6 +59,7 @@ class PentestEngagementCreate(BaseModel):
     title: str = Field(..., min_length=2, max_length=180)
     scope_written_summary: str = Field(..., min_length=10, max_length=10000)
     authorized_targets: str = Field(..., min_length=3, max_length=5000)
+    authorized_ipv6_targets: str = Field(default="", max_length=5000)
     window_start: datetime
     window_end: datetime
 
@@ -65,6 +67,22 @@ class PentestEngagementCreate(BaseModel):
     @classmethod
     def check_nonblank(cls, value: str) -> str:
         return validate_nonblank_input(value)
+
+    @field_validator("authorized_ipv6_targets")
+    @classmethod
+    def validate_ipv6_targets(cls, value: str) -> str:
+        if value.strip():
+            parse_authorized_ipv6_targets(value)
+        return value.strip()
+
+    @field_validator("window_start", "window_end")
+    @classmethod
+    def normalize_window_timezone(cls, value: datetime) -> datetime:
+        # SQLAlchemy stores these columns as timezone-naive UTC and the C2
+        # authorization gate compares them against utc_now() in the same form.
+        if value.tzinfo is not None:
+            return value.astimezone(timezone.utc).replace(tzinfo=None)
+        return value
 
     @model_validator(mode="after")
     def check_window_order(self) -> "PentestEngagementCreate":
@@ -230,6 +248,7 @@ async def create_pentest_engagement(
         title=req.title,
         scope_written_summary=req.scope_written_summary,
         authorized_targets=req.authorized_targets,
+        authorized_ipv6_targets=req.authorized_ipv6_targets,
         window_start=req.window_start,
         window_end=req.window_end,
         status="autorizado"
