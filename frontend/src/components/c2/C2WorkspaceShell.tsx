@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { useVault } from '../../context/VaultContext';
 import { useC2 } from '../../context/C2Context';
+import { api, getApiUserToken } from '../../lib/api';
 import type { C2LogType, C2SectionId } from '../../types/c2';
 
 const HostsPanel = lazy(() => import('./panels/HostsPanel').then((m) => ({ default: m.HostsPanel })));
@@ -110,8 +111,28 @@ export const C2WorkspaceShell: React.FC = () => {
   const [logFilter, setLogFilter] = useState<'all' | C2LogType>('all');
   const [modulesOpen, setModulesOpen] = useState(false);
   const [mobileOpsOpen, setMobileOpsOpen] = useState(false);
+  const [accountStatus, setAccountStatus] = useState<'unknown' | 'checking' | 'signed_out' | 'owner' | 'other' | 'password_change' | 'error'>('unknown');
   const logContainerRef = useRef<HTMLDivElement>(null);
   const modulesContainerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isUnlocked) { setAccountStatus('unknown'); return; }
+    let active = true;
+    const check = async () => {
+      if (!getApiUserToken()) { if (active) setAccountStatus('signed_out'); return; }
+      setAccountStatus('checking');
+      try {
+        const user = await api.getCurrentUser();
+        if (active) setAccountStatus(user.must_change_password ? 'password_change' : user.role === 'owner' ? 'owner' : 'other');
+      } catch {
+        if (active) setAccountStatus(getApiUserToken() ? 'error' : 'signed_out');
+      }
+    };
+    void check();
+    const expired = () => { active = false; setAccountStatus('signed_out'); };
+    window.addEventListener('core_user_session_expired', expired);
+    return () => { active = false; window.removeEventListener('core_user_session_expired', expired); };
+  }, [isUnlocked]);
 
   const selectedLink = useMemo(
     () => opsecState?.interfaces?.find((i) => i.name === selectedIface) || opsecState?.interfaces?.[0] || null,
@@ -144,6 +165,18 @@ export const C2WorkspaceShell: React.FC = () => {
   }, [modulesOpen]);
 
   const ActivePanel = PANEL_COMPONENTS[activeSection as C2SectionId] || HostsPanel;
+  const accountLabel = {
+    unknown: 'Se comprueba al desbloquear', checking: 'Comprobando', signed_out: 'Sin sesión de cuenta',
+    owner: 'Propietario', other: 'Sin rol de propietario', password_change: 'Cambiar contraseña de cuenta', error: 'No se pudo comprobar',
+  }[accountStatus];
+  const serviceLabel = !isUnlocked ? 'Se comprueba al desbloquear' : serviceState === 'running' ? 'Disponible' : serviceState === 'forbidden' ? 'Acceso restringido' : serviceState === 'checking' || serviceState === 'idle' ? 'Comprobando' : 'No disponible';
+  const accessStatus = (
+    <dl aria-label="Estado de acceso a Red y Lab" className="mt-5 grid gap-2 rounded-lg border border-obsidian-border bg-obsidian-bg/50 p-3 text-xs sm:grid-cols-3">
+      <div><dt className="text-obsidian-muted">Bóveda</dt><dd className="mt-1 font-medium text-white">{isUnlocked ? 'Desbloqueada' : 'Bloqueada'}</dd></div>
+      <div><dt className="text-obsidian-muted">Cuenta</dt><dd className="mt-1 font-medium text-white">{accountLabel}</dd></div>
+      <div><dt className="text-obsidian-muted">Servicio C2</dt><dd className="mt-1 font-medium text-white">{serviceLabel}</dd></div>
+    </dl>
+  );
 
   if (!isUnlocked) {
     return (
@@ -158,6 +191,7 @@ export const C2WorkspaceShell: React.FC = () => {
           <p className="mt-2 text-xs text-obsidian-muted">
             Desbloquea tu bóveda para habilitar los módulos de red, el flujo WebSocket en vivo y los controles OPSEC.
           </p>
+          {accessStatus}
           <button
             type="button"
             onClick={openUnlockModal}
@@ -188,6 +222,9 @@ export const C2WorkspaceShell: React.FC = () => {
               <p role="status" className="mt-2 text-sm leading-relaxed text-obsidian-muted">
                 {checking ? 'Estamos comprobando la conexión con el servicio de red.' : forbidden ? 'Red y Lab requiere una cuenta con rol Propietario. Si estás usando una cuenta de Ventas, cierra esa sesión en Cuentas del equipo e inicia sesión como propietario.' : 'Para usar Red y Lab, inicia C2 en la computadora donde está instalado LESSSO.'}
               </p>
+              {accessStatus}
+              {accountStatus === 'signed_out' && !checking && <p className="mt-3 text-xs leading-relaxed text-obsidian-muted">Inicia sesión con una cuenta propietaria en Cuentas del equipo para acceder al servicio.</p>}
+              {accountStatus === 'password_change' && <p className="mt-3 text-xs leading-relaxed text-obsidian-muted">Cambia la contraseña temporal de la cuenta en Cuentas del equipo antes de continuar.</p>}
               {forbidden && <p className="mt-3 text-xs leading-relaxed text-obsidian-muted">Si es tu primer acceso como propietario, cambia la contraseña temporal antes de volver a Red y Lab.</p>}
               {!checking && !forbidden && (
                 <div className="mt-4 space-y-4 text-sm leading-relaxed text-obsidian-muted">
@@ -205,12 +242,13 @@ export const C2WorkspaceShell: React.FC = () => {
                   </div>
                 </div>
               )}
-              {forbidden ? (
+              {(forbidden || accountStatus === 'signed_out' || accountStatus === 'password_change' || accountStatus === 'other') && !checking && (
                 <button type="button" onClick={() => setActiveSection('settings_team')} className="mt-5 inline-flex min-h-[44px] items-center rounded-lg bg-obsidian-gold px-4 text-sm font-semibold text-black hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-gold">
                   Ir a Cuentas del equipo
                 </button>
-              ) : !checking && (
-                <button type="button" onClick={() => void retryService()} className="mt-5 inline-flex min-h-[44px] items-center gap-2 rounded-lg border border-obsidian-gold/40 bg-obsidian-surface px-4 text-sm font-semibold text-white transition-colors hover:border-obsidian-gold hover:bg-obsidian-gold/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-gold">
+              )}
+              {!checking && !forbidden && (
+                <button type="button" onClick={() => void retryService()} className="mt-5 mr-2 inline-flex min-h-[44px] items-center gap-2 rounded-lg border border-obsidian-gold/40 bg-obsidian-surface px-4 text-sm font-semibold text-white transition-colors hover:border-obsidian-gold hover:bg-obsidian-gold/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-gold">
                   <RefreshCw size={15} aria-hidden="true" /> Volver a comprobar
                 </button>
               )}

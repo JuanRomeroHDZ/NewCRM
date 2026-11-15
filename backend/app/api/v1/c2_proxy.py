@@ -60,6 +60,11 @@ async def forward(path: str, request: Request):
                 params=request.query_params.multi_items(), content=await request.body(), headers=headers)
     except (httpx.HTTPError, OSError):
         raise HTTPException(503, 'El servicio C2 no está disponible.')
+    if response.status_code in (401, 403):
+        # The caller already passed the vault and owner checks above. An auth
+        # failure from the private worker concerns the inter-process secret,
+        # not the user's role or the vault session.
+        raise HTTPException(503, 'No se pudo autenticar la conexión interna con el servicio C2. Revisa su configuración y vuelve a intentarlo.')
     allowed = ('content-type', 'content-disposition', 'cache-control')
     return Response(response.content, status_code=response.status_code,
                     headers={k: v for k, v in response.headers.items() if k.lower() in allowed})

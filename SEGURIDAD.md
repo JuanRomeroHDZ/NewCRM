@@ -15,6 +15,13 @@
 - El backend incluye sesiones de usuario con tokens aleatorios, caducidad y protección por intentos fallidos. Las políticas de intentos y expiración son configurables.
 - Mantén `SERVER_SECRET_KEY` y la contraseña maestra en gestores separados. Una no sustituye a la otra.
 
+## Primera cuenta propietaria y migración
+
+- La contraseña de la bóveda y la contraseña de la cuenta son independientes. Un token de bóveda desbloqueada autoriza el alta inicial mientras no exista la marca de alta ni un propietario establecido; no identifica por sí solo a una persona. En una instalación compartida, controla quién puede acceder al servicio y conocer la contraseña de la bóveda durante la puesta en marcha.
+- En una base nueva, el alta crea un propietario activo y exige cambiar su contraseña. La marca única de alta impide repetirla, también frente a solicitudes simultáneas.
+- Para instalaciones anteriores se permite el alta si todos los propietarios tienen el nombre provisional configurado en `INITIAL_OWNER_USERNAME` y aún deben cambiar su contraseña. La cuenta provisional queda desactivada, no borrada, al completarse el alta. La marca, la cuenta, la desactivación, el registro y la sesión se guardan en la misma transacción; si falla antes de confirmarse, se revierte.
+- Un propietario establecido, incluso desactivado, cierra el alta inicial. Desactivar una cuenta no abre una vía para reclamar la instalación; conserva medios administrativos y respaldos de recuperación. El cambio de contraseña provisional deja de cumplir la condición de migración.
+
 ## Red y servicios externos
 
 - El proxy publica `127.0.0.1` por defecto. Para acceso en LAN, cambia `HOST_BIND_IP` a `0.0.0.0` y restringe el puerto con el firewall.

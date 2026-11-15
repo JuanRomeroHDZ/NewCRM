@@ -91,7 +91,7 @@ class CredentialTester:
         for username, password, vendor in DEFAULT_CREDENTIALS:
             if self._try_rtsp_auth(username, password, port):
                 valid_creds.append((username, password, vendor))
-                print(f"    [!] RTSP credential found: {username}:{password} ({vendor})")
+                print(f"    [!] RTSP credential found ({vendor}); see protected findings for details.")
                 if not self.verbose:
                     break
 
@@ -206,7 +206,7 @@ class CredentialTester:
             for path in login_paths:
                 if self._try_http_basic(username, password, port, path, use_ssl):
                     valid_creds.append((username, password, vendor, path))
-                    print(f"    [!] HTTP credential found: {username}:{password} at {path}")
+                    print(f"    [!] HTTP credential found at {path}; see protected findings for details.")
                     break
             if valid_creds and not self.verbose:
                 break

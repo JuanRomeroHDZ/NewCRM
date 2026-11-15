@@ -40,11 +40,13 @@ async function fetchC2Response(url: string, options: RequestInit): Promise<Respo
   }
 }
 
-async function handleC2ErrorResponse(endpoint: string, response: Response): Promise<never> {
+async function handleC2ErrorResponse(endpoint: string, response: Response, requestVaultToken: string | null): Promise<never> {
   if (response.status === 401) {
-    setApiVaultToken(null);
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('vault_locked'));
+    if ((requestVaultToken || '') === (getApiVaultToken() || '')) {
+      setApiVaultToken(null);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('vault_locked'));
+      }
     }
     throw createHttpApiError(response.status, endpoint, false);
   }
@@ -82,16 +84,14 @@ async function handleC2ErrorResponse(endpoint: string, response: Response): Prom
 
 async function c2Request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const endpoint = `/c2${path}`;
+  const headers = { ...buildC2Headers(true), ...(options.headers as Record<string, string> | undefined) };
   const response = await fetchC2Response(`${API_BASE}${endpoint}`, {
     ...options,
-    headers: {
-      ...buildC2Headers(true),
-      ...(options.headers as Record<string, string> | undefined),
-    },
+    headers,
   });
 
   if (!response.ok) {
-    await handleC2ErrorResponse(endpoint, response);
+    await handleC2ErrorResponse(endpoint, response, headers['X-Vault-Token'] || null);
   }
   if (response.status === 204) {
     return undefined as T;
@@ -118,12 +118,13 @@ function triggerBrowserBlobDownload(blob: Blob, filename: string): void {
 
 async function c2DownloadBlob(path: string, fallbackFilename: string): Promise<Blob> {
   const endpoint = `/c2${path}`;
+  const headers = buildC2Headers(false);
   const response = await fetchC2Response(`${API_BASE}${endpoint}`, {
     method: 'GET',
-    headers: buildC2Headers(false),
+    headers,
   });
   if (!response.ok) {
-    await handleC2ErrorResponse(endpoint, response);
+    await handleC2ErrorResponse(endpoint, response, headers['X-Vault-Token'] || null);
   }
   const disposition = response.headers.get('Content-Disposition') || '';
   const match = disposition.match(/filename="?([^";]+)"?/i);

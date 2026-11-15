@@ -40,3 +40,32 @@ async def test_encrypted_backup_and_restore_roundtrip(client, auth_token):
     res_data = restore_res.json()
     assert "restored_emails" in res_data
     assert "restored_payments" in res_data
+
+@pytest.mark.asyncio
+async def test_restore_remaps_recovery_links_when_existing_addresses_have_new_ids(db_session):
+    """A recovery link follows the matched email, not its old backup ID."""
+    import base64
+    import json
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+    from sqlalchemy import select
+    from app.api.v1.vault_backup import derive_export_key, restore_encrypted_vault, RestoreEncryptedRequest
+    from app.models import EmailAccount
+
+    existing = EmailAccount(id="destination-id", address="recovery@example.test", provider="Custom")
+    db_session.add(existing)
+    await db_session.commit()
+    dump = {
+        "emails": [
+            {"id": "primary-old-id", "address": "primary@example.test", "provider": "Custom", "recovery_email_id": "recovery-old-id"},
+            {"id": "recovery-old-id", "address": "recovery@example.test", "provider": "Custom"},
+        ],
+        "payments": [], "platforms": [], "incomes": [], "renewals": [],
+    }
+    password = "Only-Test-Password-123"
+    salt, nonce = b"s" * 16, b"n" * 12
+    ciphertext = AESGCM(derive_export_key(password, salt)).encrypt(nonce, json.dumps(dump).encode(), None)
+    backup = {"format": "emailsaver-encrypted-vault", "salt": base64.b64encode(salt).decode(), "nonce": base64.b64encode(nonce).decode(), "ciphertext": base64.b64encode(ciphertext).decode()}
+    result = await restore_encrypted_vault(RestoreEncryptedRequest(export_password=password, backup_data=backup), db_session)
+    assert result["restored_emails"] == 2
+    primary = (await db_session.execute(select(EmailAccount).where(EmailAccount.address == "primary@example.test"))).scalar_one()
+    assert primary.recovery_email_id == "destination-id"

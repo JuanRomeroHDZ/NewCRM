@@ -199,6 +199,37 @@ async def test_bootstrap_is_closed_after_owner_password_is_changed(client, db_se
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("active", [True, False])
+async def test_established_owner_cannot_be_reclaimed_even_when_disabled(client, db_session, auth_token, active):
+    db_session.add(User(
+        username="existing.owner", email="owner@example.test", full_name="Existing Owner",
+        role="owner", is_active=active, must_change_password=False,
+        hashed_password=hash_master_password("ExistingOwnerPassword123!"),
+    ))
+    await db_session.commit()
+    headers = {"X-Vault-Token": auth_token}
+    assert (await client.get('/api/v1/auth/bootstrap-status', headers=headers)).json() == {"available": False}
+    response = await client.post('/api/v1/auth/bootstrap-account', headers=headers, json={
+        "username": "new.owner", "email": "new@example.test", "full_name": "New Owner",
+        "password": "NewOwnerPassword123!",
+    })
+    assert response.status_code == 409
+    assert await db_session.scalar(select(User.id).where(User.username == 'new.owner')) is None
+
+
+@pytest.mark.asyncio
+async def test_fresh_bootstrap_is_one_time_and_requires_password_change(client, db_session, auth_token):
+    headers = {"X-Vault-Token": auth_token}
+    payload = {"username": "fresh.owner", "email": "fresh@example.test", "full_name": "Fresh Owner", "password": "FreshOwnerPassword123!"}
+    assert (await client.get('/api/v1/auth/bootstrap-status', headers=headers)).json() == {"available": True}
+    created = await client.post('/api/v1/auth/bootstrap-account', headers=headers, json=payload)
+    assert created.status_code == 201
+    assert created.json()['user']['role'] == 'owner'
+    assert created.json()['user']['must_change_password'] is True
+    assert (await client.post('/api/v1/auth/bootstrap-account', headers=headers, json=payload)).status_code == 409
+
+
+@pytest.mark.asyncio
 async def test_login_handles_whitespace_and_case_insensitive_identifiers(client, db_session, auth_token):
     import app.api.v1.auth as auth_api
 

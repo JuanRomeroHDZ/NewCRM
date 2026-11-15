@@ -10,6 +10,7 @@ import React, {
 import { useVault } from './VaultContext';
 import { c2Api, buildC2WsUrl, buildC2WsProtocols } from '../lib/c2Api';
 import { ApiError } from '../lib/apiErrors';
+import { createC2SessionGuard } from '../lib/c2SessionGuard';
 import { C2Lang, getStoredC2Lang, setStoredC2Lang, tC2 } from '../lib/c2I18n';
 import type {
   C2CameraDiscovered,
@@ -219,6 +220,8 @@ export const C2Provider: React.FC<{ children: React.ReactNode }> = ({ children }
   const [enteredC2, setEnteredC2] = useState(false);
   const inC2Workspace = activeSection.startsWith('c2_');
   const unlockedRef = useRef(isUnlocked);
+  const sessionGuardRef = useRef(createC2SessionGuard(isUnlocked));
+  sessionGuardRef.current.update(isUnlocked);
   const serviceRequestRef = useRef(0);
   unlockedRef.current = isUnlocked;
 
@@ -313,8 +316,10 @@ export const C2Provider: React.FC<{ children: React.ReactNode }> = ({ children }
   // API refreshers (strictly gated on isUnlocked)
   const refreshMeta = useCallback(async () => {
     if (!isUnlocked) return;
+    const isCurrentSession = sessionGuardRef.current.capture();
     try {
       const data = await c2Api.getMeta();
+      if (!isCurrentSession()) return;
       setMeta(data);
     } catch {
       // Optional endpoint; ignore silently if unavailable
@@ -323,8 +328,10 @@ export const C2Provider: React.FC<{ children: React.ReactNode }> = ({ children }
 
   const refreshInterfaces = useCallback(async () => {
     if (!isUnlocked) return;
+    const isCurrentSession = sessionGuardRef.current.capture();
     try {
       const data = await c2Api.getInterfaces();
+      if (!isCurrentSession()) return;
       const list = data.interfaces || [];
       setInterfaces(list);
       setGateway(data.gateway || null);
@@ -336,14 +343,17 @@ export const C2Provider: React.FC<{ children: React.ReactNode }> = ({ children }
         setArpGateway((prev) => prev || data.gateway!.ip);
       }
     } catch (err) {
+      if (!isCurrentSession()) return;
       addLog('error', err instanceof Error ? err.message : 'Error loading interfaces');
     }
   }, [isUnlocked, addLog]);
 
   const refreshStatus = useCallback(async () => {
     if (!isUnlocked) return;
+    const isCurrentSession = sessionGuardRef.current.capture();
     try {
       const st = await c2Api.getStatus();
+      if (!isCurrentSession()) return;
       setModuleStatus({ ...DEFAULT_MODULE_STATUS, ...st });
     } catch {
       // WS/UI indicates connectivity issues; avoid spamming console on poll ticks
@@ -352,28 +362,36 @@ export const C2Provider: React.FC<{ children: React.ReactNode }> = ({ children }
 
   const refreshOpsec = useCallback(async () => {
     if (!isUnlocked) return;
+    const isCurrentSession = sessionGuardRef.current.capture();
     try {
       const data = await c2Api.getOpsec();
+      if (!isCurrentSession()) return;
       setOpsecState(data);
     } catch (err) {
+      if (!isCurrentSession()) return;
       addLog('error', err instanceof Error ? err.message : 'Error loading OPSEC');
     }
   }, [isUnlocked, addLog]);
 
   const refreshEnvCheck = useCallback(async () => {
     if (!isUnlocked) return;
+    const isCurrentSession = sessionGuardRef.current.capture();
     try {
       const data = await c2Api.getEnvCheck();
+      if (!isCurrentSession()) return;
       setEnvWarnings(data.warnings || []);
     } catch {
+      if (!isCurrentSession()) return;
       setEnvWarnings([]);
     }
   }, [isUnlocked]);
 
   const refreshWifiCaptures = useCallback(async () => {
     if (!isUnlocked) return;
+    const isCurrentSession = sessionGuardRef.current.capture();
     try {
       const data = await c2Api.getWifiCaptures();
+      if (!isCurrentSession()) return;
       setWifiCaptures(data.captures || []);
     } catch {
       // ignore if Wi-Fi capture directory is unavailable
@@ -382,8 +400,10 @@ export const C2Provider: React.FC<{ children: React.ReactNode }> = ({ children }
 
   const refreshWifiClients = useCallback(async () => {
     if (!isUnlocked) return;
+    const isCurrentSession = sessionGuardRef.current.capture();
     try {
       const data = await c2Api.getWifiClients();
+      if (!isCurrentSession()) return;
       setWifiClients(data.clients || []);
     } catch {
       // ignore if no previous scan
@@ -392,8 +412,10 @@ export const C2Provider: React.FC<{ children: React.ReactNode }> = ({ children }
 
   const refreshWifiIfaces = useCallback(async () => {
     if (!isUnlocked) return;
+    const isCurrentSession = sessionGuardRef.current.capture();
     try {
       const data = await c2Api.getWifiIfaces();
+      if (!isCurrentSession()) return;
       setWifiIfaces(data.interfaces || []);
     } catch {
       // ignore

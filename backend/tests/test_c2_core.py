@@ -12,6 +12,22 @@ from app.c2.modules.exploits import ExploitSearcher
 from app.c2.modules.portscan import COMMON_PORTS, parse_ports
 from app.config import settings
 
+
+def test_camera_credentials_do_not_leak_to_console(monkeypatch, capsys):
+    from app.c2.modules.cameras import credential_tester
+
+    monkeypatch.setattr(credential_tester, 'DEFAULT_CREDENTIALS', [('test-user', 'test-secret', 'fixture')])
+    tester = credential_tester.CredentialTester('example.invalid')
+    monkeypatch.setattr(tester, '_try_rtsp_auth', lambda *args: True)
+    monkeypatch.setattr(tester, '_try_http_basic', lambda *args: True)
+    findings = tester.run()
+    output = capsys.readouterr().out
+
+    assert 'test-user' not in output
+    assert 'test-secret' not in output
+    assert len(findings) == 2
+    assert all(finding['evidence'][0]['pass'] == 'test-secret' for finding in findings)
+
 try:
     from scapy.all import IP as _SCAPY_IP, Raw as _SCAPY_Raw, TCP as _SCAPY_TCP
     _HAS_SCAPY = True

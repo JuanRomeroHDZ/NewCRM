@@ -251,6 +251,7 @@ async def restore_encrypted_vault(
 
     # 1. Restore Emails
     email_map = {}
+    recovery_links = []
     for e_data in vault_dump.get("emails", []):
         target_id = e_data.get("id")
         existing = await db.get(EmailAccount, target_id) if target_id else None
@@ -259,14 +260,26 @@ async def restore_encrypted_vault(
             existing = res.scalar_one_or_none()
 
         filtered = {k: v for k, v in e_data.items() if k in EMAIL_FIELDS}
+        # Resolve recovery links after every email has a destination id. An
+        # address match may map a backup id to a different existing record.
+        has_recovery = "recovery_email_id" in filtered
+        recovery_id = filtered.pop("recovery_email_id", None)
         if existing:
             for k, v in filtered.items():
                 setattr(existing, k, v)
-            email_map[target_id] = existing.id
+            restored_email = existing
         else:
             new_e = EmailAccount(id=target_id or None, **filtered)
             db.add(new_e)
-            email_map[target_id] = new_e.id
+            restored_email = new_e
+        await db.flush()
+        if target_id:
+            email_map[target_id] = restored_email.id
+        if has_recovery:
+            recovery_links.append((restored_email, recovery_id))
+
+    for restored_email, recovery_id in recovery_links:
+        restored_email.recovery_email_id = email_map.get(recovery_id, recovery_id)
 
     # 2. Restore Payments
     pay_map = {}
@@ -281,6 +294,7 @@ async def restore_encrypted_vault(
         else:
             new_p = PaymentMethod(id=target_id or None, **filtered)
             db.add(new_p)
+            await db.flush()
             pay_map[target_id] = new_p.id
 
     # 3. Restore Platforms

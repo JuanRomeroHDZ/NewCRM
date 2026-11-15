@@ -266,7 +266,7 @@ async def bootstrap_initial_account(
     db: AsyncSession = Depends(get_db),
     _: bool = Depends(require_vault_unlocked),
 ):
-    """Creates one ordinary seller account after the owner unlocks the vault."""
+    """Create the initial owner after vault authentication, exactly once."""
     claim_key = "auth.initial_owner_claimed"
     if not await _initial_account_is_available(db):
         raise HTTPException(status_code=409, detail="La creación inicial de cuenta ya no está disponible.")
@@ -289,7 +289,7 @@ async def bootstrap_initial_account(
         category="security",
         value_json='"claimed"',
         is_encrypted=False,
-        description="Marca única de creación de la primera cuenta ordinaria.",
+        description="Marca única de creación de la cuenta propietaria inicial.",
     )
     db.add(claim)
     try:

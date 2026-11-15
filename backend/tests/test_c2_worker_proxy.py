@@ -84,6 +84,21 @@ async def test_proxy_auth_status_and_forwarding(client, worker):
 
 
 @pytest.mark.asyncio
+async def test_worker_secret_mismatch_is_not_reported_as_user_or_vault_failure(client, worker, monkeypatch):
+    app.dependency_overrides[require_vault_unlocked] = lambda: True
+    app.dependency_overrides[c2_proxy.owner] = lambda: True
+    try:
+        monkeypatch.setenv('C2_WORKER_SECRET', 'b' * 48)
+        response = await client.get('/api/v1/c2/meta')
+        assert response.status_code == 503
+        assert 'conexión interna' in response.json()['detail']
+        assert 'b' * 48 not in response.text
+    finally:
+        app.dependency_overrides.pop(require_vault_unlocked, None)
+        app.dependency_overrides.pop(c2_proxy.owner, None)
+
+
+@pytest.mark.asyncio
 async def test_websocket_requires_sessions_and_relays_worker_events(worker, monkeypatch):
     from fastapi.testclient import TestClient
     from starlette.websockets import WebSocketDisconnect

@@ -103,7 +103,7 @@ export const VaultUnlockModal: React.FC = () => {
                 {isSetup ? 'Desbloquear bóveda' : 'Inicializar bóveda'}
               </h2>
               <p className="text-xs text-obsidian-muted">
-                Acceso cifrado para operaciones C2 y writeups
+                La bóveda protege tus datos. Tu cuenta de equipo utiliza una contraseña independiente.
               </p>
             </div>
           </div>
@@ -205,8 +205,8 @@ export const VaultUnlockModal: React.FC = () => {
 
           <p className="text-[11px] text-obsidian-muted leading-relaxed">
             {isSetup
-              ? `Ingresa la llave que definiste al inicializar la bóveda. Se bloqueará automáticamente tras ${timeoutMinutes} min de inactividad.`
-              : `Esta llave cifra localmente tus credenciales, registros operativos, informes y el laboratorio C2. No tiene recuperación si la olvidas (auto-bloqueo: ${timeoutMinutes} min).`}
+              ? `Ingresa la contraseña que definiste para la bóveda. Se bloqueará automáticamente tras ${timeoutMinutes} min de inactividad. Para Red y Lab también necesitas iniciar sesión con una cuenta autorizada.`
+              : `Crea una contraseña distinta de la que usarás para tu cuenta de equipo. Guárdala en un lugar seguro: no se puede recuperar si la olvidas. La bóveda se bloqueará tras ${timeoutMinutes} min de inactividad.`}
           </p>
 
           <div className="pt-2 flex flex-wrap items-center justify-end gap-2.5">

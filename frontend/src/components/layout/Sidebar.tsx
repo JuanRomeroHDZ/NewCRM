@@ -260,7 +260,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onCloseMobile })
             const listId = `nav-group-${group.id}`;
             return (
               <li key={group.id}>
-                {!compact && <button type="button" aria-expanded={expanded} aria-controls={listId} onClick={() => setExpandedGroups((current) => ({ ...current, [group.id]: !current[group.id] }))} className={`flex min-h-9 w-full items-center gap-2 rounded-lg px-3 text-[10px] font-semibold uppercase tracking-[0.12em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 ${groupIsActive ? 'text-indigo-200' : 'text-obsidian-muted hover:bg-obsidian-surface hover:text-white'}`}>
+                {!compact && <button type="button" aria-expanded={expanded} aria-controls={listId} onClick={() => setExpandedGroups((current) => ({ ...current, [group.id]: !current[group.id] }))} className={`flex min-h-11 w-full items-center gap-2 rounded-lg px-3 text-[11px] font-semibold uppercase tracking-[0.1em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 lg:min-h-9 ${groupIsActive ? 'text-indigo-200' : 'text-obsidian-muted hover:bg-obsidian-surface hover:text-white'}`}>
                   <GroupIcon size={14} className="shrink-0" />
                   <span className="min-w-0 flex-1 truncate text-left">{group.label}</span>
                   <ChevronDown size={13} className={`shrink-0 transition-transform ${expanded ? '' : '-rotate-90'}`} />
@@ -273,15 +273,15 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onCloseMobile })
                     return (
                       <React.Fragment key={item.id}>
                         {!compact && item.subgroup && (
-                          <li role="presentation" className="px-3 pt-2 pb-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-obsidian-muted/75">
+                          <li role="presentation" className="px-3 pt-2 pb-0.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-obsidian-muted">
                             {item.subgroup}
                           </li>
                         )}
                         <li>
-                          <button type="button" onClick={() => selectSection(item)} aria-current={active ? 'page' : undefined} title={compact ? item.label : undefined} aria-label={compact ? item.label : undefined} className={`flex min-h-10 w-full items-center rounded-lg text-left text-xs font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 ${compact ? 'justify-center px-2' : 'gap-2.5 px-3'} ${active ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-950/30' : 'text-obsidian-text hover:bg-obsidian-surface hover:text-white'}`}>
+                          <button type="button" onClick={() => selectSection(item)} aria-current={active ? 'page' : undefined} title={locked ? `${item.label}: requiere desbloquear la bóveda` : compact ? item.label : undefined} aria-label={locked ? `${item.label}. Requiere desbloquear la bóveda` : compact ? item.label : undefined} className={`flex min-h-11 w-full items-center rounded-lg text-left text-xs font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 lg:min-h-10 ${compact ? 'justify-center px-2' : 'gap-2.5 px-3'} ${active ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-950/30' : 'text-obsidian-text hover:bg-obsidian-surface hover:text-white'}`}>
                             <Icon size={15} className={`shrink-0 ${active ? 'text-white' : 'text-obsidian-muted'}`} />
                             {!compact && <span className="min-w-0 flex-1 truncate">{item.label}</span>}
-                            {!compact && locked && <Lock size={11} className="shrink-0 text-amber-400/80" aria-label="Requiere desbloquear la bóveda" />}
+                            {!compact && locked && <Lock size={12} className="shrink-0 text-amber-400/80" aria-hidden="true" />}
                           </button>
                         </li>
                       </React.Fragment>
@@ -312,8 +312,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onCloseMobile })
             <div className="flex min-w-0 items-center gap-2">
               {isUnlocked ? <Unlock size={15} className="shrink-0 text-emerald-400" /> : <Lock size={15} className="shrink-0 text-obsidian-muted" />}
               <div className="min-w-0">
-                <div className="truncate text-[11px] font-semibold text-white">{isUnlocked ? 'Bóveda activa' : 'Bóveda bloqueada'}</div>
-                <div className="truncate font-mono text-[10px] text-obsidian-muted">{isUnlocked ? `Cierre ${formatTimer(remainingSeconds)}` : 'Acceso cifrado'}</div>
+                <div className="truncate text-xs font-semibold text-white">{isUnlocked ? 'Bóveda activa' : 'Bóveda bloqueada'}</div>
+                <div className="truncate font-mono text-[11px] text-obsidian-muted">{isUnlocked ? `Cierre ${formatTimer(remainingSeconds)}` : 'Acceso cifrado'}</div>
               </div>
             </div>
             <button type="button" onClick={toggleVault} className="min-h-[44px] lg:min-h-9 shrink-0 rounded-lg bg-obsidian-surface px-2.5 text-[10px] font-semibold text-white transition-colors hover:bg-obsidian-borderLight focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300">

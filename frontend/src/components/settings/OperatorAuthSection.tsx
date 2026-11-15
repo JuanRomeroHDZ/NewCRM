@@ -31,6 +31,9 @@ export const OperatorAuthSection: React.FC = () => {
   const [showPwdChangePwd, setShowPwdChangePwd] = useState(false);
   const [loginLoading, setLoginLoading] = useState(false);
   const [bootstrapAvailable, setBootstrapAvailable] = useState(false);
+  const [bootstrapStatusError, setBootstrapStatusError] = useState('');
+  const [bootstrapChecking, setBootstrapChecking] = useState(false);
+  const [bootstrapAttempt, setBootstrapAttempt] = useState(0);
   const [showBootstrapForm, setShowBootstrapForm] = useState(false);
   const [bootstrapError, setBootstrapError] = useState<string | null>(null);
   const [createUserError, setCreateUserError] = useState<string | null>(null);
@@ -122,6 +125,8 @@ export const OperatorAuthSection: React.FC = () => {
   useEffect(() => {
     if (!isUnlocked || loadingSession) {
       setBootstrapAvailable(false);
+      setBootstrapChecking(false);
+      setBootstrapStatusError('');
       setShowBootstrapForm(false);
       if (!isUnlocked) {
         setBootstrapPassword('');
@@ -130,17 +135,20 @@ export const OperatorAuthSection: React.FC = () => {
       return;
     }
     let active = true;
+    setBootstrapChecking(true);
+    setBootstrapStatusError('');
     api.getBootstrapStatus()
       .then(({ available }) => {
         if (active) setBootstrapAvailable(available);
       })
       .catch(() => {
-        if (active) setBootstrapAvailable(false);
-      });
+        if (active) { setBootstrapAvailable(false); setBootstrapStatusError('No se pudo comprobar si ya existe una cuenta de propietario.'); }
+      })
+      .finally(() => { if (active) setBootstrapChecking(false); });
     return () => {
       active = false;
     };
-  }, [isUnlocked, currentUser, loadingSession]);
+  }, [isUnlocked, currentUser, loadingSession, bootstrapAttempt]);
 
   const handleOperatorLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -402,8 +410,24 @@ export const OperatorAuthSection: React.FC = () => {
       </div>
 
       <p className="text-xs text-obsidian-muted leading-relaxed">
-        Usa tu cuenta para registrar quién realiza acciones en ventas y otras áreas. La contraseña de acceso a la bóveda es independiente.
+        La contraseña de la bóveda desbloquea los datos cifrados. La cuenta del equipo tiene otra contraseña y determina tus permisos, incluido el acceso de propietario a Red y Lab.
       </p>
+
+      <div aria-label="Pasos de acceso" className="rounded-lg border border-obsidian-border bg-obsidian-bg/50 p-3 text-xs leading-relaxed text-obsidian-muted">
+        <p className="font-semibold text-white">Pasos para comenzar</p>
+        <ol className="mt-2 list-inside list-decimal space-y-1">
+          <li>Bóveda: {isUnlocked ? 'desbloqueada' : 'crea o desbloquea la bóveda con su contraseña'}.</li>
+          <li>Cuenta: {loadingSession ? 'comprobando sesión' : currentUser ? `sesión iniciada como ${currentUser.username} (${ROLE_LABELS[currentUser.role] || currentUser.role})` : bootstrapChecking ? 'comprobando si puedes crear el propietario' : bootstrapStatusError ? 'estado de propietario no disponible' : bootstrapAvailable ? 'crea la cuenta de propietario más abajo' : 'inicia sesión con tu cuenta'}.</li>
+          <li>Contraseña de cuenta: {currentUser?.must_change_password ? 'cambia la contraseña temporal para continuar' : currentUser ? 'lista para usar' : 'cámbiala al iniciar sesión si es provisional'}.</li>
+        </ol>
+        {currentUser && currentUser.role !== 'owner' && <p className="mt-2">Red y Lab requiere una cuenta de propietario. Pide acceso al propietario de esta instalación.</p>}
+      </div>
+      {bootstrapStatusError && isUnlocked && !currentUser && (
+        <div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200">
+          <span>{bootstrapStatusError}</span>
+          <button type="button" onClick={() => setBootstrapAttempt((value) => value + 1)} className="min-h-11 rounded-md px-3 font-semibold underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300">Reintentar</button>
+        </div>
+      )}
 
       {sessionError && !loadingSession && (
         <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-200 flex flex-wrap items-center justify-between gap-2">

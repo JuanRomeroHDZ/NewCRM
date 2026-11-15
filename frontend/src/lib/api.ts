@@ -151,7 +151,7 @@ function buildAuthHeaders(extra?: Record<string, string>, includeJsonContentType
   return headers;
 }
 
-async function handleApiErrorResponse(endpoint: string, response: Response): Promise<never> {
+async function handleApiErrorResponse(endpoint: string, response: Response, requestHeaders: Record<string, string>): Promise<never> {
   const coreEndpoint = isCoreUserEndpoint(endpoint);
   if (coreEndpoint) {
     if (
@@ -159,7 +159,8 @@ async function handleApiErrorResponse(endpoint: string, response: Response): Pro
       !endpoint.startsWith('/auth/login') &&
       !endpoint.startsWith('/auth/change-password') &&
       !endpoint.startsWith('/auth/setup-2fa') &&
-      !endpoint.startsWith('/auth/verify-2fa')
+      !endpoint.startsWith('/auth/verify-2fa') &&
+      (requestHeaders.Authorization || '') === (currentUserToken ? `Bearer ${currentUserToken}` : '')
     ) {
       setApiUserToken(null);
       if (typeof window !== 'undefined') {
@@ -169,7 +170,8 @@ async function handleApiErrorResponse(endpoint: string, response: Response): Pro
   } else if (
     response.status === 401 &&
     !endpoint.startsWith('/auth/unlock') &&
-    !endpoint.startsWith('/auth/status')
+    !endpoint.startsWith('/auth/status') &&
+    (requestHeaders['X-Vault-Token'] || '') === (currentVaultToken || '')
   ) {
     setApiVaultToken(null);
     if (typeof window !== 'undefined') {
@@ -217,7 +219,7 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
   });
 
   if (!response.ok) {
-    await handleApiErrorResponse(endpoint, response);
+    await handleApiErrorResponse(endpoint, response, headers);
   }
   if (response.status === 204) {
     return undefined as T;
@@ -229,7 +231,7 @@ async function requestPage<T>(endpoint: string, offset: number, limit: number): 
   const headers = buildAuthHeaders(undefined, true);
   const response = await fetchApiResponse(`${API_BASE}${endpoint}`, { headers });
   if (!response.ok) {
-    await handleApiErrorResponse(endpoint, response);
+    await handleApiErrorResponse(endpoint, response, headers);
   }
   const items = await readApiJson<T[]>(response);
   const totalValue = response.headers.get('X-Total-Count');
@@ -252,7 +254,7 @@ async function requestBlobResponse(endpoint: string, options: RequestInit = {}):
     headers,
   });
   if (!response.ok) {
-    await handleApiErrorResponse(endpoint, response);
+    await handleApiErrorResponse(endpoint, response, headers);
   }
   const disposition = response.headers.get('Content-Disposition') || '';
   const nameMatch = disposition.match(/filename="([^"]+)"/);
@@ -672,7 +674,7 @@ export const api = {
       body: form,
     });
     if (!response.ok) {
-      await handleApiErrorResponse(endpoint, response);
+      await handleApiErrorResponse(endpoint, response, headers);
     }
     return readApiJson<WriteupAsset>(response);
   },

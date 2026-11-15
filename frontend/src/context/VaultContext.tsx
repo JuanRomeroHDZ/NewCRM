@@ -496,13 +496,14 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const lockVault = async () => {
+    let serverRevoked = true;
     try {
       await api.lockVault();
-    } catch (_) {}
+    } catch (_) { serverRevoked = false; }
     setApiVaultToken(null);
     setIsUnlocked(false);
     setRemainingSeconds(0);
-    showToast('Bóveda bloqueada.', 'info');
+    showToast(serverRevoked ? 'Bóveda bloqueada.' : 'Bóveda bloqueada en este navegador; no se pudo confirmar el cierre de la sesión en el servidor.', serverRevoked ? 'info' : 'warning');
     triggerDataReload();
   };
 
