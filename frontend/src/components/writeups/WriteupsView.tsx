@@ -9,6 +9,7 @@ import {
   Copy,
   CopyPlus,
   Download,
+  MoreVertical,
   Film,
   GitCompare,
   History,
@@ -54,6 +55,8 @@ import { PentestWhiteboard, type WhiteboardRecoveryDraft } from './PentestWhiteb
 import { WriteupExportModal } from './WriteupExportModal';
 import { WriteupMarkdownSplitEditor } from './WriteupMarkdownSplitEditor';
 import { MarkdownRichPreview } from './MarkdownRichPreview';
+import { WriteupCorrelationsPanel } from './WriteupCorrelationsPanel';
+import { correlateWriteup } from '../../lib/writeupCorrelations';
 import { MAX_REPORT_TEXT_LENGTH, MAX_REPORT_TITLE_LENGTH } from './writeupLimits';
 import {
   calculateCvss31,
@@ -186,6 +189,7 @@ export const WriteupsView: React.FC = () => {
   const workspaceModeManuallySelectedRef = useRef(false);
   const reportListManuallyToggledRef = useRef(false);
   const [showMetadata, setShowMetadata] = useState(false);
+  const [showCorrelations, setShowCorrelations] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   const [severityFilter, setSeverityFilter] = useState<string>('');
@@ -1405,6 +1409,16 @@ export const WriteupsView: React.FC = () => {
   }, [dirty, detail?.id, isUnlocked, editVersion]);
 
   useEffect(() => {
+    const pending = dirty || Object.keys(unsavedBoardIds).length > 0;
+    let message = '';
+    if (saveError) message = `No se pudo guardar: ${saveError}`;
+    else if (saving) message = 'Guardando…';
+    else if (pending) message = localDraftError ? 'Copia local no disponible' : localDraftSavedAt ? `Copia local ${localDraftSavedAt.toLocaleTimeString(systemLocale || 'es-MX', { hour: '2-digit', minute: '2-digit' })} · pendiente de sincronizar` : 'Guardando copia local cifrada…';
+    else if (lastSavedAt) message = `Guardado a las ${lastSavedAt.toLocaleTimeString(systemLocale || 'es-MX', { hour: '2-digit', minute: '2-digit' })}`;
+    window.dispatchEvent(new CustomEvent('writeup_saved_notice', { detail: { message, persistent: Boolean(saveError || saving || pending) } }));
+  }, [dirty, unsavedBoardIds, saving, saveError, localDraftError, localDraftSavedAt, lastSavedAt, systemLocale]);
+
+  useEffect(() => {
     if (!dirty || !detail || !isUnlocked) return;
     const interval = window.setInterval(() => autoSaveRef.current(), 10_000);
     return () => window.clearInterval(interval);
@@ -1939,6 +1953,9 @@ export const WriteupsView: React.FC = () => {
     redact_for_client: boolean;
     include_watermark: boolean;
     include_toc: boolean;
+    toc_depth?: number;
+    include_figure_index?: boolean;
+    include_table_index?: boolean;
     watermark_text?: string;
     rendered_diagrams?: Record<string, string>;
   }) => {
@@ -1983,6 +2000,9 @@ export const WriteupsView: React.FC = () => {
     cveId.trim() || null,
     targetScope.trim() ? targetScope.trim().slice(0, 24) : null,
   ].filter(Boolean);
+  const reportCorrelations = useMemo(() => detail ? correlateWriteup(detail, items, {
+    cveId, cweId, targetScope, prospectId, projectId, findings,
+  }) : [], [detail, items, cveId, cweId, targetScope, prospectId, projectId, findings]);
 
   return (
     <div className="writeups-view relative flex min-h-[calc(100dvh-4.5rem)] min-w-0 flex-col gap-3 overflow-x-clip p-2 sm:p-3 lg:h-[calc(100dvh-4.5rem)] lg:min-h-0 lg:flex-row lg:p-4">
@@ -2086,9 +2106,9 @@ export const WriteupsView: React.FC = () => {
                     onClick={() => handleSelectWriteup(item.id)}
                     aria-current={selected ? 'true' : undefined}
                     aria-label={`${item.title}, severidad ${SEVERITY_LABEL[item.severity] || item.severity}, estado ${STATUS_LABEL[item.status] || item.status}, alcance ${item.target_scope || 'no indicado'}`}
-                    className={`w-full rounded-xl border p-2.5 text-left text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300 ${
+                    className={`w-full rounded-xl border p-2.5 text-left text-white transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${
                       SEVERITY_CARD[item.severity] || SEVERITY_CARD.media
-                    } ${selected ? 'ring-2 ring-indigo-400 ring-offset-1 ring-offset-slate-900' : ''}`}
+                    } ${selected ? '!border-emerald-400' : ''}`}
                   >
                     <div className="flex items-center justify-between gap-1 mb-1">
                       <span className="text-[10px] font-medium text-white/80">{STATUS_LABEL[item.status] || item.status}</span>
@@ -2191,14 +2211,14 @@ export const WriteupsView: React.FC = () => {
         ) : (
           <>
             {/* Compact Responsive Header Bar */}
-            <div className="p-2.5 sm:p-3 border-b border-slate-800 bg-slate-900/95 space-y-2">
+            <div className="writeup-header-container p-2.5 sm:p-3 border-b border-slate-800 bg-slate-900/95 space-y-2">
               <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
                   onClick={() => handleManualReportListChange()}
                   title={showList ? 'Ocultar lista' : 'Mostrar lista'}
                   aria-label={showList ? 'Ocultar lista' : 'Mostrar lista'}
-                  className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 shrink-0"
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 shrink-0"
                 >
                   {showList ? <PanelLeftClose className="w-4 h-4" /> : <PanelLeftOpen className="w-4 h-4" />}
                 </button>
@@ -2212,7 +2232,7 @@ export const WriteupsView: React.FC = () => {
                   }}
                   aria-label="Título del informe"
                   maxLength={MAX_REPORT_TITLE_LENGTH}
-                  className="min-w-[120px] max-w-full flex-1 basis-40 bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-sm font-bold text-white"
+                  className="writeup-header-title h-10 min-w-[120px] w-48 max-w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-sm font-bold text-white"
                 />
 
                 <div className="flex min-w-0 flex-wrap items-center gap-1.5">
@@ -2234,7 +2254,7 @@ export const WriteupsView: React.FC = () => {
                       value={activeBoard?.id || ''}
                       onChange={(e) => void handleSelectBoard(e.target.value)}
                       aria-label="Seleccionar pizarra"
-                      className="min-h-9 max-w-[160px] rounded-lg border border-slate-800 bg-slate-950 px-2 py-1 text-slate-200"
+                      className="h-10 max-w-[160px] rounded-lg border border-slate-800 bg-slate-950 px-2 py-1 text-slate-200"
                     >
                       {detail.boards.map((b) => (
                         <option key={b.id} value={b.id}>{b.title}</option>
@@ -2244,7 +2264,7 @@ export const WriteupsView: React.FC = () => {
                       type="button"
                       onClick={handleCreateBoard}
                       aria-label="Crear nueva pizarra"
-                      className="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-indigo-300 flex items-center gap-1"
+                      className="h-10 px-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center gap-1"
                       title="Nueva pizarra"
                     >
                       <Plus className="w-3.5 h-3.5" />
@@ -2256,19 +2276,32 @@ export const WriteupsView: React.FC = () => {
 
                 <button
                   type="button"
+                  onClick={() => setShowCorrelations((visible) => !visible)}
+                  aria-expanded={showCorrelations}
+                  aria-controls="writeup-correlations-panel"
+                  aria-label="Mostrar u ocultar correlaciones"
+                  className={`writeup-header-compact-button inline-flex items-center gap-1 rounded-lg border px-2 py-1.5 text-xs ${showCorrelations ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200' : 'border-slate-700 bg-slate-800 text-slate-300 hover:text-white'}`}
+                  title="Detectar coincidencias con otros informes"
+                >
+                  <GitCompare className="h-3.5 w-3.5" aria-hidden="true" />
+                  <span className="writeup-header-action-label">Correlaciones</span>
+                </button>
+
+                <button
+                  type="button"
                   onClick={() => setShowMetadata((v) => !v)}
                   aria-label="Mostrar u ocultar detalles del informe"
                   aria-expanded={showMetadata}
-                  className={`px-2 py-1.5 rounded-lg text-xs flex items-center gap-1 border ${
-                    showMetadata ? 'bg-indigo-600/20 border-indigo-500/40 text-indigo-200' : 'bg-slate-800 border-slate-700 text-slate-300'
+                  className={`writeup-header-compact-button px-2 py-1.5 rounded-lg text-xs flex items-center gap-1 border ${
+                    showMetadata ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-200' : 'bg-slate-800 border-slate-700 text-slate-300'
                   }`}
                   title="Mostrar u ocultar detalles del informe y sus relaciones"
                 >
                   <SlidersHorizontal className="w-3.5 h-3.5" />
-                    <span className="hidden md:inline">Detalles</span>
+                    <span className="writeup-header-action-label">Detalles</span>
                 </button>
 
-                <div className="flex max-w-full flex-wrap items-center justify-end gap-1 ml-auto">
+                <div className="writeup-header-actions flex max-w-full flex-wrap items-center justify-end gap-1 ml-auto">
                   {staleCount > 0 && (
                     <span className="px-1.5 py-1 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[11px] flex items-center gap-1" title="Cita(s) desactualizada(s)">
                       <AlertTriangle className="w-3.5 h-3.5" />
@@ -2281,16 +2314,15 @@ export const WriteupsView: React.FC = () => {
                     disabled={saving}
                     onClick={() => void handleSaveWriteup(false)}
                     aria-label={saving ? 'Guardando informe' : dirty ? 'Guardar cambios del informe' : 'Informe guardado'}
-                    className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 ${
+                    className={`writeup-header-compact-button h-10 w-10 shrink-0 justify-center rounded-lg text-xs font-semibold flex items-center ${
                       dirty ? 'bg-indigo-600 hover:bg-indigo-500 text-white' : 'bg-slate-800 hover:bg-slate-700 text-slate-200'
                     }`}
-                    title="Guardar cambios protegidos"
+                    title={saving ? 'Guardando informe' : dirty ? 'Guardar cambios del informe' : 'Informe guardado'}
                   >
                     <Save className="w-3.5 h-3.5" />
-                    <span>{saving ? 'Guardando…' : dirty ? 'Guardar*' : 'Guardado'}</span>
                   </button>
                   <span role="status" className={saveError ? 'text-xs text-rose-300' : 'text-xs text-slate-400'}>
-                  {saveError ? `No se pudo guardar: ${saveError}` : lastSavedAt && !dirty && Object.keys(unsavedBoardIds).length === 0 ? `Guardado a las ${lastSavedAt.toLocaleTimeString(systemLocale || 'es-MX', { hour: '2-digit', minute: '2-digit' })}` : dirty || Object.keys(unsavedBoardIds).length > 0 ? localDraftError ? 'Copia local no disponible; vuelve a la pizarra para reintentar' : localDraftSavedAt ? `Copia cifrada guardada a las ${localDraftSavedAt.toLocaleTimeString(systemLocale || 'es-MX', { hour: '2-digit', minute: '2-digit' })}; autoguardado activado` : 'Guardando copia local cifrada…' : ''}
+                  {saveError ? `No se pudo guardar: ${saveError}` : localDraftError ? 'Copia local no disponible; vuelve a la pizarra para reintentar' : ''}
                   </span>
                   {recoveryCandidates.length > 0 && (
                     <button type="button" onClick={() => setShowRecovery(true)} className="rounded-lg border border-amber-700/70 bg-amber-950/50 px-3 py-2 text-xs text-amber-100 hover:bg-amber-900/60" aria-label={`Ver ${recoveryCandidates.length} copias locales recuperables`}>
@@ -2308,10 +2340,11 @@ export const WriteupsView: React.FC = () => {
                     type="button"
                     disabled={revisionLoading}
                     onClick={() => void openRevisionHistory()}
-                    className="px-2 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-200 text-xs flex items-center gap-1"
+                    className="writeup-header-compact-button h-10 w-10 shrink-0 justify-center rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-200 text-xs flex items-center"
+                    aria-label="Abrir historial del informe"
                     title="Explorar historial de versiones"
                   >
-                    <History className="w-3.5 h-3.5" /> Historial
+                    <History className="w-4 h-4" aria-hidden="true" />
                   </button>
 
 
@@ -2319,15 +2352,14 @@ export const WriteupsView: React.FC = () => {
                     type="button"
                     onClick={() => setShowExportModal(true)}
                     aria-label="Exportar informe"
-                    className="px-2.5 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold flex items-center gap-1"
+                    className="writeup-header-compact-button h-10 w-10 shrink-0 justify-center rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center"
                     title="Exportar el informe"
                   >
-                    <Download className="w-3.5 h-3.5" />
-                    <span className="hidden sm:inline">Exportar</span>
+                    <Download className="w-4 h-4" aria-hidden="true" />
                   </button>
 
                   <details className="relative">
-                    <summary className="flex min-h-9 cursor-pointer list-none items-center rounded-lg bg-slate-800 px-3 text-xs text-slate-200 hover:bg-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300">Más acciones <ChevronDown className="ml-1 h-3.5 w-3.5" aria-hidden="true" /></summary>
+                    <summary data-caret="manual" aria-label="Más acciones del informe" title="Más acciones del informe" className="writeup-header-more-summary flex h-10 w-10 cursor-pointer list-none items-center justify-center rounded-lg bg-slate-800 text-xs text-slate-200 hover:bg-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 [&::-webkit-details-marker]:hidden"><MoreVertical className="h-4 w-4" aria-hidden="true" /></summary>
                     <div className="absolute right-0 z-30 mt-1 grid min-w-48 gap-1 rounded-lg border border-slate-700 bg-slate-900 p-2 shadow-xl">
                   <button
                     type="button"
@@ -2494,6 +2526,18 @@ export const WriteupsView: React.FC = () => {
 
             </div>
 
+            <div id="writeup-correlations-panel" hidden={!showCorrelations}>
+              <WriteupCorrelationsPanel
+                correlations={reportCorrelations}
+                loadedCount={items.length}
+                totalCount={total}
+                hasMore={hasMore}
+                loadingMore={loadingMore}
+                onOpenReport={(reportId) => void handleSelectWriteup(reportId)}
+                onLoadMore={() => void handleLoadMore()}
+              />
+            </div>
+
             {/* Active Workspace Area (scrollable gracefully on mobile/medium, fixed split on desktop) */}
             <div className="flex-1 min-h-0 p-2 sm:p-3 overflow-y-auto lg:overflow-hidden">
               {mode === 'markdown' && (
@@ -2546,7 +2590,7 @@ export const WriteupsView: React.FC = () => {
               )}
 
               {mode === 'dual' && (
-                <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 h-full min-h-0">
+                <div className="grid grid-cols-1 grid-rows-[minmax(18rem,1fr)_minmax(18rem,1fr)] 2xl:grid-cols-2 2xl:grid-rows-1 gap-3 h-full min-h-0 overflow-y-auto 2xl:overflow-y-hidden">
                   <WriteupMarkdownSplitEditor
                     key={detail.id}
                     markdown={markdown}
@@ -2623,7 +2667,7 @@ export const WriteupsView: React.FC = () => {
                                 <svg width="36" height="40" viewBox="0 0 36 40" aria-hidden="true">
                                   <rect x="6" y={40 - barHeight} width="24" height={barHeight} rx="4" fill={SEVERITY_BAR_COLOR[sevKey]} fillOpacity="0.85" />
                                 </svg>
-                                <span className="text-[10px] uppercase tracking-wide text-slate-400 truncate max-w-full">{sevKey}</span>
+                                <span className="max-w-full truncate text-xs font-medium text-slate-300">{sevKey}</span>
                               </div>
                             );
                           })}
@@ -2946,8 +2990,8 @@ export const WriteupsView: React.FC = () => {
                 <div className="h-full overflow-y-auto grid grid-cols-1 lg:grid-cols-2 gap-4 pr-1">
                   <div className="space-y-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-                        Evidencias multimedia (GIF / Video / WebP)
+                      <h3 className="text-xs font-semibold text-slate-300">
+                        Evidencias multimedia (GIF, video y WebP)
                       </h3>
                       <div className="flex items-center gap-2 text-xs">
                         <label className="flex items-center gap-1 text-[11px] text-slate-300 cursor-pointer">
@@ -3065,7 +3109,7 @@ export const WriteupsView: React.FC = () => {
                   <div className="space-y-4">
                     {/* Citations & Stale Diff Panel */}
                     <div className="space-y-2">
-                      <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                      <h3 className="text-xs font-semibold text-slate-300">
                         Citas del informe en la pizarra ({detail.citations.length})
                       </h3>
                       {detail.citations.length === 0 ? (
@@ -3110,7 +3154,7 @@ export const WriteupsView: React.FC = () => {
                     </div>
 
                     <div className="space-y-2">
-                      <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">Historial de revisiones</h3>
+                      <h3 className="text-xs font-semibold text-slate-300">Historial de revisiones</h3>
                       {revisions.length === 0 ? (
                         <p className="text-xs text-slate-400">Guarda una revisión desde la parte superior para poder restaurarla después.</p>
                       ) : (
@@ -3149,7 +3193,7 @@ export const WriteupsView: React.FC = () => {
                     </div>
 
                     <div className="space-y-2">
-                      <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">Auditoría de exportaciones</h3>
+                      <h3 className="text-xs font-semibold text-slate-300">Auditoría de exportaciones</h3>
                       {detail.export_logs.length === 0 ? (
                         <EmptyState
                           icon={Download}
@@ -3438,7 +3482,7 @@ export const WriteupsView: React.FC = () => {
                 {revisionTree.map(([key, group], index) => <details key={key} open={index === 0} className="mt-2">
                   <summary className="cursor-pointer rounded px-2 py-2 text-xs font-medium text-slate-200 hover:bg-slate-800">{group.label} <span className="text-slate-500">({group.revisions.length})</span></summary>
                   <div className="mt-1 space-y-1">
-                    {group.revisions.map(rev => <button key={rev.id} type="button" onClick={() => void selectRevision(rev)} aria-current={rev.id === diffRevision?.id ? 'true' : undefined} className={`w-full rounded border px-2 py-2 text-left text-xs ${rev.id === diffRevision?.id ? 'border-indigo-400/60 bg-indigo-950/30 text-white shadow-sm shadow-indigo-950/30' : 'border-slate-800 text-slate-300 hover:border-slate-700 hover:bg-slate-800'}`}>
+                    {group.revisions.map(rev => <button key={rev.id} type="button" onClick={() => void selectRevision(rev)} aria-current={rev.id === diffRevision?.id ? 'true' : undefined} className={`w-full rounded border px-2 py-2 text-left text-xs ${rev.id === diffRevision?.id ? 'border-emerald-700/50 bg-emerald-950/30 text-white' : 'border-slate-800 text-slate-300 hover:border-slate-700 hover:bg-slate-800'}`}>
                       <span className="block font-medium">v{rev.revision_number} · {rev.change_note || 'Revisión'}</span>
                       <span className="mt-1 block text-slate-400">{rev.created_by_name || 'Sistema'} · {formatApiDateTime(rev.created_at, systemLocale || 'es-MX')}</span>
                     </button>)}

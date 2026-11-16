@@ -320,7 +320,7 @@ export const SubscriptionsLists: React.FC<SubscriptionsListsProps> = ({
                     </div>
                   </div>
                   <details className="group mt-1.5">
-                    <summary className="inline-flex min-h-8 cursor-pointer list-none items-center gap-1.5 text-[10px] text-indigo-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400 [&::-webkit-details-marker]:hidden">
+                    <summary data-caret="manual" className="inline-flex min-h-8 cursor-pointer list-none items-center gap-1.5 text-[10px] text-indigo-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400 [&::-webkit-details-marker]:hidden">
                       <span>Ver detalles</span>
                       <ChevronDown size={12} aria-hidden="true" className="transition-transform group-open:rotate-180" />
                     </summary>

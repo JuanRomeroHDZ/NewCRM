@@ -39,7 +39,7 @@ export const DashboardMetrics: React.FC<DashboardMetricsProps> = ({
       <div className="mb-1.5 flex items-center justify-between gap-2 text-obsidian-muted">
         <span className="text-xs font-medium">Gasto mensual</span>
       </div>
-      <div className="break-words font-mono text-lg font-bold tracking-tight text-white sm:text-xl">
+      <div className="break-words font-mono text-lg font-bold tracking-tight tabular-nums text-white sm:text-xl">
         ${formatAmount(monthlyMXN)} <span className="text-xs font-sans text-obsidian-muted">MXN</span>
       </div>
       <div className="mt-1 break-words text-[10px] text-obsidian-muted sm:text-[11px]">
@@ -51,7 +51,7 @@ export const DashboardMetrics: React.FC<DashboardMetricsProps> = ({
       <div className="mb-1.5 flex items-center justify-between gap-2 text-obsidian-muted">
         <span className="text-xs font-medium">Ganancia del mes</span>
       </div>
-      <div className={`break-words font-mono text-lg font-bold tracking-tight sm:text-xl ${netMonthMXN >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+      <div className={`break-words font-mono text-lg font-bold tracking-tight tabular-nums sm:text-xl ${netMonthMXN >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
         {netMonthMXN >= 0 ? '+' : '-'}${formatAmount(Math.abs(netMonthMXN))}{' '}
         <span className="text-xs font-sans text-obsidian-muted">MXN</span>
       </div>
@@ -64,7 +64,7 @@ export const DashboardMetrics: React.FC<DashboardMetricsProps> = ({
       <div className="mb-1.5 flex items-center justify-between gap-2 text-obsidian-muted">
         <span className="text-xs font-medium">Acceso con correo</span>
       </div>
-      <div className="break-words font-mono text-lg font-bold tracking-tight text-white sm:text-xl">
+      <div className="break-words font-mono text-lg font-bold tracking-tight tabular-nums text-white sm:text-xl">
         {ssoPercentage}% <span className="text-xs font-sans text-obsidian-muted">del total</span>
       </div>
       <div className="mt-1 flex flex-wrap justify-between gap-x-2 gap-y-1 text-[10px] text-obsidian-muted sm:text-[11px]">
@@ -77,7 +77,7 @@ export const DashboardMetrics: React.FC<DashboardMetricsProps> = ({
       <div className="mb-1.5 flex items-center justify-between gap-2 text-obsidian-muted">
         <span className="text-xs font-medium">Correos protegidos</span>
       </div>
-      <div className="break-words font-mono text-lg font-bold tracking-tight text-white sm:text-xl">
+      <div className="break-words font-mono text-lg font-bold tracking-tight tabular-nums text-white sm:text-xl">
         {protectedEmailsCount} / {emailCount} <span className="text-xs font-sans text-obsidian-muted">con 2 pasos</span>
       </div>
       <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[11px] text-obsidian-muted">

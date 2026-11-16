@@ -3,6 +3,25 @@
   "detector": {
     "ignoreRules": [],
     "ignoreFiles": [],
-    "ignoreValues": []
+    "ignoreValues": [
+      {
+        "rule": "broken-image",
+        "value": "*",
+        "files": [
+          "frontend/src/components/writeups/pentestUtils.ts"
+        ],
+        "createdAt": "2026-11-16T07:50:23.770Z",
+        "reason": "Agent: detector matches literal <img> tags inside regexes that parse user-authored Markdown for the internal index; this utility does not render or emit broken image elements."
+      },
+      {
+        "rule": "codex-grid-background",
+        "value": "*",
+        "files": [
+          "frontend/src/index.css"
+        ],
+        "createdAt": "2026-11-16T07:58:05.742Z",
+        "reason": "Agent: preserve the user-visible Cuadrícula fina background option in Apariencia; this selectable preference is intentional and already part of the product."
+      }
+    ]
   }
 }

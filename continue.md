@@ -1,20 +1,20 @@
-# Continuación: informes y editor
+# Estado y pendientes reales
 
-## Estado al cerrar esta sesión
+Actualizado: 16 de noviembre de 2026.
 
-- Están publicados el encabezado de navegación contraída, la barra de herramientas sin saltos de fila y las etiquetas con colores y tamaños.
-- La portada formal está implementada en HTML, PDF y DOCX. Los formatos Markdown, ZIP, JSON, CSV y SARIF mantienen su estructura de datos.
-- La selección «Todas las herramientas» se comprobó visualmente en escritorio: la barra queda en una línea desplazable. La bóveda estaba desbloqueada en la pestaña del CRM.
-- Pasaron 57 pruebas de frontend, 19 pruebas de informes/configuración y la prueba de portada PDF/DOCX. El detector de diseño solo informó de la cuadrícula decorativa preexistente de la aplicación.
+## Implementado y comprobado
 
-## Pendiente de comprobación
+- El editor ofrece encabezados H1–H6 y 12 estilos de lista desde menús compactos; los desplegables de informe y pizarra muestran una flecha y abren paneles flotantes.
+- El índice interno organiza secciones, tablas e imágenes tanto en Markdown como en HTML. La exportación permite elegir profundidad del índice de secciones y añadir índices de tablas e imágenes; Word y Markdown incluyen esos índices.
+- La pizarra agrupa herramientas de dibujo, flechas, trazos y símbolos de red/seguridad en menús flotantes. Revisé el modo combinado con informe y pizarra después de recargar el servicio.
+- El globo de ayuda de Finanzas se muestra bajo su título y queda dentro de la pantalla.
+- La sesión autenticada continuó activa tras actualizar y recargar el frontend. Revisé Informes, Finanzas, Correo y servicios, Conexiones y los menús principales sin editar ni borrar registros.
+- `npm test` pasó: 15/15 archivos de prueba; las 322 pruebas de backend pasaron en la ejecución anterior. La compilación de producción actual terminó correctamente. El detector Impeccable no encontró hallazgos nuevos y `git diff --check` quedó limpio.
 
-1. Verificar en móvil y en escritorio que todas las herramientas se alcanzan con teclado y desplazamiento, y que la cabecera lateral se ve correctamente contraída y expandida.
-2. En un informe de prueba aislado, insertar etiquetas de cada color y tamaño, guardar, recargar y comprobar vista previa y exportaciones HTML, PDF y DOCX. No modificar ni eliminar los informes reales del usuario.
-3. Revisar visualmente las portadas exportadas en PDF y Word, incluyendo textos largos, clasificación y alcance censurado. Comprobar también el formato HTML.
-4. Completar la prueba anterior de pegar una captura nueva, guardar, recargar y confirmar que aparece en edición y vista previa.
-5. Revisar el comportamiento de etiquetas dentro de bloques de código con delimitadores alternativos y ajustar la sintaxis si es necesario sin alterar las anclas existentes `{#texto}`.
+## Verificaciones externas que aún no se pueden cerrar aquí
 
-## Contexto
+1. Confirmar el acceso desde una segunda PC de la red interna. La redirección HTTP a HTTPS está instalada; esta sesión no representa un cliente distinto.
+2. Probar el intervalo completo de inactividad configurado. Las pruebas automatizadas cubren expiración y renovación, pero esperar el intervalo real requiere dejar la aplicación inactiva durante ese tiempo.
+3. Probar funciones Wi‑Fi que necesitan una interfaz dedicada. No se conectó un adaptador USB ni se cambió el modo de la interfaz de red en uso; el límite está documentado en `Limites_hardware.md`.
 
-El usuario prefiere jade oscuro como color principal, rojo para seguridad, azul para infraestructura y jade para desarrollo; en contextos neutros usa blanco, dorado y negro. Mantener la bóveda y el guardado de informes. No solicitar contraseñas por chat. No intervenir la interfaz Wi‑Fi activa; las pruebas físicas pendientes están en `Limites_hardware.md`.
+No quedan implementaciones de código pendientes de esta lista. Conserva los informes y datos existentes; no limpiar mediante borrado de registros, volúmenes o archivos de usuario.

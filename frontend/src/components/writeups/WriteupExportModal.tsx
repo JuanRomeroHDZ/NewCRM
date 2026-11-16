@@ -11,6 +11,9 @@ interface WriteupExportModalProps {
     redact_for_client: boolean;
     include_watermark: boolean;
     include_toc: boolean;
+    toc_depth?: number;
+    include_figure_index?: boolean;
+    include_table_index?: boolean;
     watermark_text?: string;
     rendered_diagrams?: Record<string, string>;
   }) => Promise<string | undefined>;
@@ -45,6 +48,9 @@ export const WriteupExportModal: React.FC<WriteupExportModalProps> = ({ writeup,
   const [redactForClient, setRedactForClient] = useState(true);
   const [includeWatermark, setIncludeWatermark] = useState(true);
   const [includeToc, setIncludeToc] = useState(true);
+  const [tocDepth, setTocDepth] = useState(6);
+  const [includeFigures, setIncludeFigures] = useState(false);
+  const [includeTables, setIncludeTables] = useState(false);
   const [watermarkText, setWatermarkText] = useState('');
   const [exporting, setExporting] = useState(false);
   const [lastSha, setLastSha] = useState<string | null>(null);
@@ -67,7 +73,7 @@ export const WriteupExportModal: React.FC<WriteupExportModalProps> = ({ writeup,
       }
       if (event.key !== 'Tab' || !dialogRef.current) return;
       const focusable = Array.from(
-        dialogRef.current.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), [tabindex]:not([tabindex="-1"])')
+        dialogRef.current.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled), [tabindex]:not([tabindex="-1"])')
       ).filter((element) => element.getAttribute('aria-hidden') !== 'true');
       if (focusable.length === 0) return;
       const first = focusable[0];
@@ -93,6 +99,7 @@ export const WriteupExportModal: React.FC<WriteupExportModalProps> = ({ writeup,
     () => (writeup.markdown_content.match(/```mermaid\b/gi) || []).length,
     [writeup.markdown_content]
   );
+  const supportsDocumentIndexes = ['pdf', 'docx', 'html', 'md', 'md_zip'].includes(selectedFormat);
 
   const handleRunExport = async () => {
     if (exportingRef.current) return;
@@ -110,6 +117,9 @@ export const WriteupExportModal: React.FC<WriteupExportModalProps> = ({ writeup,
         redact_for_client: redactForClient,
         include_watermark: includeWatermark,
         include_toc: includeToc,
+        toc_depth: tocDepth,
+        include_figure_index: includeFigures,
+        include_table_index: includeTables,
         watermark_text: watermarkText.trim() || undefined,
         rendered_diagrams: renderedDiagrams,
       });
@@ -191,18 +201,30 @@ export const WriteupExportModal: React.FC<WriteupExportModalProps> = ({ writeup,
               </div>
             </label>
 
-            <label className="flex items-start gap-2.5 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={includeToc}
-                onChange={(e) => setIncludeToc(e.target.checked)}
-                className="mt-0.5 rounded border-slate-600 bg-slate-800 text-indigo-600"
-              />
-              <div>
-                <div className="text-xs font-medium text-slate-200">Tabla de contenidos</div>
-              <div className="text-[11px] text-slate-300">Agrega un índice en los archivos HTML y PDF.</div>
+            {supportsDocumentIndexes && (
+              <div className="space-y-2 border-l border-slate-700 pl-4 text-xs text-slate-200">
+                {includeToc && <label className="flex items-center gap-2">Niveles de encabezado
+                  <select value={tocDepth} onChange={(event) => setTocDepth(Number(event.target.value))} className="min-h-9 rounded-md border border-slate-700 bg-slate-950 px-2 text-white">
+                    {[1, 2, 3, 4, 5, 6].map((level) => <option key={level} value={level}>Hasta H{level}</option>)}
+                  </select>
+                </label>}
+                <label className="flex items-center gap-2"><input type="checkbox" checked={includeFigures} onChange={(event) => setIncludeFigures(event.target.checked)} /> Índice de figuras e imágenes</label>
+                <label className="flex items-center gap-2"><input type="checkbox" checked={includeTables} onChange={(event) => setIncludeTables(event.target.checked)} /> Índice de tablas</label>
               </div>
-            </label>
+            )}
+
+            {supportsDocumentIndexes && <label className="flex items-start gap-2.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={includeToc}
+                  onChange={(e) => setIncludeToc(e.target.checked)}
+                  className="mt-0.5 rounded border-slate-600 bg-slate-800 text-indigo-600"
+                />
+                <div>
+                  <div className="text-xs font-medium text-slate-200">Tabla de contenidos</div>
+                  <div className="text-[11px] text-slate-300">Enlaza los encabezados disponibles en el formato elegido.</div>
+                </div>
+              </label>}
 
             <label className="flex items-start gap-2.5 cursor-pointer">
               <input

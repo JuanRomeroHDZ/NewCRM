@@ -518,6 +518,8 @@ async def api_fingerprint(req: FingerprintReq):
 
 @http_router.post("/exploits/check")
 def api_exploits_check(req: ExploitCheckReq):
+    if demo.is_demo():
+        return {"results": []}
     if not exploits.SEARCHSPLOIT:
         raise HTTPException(
             status_code=503,

@@ -48,6 +48,7 @@ export const CredentialFilters: React.FC<CredentialFiltersProps> = ({
       <details className="group relative shrink-0">
         <summary
           aria-label={`Filtrar contraseñas por tipo. Selección: ${selectedCategory}`}
+          data-caret="manual"
           className="inline-flex min-h-10 cursor-pointer list-none items-center gap-1.5 rounded-lg border border-obsidian-border bg-obsidian-panel px-2.5 text-xs text-obsidian-text hover:bg-obsidian-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 [&::-webkit-details-marker]:hidden"
         >
           <Filter size={14} aria-hidden="true" />

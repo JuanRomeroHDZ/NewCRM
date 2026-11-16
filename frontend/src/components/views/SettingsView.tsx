@@ -16,6 +16,7 @@ const sectionTargets: Partial<Record<SectionType, string>> = {
   settings_limits: 'settings-limits',
   settings_access: 'settings-access',
   settings_network: 'settings-network',
+  settings_writeups: 'settings-writeups',
   settings_tools: 'settings-tools',
   settings_backup: 'settings-backup',
   settings_team: 'settings-team',
@@ -33,7 +34,7 @@ export const SettingsView: React.FC = () => {
   const [localClipboard, setLocalClipboard] = useState(clipboardClearSeconds);
   const [localReveal, setLocalReveal] = useState(allowRevealPasswords);
   const [localHotkey, setLocalHotkey] = useState(searchHotkey);
-  const [localAccent, setLocalAccent] = useState(accentColor || '#6366f1');
+  const [localAccent, setLocalAccent] = useState(accentColor || '#0F766E');
   const [localCanvas, setLocalCanvas] = useState(canvasStyle || 'dot-grid');
 
   // Phase 7 Operational & Security Policies
@@ -93,7 +94,7 @@ export const SettingsView: React.FC = () => {
     setLocalClipboard(clipboardClearSeconds);
     setLocalReveal(allowRevealPasswords);
     setLocalHotkey(searchHotkey);
-    setLocalAccent(accentColor || '#6366f1');
+    setLocalAccent(accentColor || '#0F766E');
     setLocalCanvas(canvasStyle || 'dot-grid');
   }, [timeoutMinutes, clipboardClearSeconds, allowRevealPasswords, searchHotkey, accentColor, canvasStyle]);
 

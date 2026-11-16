@@ -221,10 +221,10 @@ export const VaultUnlockModal: React.FC = () => {
             <button
               type="submit"
               disabled={isLoading || !password || (!isSetup && !confirmPassword)}
-              className="min-h-[44px] lg:min-h-9 inline-flex items-center justify-center gap-2 px-5 py-2 rounded-xl bg-obsidian-gold hover:brightness-110 active:scale-95 text-black text-xs font-semibold shadow-lg shadow-obsidian-gold/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-gold"
+              className="min-h-[44px] lg:min-h-9 inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-700 px-5 py-2 text-xs font-semibold text-white transition-colors hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300"
             >
               {isLoading ? (
-                <div className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
+                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
               ) : (
                 <>
                   <span>{isSetup ? 'Desbloquear bóveda' : 'Configurar bóveda'}</span>

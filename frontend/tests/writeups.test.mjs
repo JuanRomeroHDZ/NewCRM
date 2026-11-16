@@ -34,6 +34,34 @@ test('createPortTableMarkdown valida límites y escapa contenido de las celdas',
   assert.throws(() => portTable.createPortTableMarkdown(Array.from({ length: 101 }, (_, i) => `${i + 1}/tcp http`).join(', ')));
 });
 
+test('el índice interno incluye H5 y H6, tablas e imágenes y omite bloques de código', () => {
+  const md = ['# Informe', '##### Nivel cinco', '###### Nivel seis', '| Puerto | Estado |', '| --- | --- |', '| 80 | abierto |', '![Captura](asset://abc)', '~~~md', '###### No es encabezado', '![No es imagen](x.png)', '~~~'].join('\n');
+  assert.deepEqual(pentestUtils.extractMarkdownOutline(md).map((item) => item.level), [1, 5, 6]);
+  assert.deepEqual(pentestUtils.extractMarkdownObjects(md), [
+    { kind: 'table', text: 'Puerto · Estado', line: 4 },
+    { kind: 'image', text: 'Captura', line: 7 },
+  ]);
+});
+
+test('el índice interno reconoce imágenes y tablas HTML, conserva líneas CRLF y excluye etiquetas dentro de código', () => {
+  const md = [
+    '# Informe',
+    "<figure><img src='captura.png' alt='Acceso inicial'><figcaption>Pantalla inicial</figcaption></figure>",
+    "<img src='consola.png' alt='Terminal'>",
+    '<table><caption>Puertos encontrados</caption><tr><th>Puerto</th><th>Servicio</th></tr></table>',
+    '```html',
+    '<img src="fake.png" alt="No contar">',
+    '<table><tr><th>Falsa</th></tr></table>',
+    '```',
+  ].join('\r\n');
+  assert.deepEqual(pentestUtils.extractMarkdownOutline(md).map((item) => item.text), ['Informe']);
+  assert.deepEqual(pentestUtils.extractMarkdownObjects(md), [
+    { kind: 'image', text: 'Pantalla inicial', line: 2 },
+    { kind: 'image', text: 'Terminal', line: 3 },
+    { kind: 'table', text: 'Puertos encontrados', line: 4 },
+  ]);
+});
+
 test('Writeups no usa diálogos nativos ni precarga ejemplos que parecen datos reales', () => {
   const editor = fs.readFileSync('src/components/writeups/WriteupMarkdownSplitEditor.tsx', 'utf8');
   const view = fs.readFileSync('src/components/writeups/WriteupsView.tsx', 'utf8');
@@ -181,8 +209,8 @@ test('buildAttackPathElements crea nodos anclados con sourceId/targetId desde sc
   assert.ok(els.some((e) => e.text?.includes('H-01')));
 });
 
-test('PENTEST_STENCILS ofrece 16 nodos SVG puros sin foreignObject ni emojis', () => {
-  assert.equal(pentestIcons.PENTEST_STENCILS.length, 16);
+test('PENTEST_STENCILS ofrece nodos SVG puros sin foreignObject ni emojis', () => {
+  assert.ok(pentestIcons.PENTEST_STENCILS.length >= 19);
   for (const stencil of pentestIcons.PENTEST_STENCILS) {
     const svg = pentestIcons.renderIconSvgXml(stencil.id, 10, 10, 24, '#6366f1');
     assert.ok(svg.includes('<g transform='));

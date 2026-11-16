@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { marked } from 'marked';
 import {
   Anchor,
   Binary,
@@ -6,7 +7,9 @@ import {
   Calculator,
   Check,
   CheckSquare,
+  Circle,
   ChevronDown,
+  Columns2,
   Code,
   Code2,
   Eye,
@@ -22,13 +25,14 @@ import {
   Link,
   Link2,
   List,
-  ListOrdered,
   ListTree,
   Minus,
+  PenLine,
   Quote,
   Server,
   ShieldAlert,
   ShieldCheck,
+  Square,
   Sparkles,
   Strikethrough,
   Table,
@@ -51,6 +55,7 @@ import {
   encodeBase64Utf8,
   encodeHex,
   extractMarkdownOutline,
+  extractMarkdownObjects,
 } from './pentestUtils';
 import { MarkdownRichPreview } from './MarkdownRichPreview';
 import { MAX_REPORT_TEXT_LENGTH } from './writeupLimits';
@@ -90,7 +95,7 @@ const MAX_CITATION_LENGTH = 5000;
 
 function findNearestHeading(lines: string[], upToLineZeroBased: number): string | null {
   for (let i = Math.min(upToLineZeroBased, lines.length - 1); i >= 0; i--) {
-    const match = lines[i].match(/^(#{1,4})\s+(.*)$/);
+    const match = lines[i].match(/^(#{1,6})\s+(.*)$/);
     if (match) return match[2].replace(/\{#[a-zA-Z0-9_-]+\}/g, '').trim();
   }
   return null;
@@ -112,6 +117,7 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
   const { showToast } = useVault();
   const [redactPreview, setRedactPreview] = useState(false);
   const [activeTray, setActiveTray] = useState<InlineTray>('none');
+  const [outlineKind, setOutlineKind] = useState<'headings' | 'table' | 'image'>('headings');
   const [toolFilter, setToolFilter] = useState<ToolGroupFilter>('text');
   const [cvssInputs, setCvssInputs] = useState<Cvss31Metrics>(DEFAULT_CVSS31_METRICS);
   const [uploading, setUploading] = useState(false);
@@ -120,8 +126,7 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
   const [codecOutput, setCodecOutput] = useState('');
   const [codecError, setCodecError] = useState('');
   const [portSpec, setPortSpec] = useState('');
-  const [tableColumns, setTableColumns] = useState('Nombre, Descripción');
-  const [tableRows, setTableRows] = useState(2);
+  const [tableCells, setTableCells] = useState<string[][]>([['Nombre', 'Descripción'], ['', ''], ['', '']]);
   const [labelColor, setLabelColor] = useState('jade');
   const [labelSize, setLabelSize] = useState('normal');
   const [kitFeedback, setKitFeedback] = useState('');
@@ -200,6 +205,48 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
       ta.focus();
       const pos = start + prefix.length;
       ta.setSelectionRange(pos, pos);
+    });
+  };
+
+  const applyListStyle = (style: 'bullet' | 'ordered' | 'task' | 'done' | 'nested-bullet' | 'nested-ordered' | 'square' | 'circle' | 'alpha' | 'alpha-upper' | 'roman' | 'roman-upper') => {
+    const ta = textareaRef.current;
+    const source = ta?.value ?? markdown;
+    const start = ta?.selectionStart ?? source.length;
+    const end = ta?.selectionEnd ?? start;
+    const lineStart = source.lastIndexOf('\n', Math.max(0, start - 1)) + 1;
+    const endSearch = Math.max(start, end - 1);
+    const nextNewline = source.indexOf('\n', endSearch);
+    const lineEnd = nextNewline < 0 ? source.length : nextNewline;
+    const selectedLines = source.slice(lineStart, lineEnd).split(/\r?\n/);
+    const cleanItem = (line: string) => line.replace(/^\s*(?:(?:[-+*])\s+(?:\[[ xX]\]\s*)?|\d+[.)]\s*)/, '').trim();
+    const content = selectedLines.map(cleanItem).filter(Boolean);
+    const items = content.length ? content : ['Elemento'];
+    const prefixStyles: Partial<Record<typeof style, (index: number) => string>> = {
+      bullet: () => '- ',
+      ordered: (index) => `${index + 1}. `,
+      task: () => '- [ ] ',
+      done: () => '- [x] ',
+      'nested-bullet': () => '  - ',
+      'nested-ordered': (index) => `  ${index + 1}. `,
+    };
+    let replacement: string;
+    const prefix = prefixStyles[style];
+    if (prefix) {
+      replacement = items.map((item, index) => `${prefix(index)}${item}`).join('\n');
+    } else {
+      const listTag = style === 'square' || style === 'circle' ? 'ul' : 'ol';
+      const listType = style === 'square' ? 'square' : style === 'circle' ? 'circle' : style === 'alpha' ? 'a' : style === 'alpha-upper' ? 'A' : style === 'roman' ? 'i' : 'I';
+      const renderedItems = items.map((item) => `<li>${marked.parseInline(item, { async: false }).trim()}</li>`).join('\n');
+      replacement = `<${listTag} type="${listType}">\n${renderedItems}\n</${listTag}>`;
+    }
+    const next = source.slice(0, lineStart) + replacement + source.slice(lineEnd);
+    onChange(next);
+    setActiveTray('none');
+    requestAnimationFrame(() => {
+      if (!ta) return;
+      ta.focus();
+      const cursor = lineStart + replacement.length;
+      ta.setSelectionRange(cursor, cursor);
     });
   };
 
@@ -291,6 +338,7 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
   const cvssResult = useMemo(() => calculateCvss31(cvssInputs), [cvssInputs]);
   const docMetrics = useMemo(() => computeWriteupMetrics(markdown), [markdown]);
   const outlineItems = useMemo(() => extractMarkdownOutline(markdown), [markdown]);
+  const outlineObjects = useMemo(() => extractMarkdownObjects(markdown), [markdown]);
   const showGroup = (group: Exclude<ToolGroupFilter, 'all'>) => toolFilter === 'all' || toolFilter === group;
   const toggleTray = (tray: InlineTray) => setActiveTray((prev) => (prev === tray ? 'none' : tray));
 
@@ -375,19 +423,22 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
   const sideBySide = splitView === 'split' && sideBySideAvailable;
 
   return (
-    <div onKeyDownCapture={handleWorkspaceKeyDown} className="writeup-markdown-editor flex min-w-0 max-w-full flex-col h-full min-h-[300px] bg-slate-950 border border-slate-800 rounded-xl overflow-hidden">
+    <div onKeyDownCapture={handleWorkspaceKeyDown} className="writeup-markdown-editor writeup-editor-container flex min-w-0 max-w-full flex-col h-full min-h-[300px] bg-slate-950 border border-slate-800 rounded-xl overflow-visible">
       {/* Compact toolbar: category, actions and view controls share one row. */}
-      <div className="flex min-w-0 items-center gap-1 border-b border-slate-800 bg-slate-900/95 px-2 py-1.5">
+      <div className={`relative z-20 flex min-w-0 items-center gap-1 border-b border-slate-800 bg-slate-900/95 px-2 py-1.5 ${toolFilter === 'all' ? 'flex-wrap' : ''}`}>
         {splitView !== 'preview' && <label className="relative inline-flex shrink-0 items-center">
             <span className="sr-only">Categoría de herramientas</span>
-            <select value={toolFilter} onChange={(event) => setToolFilter(event.target.value as ToolGroupFilter)} className="min-h-9 max-w-28 appearance-none rounded-lg border border-slate-700 bg-slate-950 pl-2 pr-7 text-xs text-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 sm:max-w-44">
-              <option value="text">Texto</option><option value="blocks">Bloques</option><option value="media">Multimedia</option><option value="pentest">Seguridad</option><option value="all">Todas las herramientas</option>
+            <select value={toolFilter} onChange={(event) => setToolFilter(event.target.value as ToolGroupFilter)} title={toolFilter === 'all' ? 'Todas las herramientas' : undefined} className="min-h-9 w-28 appearance-none rounded-lg border border-slate-700 bg-slate-950 pl-2 pr-6 text-xs text-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300">
+              <option value="text">Texto</option><option value="blocks">Bloques</option><option value="media">Multimedia</option><option value="pentest">Seguridad</option><option value="all">Todas</option>
             </select>
             <ChevronDown className="pointer-events-none absolute right-2 h-4 w-4 text-slate-400" aria-hidden="true" />
           </label>}
-        {splitView !== 'preview' && <div role="region" tabIndex={0} className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300" aria-label="Herramientas de edición; desplázate horizontalmente para ver más">
+        {splitView !== 'preview' && <div role="region" tabIndex={0} className={`flex min-w-0 items-center gap-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 ${toolFilter === 'all' ? 'order-3 basis-full flex-wrap border-t border-slate-800 py-1.5' : 'flex-1 overflow-visible'}`} aria-label={toolFilter === 'all' ? 'Todas las herramientas de edición, organizadas por grupo' : 'Herramientas de edición; desplázate horizontalmente para ver más'}>
         {showGroup('text') && (
-          <div className="flex shrink-0 items-center gap-0.5 pr-1.5 border-r border-slate-800">
+          <div className={`flex min-w-0 max-w-full items-center gap-0.5 pr-1.5 border-r border-slate-800 ${toolFilter === 'all' ? 'flex-wrap' : 'shrink-0 flex-nowrap'}`}>
+            <details className="relative shrink-0" onClick={(event) => { if ((event.target as HTMLElement).closest('button')) event.currentTarget.open = false; }}>
+              <summary data-caret="manual" aria-label="Encabezados" title="Encabezados" className="flex h-9 cursor-pointer list-none items-center justify-center gap-0.5 rounded px-1 text-slate-300 hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-300"><Heading1 className="h-4 w-4" /><ChevronDown className="h-3 w-3" aria-hidden="true" /></summary>
+              <div className="absolute left-0 top-full z-50 mt-1 flex gap-1 rounded-lg border border-slate-700 bg-slate-900 p-1 shadow-xl">
             <button type="button" onClick={() => prefixLineAtCursor('# ')} title="Título H1" aria-label="Título H1" className="p-1.5 rounded hover:bg-slate-800 text-slate-300">
               <Heading1 className="w-4 h-4" />
             </button>
@@ -397,7 +448,13 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
             <button type="button" onClick={() => prefixLineAtCursor('### ')} title="Sección H3" aria-label="Sección H3" className="p-1.5 rounded hover:bg-slate-800 text-slate-300">
               <Heading3 className="w-4 h-4" />
             </button>
-            <button type="button" onClick={() => toggleTray('label')} aria-label="Insertar etiqueta de color" aria-expanded={activeTray === 'label'} title="Etiqueta de color" className="rounded p-1.5 text-emerald-300 hover:bg-slate-800"><Tag className="h-4 w-4" /></button>
+            {[4, 5, 6].map((level) => <button key={level} type="button" onClick={() => prefixLineAtCursor(`${'#'.repeat(level)} `)} title={`Encabezado H${level}`} aria-label={`Encabezado H${level}`} className="min-h-9 rounded px-2 text-xs text-slate-300 hover:bg-slate-800">H{level}</button>)}
+              </div>
+            </details>
+            <button type="button" onClick={() => toggleTray('label')} aria-label="Insertar etiqueta de color" aria-expanded={activeTray === 'label'} title="Etiqueta de color" className="flex h-9 items-center justify-center gap-0.5 rounded px-1 text-emerald-300 hover:bg-slate-800"><Tag className="h-4 w-4" /><ChevronDown className="h-3 w-3" aria-hidden="true" /></button>
+            <details className="relative shrink-0" onClick={(event) => { if ((event.target as HTMLElement).closest('button')) event.currentTarget.open = false; }}>
+              <summary data-caret="manual" aria-label="Formato de texto" title="Formato de texto" className="flex h-9 cursor-pointer list-none items-center justify-center gap-0.5 rounded px-1 text-slate-300 hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-300"><Bold className="h-4 w-4" /><ChevronDown className="h-3 w-3" aria-hidden="true" /></summary>
+              <div className="absolute left-0 top-full z-50 mt-1 flex gap-1 rounded-lg border border-slate-700 bg-slate-900 p-1 shadow-xl">
             <button type="button" onClick={() => insertAtCursor('**', true, '**', 'negrita')} title="Negrita" aria-label="Negrita" className="p-1.5 rounded hover:bg-slate-800 text-slate-300">
               <Bold className="w-4 h-4" />
             </button>
@@ -407,23 +464,26 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
             <button type="button" onClick={() => insertAtCursor('~~', true, '~~', 'tachado')} title="Tachado" aria-label="Tachado" className="p-1.5 rounded hover:bg-slate-800 text-slate-300">
               <Strikethrough className="w-4 h-4" />
             </button>
+              </div>
+            </details>
             <button type="button" onClick={() => insertAtCursor('[', true, '](https://)', 'texto_enlace')} title="Enlace en el informe" aria-label="Enlace" className="p-1.5 rounded hover:bg-slate-800 text-slate-300">
               <Link className="w-4 h-4" />
             </button>
-            <button type="button" onClick={() => prefixLineAtCursor('- ')} title="Lista viñetas" aria-label="Lista viñetas" className="p-1.5 rounded hover:bg-slate-800 text-slate-300">
-              <List className="w-4 h-4" />
-            </button>
-            <button type="button" onClick={() => prefixLineAtCursor('1. ')} title="Lista numerada" aria-label="Lista numerada" className="p-1.5 rounded hover:bg-slate-800 text-slate-300">
-              <ListOrdered className="w-4 h-4" />
-            </button>
-            <button type="button" onClick={() => prefixLineAtCursor('- [ ] ')} title="Checklist" aria-label="Checklist" className="p-1.5 rounded hover:bg-slate-800 text-slate-300">
-              <CheckSquare className="w-4 h-4" />
-            </button>
+            <details className="relative shrink-0" onClick={(event) => { if ((event.target as HTMLElement).closest('button')) event.currentTarget.open = false; }}>
+              <summary data-caret="manual" aria-label="Estilos de lista" title="Estilos de lista" className="flex h-9 cursor-pointer list-none items-center justify-center gap-0.5 rounded px-1 text-slate-300 hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-300"><List className="h-4 w-4" aria-hidden="true" /><ChevronDown className="h-3 w-3" aria-hidden="true" /></summary>
+              <div className="absolute left-0 top-full z-50 mt-1 grid w-52 grid-cols-1 rounded-lg border border-slate-700 bg-slate-900 p-1 shadow-xl">
+                {([
+                  ['bullet', 'Viñetas'], ['ordered', 'Numerada'], ['task', 'Lista de tareas'], ['done', 'Tareas completadas'],
+                  ['nested-bullet', 'Viñetas anidadas'], ['nested-ordered', 'Numeración anidada'], ['square', 'Viñeta cuadrada'],
+                  ['circle', 'Viñeta abierta'], ['alpha', 'Alfabética (a, b, c)'], ['alpha-upper', 'Alfabética (A, B, C)'], ['roman', 'Romana (i, ii, iii)'], ['roman-upper', 'Romana (I, II, III)'],
+                ] as const).map(([style, label]) => <button key={style} type="button" onClick={() => applyListStyle(style)} className="flex min-h-9 items-center gap-2 rounded-md px-2 text-left text-xs text-slate-200 hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-300"><span className="flex w-4 shrink-0 items-center justify-center font-mono text-slate-400">{style === 'task' ? <Square className="h-3.5 w-3.5" aria-hidden="true" /> : style === 'done' ? <CheckSquare className="h-3.5 w-3.5" aria-hidden="true" /> : style === 'square' ? <Square className="h-3 w-3" aria-hidden="true" /> : style === 'circle' || style === 'nested-bullet' ? <Circle className="h-3 w-3" aria-hidden="true" /> : style === 'ordered' || style === 'nested-ordered' ? '1.' : style === 'alpha' ? 'a.' : style === 'alpha-upper' ? 'A.' : style === 'roman' ? 'i.' : style === 'roman-upper' ? 'I.' : '•'}</span>{label}</button>)}
+              </div>
+            </details>
           </div>
         )}
 
         {showGroup('blocks') && (
-          <div className="flex shrink-0 flex-nowrap items-center gap-0.5 pr-1.5 border-r border-slate-800">
+          <div className={`flex min-w-0 max-w-full items-center gap-0.5 pr-1.5 border-r border-slate-800 ${toolFilter === 'all' ? 'flex-wrap' : 'shrink-0 flex-nowrap'}`}>
             <button type="button" onClick={() => insertAtCursor('`', true, '`', 'codigo')} title="Código en línea" aria-label="Código en línea" className="p-1.5 rounded hover:bg-slate-800 text-slate-300">
               <Code className="w-4 h-4" />
             </button>
@@ -436,7 +496,7 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
                 activeTray === 'code' ? 'bg-indigo-600 text-white' : 'hover:bg-slate-800 text-slate-200'
               }`}
             >
-              <Code2 className="w-3.5 h-3.5 text-cyan-400" />
+              <Code2 className="w-3.5 h-3.5 text-emerald-400" />
               <span className="hidden sm:inline">Código</span>
               <ChevronDown className="w-3 h-3" />
             </button>
@@ -477,7 +537,7 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
         )}
 
         {showGroup('media') && (
-          <div className="flex shrink-0 flex-nowrap items-center gap-1 pr-1.5 border-r border-slate-800">
+          <div className={`flex min-w-0 max-w-full items-center gap-1 pr-1.5 border-r border-slate-800 ${toolFilter === 'all' ? 'flex-wrap' : 'shrink-0 flex-nowrap'}`}>
             <button
               type="button"
               disabled={uploading}
@@ -542,7 +602,7 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
         )}
 
         {showGroup('pentest') && (
-          <div className="flex shrink-0 flex-nowrap items-center gap-1">
+          <div className={`flex min-w-0 max-w-full items-center gap-1 ${toolFilter === 'all' ? 'flex-wrap' : 'shrink-0 flex-nowrap'}`}>
             <button
               type="button"
               onClick={handleCiteSelection}
@@ -595,18 +655,6 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
             </button>
             <button
               type="button"
-              onClick={() => toggleTray('outline')}
-              className={`px-2 py-1 rounded text-xs flex items-center gap-1 ${
-                activeTray === 'outline' ? 'bg-indigo-600 text-white' : 'bg-slate-800 hover:bg-slate-700 text-slate-200'
-              }`}
-              title="Índice del informe y sus medidas"
-              aria-label="Abrir índice del informe"
-            >
-              <ListTree className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Índice</span>
-            </button>
-            <button
-              type="button"
               onClick={() => toggleTray('templates')}
               className={`px-2 py-1 rounded text-xs flex items-center gap-1 ${
                 activeTray === 'templates' ? 'bg-indigo-600 text-white' : 'bg-slate-800 hover:bg-slate-700 text-slate-200'
@@ -619,13 +667,14 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
           </div>
         )}
         </div>}
-        <div className="flex shrink-0 items-center gap-1">
+        <div className={`flex shrink-0 items-center gap-1 ${toolFilter === 'all' ? 'order-2 ml-auto' : ''}`}>
+          <button type="button" onClick={() => { if (splitView === 'preview') setSplitView('edit'); toggleTray('outline'); }} aria-label="Índice del informe" aria-expanded={activeTray === 'outline' && splitView !== 'preview'} title="Índice del informe" className={`inline-flex h-9 w-9 items-center justify-center rounded-lg border focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-300 ${activeTray === 'outline' && splitView !== 'preview' ? 'border-emerald-600 bg-emerald-900 text-white' : 'border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700'}`}><ListTree className="h-4 w-4" aria-hidden="true" /></button>
           <button
             type="button"
             onClick={() => setRedactPreview((v) => !v)}
             aria-pressed={redactPreview}
             aria-label={redactPreview ? 'Mostrar vista para cliente' : 'Mostrar vista interna'}
-            className={`min-h-9 px-3 py-1 rounded-lg text-xs flex items-center gap-1.5 border shrink-0 ${
+            className={`writeup-toolbar-compact-button min-h-9 px-3 py-1 rounded-lg text-xs flex items-center gap-1.5 border shrink-0 ${
               redactPreview
                 ? 'bg-emerald-600/20 border-emerald-500/40 text-emerald-300'
                 : 'bg-slate-800 border-slate-700 text-slate-300'
@@ -633,15 +682,16 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
             title="Alternar vista interna vs cliente censurada"
           >
             {redactPreview ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-            <span className="hidden sm:inline">{redactPreview ? 'Cliente' : 'Interna'}</span>
+            <span className="writeup-editor-toolbar-label">{redactPreview ? 'Cliente' : 'Interna'}</span>
           </button>
 
-          <label className="relative inline-flex items-center">
+          <label className="writeup-view-mode-label relative inline-flex items-center">
             <span className="sr-only">Vista del texto del informe</span>
-            <select value={splitView} onChange={(event) => setSplitView(event.target.value as 'edit' | 'split' | 'preview')} className="min-h-9 appearance-none rounded-lg border border-slate-700 bg-slate-950 pl-3 pr-9 text-xs text-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300">
+            <select value={splitView} onChange={(event) => setSplitView(event.target.value as 'edit' | 'split' | 'preview')} aria-label={`Vista del informe: ${splitView === 'edit' ? 'Editar' : splitView === 'split' ? 'Dos vistas' : 'Vista previa'}`} title={`Vista: ${splitView === 'edit' ? 'Editar' : splitView === 'split' ? 'Dos vistas' : 'Vista previa'}`} className="writeup-view-mode-select min-h-9 w-28 appearance-none rounded-lg border border-slate-700 bg-slate-950 pl-2 pr-6 text-xs text-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300">
               <option value="edit">Editar</option><option value="split">Dos vistas</option><option value="preview">Vista previa</option>
             </select>
-            <ChevronDown className="pointer-events-none absolute right-3 h-4 w-4 text-slate-400" aria-hidden="true" />
+            {splitView === 'edit' ? <PenLine className="writeup-view-mode-icon pointer-events-none absolute left-2 hidden h-4 w-4 text-slate-300" aria-hidden="true" /> : splitView === 'preview' ? <Eye className="writeup-view-mode-icon pointer-events-none absolute left-2 hidden h-4 w-4 text-slate-300" aria-hidden="true" /> : <Columns2 className="writeup-view-mode-icon pointer-events-none absolute left-2 hidden h-4 w-4 text-slate-300" aria-hidden="true" />}
+            <ChevronDown className="writeup-view-mode-chevron pointer-events-none absolute right-2 h-4 w-4 text-slate-400" aria-hidden="true" />
           </label>
         </div>
       </div>
@@ -671,21 +721,33 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
         </div>
       )}
       {activeTray === 'table' && (
-        <div className="flex flex-wrap items-end gap-3 border-t border-slate-800 p-3 text-xs text-slate-200">
-          <label className="flex min-w-48 flex-1 flex-col gap-1">Encabezados separados por comas
-            <input value={tableColumns} onChange={(event) => setTableColumns(event.target.value)} maxLength={300} className="min-h-10 rounded border border-slate-700 bg-slate-950 px-3 text-sm text-white" />
-          </label>
-          <label className="flex flex-col gap-1">Filas
-            <input type="number" min={1} max={20} value={tableRows} onChange={(event) => setTableRows(Number(event.target.value))} className="min-h-10 w-20 rounded border border-slate-700 bg-slate-950 px-2 text-sm text-white" />
-          </label>
-          <button type="button" className="min-h-10 rounded bg-indigo-600 px-4 font-medium text-white" onClick={() => {
-            const columns = tableColumns.split(',').map((column) => column.trim().replace(/\|/g, '\\|')).filter(Boolean).slice(0, 10);
-            if (!columns.length) { showToast('Agrega al menos un encabezado.', 'warning'); return; }
-            const row = `| ${columns.map(() => ' ').join(' | ')} |`;
-            const count = Math.max(1, Math.min(20, Math.trunc(tableRows) || 1));
-            insertAtCursor(`\n| ${columns.join(' | ')} |\n| ${columns.map(() => '---').join(' | ')} |\n${Array(count).fill(row).join('\n')}\n`);
-            setActiveTray('none');
-          }}>Insertar tabla</button>
+        <div className="space-y-2 border-t border-slate-800 p-3 text-xs text-slate-200">
+          <p className="text-slate-300">Escribe los encabezados y los datos; puedes completar las celdas después.</p>
+          <div className="max-h-56 overflow-auto">
+            <table className="border-collapse text-left"><tbody>
+              {tableCells.map((row, rowIndex) => <tr key={rowIndex}>
+                {row.map((cell, colIndex) => <td key={colIndex} className="border border-slate-700 p-0">
+                  <input aria-label={`${rowIndex === 0 ? 'Encabezado' : `Fila ${rowIndex}`} columna ${colIndex + 1}`} value={cell} maxLength={300} onChange={(event) => {
+                    const value = event.target.value;
+                    setTableCells((current) => current.map ( (cells, i) => i === rowIndex ? cells.map((item, j) => j === colIndex ? value : item) : cells));
+                  }} className={`min-h-9 w-36 bg-slate-950 px-2 text-sm text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-400 ${rowIndex === 0 ? 'font-semibold' : ''}`} />
+                </td>)}
+              </tr>)}
+            </tbody></table>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" disabled={tableCells.length >= 21} onClick={() => setTableCells((current) => [...current, current[0].map(() => '')])} className="min-h-9 rounded border border-slate-700 px-3 disabled:opacity-40">Añadir fila</button>
+            <button type="button" disabled={tableCells[0].length >= 10} onClick={() => setTableCells((current) => current.map((row) => [...row, '']))} className="min-h-9 rounded border border-slate-700 px-3 disabled:opacity-40">Añadir columna</button>
+            <button type="button" disabled={tableCells.length <= 2} onClick={() => setTableCells((current) => current.slice(0, -1))} className="min-h-9 rounded border border-slate-700 px-3 disabled:opacity-40">Quitar última fila</button>
+            <button type="button" disabled={tableCells[0].length <= 1} onClick={() => setTableCells((current) => current.map((row) => row.slice(0, -1)))} className="min-h-9 rounded border border-slate-700 px-3 disabled:opacity-40">Quitar última columna</button>
+            <button type="button" className="min-h-9 rounded bg-emerald-700 px-4 font-medium text-white hover:bg-emerald-600" onClick={() => {
+              const clean = (value: string) => value.trim().replace(/\|/g, '\\|');
+              const row = (cells: string[]) => `| ${cells.map(clean).join(' | ')} |`;
+              const header = tableCells[0].map((value, index) => value.trim() || `Columna ${index + 1}`);
+              insertAtCursor(`\n${row(header)}\n| ${header.map(() => '---').join(' | ')} |\n${tableCells.slice(1).map(row).join('\n')}\n`);
+              setActiveTray('none');
+            }}>Insertar tabla</button>
+          </div>
         </div>
       )}
       {activeTray === 'code' && (
@@ -745,9 +807,9 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
       )}
 
       {activeTray === 'outline' && (
-        <div className="px-3 py-2.5 bg-slate-900 border-b border-slate-800 space-y-2 text-xs max-h-56 overflow-y-auto">
+        <div className="px-3 py-2.5 bg-slate-900 border-b border-slate-800 space-y-2 text-xs max-h-56 overflow-y-auto" aria-label="Índice interno del informe">
           <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-300">
-            <span className="font-semibold text-slate-100">Índice de secciones ({outlineItems.length})</span>
+            <span className="font-semibold text-slate-100">Índice del informe</span>
             <div className="flex flex-wrap gap-2 text-slate-400 tabular-nums">
               <span>{docMetrics.words} pal.</span>
               <span>{docMetrics.readingMinutes} min lectura</span>
@@ -756,24 +818,10 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
               <span>{docMetrics.redactedMarkers} redact</span>
             </div>
           </div>
-          {outlineItems.length === 0 ? (
-            <p className="text-[11px] text-slate-500">Agrega encabezados (`# `, `## `) para navegar el informe.</p>
-          ) : (
-            <div className="flex flex-wrap gap-1.5">
-              {outlineItems.map((h, i) => (
-                <button
-                  key={`${h.line}-${i}`}
-                  type="button"
-                  onClick={() => jumpToLine(h.line)}
-                  className="px-2 py-1 rounded bg-slate-950 hover:bg-slate-800 border border-slate-800 text-left text-[11px] text-slate-200 flex items-center gap-1"
-                >
-                  <span className="text-indigo-400 font-mono">H{h.level}</span>
-                  <span className="truncate max-w-[180px]">{h.text}</span>
-                  <span className="text-slate-500 font-mono">L{h.line}</span>
-                </button>
-              ))}
-            </div>
-          )}
+          <div role="group" aria-label="Tipo de índice" className="flex flex-wrap gap-1">
+            {([['headings', `Secciones (${outlineItems.length})`], ['table', `Tablas (${outlineObjects.filter((item) => item.kind === 'table').length})`], ['image', `Imágenes (${outlineObjects.filter((item) => item.kind === 'image').length})`]] as const).map(([value, label]) => <button key={value} type="button" aria-pressed={outlineKind === value} onClick={() => setOutlineKind(value)} className={`min-h-9 rounded-md px-2 text-xs focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-300 ${outlineKind === value ? 'bg-emerald-800 text-white' : 'bg-slate-800 text-slate-200 hover:bg-slate-700'}`}>{label}</button>)}
+          </div>
+          {outlineKind === 'headings' ? (outlineItems.length ? <ul>{outlineItems.map((h, i) => <li key={`${h.line}-${i}`} style={{ paddingLeft: `${(h.level - 1) * 12}px` }}><button type="button" onClick={() => jumpToLine(h.line)} className="flex min-h-9 w-full items-center gap-2 rounded px-2 text-left text-slate-200 hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-300"><span className="shrink-0 font-mono text-slate-400">H{h.level}</span><span className="min-w-0 flex-1 truncate">{h.text}</span><span className="shrink-0 font-mono text-slate-400">L{h.line}</span></button></li>)}</ul> : <p className="text-slate-400">Agrega encabezados con # para navegar el informe.</p>) : (outlineObjects.some((item) => item.kind === outlineKind) ? <ul>{outlineObjects.filter((item) => item.kind === outlineKind).map((item, i) => <li key={`${item.line}-${i}`}><button type="button" onClick={() => jumpToLine(item.line)} className="flex min-h-9 w-full items-center gap-2 rounded px-2 text-left text-slate-200 hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-300"><span className="min-w-0 flex-1 truncate">{item.text}</span><span className="shrink-0 font-mono text-slate-400">L{item.line}</span></button></li>)}</ul> : <p className="text-slate-400">No se encontraron {outlineKind === 'table' ? 'tablas' : 'imágenes'} en el Markdown.</p>)}
         </div>
       )}
 

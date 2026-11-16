@@ -15,9 +15,9 @@ export function loadMermaid() {
           themeVariables: {
             darkMode: true,
             background: '#081416',
-            primaryColor: '#1e1b4b',
+            primaryColor: '#123248',
             primaryTextColor: '#f8fafc',
-            primaryBorderColor: '#6366f1',
+            primaryBorderColor: '#60a5fa',
             lineColor: '#94a3b8',
             secondaryColor: '#0f172a',
             tertiaryColor: '#111827',

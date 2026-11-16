@@ -186,25 +186,25 @@ export const SecurityAuditView: React.FC = () => {
             type="button"
             onClick={loadAudit}
             disabled={loading}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-obsidian-panel hover:bg-obsidian-surface border border-obsidian-border text-obsidian-muted hover:text-white text-xs font-medium disabled:opacity-50"
+            className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-obsidian-border bg-obsidian-panel px-3 text-xs font-medium text-obsidian-muted hover:bg-obsidian-surface hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 disabled:opacity-50"
           >
-            <RefreshCw size={13} className={loading ? 'animate-spin' : ''} aria-hidden="true" />
+            <RefreshCw size={16} className={loading ? 'animate-spin' : ''} aria-hidden="true" />
             <span>Actualizar</span>
           </button>
           <button
             type="button"
             onClick={() => setActiveSection('settings')}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-obsidian-panel hover:bg-obsidian-surface border border-obsidian-border text-obsidian-muted hover:text-white text-xs font-medium"
+            className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-obsidian-border bg-obsidian-panel px-3 text-xs font-medium text-obsidian-muted hover:bg-obsidian-surface hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
           >
-            <Clock size={13} aria-hidden="true" />
+            <Clock size={16} aria-hidden="true" />
             <span>Frecuencia de cambio</span>
           </button>
           <button
             type="button"
             onClick={openPasswordGen}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-obsidian-surface hover:bg-obsidian-border border border-obsidian-border text-white text-xs font-semibold shrink-0"
+            className="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-lg border border-obsidian-border bg-obsidian-surface px-3 text-xs font-semibold text-white hover:bg-obsidian-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
           >
-            <Sparkles size={14} className="text-cyan-400 shrink-0" aria-hidden="true" />
+            <Sparkles size={16} className="shrink-0" aria-hidden="true" />
             <span>Generar contraseña</span>
           </button>
         </div>

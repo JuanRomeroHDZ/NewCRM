@@ -23,9 +23,22 @@ class VaultSessionManager:
             self._sessions[jti] = {
                 "key": key or b"",
                 "exp": exp,
+                "timeout": max(1, exp - now),
                 "revoked": False,
                 "created_at": now
             }
+
+    def remaining(self, jti: str, *, touch: bool = False) -> int:
+        with self._lock:
+            session = self._sessions.get(jti)
+            now = time.time()
+            if not session or session.get("revoked") or session["exp"] <= now:
+                if session:
+                    session["key"] = b""
+                return 0
+            if touch:
+                session["exp"] = now + session["timeout"]
+            return max(1, int(session["exp"] - now))
 
     def get_session_key(self, jti: str) -> bytes | None:
         with self._lock:

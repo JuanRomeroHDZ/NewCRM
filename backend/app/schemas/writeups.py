@@ -146,7 +146,7 @@ class WriteupCitationCreate(BaseModel):
     line_start: int = Field(default=1, ge=1, le=200000)
     line_end: int = Field(default=1, ge=1, le=200000)
     quoted_text: str = Field(..., min_length=1, max_length=10000)
-    color: str = Field(default="#6366f1", pattern=r"^#[0-9a-fA-F]{6}$")
+    color: str = Field(default="#10B981", pattern=r"^#[0-9a-fA-F]{6}$")
     note: str | None = Field(default=None, max_length=2000)
 
 
@@ -215,6 +215,9 @@ class WriteupExportRequest(BaseModel):
     redact_for_client: bool = False
     include_watermark: bool = True
     include_toc: bool = True
+    toc_depth: int = Field(default=6, ge=1, le=6)
+    include_figure_index: bool = False
+    include_table_index: bool = False
     watermark_text: str | None = Field(default=None, max_length=120)
     rendered_diagrams: dict[str, str] = Field(default_factory=dict)
 

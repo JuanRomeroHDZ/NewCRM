@@ -64,6 +64,20 @@ export interface EmailAccount {
   updated_at?: string;
 }
 
+export interface EmailDnsRecordCheck {
+  status: 'publicado' | 'faltante' | 'débil' | 'múltiple' | 'no_revisado' | 'no_determinado';
+  summary: string;
+  records: string[];
+}
+
+export interface EmailDomainPostureResponse {
+  domain: string;
+  checked_at: string;
+  spf: EmailDnsRecordCheck;
+  dmarc: EmailDnsRecordCheck;
+  dkim: EmailDnsRecordCheck;
+}
+
 export interface PlatformAccount {
   id: string;
   name: string;

@@ -1,4 +1,4 @@
-import { API_BASE, getApiUserToken, getApiVaultToken, setApiVaultToken } from './api';
+import { API_BASE, getApiUserToken, getApiVaultToken, setApiVaultToken, setApiUserToken } from './api';
 import { ApiError, createHttpApiError, normalizeResponseReadError, normalizeTransportError } from './apiErrors';
 import type {
   C2CameraDiscovered,
@@ -52,9 +52,14 @@ async function fetchC2Response(url: string, options: RequestInit): Promise<Respo
   }
 }
 
-async function handleC2ErrorResponse(endpoint: string, response: Response, requestVaultToken: string | null): Promise<never> {
+async function handleC2ErrorResponse(endpoint: string, response: Response, requestVaultToken: string | null, requestUserToken: string | null): Promise<never> {
   if (response.status === 401) {
-    if ((requestVaultToken || '') === (getApiVaultToken() || '')) {
+    if (response.headers.get('X-Auth-Scope') === 'user') {
+      if (requestUserToken && requestUserToken === getApiUserToken()) {
+        setApiUserToken(null);
+        window.dispatchEvent(new CustomEvent('core_user_session_expired'));
+      }
+    } else if ((requestVaultToken || '') === (getApiVaultToken() || '')) {
       setApiVaultToken(null);
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('vault_locked'));
@@ -103,7 +108,7 @@ async function c2Request<T>(path: string, options: RequestInit = {}): Promise<T>
   });
 
   if (!response.ok) {
-    await handleC2ErrorResponse(endpoint, response, headers['X-Vault-Token'] || null);
+    await handleC2ErrorResponse(endpoint, response, headers['X-Vault-Token'] || null, headers.Authorization?.replace(/^Bearer /, '') || null);
   }
   if (response.status === 204) {
     return undefined as T;
@@ -136,7 +141,7 @@ async function c2DownloadBlob(path: string, fallbackFilename: string): Promise<B
     headers,
   });
   if (!response.ok) {
-    await handleC2ErrorResponse(endpoint, response, headers['X-Vault-Token'] || null);
+    await handleC2ErrorResponse(endpoint, response, headers['X-Vault-Token'] || null, headers.Authorization?.replace(/^Bearer /, '') || null);
   }
   const disposition = response.headers.get('Content-Disposition') || '';
   const match = disposition.match(/filename="?([^";]+)"?/i);

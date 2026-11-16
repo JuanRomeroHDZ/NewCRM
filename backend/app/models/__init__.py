@@ -186,7 +186,7 @@ class UserSettings(Base):
     clipboard_clear_seconds: Mapped[int] = mapped_column(Integer, default=30)
     allow_reveal_passwords: Mapped[bool] = mapped_column(Boolean, default=False)
     search_hotkey: Mapped[str] = mapped_column(String(32), default="ctrl+k")
-    accent_color: Mapped[str] = mapped_column(String(32), default="#6366f1")
+    accent_color: Mapped[str] = mapped_column(String(32), default="#0F766E")
     canvas_style: Mapped[str] = mapped_column(String(32), default="dot-grid")
 
     # Phase 7 Business Policies

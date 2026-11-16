@@ -17,7 +17,7 @@ export default {
           borderLight: '#26363C',
           muted: '#B3B9BC',
           text: '#FFFFFF',
-          accent: 'var(--brand-accent, #A98242)',
+          accent: 'var(--brand-accent, #0F766E)',
           accentGlow: 'rgba(169, 130, 66, 0.25)',
           dangerBg: '#240B0B',
           errorText: '#F87171',
@@ -26,16 +26,16 @@ export default {
           gold: '#A98242'
         },
         indigo: {
-          50: '#ffffff', 100: '#ffffff', 200: '#eee1c9', 300: '#d5bc8f',
-          400: '#c9aa73', 500: '#A98242', 600: '#A98242', 700: '#806333',
-          800: '#544124', 900: '#302919', 950: '#1c1a14'
+          50: '#ecfdf5', 100: '#d1fae5', 200: '#a7f3d0', 300: '#6ee7b7',
+          400: '#34d399', 500: '#10b981', 600: '#0f766e', 700: '#115e59',
+          800: '#134e4a', 900: '#064e3b', 950: '#022c22'
         },
         slate: {
           50: '#ffffff', 100: '#f1f1f0', 200: '#dadddd', 300: '#c7cdce',
           400: '#b3b9bc', 500: '#889394', 600: '#617071', 700: '#344749',
           800: '#182a2c', 900: '#0C1024', 950: '#080A0A'
         },
-        brand: { 400: '#d5bc8f', 500: '#A98242', 600: '#25334a' }
+        brand: { 400: '#6ee7b7', 500: '#0f766e', 600: '#064e3b' }
       },
       borderRadius: { lg: '0.375rem', xl: '0.5rem', '2xl': '0.625rem', '3xl': '0.75rem' },
       fontFamily: {

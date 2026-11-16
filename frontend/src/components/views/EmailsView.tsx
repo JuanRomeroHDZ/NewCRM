@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useId, useRef } from 'react';
+import React, { useState, useEffect, useId, useRef, useMemo } from 'react';
 import {
   Mail,
   Plus,
@@ -11,6 +11,7 @@ import {
   Rocket,
   AlertTriangle,
   LoaderCircle,
+  ChevronDown,
 } from 'lucide-react';
 import { useVault } from '../../context/VaultContext';
 import { api } from '../../lib/api';
@@ -22,6 +23,7 @@ import { InfoTooltip } from '../common/InfoTooltip';
 import { EmptyState } from '../common/EmptyState';
 import { InlineErrorNotice } from '../common/InlineErrorNotice';
 import { INPUT_LIMITS } from '../../lib/validation';
+import { EmailDomainPosture } from './email/EmailDomainPosture';
 
 export const EmailsView: React.FC = () => {
   const {
@@ -50,7 +52,10 @@ export const EmailsView: React.FC = () => {
   const requestVersion = useRef(0);
   const nextOffset = useRef(0);
 
-  const filteredEmails = emails.filter((email) => matchesScope(email.scope));
+  const filteredEmails = useMemo(() => emails.filter((email) => matchesScope(email.scope)), [emails, matchesScope]);
+  const emailDomains = useMemo(() => Array.from(new Set(filteredEmails
+    .map((email) => email.address.split('@').pop()?.trim().toLowerCase() || '')
+    .filter(Boolean))), [filteredEmails]);
 
   useEffect(() => {
     if (!isUnlocked) {
@@ -183,6 +188,8 @@ export const EmailsView: React.FC = () => {
         </div>
       </div>
 
+      {isUnlocked && <EmailDomainPosture domains={emailDomains} />}
+
       {/* Level 2 Security Alert banner if locked */}
       {!isUnlocked && (
         <div className="flex flex-col justify-between gap-3 rounded-2xl border border-amber-500/25 bg-amber-500/10 p-4 sm:flex-row sm:items-center">
@@ -195,7 +202,7 @@ export const EmailsView: React.FC = () => {
           <button
             type="button"
             onClick={openUnlockModal}
-            className="min-h-[38px] flex-shrink-0 self-end rounded-lg bg-indigo-600 px-3.5 py-1.5 text-xs font-semibold text-white whitespace-nowrap hover:bg-indigo-500 sm:self-auto"
+            className="min-h-10 flex-shrink-0 self-end rounded-lg bg-indigo-600 px-3 text-xs font-semibold text-white whitespace-nowrap hover:bg-indigo-500 sm:self-auto"
           >
             Desbloquear Bóveda
           </button>
@@ -344,9 +351,10 @@ export const EmailsView: React.FC = () => {
                   </div>
 
                   <details className="min-w-0 shrink-0">
-                    <summary className="flex min-h-[34px] cursor-pointer list-none items-center gap-1.5 rounded-lg border border-obsidian-border bg-obsidian-surface px-2.5 py-1 text-[10px] font-medium text-obsidian-text hover:bg-obsidian-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 [&::-webkit-details-marker]:hidden">
+                    <summary data-caret="manual" className="flex min-h-[34px] cursor-pointer list-none items-center gap-1.5 rounded-lg border border-obsidian-border bg-obsidian-surface px-2.5 py-1 text-[10px] font-medium text-obsidian-text hover:bg-obsidian-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 [&::-webkit-details-marker]:hidden">
                       <Plus size={12} aria-hidden="true" />
                       <span>Vincular</span>
+                      <ChevronDown size={12} aria-hidden="true" />
                     </summary>
                     <div className="mt-1 flex max-w-full flex-wrap gap-1.5 border-t border-obsidian-border/60 pt-1.5">
                       <button
@@ -418,6 +426,8 @@ export const EmailsView: React.FC = () => {
               ? 'No se encontraron correos con esa búsqueda'
               : 'No hay correos principales para esta selección'
           }
+          actionLabel={search ? 'Limpiar búsqueda' : 'Agregar correo'}
+          onAction={search ? () => setSearch('') : () => openEmailModal()}
         />
       )}
     </div>

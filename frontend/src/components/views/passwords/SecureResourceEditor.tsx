@@ -96,7 +96,7 @@ export const SecureResourceEditor: React.FC<SecureResourceEditorProps> = ({ reso
 
     setSaving(true);
     try {
-      const parsedTags: TagItem[] = tagNames.map((name) => ({ name, color: '#6366f1' }));
+      const parsedTags: TagItem[] = tagNames.map((name) => ({ name, color: '#34D399' }));
       const payload: Partial<SecureResource> = {
         title: cleanTitle,
         resource_type: type,

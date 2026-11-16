@@ -90,7 +90,7 @@ class WriteupCitation(Base):
     line_end: Mapped[int] = mapped_column(Integer, default=1)
     quoted_text: Mapped[str] = mapped_column(Text, nullable=False)  # Encrypted at rest
     quote_hash: Mapped[str] = mapped_column(String(64), nullable=False)
-    color: Mapped[str] = mapped_column(String(32), default="#6366f1")
+    color: Mapped[str] = mapped_column(String(32), default="#10B981")
     note: Mapped[str | None] = mapped_column(Text, nullable=True)  # Encrypted at rest
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, onupdate=utc_now)

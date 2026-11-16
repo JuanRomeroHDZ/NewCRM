@@ -200,7 +200,7 @@ export const PlatformsView: React.FC = () => {
           <button
             type="button"
             onClick={openUnlockModal}
-            className="min-h-[44px] lg:min-h-9 flex-shrink-0 self-end rounded-lg bg-indigo-600 px-3.5 py-1.5 text-xs font-semibold text-white whitespace-nowrap hover:bg-indigo-500 sm:self-auto"
+            className="min-h-10 flex-shrink-0 self-end rounded-lg bg-indigo-600 px-3 text-xs font-semibold text-white whitespace-nowrap hover:bg-indigo-500 sm:self-auto"
           >
             Desbloquear Bóveda
           </button>
@@ -295,13 +295,13 @@ export const PlatformsView: React.FC = () => {
           <div
             role="group"
             aria-label="Modo de visualización"
-            className="hidden shrink-0 items-center rounded-lg border border-obsidian-border bg-obsidian-bg p-1 md:flex"
+            className="hidden h-10 shrink-0 items-center rounded-lg border border-obsidian-border bg-obsidian-bg p-1 md:flex"
           >
             <button
               type="button"
               aria-pressed={viewMode === 'table'}
               onClick={() => setViewMode('table')}
-              className={`min-h-[44px] md:min-h-9 rounded-lg px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
+              className={`h-8 rounded-md px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
                 viewMode === 'table' ? 'bg-obsidian-surface text-white' : 'text-obsidian-muted hover:text-white'
               }`}
             >
@@ -311,7 +311,7 @@ export const PlatformsView: React.FC = () => {
               type="button"
               aria-pressed={viewMode === 'grid'}
               onClick={() => setViewMode('grid')}
-              className={`min-h-[44px] md:min-h-9 rounded-lg px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
+              className={`h-8 rounded-md px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
                 viewMode === 'grid' ? 'bg-obsidian-surface text-white' : 'text-obsidian-muted hover:text-white'
               }`}
             >
@@ -659,7 +659,7 @@ export const PlatformsView: React.FC = () => {
               className="inline-flex min-h-[40px] items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white shadow-md shadow-indigo-600/20 hover:bg-indigo-500"
             >
               <Plus size={14} aria-hidden="true" />
-              <span>Vincular Primera Plataforma</span>
+              <span>Vincular plataforma</span>
             </button>
           </div>
         </div>

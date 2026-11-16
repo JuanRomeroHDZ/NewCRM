@@ -65,7 +65,7 @@ export const PlatformModal: React.FC = () => {
   // Tags
   const [tags, setTags] = useState<TagItem[]>([]);
   const [newTagName, setNewTagName] = useState('');
-  const [newTagColor, setNewTagColor] = useState('#6366f1');
+  const [newTagColor, setNewTagColor] = useState('#34D399');
 
   const [formError, setFormError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);

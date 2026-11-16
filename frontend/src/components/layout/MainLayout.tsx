@@ -21,11 +21,18 @@ function getAccentTextColor(color: string): string {
 }
 
 export const MainLayout: React.FC = () => {
-  const { canvasStyle, accentColor, selectedEntity } = useVault();
+  const { canvasStyle, accentColor, selectedEntity, isSetup, setActiveSection } = useVault();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const menuTriggerRef = useRef<HTMLButtonElement>(null);
   const wasMobileNavOpen = useRef(false);
   const canvasClass = canvasStyle === 'dot-grid' ? 'dot-grid-canvas' : canvasStyle === 'subtle-grid' ? 'subtle-grid' : '';
+
+  useEffect(() => {
+    if (!isSetup) {
+      try { if (localStorage.getItem('lessso-first-steps-dismissed') === '1') return; } catch { /* Guide remains available. */ }
+      setActiveSection('help');
+    }
+  }, [isSetup, setActiveSection]);
 
   useEffect(() => {
     if (!mobileNavOpen) return;

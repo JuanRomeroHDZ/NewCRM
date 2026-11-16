@@ -997,7 +997,7 @@ export const GraphView: React.FC = () => {
                 className="inline-flex min-h-11 touch-manipulation items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white transition-all active:bg-indigo-500 hover:bg-indigo-500"
               >
                 <Plus size={14} aria-hidden="true" />
-                <span>Agregar Correo Principal</span>
+                <span>Agregar correo</span>
               </button>
               <button
                 type="button"
@@ -1005,7 +1005,7 @@ export const GraphView: React.FC = () => {
                 className="inline-flex min-h-11 touch-manipulation items-center gap-1.5 rounded-xl border border-obsidian-border bg-obsidian-surface px-4 py-2 text-xs font-semibold text-white transition-all active:bg-obsidian-border hover:bg-obsidian-border"
               >
                 <Plus size={14} className="text-amber-400" aria-hidden="true" />
-                <span>Nuevo Prospecto</span>
+                <span>Agregar prospecto</span>
               </button>
             </div>
           </div>

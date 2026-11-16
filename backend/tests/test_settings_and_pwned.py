@@ -87,16 +87,16 @@ async def test_pwned_checker_offline_safety():
 
 
 @pytest.mark.asyncio
-async def test_local_mode_blocks_external_requests(client, auth_token, monkeypatch):
+async def test_local_mode_blocks_external_requests(db_session, monkeypatch):
     monkeypatch.setattr(settings, "LOCAL_MODE", True)
 
     def fail_if_called(*args, **kwargs):
         raise AssertionError("El modo local no debe abrir conexiones externas")
 
     monkeypatch.setattr("app.services.currency.httpx.AsyncClient", fail_if_called)
-    sync = await client.post("/api/v1/exchange/sync", headers={"X-Vault-Token": auth_token})
-    assert sync.status_code == 200
-    assert sync.json()["synced"] is False
-    assert sync.json()["source"] == "modo_local"
+    from app.services.currency import sync_external_exchange_rate
+    _, synced, source = await sync_external_exchange_rate(db_session)
+    assert synced is False
+    assert source == "modo_local"
     compromised, count, status = await check_pwned_password("Clave ficticia única para modo local 458!")
     assert (compromised, count, status) == (None, 0, "unknown")

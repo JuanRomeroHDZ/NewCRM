@@ -6,6 +6,7 @@ const C2WorkspaceShell = lazy(() => import('../c2/C2WorkspaceShell').then((modul
 
 const sectionViews: Record<SectionType, React.LazyExoticComponent<React.ComponentType>> = {
   dashboard: lazy(() => import('../views/DashboardView').then((module) => ({ default: module.DashboardView }))),
+  help: lazy(() => import('../views/HelpView').then((module) => ({ default: module.HelpView }))),
   emails: lazy(() => import('../views/EmailsView').then((module) => ({ default: module.EmailsView }))),
   platforms: lazy(() => import('../views/PlatformsView').then((module) => ({ default: module.PlatformsView }))),
   capture: lazy(() => import('../views/MapCaptureView').then((module) => ({ default: module.MapCaptureView }))),
@@ -21,6 +22,7 @@ const sectionViews: Record<SectionType, React.LazyExoticComponent<React.Componen
   settings_limits: SettingsView,
   settings_access: SettingsView,
   settings_network: SettingsView,
+  settings_writeups: SettingsView,
   settings_tools: SettingsView,
   settings_backup: SettingsView,
   settings_team: SettingsView,

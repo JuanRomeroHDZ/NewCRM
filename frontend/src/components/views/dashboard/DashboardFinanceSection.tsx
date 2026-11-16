@@ -39,19 +39,19 @@ export const DashboardFinanceSection: React.FC<DashboardFinanceSectionProps> = (
     <div className="flex flex-wrap items-center justify-between gap-2">
       <div className="flex min-w-0 items-center gap-2">
         <BarChart3 size={16} className="shrink-0 text-obsidian-muted" aria-hidden="true" />
-        <h2 id="dashboard-finance-heading" className="min-w-0 break-words text-sm font-bold tracking-tight text-white">
+        <h2 id="dashboard-finance-heading" className="min-w-0 break-words text-sm font-bold text-white">
           Finanzas y vencimientos
         </h2>
         <InfoTooltip content="Compara ingresos cobrados con gastos de suscripciones y revisa los vencimientos próximos." />
       </div>
-      <button type="button" onClick={onOpenSubscriptions} className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-indigo-400 hover:text-indigo-300">
+      <button type="button" onClick={onOpenSubscriptions} className="inline-flex min-h-9 shrink-0 items-center gap-1 rounded-sm text-xs font-medium text-indigo-400 hover:text-indigo-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400">
         Ver suscripciones <ArrowRight size={12} aria-hidden="true" />
       </button>
     </div>
 
     <div className="grid min-w-0 grid-cols-1 gap-3 min-[420px]:grid-cols-2 lg:grid-cols-4">
       <div className="min-w-0 border-b border-obsidian-border pb-3 min-[420px]:border-b-0 min-[420px]:pb-0">
-        <h3 className="mb-2 flex items-center gap-1 text-[10px] font-semibold uppercase text-obsidian-muted">
+        <h3 className="mb-2 flex items-center gap-1 text-xs font-medium text-obsidian-muted">
           <Wallet size={11} className="shrink-0 text-obsidian-muted" aria-hidden="true" />
           Ganancia neta
         </h3>
@@ -61,14 +61,14 @@ export const DashboardFinanceSection: React.FC<DashboardFinanceSectionProps> = (
       </div>
 
       <div className="min-w-0 border-b border-obsidian-border pb-3 min-[420px]:border-b-0 min-[420px]:pb-0">
-        <h3 className="mb-2 text-[10px] font-semibold uppercase text-obsidian-muted">Gasto en suscripciones</h3>
+        <h3 className="mb-2 text-xs font-medium text-obsidian-muted">Gasto en suscripciones</h3>
         <MetricRow label="Semana" value={`$${formatAmount(fin.weeklyMXN)} MXN`} />
         <MetricRow label="Mes" value={`$${formatAmount(fin.monthlyMXN)} MXN`} color="text-emerald-400" />
         <MetricRow label="Año" value={`$${formatAmount(fin.yearlyMXN)} MXN`} color="text-indigo-300" />
       </div>
 
       <div className="min-w-0 border-b border-obsidian-border pb-3 min-[420px]:border-b-0 min-[420px]:pb-0">
-        <h3 className="mb-2 flex items-center gap-1 text-[10px] font-semibold uppercase text-obsidian-muted">
+        <h3 className="mb-2 flex items-center gap-1 text-xs font-medium text-obsidian-muted">
           <TrendingUp size={11} className="shrink-0 text-obsidian-muted" aria-hidden="true" />
           Meses con más y menos gasto
         </h3>
@@ -78,7 +78,7 @@ export const DashboardFinanceSection: React.FC<DashboardFinanceSectionProps> = (
       </div>
 
       <div className="min-w-0">
-        <h3 className="mb-2 flex items-center gap-1 text-[10px] font-semibold uppercase text-obsidian-muted">
+        <h3 className="mb-2 flex items-center gap-1 text-xs font-medium text-obsidian-muted">
           <Server size={11} className="shrink-0 text-obsidian-muted" aria-hidden="true" />
           Dominios y hosting ({realProfit.activeRenewalsCount})
         </h3>
@@ -106,7 +106,7 @@ export const DashboardFinanceSection: React.FC<DashboardFinanceSectionProps> = (
                 type="button"
                 onClick={() => onCurrencyChange(currency)}
                 aria-pressed={pipelineCurrency === currency}
-                className={`rounded px-1.5 py-0.5 ${pipelineCurrency === currency ? 'bg-indigo-600 text-white' : 'text-obsidian-muted hover:text-white'}`}
+                className={`min-h-8 rounded px-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${pipelineCurrency === currency ? 'bg-indigo-600 text-white' : 'text-obsidian-muted hover:text-white'}`}
               >
                 {currency}
               </button>
@@ -142,7 +142,7 @@ export const DashboardFinanceSection: React.FC<DashboardFinanceSectionProps> = (
 );
 
 const MetricRow: React.FC<{ label: string; value: string; color?: string }> = ({ label, value, color = 'text-white' }) => (
-  <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5 py-0.5 text-xs font-mono">
+  <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5 py-0.5 text-xs font-mono tabular-nums">
     <span className="min-w-0 flex-[1_1_8rem] break-words text-obsidian-muted">{label}</span>
     <span className={`min-w-0 max-w-full flex-[0_1_auto] break-words text-right font-semibold ${color}`}>{value}</span>
   </div>

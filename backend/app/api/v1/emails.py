@@ -1,13 +1,17 @@
 import json
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+import ipaddress
+import re
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Response, status
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.concurrency import run_in_threadpool
 from app.database import get_db
 from app.models import EmailAccount, PlatformAccount, PasswordHistory, Prospect, utc_now
-from app.schemas import EmailCreate, EmailUpdate, EmailResponse, BackupCodeItem, SecurityQuestionItem
+from app.schemas import EmailCreate, EmailUpdate, EmailResponse, EmailDomainPostureRequest, EmailDomainPostureResponse, BackupCodeItem, SecurityQuestionItem
 from app.security.crypto import encrypt_secret, decrypt_secret, encrypt_note, decrypt_note, calculate_entropy
 from app.security.tokens import require_vault_unlocked
 from app.services.audit import log_audit_event
+from app.services.email_domain_posture import check_email_domain_posture
 
 # All email routes strictly require an unlocked Level 2 vault session
 router = APIRouter(prefix="/emails", tags=["emails"], dependencies=[Depends(require_vault_unlocked)])
@@ -160,6 +164,49 @@ async def list_emails(
         output.append(await _build_email_response(e, db=db, is_unlocked=True, list_relations=list_relations))
 
     return output
+
+
+@router.post("/domain-posture", response_model=EmailDomainPostureResponse)
+async def inspect_email_domain_posture(
+    payload: EmailDomainPostureRequest = Body(...),
+    db: AsyncSession = Depends(get_db),
+):
+    """Check public SPF, DMARC and optional DKIM TXT records for a saved email domain."""
+    normalized_domain = payload.domain.strip().rstrip(".").lower()
+    try:
+        normalized_domain = normalized_domain.encode("idna").decode("ascii")
+    except UnicodeError as exc:
+        raise HTTPException(status_code=400, detail="El dominio no tiene un formato válido.") from exc
+    try:
+        ipaddress.ip_address(normalized_domain)
+    except ValueError:
+        pass
+    else:
+        raise HTTPException(status_code=400, detail="Ingresa un nombre de dominio, no una dirección IP.")
+
+    labels = normalized_domain.split(".")
+    if (
+        len(labels) < 2
+        or len(normalized_domain) > 253
+        or any(not re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", label) for label in labels)
+        or not re.fullmatch(r"(?:[a-z]{2,63}|xn--[a-z0-9-]{2,59})", labels[-1])
+        or labels[-1] in {"local", "localhost", "internal", "test", "invalid"}
+    ):
+        raise HTTPException(status_code=400, detail="Ingresa un dominio público válido.")
+
+    normalized_selector = (payload.dkim_selector or "").strip().lower() or None
+    if normalized_selector and not re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", normalized_selector):
+        raise HTTPException(status_code=400, detail="El selector DKIM solo puede contener letras, números y guiones.")
+
+    saved_email = await db.execute(
+        select(EmailAccount.id)
+        .where(EmailAccount.is_deleted == False, EmailAccount.address.ilike(f"%@{normalized_domain}"))
+        .limit(1)
+    )
+    if not saved_email.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Solo puedes revisar dominios asociados a correos guardados en la bóveda.")
+
+    return await run_in_threadpool(check_email_domain_posture, normalized_domain, normalized_selector)
 
 @router.get("/{email_id}", response_model=EmailResponse)
 async def get_email_detail(

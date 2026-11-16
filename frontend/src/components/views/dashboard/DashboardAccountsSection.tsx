@@ -29,7 +29,7 @@ export const DashboardAccountsSection: React.FC<DashboardAccountsSectionProps> =
     <div className="min-w-0 space-y-3 rounded-xl border border-obsidian-border bg-obsidian-panel p-4 sm:p-5">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
-          <h2 className="text-sm font-bold tracking-tight text-white">Correos principales</h2>
+          <h2 className="text-sm font-bold text-white">Correos principales</h2>
           <span className="text-xs text-obsidian-muted">{emails.length}</span>
         </div>
         <div className="flex shrink-0 items-center gap-1">
@@ -82,7 +82,7 @@ export const DashboardAccountsSection: React.FC<DashboardAccountsSectionProps> =
 
     <div className="min-w-0 space-y-3 rounded-xl border border-obsidian-border bg-obsidian-panel p-4 sm:p-5">
       <div className="flex items-center justify-between gap-2">
-        <h2 className="flex min-w-0 items-center gap-2 text-sm font-bold tracking-tight text-white">
+        <h2 className="flex min-w-0 items-center gap-2 text-sm font-bold text-white">
           <Clock size={15} className="shrink-0 text-indigo-400" aria-hidden="true" />
           <span className="truncate">Próximos cobros</span>
         </h2>

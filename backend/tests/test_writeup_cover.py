@@ -6,7 +6,9 @@ from weasyprint import HTML
 
 from app.services.writeup_exporter import (
     ExportBundleContext,
+    _build_md_artifact,
     _build_docx_artifact,
+    _extract_document_index,
     _ssrf_safe_url_fetcher,
     build_standalone_html_document,
 )
@@ -34,3 +36,88 @@ def test_cover_precedes_body_and_docx_preserves_label_format():
         xml = archive.read("word/document.xml")
         assert b'w:type="page"' in xml
         assert b"secreto" not in xml
+
+
+def test_short_html_report_has_working_heading_index():
+    ctx = ExportBundleContext(
+        'report', 'Informe', 'informe', 'borrador', 'media',
+        None, None, None, None, None, [], '',
+        '# Introducción\nTexto\n\n## Hallazgos\nContenido', [], [], {}, {},
+        include_toc=True,
+    )
+    result = build_standalone_html_document(ctx)
+    assert 'class="toc"' in result
+    assert 'href="#introduccion"' in result and 'id="introduccion"' in result
+    assert 'href="#hallazgos"' in result and 'id="hallazgos"' in result
+
+
+def test_export_indexes_link_to_media_tables_and_limit_heading_depth():
+    ctx = ExportBundleContext(
+        'report', 'Informe', 'informe', 'borrador', 'media',
+        None, None, None, None, None, [], '',
+        '# General\n\n## Detalle\n\n![Captura](https://example.com/a.png)\n\n| Puerto | Estado |\n|---|---|\n| 80 | abierto |',
+        [], [], {}, {}, include_toc=True, toc_depth=1, include_figure_index=True, include_table_index=True,
+    )
+    result = build_standalone_html_document(ctx)
+    assert 'href="#general"' in result
+    assert 'href="#detalle"' not in result
+    assert 'href="#export-figure-1"' in result and 'id="export-figure-1"' in result
+    assert 'href="#export-table-1"' in result and 'id="export-table-1"' in result
+
+
+def test_html_indexes_include_raw_html_figures_images_and_tables():
+    ctx = ExportBundleContext(
+        'report', 'Informe', 'informe', 'borrador', 'media',
+        None, None, None, None, None, [], '',
+        "# Informe\n\n<figure class='evidence'><img src='https://example.invalid/cap.png' alt='Captura'><figcaption>Prueba de acceso</figcaption></figure>\n\n<img src='https://example.invalid/term.png' alt='Terminal'>\n\n<table><caption>Servicios expuestos</caption><tr><th>Puerto</th><th>Servicio</th></tr><tr><td>22</td><td>ssh</td></tr></table>",
+        [], [], {}, {}, include_figure_index=True, include_table_index=True,
+    )
+    result = build_standalone_html_document(ctx)
+    assert 'Figura 1 · Prueba de acceso' in result
+    assert 'Figura 2 · Terminal' in result
+    assert 'Tabla 1 · Servicios expuestos' in result
+    assert 'id="export-figure-1"' in result and 'href="#export-figure-1"' in result
+    assert 'id="export-figure-2"' in result and 'href="#export-figure-2"' in result
+    assert 'id="export-table-1"' in result and 'href="#export-table-1"' in result
+
+
+def test_markdown_export_adds_hierarchical_contents_and_html_object_indexes():
+    source = "# Informe\n\n## Evidencia\n\n<h5>Encabezado insertado</h5>\n\n<figure><img src='asset.png' alt='Pantalla'><figcaption>Panel de acceso</figcaption></figure>\n\n<table><caption>Servicios</caption><tr><th>Puerto</th><th>Estado</th></tr></table>\n\n~~~html\n<table><tr><th>Ignorar</th></tr></table>\n~~~"
+    ctx = ExportBundleContext(
+        'report', 'Informe', 'informe', 'borrador', 'media',
+        None, None, None, None, None, [], '', source,
+        [], [], {}, {}, include_toc=True, toc_depth=5, include_figure_index=True, include_table_index=True,
+    )
+    raw, _, _ = _build_md_artifact(ctx)
+    result = raw.decode('utf-8')
+    assert '## Contenido' in result and '[Encabezado insertado](#lessso-section-encabezado-insertado-3)' in result
+    assert '## Índice de figuras e imágenes' in result and '[Figura 1 · Panel de acceso](#lessso-figure-1)' in result
+    assert '## Índice de tablas' in result and '[Tabla 1 · Servicios](#lessso-table-1)' in result
+    assert '<a id="lessso-figure-1"></a>' in result
+    assert '<a id="lessso-table-1"></a>' in result
+    assert 'lessso-table-2' not in result
+    extracted = _extract_document_index(source)
+    assert [entry.kind for entry in extracted].count('table') == 1
+    assert not any(entry.label == 'Ignorar' for entry in extracted)
+
+
+def test_word_indexes_link_to_markdown_and_raw_html_objects_and_render_list_styles():
+    source = "# Informe\n\n<h5>Hallazgo</h5>\n\n<img src='https://example.invalid/evidence.png' alt='Terminal'>\n\n<table><caption>Puertos</caption><tr><th>Puerto</th><th>Servicio</th></tr><tr><td>22</td><td>ssh</td></tr></table>\n\nNombre | Estado\n--- | ---\napp | abierto\n\n<ol type='A'><li>Primero</li><li>Segundo</li></ol>\n\n- [x] Verificado"
+    ctx = ExportBundleContext(
+        'report', 'Informe', 'informe', 'borrador', 'media',
+        None, None, None, None, None, [], '', source,
+        [], [], {}, {}, include_toc=True, toc_depth=6, include_figure_index=True, include_table_index=True,
+    )
+    raw, _, _ = _build_docx_artifact(ctx)
+    document = docx.Document(io.BytesIO(raw))
+    text = '\n'.join([paragraph.text for paragraph in document.paragraphs] + [cell.text for table in document.tables for row in table.rows for cell in row.cells])
+    assert 'Índice de figuras e imágenes' in text and 'Figura 1 · Terminal' in text
+    assert 'Índice de tablas' in text and 'Tabla 1 · Puertos' in text and 'Tabla 2 · Nombre · Estado' in text
+    assert 'Terminal' in text and '[Imagen: Terminal]' in text
+    assert 'Puertos' in text and 'app' in text
+    assert 'A. Primero' in text and 'B. Segundo' in text
+    assert '☑ Verificado' in text
+    with zipfile.ZipFile(io.BytesIO(raw)) as archive:
+        xml = archive.read('word/document.xml')
+        assert b'<w:hyperlink' in xml and b'w:anchor="lesssow' in xml
+        assert b'<w:bookmarkStart' in xml and b'<w:bookmarkEnd' in xml

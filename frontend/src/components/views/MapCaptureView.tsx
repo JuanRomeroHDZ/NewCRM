@@ -137,10 +137,6 @@ export const MapCaptureView: React.FC = () => {
         const initialZone =
           zoneResponse.zones.find((zone) => zone.slug === config.default_zone) || zoneResponse.zones[0];
         if (initialZone) setSelectedZone(initialZone.slug);
-        if (config.default_sector) {
-          setSector((prev) => prev || config.default_sector || '');
-        }
-
         const map = leaflet
           .map(mapElementRef.current, {
             zoomControl: true,

@@ -893,6 +893,9 @@ async def export_writeup(
         redact_for_client=payload.redact_for_client,
         include_watermark=payload.include_watermark,
         include_toc=payload.include_toc,
+        toc_depth=payload.toc_depth,
+        include_figure_index=payload.include_figure_index,
+        include_table_index=payload.include_table_index,
         watermark_text=payload.watermark_text,
         rendered_diagrams=payload.rendered_diagrams,
     )

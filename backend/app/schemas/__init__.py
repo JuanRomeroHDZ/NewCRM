@@ -85,7 +85,7 @@ class VaultStatusResponse(BaseModel):
     clipboard_clear_seconds: int
     allow_reveal_passwords: bool
     search_hotkey: str
-    accent_color: str = "#6366f1"
+    accent_color: str = "#0F766E"
     canvas_style: str = "dot-grid"
     budget_cap_amount: float = 0.0
     budget_cap_currency: str = "MXN"
@@ -176,6 +176,22 @@ class EmailResponse(EmailBase):
     created_at: Any = None
     updated_at: Any = None
 
+class EmailDomainPostureRequest(BaseModel):
+    domain: str = Field(min_length=3, max_length=253)
+    dkim_selector: str | None = Field(default=None, max_length=63)
+
+class EmailDnsRecordCheck(BaseModel):
+    status: Literal['publicado', 'faltante', 'débil', 'múltiple', 'no_revisado', 'no_determinado']
+    summary: str
+    records: list[str] = Field(default_factory=list, max_length=5)
+
+class EmailDomainPostureResponse(BaseModel):
+    domain: str
+    checked_at: Any
+    spf: EmailDnsRecordCheck
+    dmarc: EmailDnsRecordCheck
+    dkim: EmailDnsRecordCheck
+
 # Platform items
 class ApiKeyItem(BaseModel):
     id: str
@@ -192,7 +208,7 @@ class EnvVarItem(BaseModel):
 
 class TagItem(BaseModel):
     name: str
-    color: str = "#6366f1"
+    color: str = "#34D399"
 
 class ApiKeyInput(ApiKeyItem):
     id: str = Field(max_length=64)
@@ -209,7 +225,7 @@ class EnvVarInput(EnvVarItem):
 
 class TagInput(TagItem):
     name: str = Field(min_length=1, max_length=50)
-    color: str = Field(default="#6366f1", max_length=32)
+    color: str = Field(default="#34D399", max_length=32)
 
 class PlatformBase(BaseModel):
     name: str
@@ -469,7 +485,7 @@ class SettingsResponse(BaseModel):
     clipboard_clear_seconds: int
     allow_reveal_passwords: bool
     search_hotkey: str
-    accent_color: str = "#6366f1"
+    accent_color: str = "#0F766E"
     canvas_style: str = "dot-grid"
     budget_cap_amount: float = 0.0
     budget_cap_currency: str = "MXN"

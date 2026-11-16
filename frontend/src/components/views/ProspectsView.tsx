@@ -265,7 +265,7 @@ export const ProspectsView: React.FC = () => {
                 className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-indigo-500/25 bg-indigo-500/10 px-3 text-xs font-semibold text-indigo-200 hover:bg-indigo-500/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
               >
                 <MapPinned size={14} aria-hidden="true" />
-                Buscar negocios en el mapa
+                Buscar negocios
                 <ArrowUpRight size={13} aria-hidden="true" />
               </button>
             )}

@@ -67,6 +67,6 @@ test('La Papelera trata los 401 como expiración de sesión de usuario', () => {
   );
 
   assert.match(corePrefixes, /'\/trash'/);
-  assert.match(api, /if \(coreEndpoint\)[\s\S]*setApiUserToken\(null\)/);
+  assert.match(api, /if \(coreEndpoint \|\| userScope\)[\s\S]*setApiUserToken\(null\)/);
   assert.match(api, /else if \([\s\S]*setApiVaultToken\(null\)/);
 });

@@ -9,7 +9,7 @@ interface TagBadgeProps {
 
 export const TagBadge: React.FC<TagBadgeProps> = ({
   name,
-  color = '#6366f1',
+  color = '#34D399',
   size = 'sm',
   onRemove
 }) => {

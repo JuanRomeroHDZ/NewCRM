@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { VaultStatus, ExchangeRate, PaymentMethod, ScopeFilter, EntityScope, RuntimeConfig, RuntimeCurrencyOption } from '../types';
-import { api, setApiVaultToken, getApiVaultToken } from '../lib/api';
+import { api, setApiVaultToken, getApiVaultToken, getApiUserToken, setApiUserToken } from '../lib/api';
 import { ConfirmDialog, ConfirmDialogOptions } from '../components/common/ConfirmDialog';
 import { PromptDialog, PromptDialogOptions } from '../components/common/PromptDialog';
 import { deriveDraftKey } from '../lib/writeupDraftRecovery';
@@ -8,6 +8,7 @@ import { createRequestSequence } from '../lib/requestSequence';
 
 export type SectionType = 
   | 'dashboard'
+  | 'help'
   | 'emails'
   | 'platforms'
   | 'capture'
@@ -23,6 +24,7 @@ export type SectionType =
   | 'settings_limits'
   | 'settings_access'
   | 'settings_network'
+  | 'settings_writeups'
   | 'settings_tools'
   | 'settings_backup'
   | 'settings_team'
@@ -165,6 +167,13 @@ interface VaultContextType {
 }
 
 const VaultContext = createContext<VaultContextType | undefined>(undefined);
+const DEFAULT_ACCENT_COLOR = '#0F766E';
+const LEGACY_DEFAULT_ACCENT_COLOR = '#6366f1';
+
+function normalizeAccentColor(value: string | undefined): string {
+  if (!value || !/^#[\da-f]{6}$/i.test(value)) return DEFAULT_ACCENT_COLOR;
+  return value.toLowerCase() === LEGACY_DEFAULT_ACCENT_COLOR ? DEFAULT_ACCENT_COLOR : value;
+}
 
 export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isSetup, setIsSetup] = useState<boolean>(true);
@@ -177,7 +186,7 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [clipboardClearSeconds, setClipboardClearSeconds] = useState<number>(30);
   const [allowRevealPasswords, setAllowRevealPasswords] = useState<boolean>(false);
   const [searchHotkey, setSearchHotkey] = useState<string>('ctrl+k');
-  const [accentColor, setAccentColor] = useState<string>('#6366f1');
+  const [accentColor, setAccentColor] = useState<string>(DEFAULT_ACCENT_COLOR);
   const [canvasStyle, setCanvasStyle] = useState<string>('dot-grid');
 
   // Global Scope Filter
@@ -350,7 +359,7 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       setClipboardClearSeconds(status.clipboard_clear_seconds);
       setAllowRevealPasswords(status.allow_reveal_passwords);
       setSearchHotkey(status.search_hotkey || 'ctrl+k');
-      setAccentColor(/^#[\da-f]{6}$/i.test(status.accent_color) ? status.accent_color : '#6366f1');
+      setAccentColor(normalizeAccentColor(status.accent_color));
       setCanvasStyle(['dot-grid', 'subtle-grid', 'plain'].includes(status.canvas_style) ? status.canvas_style : 'dot-grid');
 
       if (!status.is_unlocked && getApiVaultToken()) {
@@ -438,18 +447,43 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     'MXN';
   const systemLocale = runtimeConfig?.currency_config?.locale || 'es-MX';
 
-  // Countdown timer for vault auto-lock
+  // Only real user interaction extends the server-side inactivity deadline.
   useEffect(() => {
-    if (!isUnlocked || remainingSeconds <= 0) return;
+    if (!isUnlocked) return;
+    let lastAttempt = 0;
+    let active = true;
+    const recordActivity = () => {
+      if (document.visibilityState !== 'visible' || Date.now() - lastAttempt < 15000) return;
+      lastAttempt = Date.now();
+      const token = getApiVaultToken();
+      const userToken = getApiUserToken();
+      void api.recordVaultActivity().then(({ remaining_seconds, account_active }) => {
+        if (active && token && token === getApiVaultToken()) {
+          vaultStatusRequests.current.invalidate();
+          setRemainingSeconds(remaining_seconds);
+          if (account_active === false && userToken && userToken === getApiUserToken()) {
+            setApiUserToken(null);
+            window.dispatchEvent(new CustomEvent('core_user_session_expired'));
+          }
+        }
+      }).catch(() => { lastAttempt = 0; });
+    };
+    const events = ['pointerdown', 'keydown', 'input', 'wheel', 'touchstart'] as const;
+    events.forEach((event) => window.addEventListener(event, recordActivity, { passive: true }));
+    return () => {
+      active = false;
+      events.forEach((event) => window.removeEventListener(event, recordActivity));
+    };
+  }, [isUnlocked]);
+
+  // Confirm expiry with the server: another tab may have extended the session.
+  useEffect(() => {
+    if (!isUnlocked) return;
 
     const interval = setInterval(() => {
       setRemainingSeconds((prev) => {
         if (prev <= 1) {
-          clearInterval(interval);
-          vaultStatusRequests.current.invalidate();
-          setApiVaultToken(null);
-          setIsUnlocked(false);
-          showToast('La bóveda se ha bloqueado automáticamente por inactividad', 'warning');
+          void refreshVaultStatus();
           return 0;
         }
         return prev - 1;
@@ -457,7 +491,7 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [isUnlocked, remainingSeconds, showToast]);
+  }, [isUnlocked, refreshVaultStatus]);
 
   // Global hotkey handler (Ctrl+K or Escape to close modals)
   useEffect(() => {

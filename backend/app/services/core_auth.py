@@ -123,7 +123,7 @@ async def get_current_user_from_token(
     if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Autenticación requerida"
+            detail="Autenticación requerida", headers={"X-Auth-Scope": "user"}
         )
 
     thash = hash_token(token)
@@ -141,7 +141,7 @@ async def get_current_user_from_token(
     if not db_session:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Sesión expirada o revocada"
+            detail="Sesión expirada o revocada", headers={"X-Auth-Scope": "user"}
         )
 
     user_stmt = select(User).where(User.id == db_session.user_id, User.is_active == True)
@@ -151,7 +151,7 @@ async def get_current_user_from_token(
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Usuario inactivo o no encontrado"
+            detail="Usuario inactivo o no encontrado", headers={"X-Auth-Scope": "user"}
         )
 
     return user

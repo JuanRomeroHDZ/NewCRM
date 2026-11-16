@@ -47,7 +47,9 @@ async def sync_external_exchange_rate(db: AsyncSession, force: bool = False) -> 
     if record and record.is_manual and not force:
         return float(record.rate), False, "manual"
 
-    if settings.LOCAL_MODE:
+    # An explicit press of “actualizar desde internet” authorizes this one request.
+    # Background callers still respect local mode, and failures retain the cached record.
+    if settings.LOCAL_MODE and not force:
         return (float(record.rate) if record else settings.FALLBACK_USD_MXN_RATE), False, "modo_local"
 
     providers = [

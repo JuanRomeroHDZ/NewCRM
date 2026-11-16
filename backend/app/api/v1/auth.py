@@ -29,6 +29,7 @@ from app.security.tokens import (
     revoke_vault_token,
     get_vault_remaining_seconds,
     require_vault_unlocked,
+    touch_vault_token,
 )
 from app.security.totp import generate_random_totp_secret, verify_totp_code
 from app.services.audit import log_audit_event
@@ -41,6 +42,27 @@ from app.services.core_auth import (
 from app.services.activity_service import record_event
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+@router.post("/activity")
+async def vault_activity(request: Request, x_vault_token: str | None = Header(None), db: AsyncSession = Depends(get_db)):
+    remaining = touch_vault_token(x_vault_token)
+    if not remaining:
+        raise HTTPException(status_code=401, detail="La sesión venció. Desbloquea la bóveda para continuar.")
+    account_active = None
+    authorization = request.headers.get("Authorization", "")
+    if authorization.startswith("Bearer "):
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        token_hash = hash_token(authorization[7:].strip())
+        timeout = await db.scalar(select(UserSettings.vault_timeout_minutes).limit(1))
+        result = await db.execute(
+            update(DbSession)
+            .where(DbSession.token_hash == token_hash, DbSession.is_revoked == False, DbSession.expires_at > now,
+                   DbSession.user_id.in_(select(User.id).where(User.is_active == True)))
+            .values(expires_at=now + timedelta(minutes=timeout or app_settings.VAULT_SESSION_TIMEOUT_MINUTES))
+        )
+        await db.commit()
+        account_active = result.rowcount == 1
+    return {"remaining_seconds": remaining, "account_active": account_active}
 
 _VAULT_FAILED_ATTEMPTS: dict[str, list[datetime]] = {}
 
@@ -419,11 +441,13 @@ async def user_login(
             )
 
     user_agent = request.headers.get("User-Agent")
+    session_timeout = await db.scalar(select(UserSettings.vault_timeout_minutes).limit(1)) or app_settings.VAULT_SESSION_TIMEOUT_MINUTES
     token_str, db_sess = await create_user_session(
         db,
         user=user,
         ip_address=ip_addr,
-        user_agent=user_agent
+        user_agent=user_agent,
+        timeout_minutes=session_timeout,
     )
 
     user_resp = UserResponse(
@@ -441,7 +465,7 @@ async def user_login(
     return UserLoginResponse(
         token=token_str,
         user=user_resp,
-        expires_in_minutes=app_settings.VAULT_SESSION_TIMEOUT_MINUTES
+        expires_in_minutes=session_timeout
     )
 
 @router.post("/logout")

@@ -11,6 +11,9 @@ import type {
   PlatformAccount,
   Prospect,
   VaultStatus,
+  WriteupSummary,
+  AuditLogItem,
+  SecurityAuditResponse,
 } from '../../types';
 import { EmptyState } from '../common/EmptyState';
 import { InlineErrorNotice } from '../common/InlineErrorNotice';
@@ -34,6 +37,10 @@ import { DashboardFinanceSection } from './dashboard/DashboardFinanceSection';
 import { DashboardMapLink } from './dashboard/DashboardMapLink';
 import { DashboardMetrics } from './dashboard/DashboardMetrics';
 import { DashboardProspectsSection, ProspectContactChannel } from './dashboard/DashboardProspectsSection';
+import { formatApiDateTime } from '../../lib/dates';
+import { projectCashflow90Days } from '../../lib/cashflowForecast';
+import { DashboardActionCenter, DashboardActionTarget } from './dashboard/DashboardActionCenter';
+import { DashboardForecastSection } from './dashboard/DashboardForecastSection';
 
 export const DashboardView: React.FC = () => {
   const {
@@ -67,6 +74,13 @@ export const DashboardView: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [partialDataWarning, setPartialDataWarning] = useState<string | null>(null);
+  const [recentReports, setRecentReports] = useState<WriteupSummary[]>([]);
+  const [recentEvents, setRecentEvents] = useState<AuditLogItem[]>([]);
+  const [recentLoading, setRecentLoading] = useState(true);
+  const [securityAudit, setSecurityAudit] = useState<SecurityAuditResponse | null>(null);
+  const [securityAuditLoading, setSecurityAuditLoading] = useState(true);
+  const [securityAuditError, setSecurityAuditError] = useState(false);
+  const [recentErrors, setRecentErrors] = useState<string[]>([]);
   const [dismissedRateNotice, setDismissedRateNotice] = useState(() => {
     try {
       return window.sessionStorage.getItem('newcrm.dashboard.exchange-rate-notice') || '';
@@ -169,6 +183,44 @@ export const DashboardView: React.FC = () => {
   }, [loadDashboardData, dataVersion]);
 
   useEffect(() => {
+    let active = true;
+    if (!isUnlocked) {
+      setRecentReports([]);
+      setRecentEvents([]);
+      setRecentErrors([]);
+      setRecentLoading(false);
+      return () => { active = false; };
+    }
+    setRecentLoading(true);
+    void Promise.allSettled([api.listWriteupsPage({ limit: 4, offset: 0 }), api.getAuditTrail(4, 0)])
+      .then(([reports, events]) => {
+        if (!active) return;
+        setRecentReports(reports.status === 'fulfilled' ? reports.value.items : []);
+        setRecentEvents(events.status === 'fulfilled' ? events.value.items : []);
+        setRecentErrors([reports.status === 'rejected' ? 'informes' : '', events.status === 'rejected' ? 'actividad' : ''].filter(Boolean));
+      })
+      .finally(() => { if (active) setRecentLoading(false); });
+    return () => { active = false; };
+  }, [isUnlocked, dataVersion]);
+
+  useEffect(() => {
+    let active = true;
+    if (!isUnlocked) {
+      setSecurityAudit(null);
+      setSecurityAuditLoading(false);
+      setSecurityAuditError(false);
+      return () => { active = false; };
+    }
+    setSecurityAuditLoading(true);
+    setSecurityAuditError(false);
+    void api.getSecurityHealth()
+      .then((data) => { if (active) setSecurityAudit(data); })
+      .catch(() => { if (active) { setSecurityAudit(null); setSecurityAuditError(true); } })
+      .finally(() => { if (active) setSecurityAuditLoading(false); });
+    return () => { active = false; };
+  }, [isUnlocked, dataVersion]);
+
+  useEffect(() => {
     const interval = window.setInterval(() => setNowMs(Date.now()), 1000);
     return () => window.clearInterval(interval);
   }, []);
@@ -225,6 +277,39 @@ export const DashboardView: React.FC = () => {
   const filteredEmails = useMemo(() => emails.filter((email) => matchesScope(email.scope)), [emails, matchesScope]);
   const filteredPlatforms = useMemo(() => platforms.filter((platform) => matchesScope(platform.scope)), [platforms, matchesScope]);
   const filteredProspects = useMemo(() => prospects.filter((prospect) => matchesScope(prospect.scope)), [prospects, matchesScope]);
+  const filteredIncomes = useMemo(() => incomes.filter((income) => matchesScope(income.scope)), [incomes, matchesScope]);
+  const filteredRenewals = useMemo(() => renewals.filter((renewal) => matchesScope(renewal.scope)), [renewals, matchesScope]);
+  const filteredExpenses = useMemo(() => expenses.filter((expense) => matchesScope(expense.scope)), [expenses, matchesScope]);
+  const scopedSecurityAudit = useMemo(() => {
+    if (!securityAudit || activeScope === 'all') return securityAudit;
+    const emailIds = new Set(filteredEmails.map((email) => email.id));
+    const platformIds = new Set(filteredPlatforms.map((platform) => platform.id));
+    const matchesEntity = (item: { id: string; type?: string }) => item.type === 'email' ? emailIds.has(item.id) : platformIds.has(item.id);
+    const reuseGroups = securityAudit.reuse_groups.map((group) => {
+      const entities = group.entities.filter(matchesEntity);
+      return { ...group, entities, count: entities.length };
+    }).filter((group) => group.count > 1);
+    const apiKeyAlerts = (securityAudit.api_key_alerts || []).filter((alert) => platformIds.has(alert.platform_id));
+    const weakAccounts = securityAudit.weak_accounts.filter(matchesEntity);
+    const staleAccounts = (securityAudit.stale_accounts || []).filter(matchesEntity);
+    return {
+      ...securityAudit,
+      health_score: null,
+      total_accounts: emailIds.size + platformIds.size,
+      email_accounts_count: emailIds.size,
+      weak_accounts: weakAccounts,
+      weak_passwords_count: weakAccounts.length,
+      reuse_groups: reuseGroups,
+      reused_passwords_count: reuseGroups.reduce((count, group) => count + group.count, 0),
+      unprotected_emails: securityAudit.unprotected_emails.filter((email) => emailIds.has(email.id)),
+      no_2fa_emails_count: securityAudit.unprotected_emails.filter((email) => emailIds.has(email.id)).length,
+      stale_accounts: staleAccounts,
+      stale_passwords_count: staleAccounts.length,
+      api_key_alerts: apiKeyAlerts,
+      expired_api_keys_count: apiKeyAlerts.filter((alert) => alert.status === 'expired').length,
+      expiring_api_keys_count: apiKeyAlerts.filter((alert) => alert.status === 'expiring_soon').length,
+    };
+  }, [securityAudit, activeScope, filteredEmails, filteredPlatforms]);
 
   const fin = useMemo(
     () => computeFinancialExecutiveSummary(platforms, payments, exchangeRate?.rate, activeScope, expenses),
@@ -248,6 +333,14 @@ export const DashboardView: React.FC = () => {
     () => computeCommercialPipelineSummary(filteredProspects, fin.usdRate, fin.monthlyMXN),
     [filteredProspects, fin.usdRate, fin.monthlyMXN]
   );
+  const cashflowForecast = useMemo(() => projectCashflow90Days({
+    platforms: filteredPlatforms,
+    incomes: filteredIncomes,
+    renewals: filteredRenewals,
+    expenses: filteredExpenses,
+    usdRate: exchangeRate?.rate,
+    activeScope,
+  }), [filteredPlatforms, filteredIncomes, filteredRenewals, filteredExpenses, exchangeRate?.rate, activeScope]);
 
   const rateUpdatedAt = exchangeRate?.updated_at;
   const parsedRateUpdatedAt = rateUpdatedAt
@@ -278,7 +371,6 @@ export const DashboardView: React.FC = () => {
   const ssoPercentage = filteredPlatforms.length ? Math.round((ssoCount / filteredPlatforms.length) * 100) : 0;
   const emailsWithout2FA = filteredEmails.filter((email) => email.two_factor_method === 'none');
   const protectedEmailsCount = Math.max(0, filteredEmails.length - emailsWithout2FA.length);
-  const expiringTrials = filteredPlatforms.filter((platform) => platform.subscription_status === 'free_trial');
   const recontactProspects = useMemo(
     () => filteredProspects.filter((prospect) => prospect.status !== 'archivado_frio' && isProspectNeedingRecontact(prospect, nowMs)),
     [filteredProspects, nowMs]
@@ -298,7 +390,7 @@ export const DashboardView: React.FC = () => {
           <Lock size={32} aria-hidden="true" />
         </div>
         <div className="flex items-center justify-center gap-2">
-          <h2 className="text-xl font-bold tracking-tight text-white">Panel de control protegido</h2>
+        <h2 className="text-xl font-bold text-white">Panel de control protegido</h2>
           <InfoTooltip title="Bóveda bloqueada" content="Desbloquea con tu contraseña de acceso para ver tus finanzas y prospectos." />
         </div>
         <p className="text-xs text-obsidian-muted">Tus métricas permanecen protegidas mientras la sesión está bloqueada.</p>
@@ -335,6 +427,13 @@ export const DashboardView: React.FC = () => {
   const activePipelineAmount = pipelineCurrency === 'USD' ? pipelineSummary.activePipelineUSD : pipelineSummary.activePipelineMXN;
   const closedWonAmount = pipelineCurrency === 'USD' ? pipelineSummary.closedWonUSD : pipelineSummary.closedWonMXN;
   const openSubscriptions = () => setActiveSection('subscriptions');
+  const handleOpenAction = (target: DashboardActionTarget, entityId?: string) => {
+    if (target === 'email' && entityId) { openInspector('email', entityId); return; }
+    if (target === 'platform' && entityId) { openInspector('platform', entityId); return; }
+    if (target === 'security') { setActiveSection('security_audit'); return; }
+    if (target === 'emails') { setActiveSection('emails'); return; }
+    setActiveSection('subscriptions');
+  };
 
   return (
     <div className="mx-auto max-w-7xl min-w-0 space-y-6 p-3 sm:space-y-8 sm:p-8 animate-fadeIn">
@@ -368,25 +467,6 @@ export const DashboardView: React.FC = () => {
         </div>
       )}
 
-      {expiringTrials.length > 0 && (
-        <section className="flex min-w-0 flex-col items-start justify-between gap-3 rounded-xl border border-amber-500/30 bg-obsidian-panel p-4 sm:flex-row sm:items-center">
-          <div className="flex min-w-0 items-start gap-3">
-            <AlertTriangle size={17} className="mt-0.5 shrink-0 text-amber-400" aria-hidden="true" />
-            <div className="min-w-0">
-              <h2 className="text-xs font-bold text-white">Pruebas gratis próximas a cobrarse ({expiringTrials.length})</h2>
-              <div className="mt-1 flex flex-wrap gap-2">
-                {expiringTrials.map((trial) => (
-                  <button key={trial.id} type="button" onClick={() => openInspector('platform', trial.id)} className="max-w-full truncate text-[11px] text-amber-200 underline decoration-amber-500/40 underline-offset-2 hover:text-white">
-                    {trial.name} · {trial.trial_end_date || trial.next_billing_date}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-          <button type="button" onClick={openSubscriptions} className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-amber-300 hover:text-white">Ver suscripciones <ArrowRight size={12} aria-hidden="true" /></button>
-        </section>
-      )}
-
       <DashboardMetrics
         monthlyMXN={fin.monthlyMXN}
         monthlyUSD={fin.monthlyUSD}
@@ -417,6 +497,20 @@ export const DashboardView: React.FC = () => {
         onOpenSubscriptions={openSubscriptions}
       />
 
+      <div className="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-2">
+        <DashboardActionCenter
+          emails={filteredEmails}
+          platforms={filteredPlatforms}
+          renewals={filteredRenewals}
+          incomes={filteredIncomes}
+          securityAudit={scopedSecurityAudit}
+          securityLoading={securityAuditLoading}
+          securityError={securityAuditError}
+          onOpen={handleOpenAction}
+        />
+        <DashboardForecastSection forecast={cashflowForecast} formatAmount={formatAmount} onOpenFinance={openSubscriptions} />
+      </div>
+
       <div className="grid min-w-0 grid-cols-1 gap-6 min-[680px]:grid-cols-2">
       <DashboardProspectsSection
         prospects={filteredProspects}
@@ -429,7 +523,15 @@ export const DashboardView: React.FC = () => {
         onMarkResponded={handleMarkResponded}
       />
 
-      <DashboardMapLink onOpen={() => setActiveSection('graph')} />
+      <section className="min-w-0 rounded-xl border border-obsidian-border bg-obsidian-panel p-4 sm:p-5" aria-labelledby="dashboard-recent-title">
+        <div className="flex flex-wrap items-center justify-between gap-2"><h2 id="dashboard-recent-title" className="font-serif text-base font-semibold text-white">Informes y actividad reciente</h2><div className="flex items-center gap-4"><DashboardMapLink onOpen={() => setActiveSection('graph')} /><button type="button" onClick={() => setActiveSection('writeups')} className="min-h-9 rounded-sm text-xs text-emerald-300 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400">Ver informes <ArrowRight size={12} className="inline" /></button></div></div>
+        <p className="mt-1 text-xs text-obsidian-muted">Actividad general de la instalación; no depende del filtro de ámbito.</p>
+        {recentErrors.length > 0 && <p role="status" className="mt-3 text-xs text-amber-200">No se pudo cargar: {recentErrors.join(' y ')}.</p>}
+        <h3 className="mt-4 text-xs font-semibold text-white">Informes actualizados</h3>
+        {recentLoading ? <p role="status" className="mt-2 text-xs text-obsidian-muted">Cargando informes…</p> : recentReports.length ? <ul className="mt-1 divide-y divide-obsidian-border">{recentReports.map((report) => <li key={report.id} className="flex min-w-0 items-baseline justify-between gap-3 py-2"><span className="min-w-0 truncate text-sm text-obsidian-text" title={report.title}>{report.title}</span><time dateTime={report.updated_at} className="shrink-0 text-xs text-obsidian-muted">{formatApiDateTime(report.updated_at, systemLocale || 'es-MX')}</time></li>)}</ul> : !recentErrors.includes('informes') && <p className="mt-2 text-xs text-obsidian-muted">Aún no hay informes.</p>}
+        <div className="mt-4 flex items-center justify-between gap-2"><h3 className="text-xs font-semibold text-white">Últimos registros</h3><button type="button" onClick={() => setActiveSection('audit_logs')} className="min-h-9 rounded-sm text-xs text-emerald-300 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400">Ver historial</button></div>
+        {recentLoading ? <p role="status" className="mt-2 text-xs text-obsidian-muted">Cargando actividad…</p> : recentEvents.length ? <ul className="mt-1 divide-y divide-obsidian-border">{recentEvents.map((event) => <li key={event.id} className="flex min-w-0 items-baseline justify-between gap-3 py-2"><span className="min-w-0 truncate text-xs text-obsidian-text">{event.action} · {event.entity_type}</span><time dateTime={event.timestamp} className="shrink-0 text-xs text-obsidian-muted">{formatApiDateTime(event.timestamp, systemLocale || 'es-MX')}</time></li>)}</ul> : !recentErrors.includes('actividad') && <p className="mt-2 text-xs text-obsidian-muted">Aún no hay registros.</p>}
+      </section>
       </div>
 
       <DashboardAccountsSection

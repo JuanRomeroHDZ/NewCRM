@@ -14,3 +14,8 @@ test('el código, las anclas previas y valores no permitidos se conservan', () =
   const input = '`{etiqueta:azul:normal:Texto}`\n```\n{etiqueta:jade:normal:Texto}\n```\n{#Respuesta} {etiqueta:evil:normal:Texto}';
   assert.equal(renderWriteupLabels(input), input);
 });
+
+test('conserva etiquetas en bloques con delimitadores alternativos', () => {
+  const input = '~~~~md\n{etiqueta:jade:normal:Texto}\n```\n~~~~\n\n{etiqueta:azul:normal:Fuera}';
+  assert.equal(renderWriteupLabels(input), '~~~~md\n{etiqueta:jade:normal:Texto}\n```\n~~~~\n\n<span class="writeup-label writeup-label-azul writeup-label-normal">Fuera</span>');
+});

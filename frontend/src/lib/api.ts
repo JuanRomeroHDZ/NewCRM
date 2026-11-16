@@ -1,12 +1,12 @@
 import { 
-  EmailAccount, PlatformAccount, PaymentMethod, VaultStatus, 
+  EmailAccount, EmailDomainPostureResponse, PlatformAccount, PaymentMethod, VaultStatus,
   ExchangeRate, GraphData, AuditLogItem, VaultCredentialItem, Prospect,
   ClientIncome, DomainRenewal, AdvanceRenewalPayload,
   OneTimeExpense, InternalProject, SecureResource,
   CoreUser, CoreLoginResponse, CoreUserCreateResponse, TotpSetupResponse, CoreUserRole,
   WriteupSummary, WriteupDetail, WriteupBoard, WriteupCitation, WriteupAsset,
   WriteupRevision, WriteupRevisionAuthor, WriteupExportFormat, WriteupStructuredFinding, WriteupStatus, WriteupSeverity,
-  RuntimeConfig
+  RuntimeConfig, SecurityAuditResponse
 } from '../types';
 import { ApiError, createHttpApiError, normalizeResponseReadError, normalizeTransportError } from './apiErrors';
 
@@ -166,7 +166,8 @@ function buildAuthHeaders(extra?: Record<string, string>, includeJsonContentType
 
 async function handleApiErrorResponse(endpoint: string, response: Response, requestHeaders: Record<string, string>): Promise<never> {
   const coreEndpoint = isCoreUserEndpoint(endpoint);
-  if (coreEndpoint) {
+  const userScope = response.headers?.get('X-Auth-Scope') === 'user';
+  if (coreEndpoint || userScope) {
     if (
       response.status === 401 &&
       !endpoint.startsWith('/auth/login') &&
@@ -290,6 +291,7 @@ async function requestBlobResponse(endpoint: string, options: RequestInit = {}):
 export const api = {
   // Auth & Vault
   getVaultStatus: () => request<VaultStatus>('/auth/status'),
+  recordVaultActivity: () => request<{ remaining_seconds: number; account_active: boolean | null }>('/auth/activity', { method: 'POST' }),
   setupMasterPassword: (master_password: string) => 
     request<{ message: string; token: string; timeout_minutes: number }>('/auth/setup', {
       method: 'POST',
@@ -324,6 +326,10 @@ export const api = {
     return requestPage<EmailAccount>(`/emails?${params.toString()}`, filters.offset, filters.limit);
   },
   getEmailDetail: (id: string) => request<EmailAccount>(`/emails/${id}`),
+  checkEmailDomainPosture: (domain: string, dkimSelector?: string) => request<EmailDomainPostureResponse>('/emails/domain-posture', {
+    method: 'POST',
+    body: JSON.stringify({ domain, dkim_selector: dkimSelector?.trim() || null }),
+  }),
   createEmail: (data: any) => request<EmailAccount>('/emails', { method: 'POST', body: JSON.stringify(data) }),
   updateEmail: (id: string, data: any) => request<EmailAccount>(`/emails/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteEmail: (id: string) => request<{ message: string }>(`/emails/${id}`, { method: 'DELETE' }),
@@ -392,7 +398,7 @@ export const api = {
   exportVault: () => request<any>('/settings/export'),
 
   // Security Audit & Emergency Kit
-  getSecurityHealth: () => request<any>('/security/health'),
+  getSecurityHealth: () => request<SecurityAuditResponse>('/security/health'),
   getEmergencyKit: () => request<any>('/security/emergency-kit'),
   checkPasswordPwned: (password?: string, platformId?: string) =>
     request<any>('/security/check-pwned', {
@@ -792,6 +798,9 @@ export const api = {
       redact_for_client?: boolean;
       include_watermark?: boolean;
       include_toc?: boolean;
+      toc_depth?: number;
+      include_figure_index?: boolean;
+      include_table_index?: boolean;
       watermark_text?: string;
       rendered_diagrams?: Record<string, string>;
     }

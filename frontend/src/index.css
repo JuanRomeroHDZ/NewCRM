@@ -26,8 +26,8 @@
 
 @layer base {
   ::selection {
-    background-color: #d5bc8f;
-    color: #080a0a;
+    background-color: var(--brand-accent, #0f766e);
+    color: var(--brand-accent-contrast, #ffffff);
   }
   * {
     border-color: #182226;
@@ -74,40 +74,131 @@
 }
 
 .brand-theme [class~="bg-indigo-600"] {
-  background-color: #25334a !important;
-  color: #ffffff !important;
+  background-color: var(--brand-accent, #0f766e) !important;
+  color: var(--brand-accent-contrast, #ffffff) !important;
 }
 
 .brand-theme [class~="bg-indigo-600"] [class~="text-white"] {
-  color: #ffffff !important;
+  color: var(--brand-accent-contrast, #ffffff) !important;
 }
 
 .brand-theme [class~="hover:bg-indigo-500"]:hover {
-  background-color: #081416 !important;
-  color: #ffffff !important;
+  background-color: color-mix(in srgb, var(--brand-accent, #0f766e) 82%, #000000) !important;
+  color: var(--brand-accent-contrast, #ffffff) !important;
 }
 
 .brand-theme [class~="text-indigo-400"],
 .brand-theme [class~="text-indigo-300"] {
-  color: #d5bc8f !important;
+  color: #6ee7b7 !important;
 }
 
 .brand-theme [class~="border-indigo-500"],
 .brand-theme [class~="focus:border-indigo-500"]:focus {
-  border-color: #d5bc8f !important;
+  border-color: var(--brand-accent, #0f766e) !important;
 }
 
 .brand-theme [class~="border-indigo-500/20"] {
-  border-color: rgb(169 130 66 / 20%) !important;
+  border-color: color-mix(in srgb, #6ee7b7 20%, transparent) !important;
 }
 
 .brand-theme [class~="border-indigo-500/30"] {
-  border-color: rgb(169 130 66 / 30%) !important;
+  border-color: color-mix(in srgb, #6ee7b7 30%, transparent) !important;
 }
 
 .topbar-title-compact,
 .topbar-scope-compact {
   display: none;
+}
+
+.writeup-header-container,
+.writeup-editor-container,
+.board-toolbar-container {
+  container-type: inline-size;
+}
+
+.writeup-header-container { container-name: writeupHeader; }
+.writeup-editor-container { container-name: writeupEditor; }
+.board-toolbar-container { container-name: boardToolbar; }
+
+.writeup-header-compact-button,
+.writeup-header-more-summary {
+  min-height: 40px;
+  align-items: center;
+}
+.writeup-header-compact-button > svg,
+.writeup-header-more-summary > svg { width: 16px; height: 16px; flex-shrink: 0; }
+.writeup-markdown-editor [role="region"][aria-label^="Herramientas de edición"] button,
+.writeup-markdown-editor [role="region"][aria-label^="Todas las herramientas"] button {
+  min-height: 36px;
+  min-width: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+@container writeupHeader (max-width: 920px) {
+  .writeup-header-action-label { display: none; }
+  .writeup-header-compact-button {
+    width: 40px;
+    min-width: 40px;
+    min-height: 40px;
+    justify-content: center;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+  .writeup-header-more-summary {
+    width: 40px;
+    min-width: 40px;
+    justify-content: center;
+    padding-left: 0;
+    padding-right: 0;
+  }
+  .writeup-header-more-icon { display: block; }
+}
+
+@container writeupHeader (max-width: 620px) {
+  .writeup-header-actions { flex: 1 1 100%; justify-content: flex-start; margin-left: 0; }
+  .writeup-header-title { min-width: 0; flex-basis: 100%; }
+}
+
+@container writeupEditor (max-width: 720px) {
+  .writeup-editor-toolbar-label { display: none; }
+  .writeup-toolbar-compact-button {
+    width: 36px;
+    min-width: 36px;
+    justify-content: center;
+    padding-left: 0;
+    padding-right: 0;
+  }
+  .writeup-view-mode-label { width: 36px; }
+  .writeup-view-mode-select { width: 36px; padding-left: 0; padding-right: 0; color: transparent; font-size: 0; }
+  .writeup-view-mode-select option { color: #f1f5f9; font-size: 0.75rem; }
+  .writeup-view-mode-icon { display: block; }
+  .writeup-view-mode-chevron { display: none; }
+}
+
+@container boardToolbar (max-width: 900px) {
+  .board-toolbar-label { display: none; }
+  .board-toolbar-action {
+    width: 36px;
+    min-width: 36px;
+    min-height: 36px;
+    justify-content: center;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+}
+
+@container boardToolbar (max-width: 520px) {
+  .board-toolbar-layout { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px; }
+  .board-tool-group-select { grid-column: 1; grid-row: 1; width: 112px; max-width: 100%; }
+  .board-tool-controls,
+  .board-view-controls { grid-column: 1 / -1; width: auto; min-width: 0; }
+  .board-tool-controls { grid-row: 2; }
+  .board-view-controls { grid-row: 3; }
+  .board-toolbar-actions { grid-column: 2; grid-row: 1; width: auto; margin-left: 0; justify-content: flex-end; }
+  .board-tool-controls > button { width: 36px; min-width: 36px; min-height: 36px; padding: 6px; }
+  .board-tool-controls details > summary { min-height: 36px; }
 }
 
 @media (max-width: 320px) {
@@ -146,6 +237,12 @@
 
 .animate-soft-pulse {
   animation: softPulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@media (min-width: 1024px) {
+  .brand-theme:has(#primary-navigation[data-collapsed="true"]) .app-topbar {
+    padding-left: 3.5rem;
+  }
 }
 
 /* At short viewport heights the entire dialog scrolls, including its actions. */
@@ -292,24 +389,58 @@
   margin: 0.65rem 0;
 }
 
+.writeup-prose ul[type="square"] { list-style-type: square; }
+.writeup-prose ul[type="circle"] { list-style-type: circle; }
+.writeup-prose ol[type="a"] { list-style-type: lower-alpha; }
+.writeup-prose ol[type="A"] { list-style-type: upper-alpha; }
+.writeup-prose ol[type="i"] { list-style-type: lower-roman; }
+.writeup-prose ol[type="I"] { list-style-type: upper-roman; }
+
 .writeup-prose li {
   margin: 0.25rem 0;
 }
 
 .writeup-prose li > input[type='checkbox'] {
   margin-right: 0.5rem;
-  accent-color: #6366f1;
+  accent-color: var(--brand-accent, #0f766e);
   vertical-align: middle;
 }
 
+/* Keep native disclosure controls visibly recognizable across every section. */
+details > summary:not([data-caret="manual"]) {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  list-style: none;
+}
+
+details > summary:not([data-caret="manual"])::-webkit-details-marker { display: none; }
+
+details > summary:not([data-caret="manual"])::after {
+  content: "";
+  width: 7px;
+  height: 7px;
+  margin-left: auto;
+  flex: 0 0 7px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: translateY(-2px) rotate(45deg);
+  transition: transform 120ms ease;
+  opacity: 0.72;
+}
+
+details[open] > summary:not([data-caret="manual"])::after {
+  transform: translateY(2px) rotate(225deg);
+}
+
 .writeup-prose a {
-  color: #818cf8;
+  color: #6ee7b7;
   text-decoration: underline;
   text-underline-offset: 3px;
 }
 
 .writeup-prose a:hover {
-  color: #a5b4fc;
+  color: #a7f3d0;
 }
 
 .writeup-prose blockquote {
@@ -317,7 +448,7 @@
   padding: 0.65rem 1rem;
   background: rgba(15, 23, 42, 0.72);
   border: 1px solid #1e293b;
-  border-left: 1px solid #6366f1;
+  border-left: 1px solid #10b981;
   border-radius: 0.5rem;
   color: #cbd5e1;
 }
@@ -329,7 +460,7 @@
 
 .writeup-prose blockquote.md-callout-note { border-left-color: #38bdf8; background: rgba(14, 116, 144, 0.14); }
 .writeup-prose blockquote.md-callout-tip { border-left-color: #10b981; background: rgba(6, 95, 70, 0.16); }
-.writeup-prose blockquote.md-callout-important { border-left-color: #a855f7; background: rgba(88, 28, 135, 0.16); }
+.writeup-prose blockquote.md-callout-important { border-left-color: #d5bc8f; background: rgba(169, 130, 66, 0.16); }
 .writeup-prose blockquote.md-callout-warning { border-left-color: #f59e0b; background: rgba(120, 53, 15, 0.18); }
 .writeup-prose blockquote.md-callout-caution { border-left-color: #ef4444; background: rgba(127, 29, 29, 0.2); }
 
@@ -355,7 +486,9 @@
   background: #050912;
   border: 1px solid #1e293b;
   border-radius: 0.65rem;
-  overflow-x: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
   font-size: 0.8125rem;
   line-height: 1.55;
 }
@@ -541,31 +674,30 @@
   }
 }
 
-/* Dark ink keeps primary gold controls legible at rest. */
+/* Unslop by Damir Sokolovsky, CC BY 4.0.
+   https://github.com/heydamir/unslop */
 .brand-theme button[class~="bg-indigo-600"],
-.brand-theme a[class~="bg-indigo-600"] { color: #080A0A; }
+.brand-theme a[class~="bg-indigo-600"] { color: var(--brand-accent-contrast, #ffffff); }
 
-/* Jade feedback for interactive surfaces, while semantic status colors stay intact. */
+/* Keep interaction feedback within the configured LESSSO accent. */
 @media (hover: hover) {
   .brand-theme :is(button, a, select, summary):hover:not(:disabled) {
-    color: #ffffff;
-    border-color: #A98242;
+    border-color: color-mix(in srgb, var(--brand-accent, #0f766e) 38%, transparent);
   }
   .brand-theme button[class~="bg-indigo-600"]:hover:not(:disabled),
   .brand-theme button[class~="bg-obsidian-surface"]:hover:not(:disabled),
   .brand-theme button[class~="bg-obsidian-panel"]:hover:not(:disabled) {
-    background-color: #081416 !important;
-    color: #fff !important;
+    background-color: color-mix(in srgb, var(--brand-accent, #0f766e) 82%, #000000) !important;
   }
   .brand-theme button[class~="bg-indigo-600"]:hover:not(:disabled) [class~="text-white"] {
-    color: #fff !important;
+    color: var(--brand-accent-contrast, #ffffff) !important;
   }
-  .brand-theme article.group:hover { border-color: #A98242; }
+  .brand-theme article.group:hover { border-color: color-mix(in srgb, var(--brand-accent, #0f766e) 38%, transparent); }
 }
 
 .brand-theme :is(input, textarea, select)::placeholder { color: #b3b9bc; opacity: 1; }
-.brand-theme :is(input, textarea, select):focus-visible { outline: 2px solid #A98242; outline-offset: 2px; }
-.brand-theme :is(button, a[href], summary):focus-visible { outline: 2px solid #A98242; outline-offset: 2px; }
+.brand-theme :is(input, textarea, select):focus-visible { outline: 2px solid #6ee7b7; outline-offset: 2px; }
+.brand-theme :is(button, a[href], summary):focus-visible { outline: 2px solid #6ee7b7; outline-offset: 2px; }
 
 /* Etiquetas semánticas para informes; la paleta está limitada a estos valores. */
 .writeup-label { display: inline-block; border: 1px solid currentColor; border-radius: 0.3rem; padding: 0.08em 0.5em; font-weight: 600; line-height: 1.4; }

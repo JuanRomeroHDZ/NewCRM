@@ -49,7 +49,7 @@ function toProgressPercent(value: number): number {
 
 const InspectorDisclosure: React.FC<InspectorDisclosureProps> = ({ title, detail, children }) => (
   <details className="group border-b border-obsidian-border last:border-0">
-    <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 py-2 text-left focus-visible:rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 [&::-webkit-details-marker]:hidden">
+    <summary data-caret="manual" className="flex min-h-11 cursor-pointer list-none items-center gap-2 py-2 text-left focus-visible:rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 [&::-webkit-details-marker]:hidden">
       <span className="min-w-0 flex-1 truncate text-xs font-semibold text-obsidian-text">{title}</span>
       {detail && (
         <span className="hidden min-w-0 max-w-[55%] truncate text-right text-[10px] text-obsidian-muted sm:block">
@@ -712,7 +712,7 @@ export const ProspectInspectorSection: React.FC<ProspectInspectorSectionProps> =
 
         {(prospectData.started_at || prospectData.last_contacted_at || prospectData.responded_at) && (
           <details className="group border-t border-obsidian-border/60 pt-2">
-            <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-2 text-[11px] text-obsidian-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 [&::-webkit-details-marker]:hidden">
+            <summary data-caret="manual" className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-2 text-[11px] text-obsidian-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 [&::-webkit-details-marker]:hidden">
               <span>Fechas de seguimiento</span>
               <ChevronDown size={13} className="transition-transform group-open:rotate-180" aria-hidden="true" />
             </summary>

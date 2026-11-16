@@ -1,6 +1,12 @@
 from app.services.writeup_exporter import _render_writeup_labels_html, format_writeup_labels_plain
 
 
+def test_alternative_code_fence_preserves_labels():
+    source = '~~~~md\n{etiqueta:jade:normal:Texto}\n```\n~~~~\n\n{etiqueta:azul:normal:Fuera}'
+    assert format_writeup_labels_plain(source).endswith('\n\nFuera')
+    assert '{etiqueta:jade:normal:Texto}' in _render_writeup_labels_html(source)
+
+
 def test_label_palette_escapes_html_and_preserves_legacy_anchors():
     source = '{#Respuesta} {etiqueta:rojo:grande:<script>}'
     rendered = _render_writeup_labels_html(source)

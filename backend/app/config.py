@@ -72,9 +72,9 @@ class Settings(BaseSettings):
 
     # Preferencias iniciales por defecto de la bóveda (cuando aún no existen en BD)
     DEFAULT_SEARCH_HOTKEY: str = "ctrl+k"
-    DEFAULT_ACCENT_COLOR: str = "#6366f1"
+    DEFAULT_ACCENT_COLOR: str = "#0F766E"
     DEFAULT_CANVAS_STYLE: str = "dot-grid"
-    DEFAULT_TAG_COLOR: str = "#6366f1"
+    DEFAULT_TAG_COLOR: str = "#34D399"
     DEFAULT_PASSWORD_ROTATION_DAYS_ROOT: int = Field(default=90, ge=7, le=3650)
     DEFAULT_PASSWORD_ROTATION_DAYS_SECONDARY: int = Field(default=180, ge=7, le=3650)
     DEFAULT_MAX_FOLLOWUP_ATTEMPTS: int = Field(default=3, ge=1, le=20)

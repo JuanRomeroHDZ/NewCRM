@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   Menu, X, ChevronDown
 } from 'lucide-react';
@@ -13,9 +13,22 @@ interface TopbarProps {
 
 export const Topbar: React.FC<TopbarProps> = ({ onMenuClick, menuTriggerRef, isMenuOpen }) => {
   const { activeSection, activeScope, setActiveScope } = useVault();
+  const [saveNotice, setSaveNotice] = useState('');
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const onSaved = (event: Event) => {
+      const notice = (event as CustomEvent<{ message: string; persistent?: boolean }>).detail;
+      setSaveNotice(notice.message);
+      if (timer) clearTimeout(timer);
+      if (!notice.persistent) timer = setTimeout(() => setSaveNotice(''), 5000);
+    };
+    window.addEventListener('writeup_saved_notice', onSaved);
+    return () => { window.removeEventListener('writeup_saved_notice', onSaved); if (timer) clearTimeout(timer); };
+  }, []);
 
   const sectionTitles: Record<string, { title: string; compactTitle: string; tooltip?: string }> = {
     dashboard: { title: 'Resumen General', compactTitle: 'Inicio', tooltip: 'Vista rápida de tus correos principales, seguridad, prospectos, gastos e ingresos reales.' },
+    help: { title: 'Guía y primeros pasos', compactTitle: 'Guía' },
     emails: { title: 'Correos Principales', compactTitle: 'Correos', tooltip: 'Tus cuentas de correo principales, a qué teléfono o correo se recuperan y si tienen verificación en 2 pasos.' },
     platforms: { title: 'Servicios vinculados', compactTitle: 'Servicios', tooltip: 'Páginas, aplicaciones y herramientas vinculadas a tus correos principales.' },
     capture: { title: 'Captación en mapa', compactTitle: 'Mapa', tooltip: 'Busca negocios publicados en OpenStreetMap y elige cuáles guardar como prospectos.' },
@@ -31,6 +44,7 @@ export const Topbar: React.FC<TopbarProps> = ({ onMenuClick, menuTriggerRef, isM
     settings_limits: { title: 'Ajustes', compactTitle: 'Ajustes' },
     settings_access: { title: 'Ajustes', compactTitle: 'Ajustes' },
     settings_network: { title: 'Ajustes', compactTitle: 'Ajustes' },
+    settings_writeups: { title: 'Ajustes', compactTitle: 'Ajustes' },
     settings_tools: { title: 'Ajustes', compactTitle: 'Ajustes' },
     settings_backup: { title: 'Ajustes', compactTitle: 'Ajustes' },
     settings_team: { title: 'Ajustes', compactTitle: 'Ajustes' },
@@ -60,7 +74,7 @@ export const Topbar: React.FC<TopbarProps> = ({ onMenuClick, menuTriggerRef, isM
   ] as const;
 
   return (
-    <header className="relative z-20 flex min-w-0 shrink-0 items-center justify-between gap-2 border-b border-obsidian-border bg-obsidian-panel/95 px-3 py-2 sm:flex-nowrap sm:gap-3 sm:px-4 md:py-2.5">
+    <header className="app-topbar relative z-20 flex min-w-0 shrink-0 items-center justify-between gap-2 border-b border-obsidian-border bg-obsidian-panel/95 px-3 py-2 sm:flex-nowrap sm:gap-3 sm:px-4 md:py-2.5">
       {/* Title & Optional Context Tooltip */}
       <div className="flex min-w-0 flex-1 items-center gap-2">
         <button
@@ -74,7 +88,7 @@ export const Topbar: React.FC<TopbarProps> = ({ onMenuClick, menuTriggerRef, isM
         >
           {isMenuOpen ? <X size={20} aria-hidden="true" /> : <Menu size={20} aria-hidden="true" />}
         </button>
-        <h1 className="text-sm sm:text-base font-semibold text-white tracking-tight truncate" title={currentInfo.title}>
+        <h1 className="truncate text-sm font-semibold text-white sm:text-base" title={currentInfo.title}>
           <span className="topbar-title-full">{currentInfo.title}</span>
           <span className="topbar-title-compact">{currentInfo.compactTitle}</span>
         </h1>
@@ -85,6 +99,7 @@ export const Topbar: React.FC<TopbarProps> = ({ onMenuClick, menuTriggerRef, isM
         )}
       </div>
 
+      <span role="status" className="min-w-0 truncate text-xs text-emerald-300">{activeSection === 'writeups' ? saveNotice : ''}</span>
       <label className="relative shrink-0">
         <span className="sr-only">Filtrar información por ámbito</span>
         <select

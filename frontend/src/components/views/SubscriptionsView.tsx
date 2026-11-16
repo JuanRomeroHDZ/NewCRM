@@ -969,6 +969,7 @@ export const SubscriptionsView: React.FC = () => {
           <InfoTooltip
             title="Control Financiero Completo"
             content="Revisa cuánto gastas en suscripciones, cuánto dinero real te han pagado tus clientes (ganancia neta) y cuándo vencen los dominios y hostings de tus proyectos."
+            position="bottom"
           />
         </div>
 
@@ -1014,7 +1015,7 @@ export const SubscriptionsView: React.FC = () => {
                   onClick={() => setIsEditingRate(true)}
                   title="Editar tipo de cambio manualmente"
                   aria-label="Editar tipo de cambio manualmente"
-                  className="p-1 text-obsidian-muted hover:text-white rounded-lg hover:bg-obsidian-surface transition-colors"
+                  className="inline-flex h-10 w-10 items-center justify-center text-obsidian-muted hover:text-white rounded-lg hover:bg-obsidian-surface transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-400"
                 >
                   <Edit2 size={12} aria-hidden="true" />
                 </button>
@@ -1024,7 +1025,7 @@ export const SubscriptionsView: React.FC = () => {
                   disabled={isSyncingRate}
                   title="Actualizar tipo de cambio desde internet"
                   aria-label="Actualizar tipo de cambio desde internet"
-                  className="p-1 text-obsidian-muted hover:text-white rounded-lg hover:bg-obsidian-surface transition-colors disabled:opacity-50"
+                  className="inline-flex h-10 w-10 items-center justify-center text-obsidian-muted hover:text-white rounded-lg hover:bg-obsidian-surface transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-400 disabled:opacity-50"
                 >
                   <RefreshCw size={12} className={isSyncingRate ? 'animate-spin text-indigo-400' : ''} aria-hidden="true" />
                 </button>

@@ -224,12 +224,13 @@ export const RuntimeConfigSection: React.FC = () => {
   const configUnavailable = !runtimeConfig || runtimeConfigLoading || Boolean(runtimeConfigError);
 
   return (
-    <form onSubmit={handleSave} className="min-w-0 space-y-4 rounded-xl border border-obsidian-border bg-obsidian-panel p-3 sm:space-y-5 sm:p-5">
+    <div className="space-y-4">
+    <form id="runtime-config-form" onSubmit={handleSave} className="min-w-0 space-y-4 rounded-xl border border-obsidian-border bg-obsidian-panel p-3 sm:space-y-5 sm:p-5">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-obsidian-border pb-3">
         <div className="flex min-w-0 items-center gap-2">
           <Globe size={16} className="shrink-0 text-cyan-400" aria-hidden="true" />
-          <h3 className="text-sm font-bold text-white">Monedas, mapa e informes</h3>
-          <InfoTooltip content="Configura el formato de moneda, la ubicación de búsqueda y los datos de los informes." />
+          <h3 className="text-sm font-bold text-white">Monedas y mapa</h3>
+          <InfoTooltip content="Configura el formato de moneda y la ubicación de búsqueda." />
         </div>
         <button
           type="submit"
@@ -364,10 +365,16 @@ export const RuntimeConfigSection: React.FC = () => {
           </div>
         </section>
 
-        <section className="space-y-3 border-t border-obsidian-border pt-4 text-xs">
-          <h4 className="flex items-center gap-1.5 font-semibold text-white">
-            <FileText size={14} className="text-indigo-400" aria-hidden="true" /> Informes de seguridad
-          </h4>
+      </fieldset>
+    </form>
+        <section id="settings-writeups" tabIndex={-1} aria-labelledby="settings-writeups-heading" className="scroll-mt-4 space-y-3 rounded-xl border border-obsidian-border bg-obsidian-panel p-4 text-xs focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-300 sm:p-5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 id="settings-writeups-heading" className="flex items-center gap-2 text-sm font-semibold text-white">
+            <FileText size={16} className="text-emerald-400" aria-hidden="true" /> Informes de seguridad
+          </h3>
+          <button type="submit" form="runtime-config-form" disabled={saving || configUnavailable} className="inline-flex min-h-9 items-center gap-2 rounded-lg bg-emerald-700 px-3 text-xs font-semibold text-white hover:bg-emerald-600 disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-300"><Save size={16} aria-hidden="true" />{saving ? 'Guardando…' : 'Guardar'}</button>
+          </div>
+          <fieldset disabled={configUnavailable || saving} className="min-w-0 border-0 p-0 disabled:opacity-60">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <label htmlFor="rt-writeup-org" className={LABEL_CLASS}>Organización predeterminada</label>
@@ -378,8 +385,8 @@ export const RuntimeConfigSection: React.FC = () => {
               <input id="rt-writeup-watermark" type="text" maxLength={180} value={watermark} onChange={(event) => setWatermark(event.target.value)} className={INPUT_CLASS} />
             </div>
           </div>
+          </fieldset>
         </section>
-      </fieldset>
-    </form>
+    </div>
   );
 };

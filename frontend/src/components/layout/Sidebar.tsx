@@ -34,7 +34,7 @@ const navGroups: NavGroup[] = [
     id: 'inicio',
     label: 'Inicio',
     icon: LayoutDashboard,
-    items: [{ id: 'dashboard', label: 'Resumen general', icon: LayoutDashboard }],
+    items: [{ id: 'dashboard', label: 'Resumen general', icon: LayoutDashboard }, { id: 'help', label: 'Guía y primeros pasos', icon: BookOpen }],
   },
   {
     id: 'prospeccion',
@@ -111,6 +111,7 @@ const navGroups: NavGroup[] = [
       { id: 'settings_limits', label: 'Recordatorios y límites', icon: Clock, requiresVault: true },
       { id: 'settings_access', label: 'Contraseña de acceso', icon: Key, requiresVault: true },
       { id: 'settings_network', label: 'Red y servicios', icon: Network, requiresVault: true },
+      { id: 'settings_writeups', label: 'Informes de seguridad', icon: BookOpen, requiresVault: true },
       { id: 'settings_tools', label: 'Herramientas', icon: Settings, requiresVault: true },
       { id: 'settings_backup', label: 'Importación y respaldos', icon: FileText, requiresVault: true },
       { id: 'settings_team', label: 'Accesos del equipo', icon: Shield, requiresVault: true },
@@ -211,14 +212,15 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onCloseMobile })
     <aside
       ref={asideRef}
       id="primary-navigation"
+      data-collapsed={compact ? 'true' : undefined}
       aria-label="Navegación principal"
       role={!isDesktop && isMobileOpen ? "dialog" : undefined}
       aria-modal={!isDesktop && isMobileOpen ? true : undefined}
       aria-hidden={!isDesktop && !isMobileOpen ? true : undefined}
       onKeyDown={handleMobileTab}
-      className={`responsive-sidebar fixed inset-y-0 left-0 z-50 flex h-[100dvh] w-72 max-w-[calc(100vw-2rem)] shrink-0 flex-col border-r border-obsidian-border bg-obsidian-panel transition-transform duration-200 ease-out lg:static lg:h-[100dvh] lg:max-w-none ${compact ? 'lg:w-10 lg:border-r-0 lg:bg-transparent' : 'lg:w-64'} ${isMobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}
+      className={`responsive-sidebar fixed inset-y-0 left-0 z-50 flex h-[100dvh] w-72 max-w-[calc(100vw-2rem)] shrink-0 flex-col border-r border-obsidian-border bg-obsidian-panel transition-transform duration-200 ease-out lg:max-w-none ${compact ? 'lg:relative lg:h-0 lg:w-0 lg:border-r-0 lg:bg-transparent' : 'lg:static lg:h-[100dvh] lg:w-64'} ${isMobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}
     >
-      <div className={`flex h-16 shrink-0 items-center justify-between border-b border-obsidian-border ${compact ? 'bg-obsidian-panel/95 px-1' : 'px-4'}`}>
+      <div className={`flex h-16 shrink-0 items-center justify-between ${compact ? 'fixed left-0 top-0 z-50 w-10 px-1' : 'border-b border-obsidian-border px-4'}`}>
         {!compact ? (
           <div className="flex min-w-0 items-center gap-2.5">
             <button type="button" onClick={() => imageInput.current?.click()} className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-indigo-400/20 bg-indigo-600 text-white" title="Cambiar foto de perfil" aria-label="Cambiar foto de perfil">
@@ -245,8 +247,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onCloseMobile })
       {!compact && <>
       {imageError && <p role="alert" className="px-4 pb-2 text-xs leading-relaxed text-rose-300">{imageError}</p>}
 
-      <div className={`shrink-0 pb-2 ${compact ? 'px-2' : 'px-3'}`}>
-        <button type="button" onClick={() => { openCommandPalette(); onCloseMobile(); }} className={`group flex min-h-10 w-full items-center rounded-xl border border-obsidian-border bg-obsidian-bg text-xs text-obsidian-muted transition-colors hover:bg-obsidian-surface hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 ${compact ? 'justify-center px-2' : 'justify-between gap-2 px-3'}`} title={compact ? 'Buscador rápido' : undefined} aria-label={compact ? 'Buscador rápido' : undefined}>
+      <div className="shrink-0 pb-2">
+        <button type="button" onClick={() => { openCommandPalette(); onCloseMobile(); }} className="group flex min-h-11 w-full items-center justify-between gap-2 border-y border-obsidian-border bg-obsidian-bg px-4 text-xs text-obsidian-muted transition-colors hover:bg-obsidian-surface hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300" aria-label="Buscador rápido">
           <span className="flex min-w-0 items-center gap-2"><Search size={14} className="shrink-0 group-hover:text-indigo-300" />{!compact && <span className="truncate">Buscar en LESSSO</span>}</span>
           {!compact && <kbd className="shrink-0 rounded border border-obsidian-border bg-obsidian-panel px-1.5 py-0.5 font-mono text-[10px]">{searchHotkey.toUpperCase()}</kbd>}
         </button>
@@ -261,7 +263,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onCloseMobile })
             const listId = `nav-group-${group.id}`;
             return (
               <li key={group.id}>
-                {!compact && <button type="button" aria-expanded={expanded} aria-controls={listId} onClick={() => setExpandedGroups((current) => ({ ...current, [group.id]: !current[group.id] }))} className={`flex min-h-11 w-full items-center gap-2 rounded-lg px-3 text-[11px] font-semibold uppercase tracking-[0.1em] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 lg:min-h-9 ${groupIsActive ? 'text-indigo-200' : 'text-obsidian-muted hover:bg-obsidian-surface hover:text-white'}`}>
+                {!compact && <button type="button" aria-expanded={expanded} aria-controls={listId} onClick={() => setExpandedGroups((current) => ({ ...current, [group.id]: !current[group.id] }))} className={`flex min-h-11 w-full items-center gap-2 rounded-lg px-3 text-xs font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 lg:min-h-9 ${groupIsActive ? 'text-indigo-200' : 'text-obsidian-muted hover:bg-obsidian-surface hover:text-white'}`}>
                   <GroupIcon size={14} className="shrink-0" />
                   <span className="min-w-0 flex-1 truncate text-left">{group.label}</span>
                   <ChevronDown size={13} className={`shrink-0 transition-transform ${expanded ? '' : '-rotate-90'}`} />
@@ -274,7 +276,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onCloseMobile })
                     return (
                       <React.Fragment key={item.id}>
                         {!compact && item.subgroup && (
-                          <li role="presentation" className="px-3 pt-2 pb-0.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-obsidian-muted">
+                          <li role="presentation" className="px-3 pt-2 pb-0.5 text-xs font-medium text-obsidian-muted">
                             {item.subgroup}
                           </li>
                         )}
@@ -297,7 +299,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onCloseMobile })
 
       <footer className={`shrink-0 border-t border-obsidian-border ${compact ? 'p-2' : 'p-3'}`}>
         {compact ? (
-          <div className={`flex items-center justify-center rounded-xl border p-1 transition-colors ${isUnlocked ? 'border-obsidian-border bg-obsidian-panel text-obsidian-muted' : 'border-obsidian-border bg-obsidian-surface text-obsidian-muted'}`}>
+          <div className="flex items-center justify-center rounded-xl border border-obsidian-border bg-obsidian-panel p-1 text-obsidian-muted transition-colors">
             <button
               type="button"
               onClick={toggleVault}
@@ -309,16 +311,15 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onCloseMobile })
             </button>
           </div>
         ) : (
-          <div className={`flex items-center justify-between gap-2 rounded-xl border p-2.5 transition-colors ${isUnlocked ? 'border-obsidian-border bg-obsidian-panel text-obsidian-muted' : 'border-obsidian-border bg-obsidian-surface text-obsidian-muted'}`}>
+          <div className="flex items-center justify-between gap-2 rounded-xl border border-obsidian-border bg-obsidian-panel p-2.5 text-obsidian-muted transition-colors">
             <div className="flex min-w-0 items-center gap-2">
-              {isUnlocked ? <Unlock size={15} className="shrink-0 text-emerald-400" /> : <Lock size={15} className="shrink-0 text-obsidian-muted" />}
               <div className="min-w-0">
                 <div className="truncate text-xs font-semibold text-white">{isUnlocked ? 'Bóveda activa' : 'Bóveda bloqueada'}</div>
                 <div className="truncate font-mono text-[11px] text-obsidian-muted">{isUnlocked ? `Cierre ${formatTimer(remainingSeconds)}` : 'Acceso cifrado'}</div>
               </div>
             </div>
-            <button type="button" onClick={toggleVault} className="min-h-[44px] lg:min-h-9 shrink-0 rounded-lg bg-obsidian-surface px-2.5 text-[10px] font-semibold text-white transition-colors hover:bg-obsidian-borderLight focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300">
-              {isUnlocked ? 'Bloquear' : 'Desbloquear'}
+            <button type="button" onClick={toggleVault} aria-label={isUnlocked ? 'Bloquear bóveda' : 'Desbloquear bóveda'} title={isUnlocked ? 'Bloquear bóveda' : 'Desbloquear bóveda'} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-obsidian-muted transition-colors hover:bg-obsidian-border/60 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-300">
+              {isUnlocked ? <Unlock size={16} className="text-emerald-400" aria-hidden="true" /> : <Lock size={16} aria-hidden="true" />}
             </button>
           </div>
         )}

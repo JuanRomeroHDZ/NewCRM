@@ -20,7 +20,6 @@ def create_vault_token(timeout_minutes: int | None = None, encryption_key: bytes
     payload = {
         "scope": "level2_vault",
         "jti": jti,
-        "exp": exp,
         "iat": now
     }
     return jwt.encode(payload, settings.SERVER_SECRET_KEY, algorithm="HS256")
@@ -68,10 +67,17 @@ def get_vault_remaining_seconds(token: str | None) -> int:
         jti = payload.get("jti")
         if not jti or not session_manager.is_session_active(jti):
             return 0
-        exp = payload.get("exp", 0)
-        remaining = exp - int(time.time())
-        return max(0, remaining)
+        return session_manager.remaining(jti)
     except Exception:
+        return 0
+
+def touch_vault_token(token: str | None) -> int:
+    try:
+        payload = jwt.decode(token, settings.SERVER_SECRET_KEY, algorithms=["HS256"])
+        if payload.get("scope") != "level2_vault" or not payload.get("jti"):
+            return 0
+        return session_manager.remaining(payload["jti"], touch=True)
+    except (jwt.InvalidTokenError, TypeError):
         return 0
 
 async def require_vault_unlocked(x_vault_token: str | None = Header(None)) -> bool:
