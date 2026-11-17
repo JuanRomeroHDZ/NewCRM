@@ -416,8 +416,22 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       setIsUnlocked(false);
       setRemainingSeconds(0);
     };
+    const handleVaultTokenChanged = (event: Event) => {
+      const token = (event as CustomEvent<{ token: string | null }>).detail?.token;
+      if (!token) {
+        vaultStatusRequests.current.invalidate();
+        setIsUnlocked(false);
+        setRemainingSeconds(0);
+        return;
+      }
+      void refreshVaultStatus();
+    };
     window.addEventListener('vault_locked', handleVaultLocked);
-    return () => window.removeEventListener('vault_locked', handleVaultLocked);
+    window.addEventListener('vault_token_changed', handleVaultTokenChanged);
+    return () => {
+      window.removeEventListener('vault_locked', handleVaultLocked);
+      window.removeEventListener('vault_token_changed', handleVaultTokenChanged);
+    };
   }, [refreshVaultStatus]);
 
   useEffect(() => {

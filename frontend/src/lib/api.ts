@@ -93,6 +93,24 @@ let currentVaultToken: string | null = localStorage.getItem('emailsaver_vault_to
 let currentUserToken: string | null = sessionStorage.getItem('emailsaver_user_token');
 const activeWriteupEditLeases = new Map<string, { token: string; clientId: string }>();
 
+// The vault token is intentionally shared by same-origin tabs through
+// localStorage. Keep the in-memory request header in sync when another tab
+// unlocks or locks the vault; otherwise an already-open tab keeps sending a
+// stale token until its next 401 response.
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', (event) => {
+    if (event.storageArea !== localStorage || (event.key !== 'emailsaver_vault_token' && event.key !== null)) return;
+
+    const nextToken = event.key === null
+      ? localStorage.getItem('emailsaver_vault_token')
+      : event.newValue;
+    if (nextToken === currentVaultToken) return;
+
+    currentVaultToken = nextToken;
+    window.dispatchEvent(new CustomEvent('vault_token_changed', { detail: { token: nextToken } }));
+  });
+}
+
 export function setWriteupEditLease(writeupId: string, token: string, clientId: string) {
   activeWriteupEditLeases.set(writeupId, { token, clientId });
 }

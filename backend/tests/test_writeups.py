@@ -127,24 +127,30 @@ async def test_writeup_edit_lease_is_exclusive_and_release_and_expiry_reopen_edi
     assert first_lease["ttl_seconds"] == 90
     assert first_lease["token"]
 
-    missing_token_renew = await client.post(
+    reload_recovery = await client.post(
         f"/api/v1/writeups/{writeup_id}/edit-lease",
         headers=base_headers,
         json={"client_id": first_lease["client_id"]},
     )
-    assert missing_token_renew.status_code == 423
-    wrong_token_renew = await client.post(
+    assert reload_recovery.status_code == 200
+    assert reload_recovery.json()["token"] != first_lease["token"]
+    first_lease = reload_recovery.json()
+
+    stale_token_recovery = await client.post(
         f"/api/v1/writeups/{writeup_id}/edit-lease",
-        headers={**base_headers, "X-Writeup-Edit-Lease": "invalid-token", "X-Writeup-Client-ID": first_lease["client_id"]},
+        headers={**base_headers, "X-Writeup-Edit-Lease": "stale-token", "X-Writeup-Client-ID": first_lease["client_id"]},
         json={"client_id": first_lease["client_id"]},
     )
-    assert wrong_token_renew.status_code == 423
-    wrong_client_renew = await client.post(
+    assert stale_token_recovery.status_code == 200
+    assert stale_token_recovery.json()["token"] != first_lease["token"]
+    first_lease = stale_token_recovery.json()
+
+    other_tab_renew = await client.post(
         f"/api/v1/writeups/{writeup_id}/edit-lease",
-        headers={**base_headers, "X-Writeup-Edit-Lease": first_lease["token"], "X-Writeup-Client-ID": "editor-tab-b-0002"},
-        json={"client_id": first_lease["client_id"]},
+        headers={**base_headers, "X-Writeup-Client-ID": "editor-tab-b-0002"},
+        json={"client_id": "editor-tab-b-0002"},
     )
-    assert wrong_client_renew.status_code == 423
+    assert other_tab_renew.status_code == 423
 
     legitimate_renew = await client.post(
         f"/api/v1/writeups/{writeup_id}/edit-lease",

@@ -255,6 +255,40 @@ def test_markdown_exports_embed_and_bundle_attached_images_with_captions():
         assert archive.read('assets/mapa-prueba.png').startswith(b'\x89PNG\r\n\x1a\n')
 
 
+@pytest.mark.parametrize(
+    ('image_format', 'mime_type', 'filename'),
+    [('JPEG', 'image/jpeg', 'evidence.jpg'), ('WEBP', 'image/webp', 'evidence.webp')],
+)
+def test_non_pdf_exports_preserve_jpeg_and_webp_evidence(image_format, mime_type, filename):
+    image = Image.new('RGB', (64, 36), '#075c4c')
+    output = io.BytesIO()
+    image.save(output, format=image_format)
+    asset = {
+        'id': 'evidence123',
+        'filename': filename,
+        'mime_type': mime_type,
+        'encrypted_blob': encrypt_bytes(output.getvalue()),
+        'sha256': f'test-{image_format.lower()}-sha256',
+    }
+    ctx = ExportBundleContext(
+        'report', 'Informe', 'informe', 'borrador', 'media',
+        None, None, None, None, None, [], '',
+        '# Evidencia\n\n![Captura](asset://evidence123)',
+        [], [], {'evidence123': asset}, {},
+    )
+
+    html = build_standalone_html_document(ctx)
+    markdown, _, _ = _build_md_artifact(ctx)
+    word, _, _ = _build_docx_artifact(ctx)
+
+    assert f'data:{mime_type};base64,' in html
+    assert f'data:{mime_type};base64,' in markdown.decode('utf-8')
+    with zipfile.ZipFile(io.BytesIO(word)) as archive:
+        media = [archive.read(name) for name in archive.namelist() if name.startswith('word/media/')]
+    assert len(media) == 1
+    assert media[0].startswith(b'\x89PNG\r\n\x1a\n')
+
+
 def test_colored_underline_survives_export_without_allowing_arbitrary_styles():
     ctx = ExportBundleContext(
         'report', 'Informe', 'informe', 'borrador', 'media', None, None, None,

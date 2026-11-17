@@ -35,6 +35,7 @@ import { useVault } from '../../context/VaultContext';
 import { useC2 } from '../../context/C2Context';
 import { EmptyState } from '../common/EmptyState';
 import { api, clearWriteupEditLease } from '../../lib/api';
+import { getWriteupEditClientId } from '../../lib/writeupEditLeaseClient';
 import { ApiError } from '../../lib/apiErrors';
 import { formatApiDateTime, parseApiDate } from '../../lib/dates';
 import { deriveDraftKey, draftStorageKey, encryptDraft, listDraftCopies, readDraft, removeDraft, storeEncryptedDraft } from '../../lib/writeupDraftRecovery';
@@ -414,7 +415,7 @@ export const WriteupsView: React.FC = () => {
     }, 350);
   };
   if (!editClientIdRef.current) {
-    editClientIdRef.current = `writeup-${typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`}`;
+    editClientIdRef.current = getWriteupEditClientId();
   }
   const mediaTabUploadRef = useRef<HTMLInputElement>(null);
   const modalDialogRef = useRef<HTMLDivElement>(null);
@@ -2488,6 +2489,38 @@ export const WriteupsView: React.FC = () => {
                   className="writeup-header-title h-10 min-w-[120px] w-48 max-w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-sm font-bold text-white"
                 />
 
+                <button
+                  type="button"
+                  disabled={editLockState?.kind === 'acquiring'}
+                  onClick={() => {
+                    if (detail.manual_locked || editLockState?.kind === 'manual') {
+                      void handleToggleManualLock();
+                    } else if (editLockState?.kind === 'blocked' || editLockState?.kind === 'unavailable') {
+                      void acquireEditLease(detail.id).then((acquired) => {
+                        if (acquired) showToast('Reserva de edición recuperada.', 'success');
+                      });
+                    } else {
+                      void handleToggleManualLock();
+                    }
+                  }}
+                  aria-pressed={detail.manual_locked || editLockState?.kind === 'manual'}
+                  aria-label={detail.manual_locked || editLockState?.kind === 'manual'
+                    ? 'Desbloquear edición'
+                    : editLockState?.kind === 'blocked' || editLockState?.kind === 'unavailable'
+                      ? 'Reintentar reserva de edición'
+                      : 'Bloquear edición'}
+                  title={detail.manual_locked || editLockState?.kind === 'manual'
+                    ? 'Desbloquear edición'
+                    : editLockState?.kind === 'blocked' || editLockState?.kind === 'unavailable'
+                      ? 'Reintentar reserva de edición'
+                      : 'Bloquear edición'}
+                  className={`writeup-header-compact-button inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-300 ${detail.manual_locked || editLockState?.kind === 'manual'
+                    ? 'border border-amber-700/60 bg-amber-950/40 text-amber-200 hover:bg-amber-900/50'
+                    : 'bg-slate-800 text-slate-200 hover:bg-slate-700'} disabled:cursor-wait disabled:opacity-50`}
+                >
+                  {detail.manual_locked || editLockState?.kind === 'manual' ? <Unlock className="h-4 w-4" aria-hidden="true" /> : <Lock className="h-4 w-4" aria-hidden="true" />}
+                </button>
+
                 <div className="flex min-w-0 flex-wrap items-center gap-1.5">
                 <label className="relative inline-flex max-w-full items-center">
                   <span className="sr-only">Área de trabajo</span>
@@ -2526,6 +2559,7 @@ export const WriteupsView: React.FC = () => {
                     </button>
                   </div>
                 )}
+
               </div>
 
                 <button
@@ -2556,34 +2590,6 @@ export const WriteupsView: React.FC = () => {
                 </button>
 
                 <div className="writeup-header-actions flex max-w-full flex-wrap items-center justify-end gap-1 ml-auto">
-                  <button
-                    type="button"
-                    disabled={editLockState?.kind === 'acquiring'}
-                    onClick={() => {
-                      if (detail.manual_locked || editLockState?.kind === 'manual') {
-                        void handleToggleManualLock();
-                      } else if (editLockState?.kind === 'blocked' || editLockState?.kind === 'unavailable') {
-                        void acquireEditLease(detail.id).then((acquired) => {
-                          if (acquired) showToast('Reserva de edición recuperada.', 'success');
-                        });
-                      } else {
-                        void handleToggleManualLock();
-                      }
-                    }}
-                    aria-label={detail.manual_locked || editLockState?.kind === 'manual'
-                      ? 'Desbloquear edición'
-                      : editLockState?.kind === 'blocked' || editLockState?.kind === 'unavailable'
-                        ? 'Reintentar reserva de edición'
-                        : 'Bloquear edición'}
-                    title={detail.manual_locked || editLockState?.kind === 'manual'
-                      ? 'Desbloquear edición'
-                      : editLockState?.kind === 'blocked' || editLockState?.kind === 'unavailable'
-                        ? 'Reintentar reserva de edición'
-                        : 'Bloquear edición'}
-                    className="writeup-header-compact-button h-10 w-10 shrink-0 justify-center rounded-lg bg-slate-800 text-slate-200 hover:bg-slate-700 disabled:cursor-wait disabled:opacity-50"
-                  >
-                    {detail.manual_locked || editLockState?.kind === 'manual' ? <Unlock className="h-4 w-4" aria-hidden="true" /> : <Lock className="h-4 w-4" aria-hidden="true" />}
-                  </button>
                   {staleCount > 0 && (
                     <span className="px-1.5 py-1 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[11px] flex items-center gap-1" title="Cita(s) desactualizada(s)">
                       <AlertTriangle className="w-3.5 h-3.5" />

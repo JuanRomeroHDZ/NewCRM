@@ -101,8 +101,16 @@ PY
         echo 'Activa C2 real desde una terminal interactiva.' >&2
         exit 1
       fi
+      if ! command -v sudo >/dev/null 2>&1; then
+        echo 'Falta sudo; no se puede iniciar C2 real con permisos de administrador.' >&2
+        exit 1
+      fi
       echo 'Confirma con la contraseña de tu usuario del sistema si sudo la solicita.'
-      exec sudo -k -- "$0" _run_real
+      if ! sudo -k -v; then
+        echo 'No se pudieron validar los permisos de administrador; el servicio C2 no se inició.' >&2
+        exit 1
+      fi
+      exec sudo -- "$0" _run_real
     fi
     exec "$0" "_run_$MODE"
     ;;

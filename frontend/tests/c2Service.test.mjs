@@ -5,7 +5,7 @@ import { build } from 'esbuild';
 const storage = (values) => ({ getItem: (key) => values[key] || null, setItem() {}, removeItem() {} });
 globalThis.localStorage = storage({ emailsaver_vault_token: 'vault-token' });
 globalThis.sessionStorage = storage({ emailsaver_user_token: 'owner-token' });
-globalThis.window = { location: { protocol: 'https:', host: 'lessso.local' } };
+globalThis.window = { location: { protocol: 'https:', host: 'lessso.local' }, addEventListener() {} };
 const compiled = await build({ entryPoints: ['src/lib/c2Api.ts'], bundle: true, format: 'esm', platform: 'node', write: false,
   define: { 'import.meta.env.VITE_API_BASE_URL': '"/api/v1"' } });
 const api = await import(`data:text/javascript;base64,${Buffer.from(compiled.outputFiles[0].contents).toString('base64')}`);

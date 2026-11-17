@@ -144,7 +144,17 @@ while true; do
   case "$choice" in
     1|'') prepare_installation && ./scripts/up.sh || echo 'El CRM no pudo iniciarse.' ;;
     2) prepare_installation && session demo || echo 'La sesión de demostración se cerró o no pudo iniciarse.' ;;
-    3) prepare_installation && prepare_c2 && ./scripts/up.sh && ./scripts/c2.sh start || echo 'No se pudo iniciar el CRM o C2.' ;;
+    3)
+      if ! prepare_installation; then
+        echo 'No se pudo preparar el CRM. Revisa el error indicado arriba.' >&2
+      elif ! prepare_c2; then
+        echo 'No se pudo preparar C2; el CRM no se inició.' >&2
+      elif ! ./scripts/up.sh; then
+        echo 'No se pudo iniciar el CRM; C2 no se inició.' >&2
+      elif ! ./scripts/c2.sh start; then
+        echo 'El CRM quedó activo, pero C2 no se inició. Revisa el error de permisos o dependencias indicado arriba.' >&2
+      fi
+      ;;
     4) service_menu || echo 'No se pudo completar la acción.' ;;
     5) prepare_installation && session || echo 'La sesión del CRM se cerró o no pudo iniciarse.' ;;
     6) prepare_installation && ./scripts/up.sh --choose-address || echo 'El CRM no pudo iniciarse.' ;;

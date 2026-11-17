@@ -446,7 +446,10 @@ async def acquire_writeup_edit_lease(
     lease_is_active = bool(lock.lease_expires_at and lock.lease_expires_at > now)
     if lease_is_active:
         same_lease = lock.lease_client_id == payload.client_id and same_principal
-        if not same_lease or not _lease_request_matches(lock, request, current_user):
+        # A full page reload loses the in-memory lease token. Permit recovery
+        # only for the same authenticated principal and per-tab client ID; the
+        # newly issued token immediately invalidates the token from the old page.
+        if not same_lease:
             raise HTTPException(
                 status_code=423,
                 detail=f"Este writeup está reservado para edición por {lock.lease_holder_name or 'otra sesión'} hasta {lock.lease_expires_at.isoformat()}.",
