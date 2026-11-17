@@ -681,7 +681,7 @@ export const InspectorDrawer: React.FC = () => {
                       <div className="flex flex-wrap gap-1.5">
                         {platformData.tags && platformData.tags.length > 0 ? (
                           platformData.tags.map((t, idx) => (
-                            <TagBadge key={idx} name={t.name} color={t.color} />
+                            <TagBadge key={idx} name={t.name} />
                           ))
                         ) : (
                           <span className="italic text-obsidian-muted">Sin etiquetas</span>

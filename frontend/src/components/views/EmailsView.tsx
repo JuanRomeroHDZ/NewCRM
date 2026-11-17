@@ -268,7 +268,7 @@ export const EmailsView: React.FC = () => {
                     <PlatformIcon name={email.provider} size="md" />
                     <div className="min-w-0 flex-1">
                       <h3
-                        className="truncate text-sm font-bold text-white transition-colors group-hover:text-indigo-300"
+                        className="truncate text-sm font-bold text-obsidian-text"
                         title={email.address}
                       >
                         {email.address}
@@ -429,26 +429,18 @@ export const EmailsView: React.FC = () => {
               ? 'No se encontraron correos con esta búsqueda'
               : 'No hay correos principales para esta selección'}
           </h3>
-          <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
-            {search && (
+          {search && (
+            <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
               <button
                 type="button"
                 onClick={() => setSearch('')}
                 className="ui-action-secondary items-center gap-2"
-              >{/* [Acción secundaria] Mantiene disponible esta acción en su contexto. */}
+              >{/* [Acción secundaria] Restablece el filtro de búsqueda. */}
                 <X size={16} aria-hidden="true" />
                 Limpiar búsqueda
               </button>
-            )}
-            <button
-              type="button"
-              onClick={() => openEmailModal()}
-              className="ui-action-primary"
-            >{/* [Acción principal] Inicia o confirma la tarea de este espacio. */}
-              <Plus size={16} aria-hidden="true" />
-              <span>Agregar correo</span>
-            </button>
-          </div>
+            </div>
+          )}
         </div>
       )}
     </div>

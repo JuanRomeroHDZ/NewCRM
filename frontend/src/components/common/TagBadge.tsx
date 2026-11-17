@@ -3,7 +3,6 @@ import { X } from 'lucide-react';
 
 interface TagBadgeProps {
   name: string;
-  color?: string;
   size?: 'sm' | 'md';
   onRemove?: () => void;
 }

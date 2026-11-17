@@ -664,6 +664,7 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
             <input
               ref={fileInputRef}
               type="file"
+              aria-label="Seleccionar imagen o video para el informe"
               accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm,video/quicktime,.mkv"
               className="hidden"
               onChange={(e) => {
@@ -1086,6 +1087,7 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
                 <textarea
                   rows={2}
                   readOnly
+                  aria-label="Resultado decodificado"
                   value={codecOutput}
                   placeholder="Salida decodificada o payload JSON..."
                   className="w-full bg-obsidian-surface/70 border border-obsidian-border rounded p-1.5 text-obsidian-text font-mono text-[11px]"

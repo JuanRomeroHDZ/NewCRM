@@ -874,6 +874,55 @@ details[open] > summary:not([data-caret="manual"]):not(.ui-action-icon):not(:has
 .brand-theme :is(input, textarea, select):focus-visible { outline: 2px solid var(--brand-accent, #0f766e); outline-offset: 2px; }
 .brand-theme :is(button, a[href], summary):focus-visible { outline: 2px solid var(--brand-accent, #0f766e); outline-offset: 2px; }
 
+/* [Campo de formulario] Texto, búsqueda, fechas y áreas comparten geometría y superficie. */
+.brand-theme :is(
+  input:not([type]), input[type="text"], input[type="email"], input[type="password"],
+  input[type="number"], input[type="date"], input[type="datetime-local"],
+  input[type="search"], input[type="url"], input[type="tel"]
+):not(.bg-transparent) {
+  box-sizing: border-box;
+  min-height: 44px;
+  border: 1px solid #39413f;
+  border-radius: 0.5rem;
+  background-color: #171b1a;
+  color: #ffffff;
+  font-family: inherit;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+}
+.brand-theme textarea:not(.bg-transparent) {
+  box-sizing: border-box;
+  min-height: 88px;
+  border: 1px solid #39413f;
+  border-radius: 0.5rem;
+  background-color: #171b1a;
+  color: #ffffff;
+  font-family: inherit;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+@media (hover: hover) {
+  .brand-theme :is(input:not([type]), input[type="text"], input[type="email"], input[type="password"], input[type="number"], input[type="date"], input[type="datetime-local"], input[type="search"], input[type="url"], input[type="tel"], textarea):not(.bg-transparent):hover:not(:disabled) {
+    border-color: var(--brand-accent, #0f766e);
+  }
+}
+.brand-theme :is(input:not([type]), input[type="text"], input[type="email"], input[type="password"], input[type="number"], input[type="date"], input[type="datetime-local"], input[type="search"], input[type="url"], input[type="tel"], textarea):disabled {
+  border-color: #252b29;
+  background-color: #101313;
+  color: #8b9294;
+  cursor: not-allowed;
+}
+.brand-theme :is(input[type="checkbox"], input[type="radio"], input[type="range"]) {
+  accent-color: var(--brand-accent, #0f766e);
+}
+.brand-theme :is(
+  input:not([type]), input[type="text"], input[type="email"], input[type="password"],
+  input[type="number"], input[type="date"], input[type="datetime-local"],
+  input[type="search"], input[type="url"], input[type="tel"], textarea, select
+):focus:not(:disabled) {
+  border-color: var(--brand-accent, #0f766e);
+}
+
 /* Native selects share one neutral control and popup palette across the app. */
 .brand-theme select:not([multiple]) {
   color-scheme: dark;

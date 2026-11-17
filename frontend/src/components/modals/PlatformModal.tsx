@@ -65,7 +65,6 @@ export const PlatformModal: React.FC = () => {
   // Tags
   const [tags, setTags] = useState<TagItem[]>([]);
   const [newTagName, setNewTagName] = useState('');
-  const [newTagColor, setNewTagColor] = useState('#34D399');
 
   const [formError, setFormError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -349,7 +348,7 @@ export const PlatformModal: React.FC = () => {
 
   const addTag = () => {
     if (!newTagName.trim()) return;
-    setTags([...tags, { name: newTagName.trim(), color: newTagColor }]);
+    setTags([...tags, { name: newTagName.trim() }]);
     setNewTagName('');
   };
 
@@ -473,6 +472,7 @@ export const PlatformModal: React.FC = () => {
                     <div className="flex items-center gap-1.5">
                       <input
                         type="text"
+                        aria-label="Nombre del cliente nuevo"
                         maxLength={INPUT_LIMITS.COMPANY_NAME}
                         value={newClientName}
                         onChange={(e) => setNewClientName(e.target.value)}
@@ -539,6 +539,7 @@ export const PlatformModal: React.FC = () => {
                   <span className="text-[11px] font-semibold text-white block">Nuevo Correo al Vuelo:</span>
                   <input
                     type="email"
+                    aria-label="Dirección del nuevo correo"
                     maxLength={INPUT_LIMITS.EMAIL}
                     value={newEmailAddress}
                     onChange={(e) => setNewEmailAddress(e.target.value)}
@@ -547,6 +548,7 @@ export const PlatformModal: React.FC = () => {
                   />
                   <div className="flex items-center gap-1.5">
                     <select
+                      aria-label="Proveedor del nuevo correo"
                       value={newEmailProvider}
                       onChange={(e) => setNewEmailProvider(e.target.value)}
                       className="flex-1 px-2 py-1.5 rounded-lg bg-obsidian-surface border border-obsidian-border text-white text-xs"
@@ -903,13 +905,6 @@ export const PlatformModal: React.FC = () => {
                 }}
                 className="flex-1 min-w-0 px-3 py-1.5 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs"
               />
-              <input
-                type="color"
-                aria-label="Color de la etiqueta"
-                value={newTagColor}
-                onChange={(e) => setNewTagColor(e.target.value)}
-                className="w-10 h-8 rounded-lg bg-obsidian-bg border border-obsidian-border cursor-pointer p-0.5 flex-shrink-0"
-              />
               <button
                 type="button"
                 onClick={addTag}
@@ -923,12 +918,7 @@ export const PlatformModal: React.FC = () => {
                 {tags.map((t, idx) => (
                   <span
                     key={idx}
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border max-w-full"
-                    style={{
-                      backgroundColor: `${t.color}18`,
-                      borderColor: `${t.color}40`,
-                      color: t.color
-                    }}
+                    className="inline-flex max-w-full items-center gap-1.5 rounded-md border border-obsidian-border bg-obsidian-surface px-2.5 py-1 text-xs font-medium text-obsidian-muted"
                   >
                     <span className="truncate">{t.name}</span>
                     <button type="button" onClick={() => setTags(tags.filter((_, i) => i !== idx))} aria-label={`Quitar etiqueta ${t.name}`} className="ui-action-icon ui-action-danger shrink-0">

@@ -70,7 +70,6 @@ export const ProspectModal: React.FC = () => {
   // Tags
   const [tags, setTags] = useState<TagItem[]>([]);
   const [newTagName, setNewTagName] = useState('');
-  const [newTagColor, setNewTagColor] = useState('#34D399');
 
   const [formError, setFormError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -341,7 +340,7 @@ export const ProspectModal: React.FC = () => {
       showToast('Un prospecto puede tener hasta 100 etiquetas.', 'warning');
       return;
     }
-    setTags((current) => [...current, { name, color: newTagColor }]);
+    setTags((current) => [...current, { name }]);
     setNewTagName('');
   };
 
@@ -699,6 +698,7 @@ export const ProspectModal: React.FC = () => {
                     <span className="text-[11px] font-semibold text-white block">Nuevo Correo Principal al Vuelo:</span>
                     <input
                       type="email"
+                      aria-label="Dirección del nuevo correo principal"
                       maxLength={INPUT_LIMITS.EMAIL}
                       value={newEmailAddress}
                       onChange={(e) => setNewEmailAddress(e.target.value)}
@@ -707,6 +707,7 @@ export const ProspectModal: React.FC = () => {
                     />
                     <div className="flex items-center gap-1.5">
                       <select
+                        aria-label="Proveedor del nuevo correo principal"
                         value={newEmailProvider}
                         onChange={(e) => setNewEmailProvider(e.target.value)}
                         className="flex-1 px-2 py-1.5 rounded-lg bg-obsidian-surface border border-obsidian-border text-white text-xs"
@@ -886,6 +887,7 @@ export const ProspectModal: React.FC = () => {
               <div className="flex gap-2">
                 <input
                   type="text"
+                  aria-label="Nueva etiqueta del prospecto"
                   maxLength={INPUT_LIMITS.TAG_NAME}
                   placeholder="Ej. Restaurante, Inmobiliaria, Urgente..."
                   value={newTagName}
@@ -897,12 +899,6 @@ export const ProspectModal: React.FC = () => {
                     }
                   }}
                   className="flex-1 min-w-0 px-3 py-1.5 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs"
-                />
-                <input
-                  type="color"
-                  value={newTagColor}
-                  onChange={(e) => setNewTagColor(e.target.value)}
-                  className="w-10 h-8 rounded-lg bg-obsidian-bg border border-obsidian-border cursor-pointer p-0.5 flex-shrink-0"
                 />
                 <button
                   type="button"
@@ -917,12 +913,7 @@ export const ProspectModal: React.FC = () => {
                   {tags.map((t, idx) => (
                     <span
                       key={idx}
-                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border max-w-full"
-                      style={{
-                        backgroundColor: `${t.color}18`,
-                        borderColor: `${t.color}40`,
-                        color: t.color
-                      }}
+                      className="inline-flex max-w-full items-center gap-1.5 rounded-md border border-obsidian-border bg-obsidian-surface px-2.5 py-1 text-xs font-medium text-obsidian-muted"
                     >
                       <span className="truncate">{t.name}</span>
                       <button

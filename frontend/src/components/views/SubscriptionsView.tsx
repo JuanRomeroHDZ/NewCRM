@@ -932,9 +932,11 @@ export const SubscriptionsView: React.FC = () => {
   }
 
   if (activeSection === 'overview_finances') {
-    const overviewAmount = (value: number) => fin.usdRate <= 0
-      ? 'Sin tipo de cambio'
-      : overviewCurrency === 'USD' ? `$${formatAmount(value / fin.usdRate)} USD` : `$${formatAmount(value)} MXN`;
+    const overviewAmount = (value: number) => overviewCurrency === 'MXN'
+      ? `$${formatAmount(value)} MXN`
+      : fin.usdRate <= 0
+        ? 'No disponible'
+        : `$${formatAmount(value / fin.usdRate)} USD`;
     const dueSoon = filteredRenewals.filter((item) => item.days_remaining <= 30 && item.days_remaining >= 0).length;
     const financePanels = [
       { id: 'finance_income' as const, label: 'Ingresos y pagos', description: `${filteredIncomes.length} registros · pagos recibidos de clientes`, icon: Wallet },
@@ -962,7 +964,7 @@ export const SubscriptionsView: React.FC = () => {
         </section>
         <dl className="grid grid-cols-1 divide-y divide-obsidian-border sm:grid-cols-2 sm:divide-y-0">
           {financialMetrics.map((metric, index) => (
-            <div key={metric.label} className={`py-3 first:pt-0 sm:px-4 sm:py-4 sm:first:pl-0 ${index % 2 === 0 ? 'sm:border-r sm:border-obsidian-border' : ''} ${index > 1 ? 'sm:border-t sm:border-obsidian-border' : ''}`}>
+            <div key={metric.label} className={`py-3 first:pt-0 sm:py-4 ${index % 2 === 0 ? 'sm:pl-0 sm:pr-4' : 'sm:pl-4 sm:pr-0'} ${index % 2 === 0 && index + 1 < financialMetrics.length ? 'sm:border-r sm:border-obsidian-border' : ''} ${index > 1 ? 'sm:border-t sm:border-obsidian-border' : ''}`}>
               <dt className="text-xs text-obsidian-muted">{metric.label}</dt>
               <dd className="mt-1 break-words font-mono text-lg font-semibold tabular-nums text-obsidian-text">{metric.value}</dd>
             </div>

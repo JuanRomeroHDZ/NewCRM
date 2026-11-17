@@ -313,6 +313,7 @@ export const EmailModal: React.FC = () => {
               {provider === '__custom__' && (
                 <input
                   type="text"
+                  aria-label="Nombre del proveedor de correo"
                   maxLength={INPUT_LIMITS.PLATFORM_NAME}
                   value={customProvider}
                   onChange={(e) => setCustomProvider(e.target.value)}
@@ -485,6 +486,7 @@ export const EmailModal: React.FC = () => {
                   <div key={idx} className="inline-flex items-center gap-2 p-1.5 rounded-lg bg-obsidian-surface border border-obsidian-border font-mono text-xs max-w-full">
                     <input
                       type="checkbox"
+                      aria-label={`Marcar código de respaldo ${bc.code} como usado`}
                       checked={bc.is_used}
                       onChange={(e) => {
                         const updated = [...backupCodes];

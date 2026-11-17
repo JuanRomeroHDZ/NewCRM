@@ -85,7 +85,7 @@ function MetricsList({ metrics }: { metrics: Metric[] }) {
   return (
     <dl className="grid min-w-0 grid-cols-1 divide-y divide-obsidian-border sm:grid-cols-2 sm:divide-y-0">
       {metrics.map((metric, index) => (
-        <div key={`${metric.label}-${index}`} className={`min-w-0 py-3 first:pt-0 sm:px-4 sm:py-3 sm:first:pl-0 ${index % 2 === 0 ? 'sm:border-r sm:border-obsidian-border' : ''} ${index > 1 ? 'sm:border-t sm:border-obsidian-border' : ''}`}>
+        <div key={`${metric.label}-${index}`} className={`min-w-0 py-3 first:pt-0 sm:py-3 ${index % 2 === 0 ? 'sm:pl-0 sm:pr-4' : 'sm:pl-4 sm:pr-0'} ${index % 2 === 0 && index + 1 < metrics.length ? 'sm:border-r sm:border-obsidian-border' : ''} ${index > 1 ? 'sm:border-t sm:border-obsidian-border' : ''}`}>
           <dt className="text-xs text-obsidian-muted">{metric.label}</dt>
           <dd className="mt-1 break-words text-base font-semibold tabular-nums text-obsidian-text">{metric.value}</dd>
           {metric.detail && <dd className="mt-1 break-words text-xs leading-relaxed text-obsidian-muted">{metric.detail}</dd>}
@@ -97,7 +97,7 @@ function MetricsList({ metrics }: { metrics: Metric[] }) {
 
 export const ModuleOverviewView: React.FC = () => {
   const {
-    activeSection, setActiveSection, isUnlocked, openUnlockModal, dataVersion,
+    activeSection, activeScope, setActiveSection, isUnlocked, openUnlockModal, dataVersion,
     matchesScope, timeoutMinutes, clipboardClearSeconds,
   } = useVault();
   const c2 = useC2();
@@ -165,7 +165,7 @@ export const ModuleOverviewView: React.FC = () => {
             { label: 'Servicios vinculados', value: count(platforms.length), detail: `${count(platforms.filter((item) => item.subscription_status === 'active').length)} activos · ${count(platforms.filter((item) => item.subscription_status === 'free_trial').length)} en prueba` },
             { label: 'Acceso a servicios', value: `${count(platforms.filter((item) => item.access_type === 'sso').length)} con correo`, detail: `${count(platforms.filter((item) => item.access_type === 'own_password').length)} con contraseña propia` },
           ] : []),
-          ...(graph ? [{ label: 'Conexiones registradas', value: count(graph.links.length), detail: `${count(graph.nodes.length)} elementos en el mapa` }] : []),
+          ...(graph ? [{ label: activeScope === 'all' ? 'Conexiones registradas' : 'Conexiones · todos los ámbitos', value: count(graph.links.length), detail: `${count(graph.nodes.length)} elementos en el mapa` }] : []),
         ];
       } else if (activeSection === 'overview_security') {
         const result = await Promise.allSettled([api.getSecurityHealth(), api.getVaultCredentials(), api.getWriteupsOverview()]);

@@ -3225,6 +3225,7 @@ export const WriteupsView: React.FC = () => {
                         <div className="grid grid-cols-2 sm:grid-cols-6 gap-2">
                           <input
                             type="text"
+                            aria-label={`Identificador del hallazgo ${idx + 1}`}
                             value={f.id}
                             maxLength={64}
                             onChange={(e) => {
@@ -3246,6 +3247,7 @@ export const WriteupsView: React.FC = () => {
                           />
                           <input
                             type="text"
+                            aria-label={`Título del hallazgo ${f.id || idx + 1}`}
                             value={f.title}
                             maxLength={200}
                             onChange={(e) => {
@@ -3258,6 +3260,7 @@ export const WriteupsView: React.FC = () => {
                             className="sm:col-span-2 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-100 font-semibold"
                           />
                           <select
+                            aria-label={`Severidad del hallazgo ${f.id || idx + 1}`}
                             value={f.severity}
                             onChange={(e) => {
                               const next = [...findings];
@@ -3274,6 +3277,7 @@ export const WriteupsView: React.FC = () => {
                             <option value="informativa">Informativa</option>
                           </select>
                           <select
+                            aria-label={`Estado del hallazgo ${f.id || idx + 1}`}
                             value={f.status}
                             onChange={(e) => {
                               const next = [...findings];
@@ -3291,6 +3295,7 @@ export const WriteupsView: React.FC = () => {
                           <div className="flex gap-1">
                             <input
                               type="number"
+                              aria-label={`Puntuación CVSS del hallazgo ${f.id || idx + 1}`}
                               min={0}
                               max={10}
                               step={0.1}
@@ -3363,6 +3368,7 @@ export const WriteupsView: React.FC = () => {
                         {/* OWASP / CWE / MITRE ATT&CK Preset Bar + Affected Target */}
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                           <select
+                            aria-label={`Aplicar taxonomía al hallazgo ${f.id || idx + 1}`}
                             value=""
                             onChange={(e) => {
                               const preset = PENTEST_TAXONOMY_PRESETS.find((p) => p.cwe === e.target.value);
@@ -3391,6 +3397,7 @@ export const WriteupsView: React.FC = () => {
                           </select>
                           <input
                             type="text"
+                            aria-label={`Identificador CWE, OWASP o MITRE del hallazgo ${f.id || idx + 1}`}
                             value={f.cwe_id || ''}
                             maxLength={32}
                             onChange={(e) => {
@@ -3404,6 +3411,7 @@ export const WriteupsView: React.FC = () => {
                           />
                           <input
                             type="text"
+                            aria-label={`Endpoint o host afectado del hallazgo ${f.id || idx + 1}`}
                             value={f.affected_target || ''}
                             maxLength={255}
                             onChange={(e) => {
@@ -3483,6 +3491,7 @@ export const WriteupsView: React.FC = () => {
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                           <textarea
                             rows={2}
+                            aria-label={`Resumen técnico del hallazgo ${f.id || idx + 1}`}
                             value={f.summary}
                             maxLength={4000}
                             onChange={(e) => {
@@ -3496,6 +3505,7 @@ export const WriteupsView: React.FC = () => {
                           />
                           <textarea
                             rows={2}
+                            aria-label={`Remediación recomendada del hallazgo ${f.id || idx + 1}`}
                             value={f.remediation}
                             maxLength={4000}
                             onChange={(e) => {
@@ -3545,6 +3555,7 @@ export const WriteupsView: React.FC = () => {
                         <input
                           ref={mediaTabUploadRef}
                           type="file"
+                          aria-label="Seleccionar media para el informe"
                           accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm,video/quicktime,.mkv"
                           className="hidden"
                           onChange={(e) => {

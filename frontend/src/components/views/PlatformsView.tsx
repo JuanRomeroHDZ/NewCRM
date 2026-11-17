@@ -352,7 +352,7 @@ export const PlatformsView: React.FC = () => {
         <div className="hidden overflow-hidden rounded-xl border border-obsidian-border bg-obsidian-panel md:block">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs text-obsidian-text">
-              <thead className="border-b border-obsidian-border bg-obsidian-surface/60 text-[10px] font-semibold uppercase tracking-wider text-obsidian-muted">
+              <thead className="border-b border-obsidian-border bg-obsidian-surface/60 text-[11px] font-semibold text-obsidian-muted">
                 <tr>
                   <th className="px-4 py-3">Servicio</th>
                   <th className="hidden px-4 py-3 xl:table-cell">Ámbito</th>
@@ -380,7 +380,7 @@ export const PlatformsView: React.FC = () => {
                         <PlatformIcon name={p.name} iconUrl={p.icon_url} size="sm" />
                         <div className="min-w-0">
                           <span
-                            className="block truncate font-semibold text-white transition-colors group-hover:text-indigo-300"
+                            className="block truncate font-semibold text-obsidian-text"
                             title={p.name}
                           >
                             {p.name}
@@ -453,14 +453,14 @@ export const PlatformsView: React.FC = () => {
                           <span className="block font-mono font-bold text-white">
                             {formatCost(p.subscription_cost, p.currency)} {p.currency}
                           </span>
-                          <span className="text-[10px] text-obsidian-muted">/{p.billing_cycle}</span>
+                          <span className="text-[11px] text-obsidian-muted">/{p.billing_cycle}</span>
                         </div>
                       ) : p.subscription_status === 'free_trial' ? (
-                        <span className="rounded border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-400">
+                        <span className="rounded border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-[11px] font-semibold text-amber-400">
                           Prueba Gratuita
                         </span>
                       ) : (
-                        <span className={`text-[10px] uppercase ${p.subscription_status === 'cancelled' ? 'text-rose-300' : p.subscription_status === 'paused' ? 'text-amber-300' : 'text-obsidian-muted'}`}>{p.subscription_status}</span>
+                        <span className={`text-[11px] ${p.subscription_status === 'cancelled' ? 'text-rose-300' : p.subscription_status === 'paused' ? 'text-amber-300' : 'text-obsidian-muted'}`}>{p.subscription_status === 'paused' ? 'Pausada' : p.subscription_status === 'cancelled' ? 'Cancelada' : 'Gratis'}</span>
                       )}
                     </td>
 
@@ -555,7 +555,7 @@ export const PlatformsView: React.FC = () => {
                     <PlatformIcon name={p.name} iconUrl={p.icon_url} size="sm" />
                     <div className="min-w-0 flex-1">
                       <h3
-                        className="truncate text-xs font-bold text-white transition-colors group-hover:text-indigo-300"
+                        className="truncate text-xs font-bold text-obsidian-text"
                         title={p.name}
                       >
                         {p.name}

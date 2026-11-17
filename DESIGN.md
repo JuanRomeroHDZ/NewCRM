@@ -56,6 +56,12 @@ These rules come from the user's requested Notion/Obsidian-like direction: “no
 
 These rules follow the user's request to “ver el resumen de tooooodos los apartados sin tantos botones,” keep a “botón sutil” to each area, and avoid “no redundancia de información inútil, procesos inútiles”.
 
+## Form controls
+
+- Text, search, email, number, date, password, and URL fields share the neutral surface, border, radius, interface type, visible focus, and a 44px minimum height. Text areas keep at least 88px for readable multiline input.
+- Checkboxes and radios use the configured brand accent. Diagram color inputs remain user-controlled and are excluded from application chrome styling.
+- Every field has a visible label or a programmatic name; placeholder text alone is not a label. Errors and help text remain attached to the field they describe.
+
 ## Selects and dropdowns
 
 - **Native selects share the same control surface, border, radius, typography, focus treatment, and option colors through the global select rules in `index.css`.** Put decorative arrows in a positioned wrapper so they stay aligned with the control.

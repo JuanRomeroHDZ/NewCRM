@@ -553,6 +553,7 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                 </summary>
                 <textarea
                   id={`${uid}-inc-notes`}
+                  aria-label="Notas privadas del ingreso"
                   rows={2}
                   maxLength={INPUT_LIMITS.NOTES}
                   value={incNotes}
@@ -1251,6 +1252,7 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                 </summary>
                 <textarea
                   id={`${uid}-exp-notes`}
+                  aria-label="Notas privadas del gasto"
                   rows={2}
                   maxLength={INPUT_LIMITS.NOTES}
                   value={expNotes}

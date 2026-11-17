@@ -768,7 +768,7 @@ export const ProspectInspectorSection: React.FC<ProspectInspectorSectionProps> =
             <span className="text-[11px] font-medium text-obsidian-muted">Etiquetas</span>
             <div className="flex flex-wrap gap-1.5">
               {prospectData.tags && prospectData.tags.length > 0 ? (
-                prospectData.tags.map((tag, index) => <TagBadge key={`${tag.name}-${index}`} name={tag.name} color={tag.color} />)
+                prospectData.tags.map((tag, index) => <TagBadge key={`${tag.name}-${index}`} name={tag.name} />)
               ) : (
                 <span className="text-[11px] text-obsidian-muted">Sin etiquetas</span>
               )}
