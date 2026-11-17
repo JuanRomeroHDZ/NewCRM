@@ -569,6 +569,56 @@ export interface WriteupStructuredFinding {
   summary: string;
   remediation: string;
   anchor_id?: string | null;
+  evidence_asset_ids?: string[];
+}
+
+export interface WriteupMachineQuestion {
+  id: string;
+  question: string;
+  answer: string;
+  status: 'pendiente' | 'respondida';
+}
+
+export interface WriteupMachineStep {
+  id: string;
+  text: string;
+  status: 'pendiente' | 'completado';
+}
+
+export interface WriteupMachineProgress {
+  id: string;
+  name: string;
+  target: string;
+  status: 'pendiente' | 'en_progreso' | 'completada';
+  questions: WriteupMachineQuestion[];
+  steps: WriteupMachineStep[];
+}
+
+export interface WriteupEvidenceBlock {
+  id: string;
+  title: string;
+  command: string;
+  result: string;
+  target: string;
+  captured_at: string | null;
+  asset_ids: string[];
+  finding_ids: string[];
+  redact_command: boolean;
+  redact_result: boolean;
+  redact_target: boolean;
+}
+
+export interface WriteupWorkbench {
+  machines: WriteupMachineProgress[];
+  evidence: WriteupEvidenceBlock[];
+}
+
+export interface WriteupSnippet {
+  id: string;
+  name: string;
+  template: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface WriteupAsset {
@@ -685,6 +735,7 @@ export interface WriteupDetail extends WriteupSummary {
   markdown_content: string;
   executive_summary?: string | null;
   findings: WriteupStructuredFinding[];
+  workbench: WriteupWorkbench;
   boards: WriteupBoard[];
   citations: WriteupCitation[];
   assets: WriteupAsset[];

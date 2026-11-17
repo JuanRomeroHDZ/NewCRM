@@ -18,6 +18,7 @@ from app.models.writeups import (
     WriteupEditLock,
     WriteupExportLog,
     WriteupRevision,
+    WriteupSnippet,
 )
 from app.schemas.writeups import (
     WriteupAssetOut,
@@ -37,6 +38,9 @@ from app.schemas.writeups import (
     WriteupRevisionAuthorOut,
     WriteupSummaryOut,
     WriteupUpdate,
+    WriteupSnippetCreate,
+    WriteupSnippetOut,
+    WriteupSnippetUpdate,
 )
 from app.security.crypto import decrypt_note, encrypt_note
 from app.config import settings
@@ -127,6 +131,42 @@ async def require_writeup_access(request: Request, db: AsyncSession = Depends(ge
             )
         return user
     return None
+
+
+async def _validate_workbench_links(
+    db: AsyncSession,
+    writeup_id: str | None,
+    workbench: dict,
+    findings: list[dict],
+) -> None:
+    finding_ids = {str(item.get("id")) for item in findings if isinstance(item, dict) and item.get("id")}
+    asset_ids = {
+        str(asset_id)
+        for evidence in workbench.get("evidence", [])
+        if isinstance(evidence, dict)
+        for asset_id in evidence.get("asset_ids", [])
+    }
+    evidence_finding_ids = {
+        str(finding_id)
+        for evidence in workbench.get("evidence", [])
+        if isinstance(evidence, dict)
+        for finding_id in evidence.get("finding_ids", [])
+    }
+    if evidence_finding_ids - finding_ids:
+        raise HTTPException(status_code=422, detail="Una evidencia apunta a un hallazgo que ya no existe en este informe.")
+    if not asset_ids:
+        return
+    if not writeup_id:
+        raise HTTPException(status_code=422, detail="Las evidencias de un informe nuevo no pueden apuntar a archivos existentes.")
+    existing_assets = set((await db.execute(
+        select(WriteupAsset.id).where(
+            WriteupAsset.writeup_id == writeup_id,
+            WriteupAsset.is_deleted == False,  # noqa: E712
+            WriteupAsset.id.in_(asset_ids),
+        )
+    )).scalars().all())
+    if existing_assets != asset_ids:
+        raise HTTPException(status_code=422, detail="Una evidencia apunta a un archivo ajeno o eliminado.")
 
 
 def _vault_session_fingerprint(request: Request) -> str | None:
@@ -305,6 +345,78 @@ async def list_writeups(
     return results
 
 
+@router.get("/snippets", response_model=list[WriteupSnippetOut])
+async def list_writeup_snippets(
+    db: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(require_writeup_access),
+):
+    rows = (await db.execute(select(WriteupSnippet).order_by(WriteupSnippet.name.asc()).limit(500))).scalars().all()
+    return [{
+        "id": row.id,
+        "name": row.name,
+        "template": decrypt_note(row.encrypted_template) or "",
+        "created_at": row.created_at,
+        "updated_at": row.updated_at,
+    } for row in rows]
+
+
+@router.post("/snippets", response_model=WriteupSnippetOut, status_code=status.HTTP_201_CREATED)
+async def create_writeup_snippet(
+    payload: WriteupSnippetCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(require_writeup_access),
+):
+    name, template = payload.name.strip(), payload.template.strip()
+    if not name or not template:
+        raise HTTPException(status_code=422, detail="El nombre y la plantilla no pueden estar vacíos.")
+    snippet_count = await db.scalar(select(func.count(WriteupSnippet.id)))
+    if int(snippet_count or 0) >= 500:
+        raise HTTPException(status_code=409, detail="La biblioteca admite hasta 500 fragmentos. Elimina alguno antes de añadir otro.")
+    row = WriteupSnippet(name=name, encrypted_template=encrypt_note(template))
+    db.add(row)
+    await db.commit()
+    await db.refresh(row)
+    return {"id": row.id, "name": row.name, "template": template, "created_at": row.created_at, "updated_at": row.updated_at}
+
+
+@router.patch("/snippets/{snippet_id}", response_model=WriteupSnippetOut)
+async def update_writeup_snippet(
+    snippet_id: str,
+    payload: WriteupSnippetUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(require_writeup_access),
+):
+    row = await db.get(WriteupSnippet, snippet_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Fragmento no encontrado.")
+    updates = payload.model_dump(exclude_unset=True)
+    if "name" in updates:
+        if updates["name"] is None or not updates["name"].strip():
+            raise HTTPException(status_code=422, detail="El nombre del fragmento no puede estar vacío.")
+        row.name = updates["name"].strip()
+    if "template" in updates:
+        if updates["template"] is None or not updates["template"].strip():
+            raise HTTPException(status_code=422, detail="La plantilla no puede estar vacía.")
+        row.encrypted_template = encrypt_note(updates["template"].strip())
+    await db.commit()
+    await db.refresh(row)
+    return {"id": row.id, "name": row.name, "template": decrypt_note(row.encrypted_template) or "", "created_at": row.created_at, "updated_at": row.updated_at}
+
+
+@router.delete("/snippets/{snippet_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_writeup_snippet(
+    snippet_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(require_writeup_access),
+):
+    row = await db.get(WriteupSnippet, snippet_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Fragmento no encontrado.")
+    await db.delete(row)
+    await db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 @router.post("", response_model=WriteupDetailOut, status_code=status.HTTP_201_CREATED)
 async def create_writeup(
     payload: WriteupCreate,
@@ -312,6 +424,12 @@ async def create_writeup(
     current_user: User | None = Depends(require_writeup_access),
 ):
     await validate_optional_links(db, payload.prospect_id, payload.project_id, payload.engagement_id)
+    await _validate_workbench_links(
+        db,
+        None,
+        json.loads(payload.workbench.model_dump_json()),
+        [finding.model_dump(mode="json") for finding in payload.findings],
+    )
     writeup = Writeup(
         title=payload.title,
         slug=slugify_title(payload.title),
@@ -328,6 +446,7 @@ async def create_writeup(
         encrypted_findings_json=encrypt_note(json.dumps([f.model_dump() for f in payload.findings], ensure_ascii=False))
         if payload.findings
         else None,
+        encrypted_workbench_json=encrypt_note(payload.workbench.model_dump_json()),
         prospect_id=payload.prospect_id,
         project_id=payload.project_id,
         engagement_id=payload.engagement_id,
@@ -508,6 +627,8 @@ async def update_writeup(
     writeup = await _lock_writeup_for_resource_mutation(db, writeup_id, payload.expected_updated_at)
     updates = payload.model_dump(exclude_unset=True)
     updates.pop("expected_updated_at", None)
+    if payload.workbench is not None:
+        updates["workbench"] = json.loads(payload.workbench.model_dump_json())
     await validate_optional_links(
         db,
         updates.get("prospect_id"),
@@ -528,6 +649,23 @@ async def update_writeup(
     if "findings" in updates:
         findings_payload = updates["findings"] or []
         writeup.encrypted_findings_json = encrypt_note(json.dumps(findings_payload, ensure_ascii=False))
+    current_findings = updates.get("findings")
+    if current_findings is None:
+        try:
+            current_findings = json.loads(decrypt_note(writeup.encrypted_findings_json) or "[]")
+        except (TypeError, json.JSONDecodeError):
+            current_findings = []
+    workbench_payload = updates.get("workbench")
+    if workbench_payload is None:
+        try:
+            workbench_payload = json.loads(decrypt_note(writeup.encrypted_workbench_json) or '{"machines":[],"evidence":[]}')
+        except (TypeError, json.JSONDecodeError):
+            workbench_payload = {"machines": [], "evidence": []}
+    await _validate_workbench_links(db, writeup.id, workbench_payload, current_findings)
+    if "workbench" in updates:
+        writeup.encrypted_workbench_json = encrypt_note(
+            json.dumps(workbench_payload, ensure_ascii=False, separators=(",", ":"))
+        )
     if "markdown_content" in updates:
         writeup.encrypted_markdown = encrypt_note(updates["markdown_content"])
     if updates.get("save_revision"):
@@ -770,6 +908,11 @@ async def restore_revision(
         writeup.slug = slugify_title(writeup.title)
         writeup.encrypted_executive_summary = encrypt_note(snapshot.get("executive_summary")) if snapshot.get("executive_summary") else None
         writeup.encrypted_findings_json = encrypt_note(json.dumps(snapshot.get("findings", []), ensure_ascii=False))
+        writeup.encrypted_workbench_json = encrypt_note(json.dumps(
+            snapshot.get("workbench", {"machines": [], "evidence": []}),
+            ensure_ascii=False,
+            separators=(",", ":"),
+        ))
         if "assets" in snapshot:
             asset_ids = [asset["id"] for asset in snapshot["assets"]]
             existing_ids = set((await db.execute(select(WriteupAsset.id).where(WriteupAsset.writeup_id == writeup_id, WriteupAsset.id.in_(asset_ids)))).scalars().all())
@@ -906,6 +1049,34 @@ async def delete_writeup_asset(
     if not asset:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evidencia visual no encontrada.")
     asset.is_deleted = True
+    try:
+        findings = json.loads(decrypt_note(writeup.encrypted_findings_json) or "[]")
+    except (TypeError, json.JSONDecodeError):
+        findings = None
+    if isinstance(findings, list):
+        changed = False
+        for finding in findings:
+            if not isinstance(finding, dict) or not isinstance(finding.get("evidence_asset_ids"), list):
+                continue
+            retained = [item for item in finding["evidence_asset_ids"] if str(item) != asset_id]
+            changed = changed or len(retained) != len(finding["evidence_asset_ids"])
+            finding["evidence_asset_ids"] = retained
+        if changed:
+            writeup.encrypted_findings_json = encrypt_note(json.dumps(findings, ensure_ascii=False))
+    try:
+        workbench = json.loads(decrypt_note(writeup.encrypted_workbench_json) or '{"machines":[],"evidence":[]}')
+    except (TypeError, json.JSONDecodeError):
+        workbench = None
+    if isinstance(workbench, dict) and isinstance(workbench.get("evidence"), list):
+        changed = False
+        for evidence in workbench["evidence"]:
+            if not isinstance(evidence, dict) or not isinstance(evidence.get("asset_ids"), list):
+                continue
+            retained = [item for item in evidence["asset_ids"] if str(item) != asset_id]
+            changed = changed or len(retained) != len(evidence["asset_ids"])
+            evidence["asset_ids"] = retained
+        if changed:
+            writeup.encrypted_workbench_json = encrypt_note(json.dumps(workbench, ensure_ascii=False, separators=(",", ":")))
     await create_revision_snapshot(db, writeup, decrypt_note(writeup.encrypted_markdown) or "", current_user.id if current_user else None, "Evidencia retirada")
     await db.commit()
     return Response(
@@ -1161,6 +1332,10 @@ async def clone_writeup(
 ):
     source = await get_writeup_or_404(db, writeup_id)
     source_detail = await build_writeup_detail_dict(db, source)
+    source_assets = (await db.execute(select(WriteupAsset).where(
+        WriteupAsset.writeup_id == source.id,
+        WriteupAsset.is_deleted == False,  # noqa: E712
+    ))).scalars().all()
     cloned_title = (payload.title if payload and payload.title else f"{source.title} (Copia)")[:200]
     cloned = Writeup(
         title=cloned_title,
@@ -1180,6 +1355,7 @@ async def clone_writeup(
         encrypted_findings_json=encrypt_note(json.dumps(source_detail["findings"], ensure_ascii=False))
         if source_detail["findings"]
         else None,
+        encrypted_workbench_json=encrypt_note(json.dumps(source_detail["workbench"], ensure_ascii=False, separators=(",", ":"))),
         prospect_id=source.prospect_id,
         project_id=source.project_id,
         engagement_id=source.engagement_id,
@@ -1187,6 +1363,40 @@ async def clone_writeup(
     )
     db.add(cloned)
     await db.flush()
+
+    asset_id_map: dict[str, str] = {}
+    for asset in source_assets:
+        copied = WriteupAsset(
+            writeup_id=cloned.id,
+            filename=asset.filename,
+            mime_type=asset.mime_type,
+            original_size_bytes=asset.original_size_bytes,
+            optimized_size_bytes=asset.optimized_size_bytes,
+            width=asset.width,
+            height=asset.height,
+            sha256=asset.sha256,
+            exif_stripped=asset.exif_stripped,
+            encrypted_blob=asset.encrypted_blob,
+            is_deleted=False,
+            caption=asset.caption,
+        )
+        db.add(copied)
+        await db.flush()
+        asset_id_map[asset.id] = copied.id
+
+    if asset_id_map:
+        for source_id, copied_id in asset_id_map.items():
+            source_detail["markdown_content"] = source_detail["markdown_content"].replace(
+                f"asset://{source_id}", f"asset://{copied_id}"
+            )
+        for finding in source_detail["findings"]:
+            finding["evidence_asset_ids"] = [asset_id_map.get(item, item) for item in finding.get("evidence_asset_ids", [])]
+        for evidence in source_detail["workbench"].get("evidence", []):
+            evidence["asset_ids"] = [asset_id_map.get(item, item) for item in evidence.get("asset_ids", [])]
+        cloned.encrypted_markdown = encrypt_note(source_detail["markdown_content"])
+        cloned.encrypted_findings_json = encrypt_note(json.dumps(source_detail["findings"], ensure_ascii=False)) if source_detail["findings"] else None
+        cloned.encrypted_workbench_json = encrypt_note(json.dumps(source_detail["workbench"], ensure_ascii=False, separators=(",", ":")))
+    await _validate_workbench_links(db, cloned.id, source_detail["workbench"], source_detail["findings"])
 
     source_boards = (
         await db.execute(select(WriteupBoard).where(WriteupBoard.writeup_id == source.id))

@@ -1,7 +1,7 @@
 from datetime import datetime
 import math
 from typing import Literal
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from app.config import settings
 from app.schemas import validate_finite_number_input, validate_nonblank_input
 
@@ -12,6 +12,85 @@ ExportFormatType = Literal["md_zip", "md", "html", "docx", "pdf", "sarif", "csv"
 WriteupRevisionType = Literal[
     "initial", "autosave", "manual", "milestone", "restore", "edit", "evidence", "board", "citation"
 ]
+
+
+class MachineQuestion(BaseModel):
+    id: str = Field(..., min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")
+    question: str = Field(..., min_length=1, max_length=2000)
+    answer: str = Field(default="", max_length=6000)
+    status: Literal["pendiente", "respondida"] = "pendiente"
+
+
+class MachineStep(BaseModel):
+    id: str = Field(..., min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")
+    text: str = Field(..., min_length=1, max_length=2000)
+    status: Literal["pendiente", "completado"] = "pendiente"
+
+
+class MachineProgress(BaseModel):
+    id: str = Field(..., min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")
+    name: str = Field(..., min_length=1, max_length=120)
+    target: str = Field(default="", max_length=255)
+    status: Literal["pendiente", "en_progreso", "completada"] = "pendiente"
+    questions: list[MachineQuestion] = Field(default_factory=list, max_length=100)
+    steps: list[MachineStep] = Field(default_factory=list, max_length=200)
+
+
+class WriteupEvidenceBlock(BaseModel):
+    id: str = Field(..., min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")
+    title: str = Field(..., min_length=1, max_length=200)
+    command: str = Field(default="", max_length=6000)
+    result: str = Field(default="", max_length=20000)
+    target: str = Field(default="", max_length=255)
+    captured_at: datetime | None = None
+    asset_ids: list[str] = Field(default_factory=list, max_length=50)
+    finding_ids: list[str] = Field(default_factory=list, max_length=100)
+    redact_command: bool = False
+    redact_result: bool = False
+    redact_target: bool = False
+
+
+class WriteupWorkbench(BaseModel):
+    machines: list[MachineProgress] = Field(default_factory=list, max_length=100)
+    evidence: list[WriteupEvidenceBlock] = Field(default_factory=list, max_length=200)
+
+    @field_validator("machines")
+    @classmethod
+    def unique_machine_ids(cls, value: list[MachineProgress]) -> list[MachineProgress]:
+        if len({machine.id for machine in value}) != len(value):
+            raise ValueError("Cada máquina debe tener un identificador distinto.")
+        return value
+
+    @field_validator("evidence")
+    @classmethod
+    def unique_evidence_ids(cls, value: list[WriteupEvidenceBlock]) -> list[WriteupEvidenceBlock]:
+        if len({item.id for item in value}) != len(value):
+            raise ValueError("Cada evidencia debe tener un identificador distinto.")
+        return value
+
+    @model_validator(mode="after")
+    def bound_total_payload(self):
+        if len(self.model_dump_json()) > 1_000_000:
+            raise ValueError("El espacio de trabajo del informe supera el límite permitido.")
+        return self
+
+
+class WriteupSnippetCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=120)
+    template: str = Field(..., min_length=1, max_length=12000)
+
+
+class WriteupSnippetUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    template: str | None = Field(default=None, min_length=1, max_length=12000)
+
+
+class WriteupSnippetOut(BaseModel):
+    id: str
+    name: str
+    template: str
+    created_at: datetime
+    updated_at: datetime
 
 
 class StructuredFindingItem(BaseModel):
@@ -27,6 +106,7 @@ class StructuredFindingItem(BaseModel):
     summary: str = Field(default="", max_length=4000)
     remediation: str = Field(default="", max_length=4000)
     anchor_id: str | None = Field(default=None, max_length=120)
+    evidence_asset_ids: list[str] = Field(default_factory=list, max_length=100)
 
     @field_validator("cvss_score")
     @classmethod
@@ -47,6 +127,7 @@ class WriteupCreate(BaseModel):
     markdown_content: str = Field(default="", max_length=settings.WRITEUP_MAX_CONTENT_CHARS)
     executive_summary: str | None = Field(default=None, max_length=25000)
     findings: list[StructuredFindingItem] = Field(default_factory=list, max_length=200)
+    workbench: WriteupWorkbench = Field(default_factory=WriteupWorkbench)
     prospect_id: str | None = Field(default=None, max_length=36)
     project_id: str | None = Field(default=None, max_length=36)
     engagement_id: str | None = Field(default=None, max_length=36)
@@ -79,6 +160,7 @@ class WriteupUpdate(BaseModel):
     markdown_content: str | None = Field(default=None, max_length=settings.WRITEUP_MAX_CONTENT_CHARS)
     executive_summary: str | None = Field(default=None, max_length=25000)
     findings: list[StructuredFindingItem] | None = Field(default=None, max_length=200)
+    workbench: WriteupWorkbench | None = None
     prospect_id: str | None = Field(default=None, max_length=36)
     project_id: str | None = Field(default=None, max_length=36)
     engagement_id: str | None = Field(default=None, max_length=36)
@@ -272,6 +354,7 @@ class WriteupDetailOut(WriteupSummaryOut):
     markdown_content: str
     executive_summary: str | None = None
     findings: list[StructuredFindingItem]
+    workbench: WriteupWorkbench = Field(default_factory=WriteupWorkbench)
     boards: list[WriteupBoardOut]
     citations: list[WriteupCitationOut]
     assets: list[WriteupAssetOut]

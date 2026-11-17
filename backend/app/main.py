@@ -140,6 +140,7 @@ async def run_additive_schema_migrations(database_engine=None):
         "ALTER TABLE domain_renewals ALTER COLUMN service_type TYPE VARCHAR(64)",
         "ALTER TABLE writeup_revisions ADD COLUMN IF NOT EXISTS encrypted_snapshot TEXT",
         "ALTER TABLE writeup_revisions ADD COLUMN IF NOT EXISTS change_type VARCHAR(32)",
+        "ALTER TABLE writeups ADD COLUMN IF NOT EXISTS encrypted_workbench_json TEXT",
         "ALTER TABLE pentest_engagements ADD COLUMN IF NOT EXISTS authorized_ipv6_targets TEXT NOT NULL DEFAULT ''",
         "CREATE INDEX IF NOT EXISTS ix_writeup_revisions_writeup_revision ON writeup_revisions (writeup_id, revision_number)",
         "CREATE INDEX IF NOT EXISTS ix_writeup_revisions_writeup_created ON writeup_revisions (writeup_id, created_at)",

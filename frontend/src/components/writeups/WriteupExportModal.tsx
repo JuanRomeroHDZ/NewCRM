@@ -2,6 +2,7 @@ import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { CheckCircle2, Download, FileArchive, FileCode, FileSpreadsheet, FileText, Globe, Shield, X } from 'lucide-react';
 import { WriteupDetail, WriteupExportFormat } from '../../types';
 import { compileMermaidDiagramsForExport } from './mermaidExportHelper';
+import { reviewPublication } from './writeupWorkbenchUtils';
 
 interface WriteupExportModalProps {
   writeup: WriteupDetail;
@@ -103,6 +104,7 @@ export const WriteupExportModal: React.FC<WriteupExportModalProps> = ({ writeup,
   );
   const supportsDocumentIndexes = ['pdf', 'docx', 'html', 'md', 'md_zip'].includes(selectedFormat);
   const supportsTypography = ['pdf', 'docx', 'html'].includes(selectedFormat);
+  const publicationReview = useMemo(() => reviewPublication(writeup), [writeup]);
 
   const handleRunExport = async () => {
     if (exportingRef.current) return;
@@ -163,6 +165,18 @@ export const WriteupExportModal: React.FC<WriteupExportModalProps> = ({ writeup,
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-5 space-y-5">
+          <section aria-label="Revisión antes de exportar" className="border-b border-slate-700 pb-4 text-xs text-slate-300">
+            <h3 className="mb-2 font-semibold text-slate-100">Revisión antes de exportar</h3>
+            <ul className="space-y-1">
+              <li>Imágenes locales ausentes: {publicationReview.missingImages}</li>
+              <li>Enlaces vacíos: {publicationReview.emptyLinks}</li>
+              <li>Secciones sin contenido: {publicationReview.emptySections}</li>
+              <li>Posibles secretos sin marcar: {publicationReview.possibleSecrets}</li>
+              <li>Campos de evidencia censurados: {publicationReview.redactedFields}</li>
+              <li>Preguntas y pasos pendientes: {publicationReview.pendingQuestions + publicationReview.pendingSteps}</li>
+            </ul>
+            <p className="mt-2 text-slate-400">La búsqueda es orientativa: revisa el contenido y las imágenes manualmente antes de compartir.</p>
+          </section>
           <div className="grid grid-cols-1 min-[360px]:grid-cols-2 sm:grid-cols-4 gap-2.5">
             {EXPORT_OPTIONS.map((opt) => {
               const Icon = opt.icon;
@@ -174,14 +188,14 @@ export const WriteupExportModal: React.FC<WriteupExportModalProps> = ({ writeup,
                   onClick={() => { setSelectedFormat(opt.format); setLastSha(null); setErrorMsg(null); }}
                   disabled={exporting}
                   aria-pressed={active}
-                  className={`min-h-11 min-w-0 text-left p-3 rounded-xl border transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
+                  className={`min-h-11 min-w-0 text-left p-3 rounded-xl border transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 ${
                     active
-                      ? 'bg-indigo-600/20 border-indigo-500 text-white'
+                      ? 'bg-emerald-700/20 border-emerald-600 text-white'
                       : 'bg-slate-950/60 border-slate-800 text-slate-300 hover:border-slate-700'
                   }`}
                 >
                   <div className="flex items-center justify-between mb-1.5">
-                    <Icon className={`w-4 h-4 ${active ? 'text-indigo-300' : 'text-slate-300'}`} aria-hidden="true" />
+                    <Icon className={`w-4 h-4 ${active ? 'text-emerald-300' : 'text-slate-300'}`} aria-hidden="true" />
                     <span className="text-[10px] font-mono text-slate-400">{opt.ext}</span>
                   </div>
                   <div className="text-xs font-semibold">{opt.label}</div>

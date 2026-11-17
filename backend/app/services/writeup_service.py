@@ -22,6 +22,7 @@ from app.models.writeups import (
 from app.security.crypto import decrypt_note, encrypt_note
 from app.services.workshop_sanitizer import sanitize_svg_content
 from app.services.writeup_exporter import ExportBundleContext
+from app.services.writeup_workspace import format_evidence_sections
 
 
 SLUG_STRIP_RE = re.compile(r"[^a-z0-9-]+")
@@ -95,6 +96,18 @@ def _load_json_list(raw_json: str | None) -> list:
         return parsed if isinstance(parsed, list) else []
     except Exception:
         return []
+
+
+def _load_json_object(raw_json: str | None) -> dict:
+    if not raw_json:
+        return {"machines": [], "evidence": []}
+    try:
+        parsed = json.loads(raw_json)
+        if isinstance(parsed, dict) and isinstance(parsed.get("machines", []), list) and isinstance(parsed.get("evidence", []), list):
+            return {"machines": parsed.get("machines", []), "evidence": parsed.get("evidence", [])}
+    except (TypeError, json.JSONDecodeError):
+        pass
+    return {"machines": [], "evidence": []}
 
 
 def serialize_board(board: WriteupBoard, writeup_updated_at: datetime | None = None) -> dict:
@@ -203,6 +216,7 @@ async def create_revision_snapshot(
             "target_scope", "tags_json", "prospect_id", "project_id", "engagement_id")},
         "executive_summary": decrypt_note(writeup.encrypted_executive_summary),
         "findings": _load_json_list(decrypt_note(writeup.encrypted_findings_json)),
+        "workbench": _load_json_object(decrypt_note(writeup.encrypted_workbench_json)),
         "boards": [{k: v for k, v in serialize_board(board).items() if k not in ("created_at", "updated_at", "writeup_updated_at")} for board in boards],
         "citations": [{k: v for k, v in serialize_citation(cit, markdown_text).items() if k not in ("created_at", "updated_at", "is_stale", "writeup_updated_at")} for cit in citations],
         "assets": [{k: v for k, v in serialize_asset(asset).items() if k not in ("created_at", "writeup_updated_at")} for asset in assets],
@@ -263,6 +277,7 @@ async def build_writeup_detail_dict(db: AsyncSession, writeup: Writeup) -> dict:
     markdown_text = decrypt_note(writeup.encrypted_markdown) or ""
     exec_summary = decrypt_note(writeup.encrypted_executive_summary)
     findings = _load_json_list(decrypt_note(writeup.encrypted_findings_json))
+    workbench = _load_json_object(decrypt_note(writeup.encrypted_workbench_json))
     tags = _load_json_list(writeup.tags_json)
 
     boards = (
@@ -316,6 +331,7 @@ async def build_writeup_detail_dict(db: AsyncSession, writeup: Writeup) -> dict:
         "markdown_content": markdown_text,
         "executive_summary": exec_summary,
         "findings": findings,
+        "workbench": workbench,
         "boards": [serialize_board(b, writeup.updated_at) for b in boards],
         "citations": [serialize_citation(c, markdown_text, writeup.updated_at) for c in citations],
         "assets": [serialize_asset(a, writeup.updated_at) for a in assets],
@@ -385,7 +401,15 @@ async def build_export_context(
         target_scope=detail["target_scope"],
         tags=detail["tags"],
         executive_summary=detail["executive_summary"] or "",
-        markdown_content=detail["markdown_content"],
+        markdown_content="\n\n".join(part for part in (
+            detail["markdown_content"],
+            format_evidence_sections(
+                detail["workbench"],
+                assets_by_id,
+                detail["findings"],
+                redact_for_client=redact_for_client,
+            ),
+        ) if part),
         findings=detail["findings"],
         citations=citations,
         assets_by_id=assets_by_id,

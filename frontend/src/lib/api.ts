@@ -6,7 +6,7 @@ import {
   CoreUser, CoreLoginResponse, CoreUserCreateResponse, TotpSetupResponse, CoreUserRole,
   WriteupSummary, WriteupDetail, WriteupBoard, WriteupCitation, WriteupAsset,
   WriteupRevision, WriteupRevisionAuthor, WriteupExportFormat, WriteupStructuredFinding, WriteupStatus, WriteupSeverity,
-  RuntimeConfig, SecurityAuditResponse
+  WriteupSnippet, WriteupWorkbench, RuntimeConfig, SecurityAuditResponse
 } from '../types';
 import { ApiError, createHttpApiError, normalizeResponseReadError, normalizeTransportError } from './apiErrors';
 
@@ -751,6 +751,7 @@ export const api = {
     markdown_content?: string;
     executive_summary?: string | null;
     findings?: WriteupStructuredFinding[];
+    workbench?: WriteupWorkbench;
     prospect_id?: string | null;
     project_id?: string | null;
   }) => request<WriteupDetail>('/writeups', { method: 'POST', body: JSON.stringify(payload) }),
@@ -770,6 +771,7 @@ export const api = {
       markdown_content?: string;
       executive_summary?: string | null;
       findings?: WriteupStructuredFinding[];
+      workbench?: WriteupWorkbench;
       prospect_id?: string | null;
       project_id?: string | null;
       expected_updated_at?: string;
@@ -778,6 +780,13 @@ export const api = {
       revision_type?: WriteupRevision['change_type'];
     }
   ) => request<WriteupDetail>(`/writeups/${writeupId}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  listWriteupSnippets: () => request<WriteupSnippet[]>('/writeups/snippets'),
+  createWriteupSnippet: (payload: { name: string; template: string }) =>
+    request<WriteupSnippet>('/writeups/snippets', { method: 'POST', body: JSON.stringify(payload) }),
+  updateWriteupSnippet: (snippetId: string, payload: { name?: string; template?: string }) =>
+    request<WriteupSnippet>(`/writeups/snippets/${encodeURIComponent(snippetId)}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  deleteWriteupSnippet: (snippetId: string) =>
+    request<void>(`/writeups/snippets/${encodeURIComponent(snippetId)}`, { method: 'DELETE' }),
   deleteWriteup: (writeupId: string, expectedUpdatedAt?: string) =>
     requestUpdatedAtHeader(`/writeups/${writeupId}${expectedUpdatedAt ? `?expected_updated_at=${encodeURIComponent(expectedUpdatedAt)}` : ''}`, { method: 'DELETE' }),
   listWriteupRevisions: (writeupId: string, offsetOrFilters: number | WriteupRevisionFilters = 0, extraFilters: WriteupRevisionFilters = {}) => {

@@ -44,6 +44,7 @@ class Writeup(Base):
     encrypted_markdown: Mapped[str | None] = mapped_column(Text, nullable=True)
     encrypted_executive_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     encrypted_findings_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    encrypted_workbench_json: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Optional CRM / Pentest links
     prospect_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("prospects.id"), nullable=True, index=True)
@@ -180,3 +181,15 @@ class WriteupExportLog(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
 
     writeup: Mapped["Writeup"] = relationship("Writeup", back_populates="export_logs")
+
+
+class WriteupSnippet(Base):
+    """Reusable encrypted command/template snippets shared by the unlocked vault."""
+
+    __tablename__ = "writeup_snippets"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=gen_uuid)
+    name: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
+    encrypted_template: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, onupdate=utc_now)

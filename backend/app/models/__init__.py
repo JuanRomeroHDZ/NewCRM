@@ -393,4 +393,5 @@ from app.models.writeups import (
     WriteupAsset,
     WriteupRevision,
     WriteupExportLog,
+    WriteupSnippet,
 )

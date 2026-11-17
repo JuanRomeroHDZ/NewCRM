@@ -91,6 +91,7 @@ interface WriteupMarkdownSplitEditorProps {
   onApplyCvss?: (score: number, vector: string, severity: WriteupSeverity) => void;
   onSave?: () => void;
   onInspectAsset?: (asset: WriteupAsset) => void;
+  onOpenWorkbench?: (tab: 'evidence' | 'progress' | 'snippets' | 'publish') => void;
   jumpTarget?: JumpTarget | null;
   readOnly?: boolean;
   editorSession?: WriteupEditorSessionState;
@@ -122,6 +123,7 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
   onApplyCvss,
   onSave,
   onInspectAsset,
+  onOpenWorkbench,
   jumpTarget,
   readOnly = false,
   editorSession,
@@ -733,10 +735,10 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
                 ? 'bg-emerald-600/20 border-emerald-500/40 text-emerald-300'
                 : 'bg-slate-800 border-slate-700 text-slate-300'
             }`}
-            title="Alternar vista interna vs cliente censurada"
+            title="La vista para cliente oculta únicamente el texto marcado con {{redact:...}}; revisa el contenido antes de compartir"
           >
             {redactPreview ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-            <span className="writeup-editor-toolbar-label">{redactPreview ? 'Cliente' : 'Interna'}</span>
+            <span className="writeup-editor-toolbar-label">{redactPreview ? 'Vista censurada' : 'Vista interna'}</span>
           </button>
 
           <label className="writeup-view-mode-label relative inline-flex items-center">
@@ -877,7 +879,10 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
       )}
 
       {activeTray === 'templates' && (
-        <div className="px-3 py-2 bg-slate-900 border-b border-slate-800 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5 text-xs max-h-56 overflow-y-auto">
+        <div className="px-3 py-2 bg-slate-900 border-b border-slate-800 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5 text-xs max-h-80 overflow-y-auto">
+          <div className="sm:col-span-2 lg:col-span-3 space-y-2 border-b border-slate-700 pb-3">
+            <div className="flex flex-wrap items-center justify-between gap-2"><div><h3 className="font-semibold text-slate-100">Plantillas del informe</h3><p className="text-slate-400">Fragmentos guardados en la biblioteca aparecen en el Laboratorio.</p></div><button type="button" onClick={() => { setActiveTray('none'); onOpenWorkbench?.('snippets'); }} className="min-h-9 rounded-md border border-slate-700 px-3 text-xs text-emerald-300 hover:bg-slate-800">Abrir biblioteca compartida</button></div>
+          </div>
           {WRITEUP_TEMPLATES.map((tpl) => (
             <button
               key={tpl.id}

@@ -6,6 +6,7 @@ import {
   Calculator,
   CheckCircle2,
   ChevronDown,
+  ClipboardList,
   Copy,
   CopyPlus,
   Download,
@@ -54,12 +55,14 @@ import {
   WriteupStatus,
   WriteupStructuredFinding,
   WriteupSummary,
+  WriteupWorkbench,
 } from '../../types';
 import { PentestWhiteboard, type WhiteboardRecoveryDraft } from './PentestWhiteboard';
 import { WriteupExportModal } from './WriteupExportModal';
 import { WriteupMarkdownSplitEditor, type WriteupEditorSessionState } from './WriteupMarkdownSplitEditor';
 import { MarkdownRichPreview } from './MarkdownRichPreview';
 import { WriteupCorrelationsPanel } from './WriteupCorrelationsPanel';
+import { EMPTY_WRITEUP_WORKBENCH, evidenceForFinding } from './writeupWorkbenchUtils';
 import { correlateWriteup } from '../../lib/writeupCorrelations';
 import { MAX_REPORT_TEXT_LENGTH, MAX_REPORT_TITLE_LENGTH } from './writeupLimits';
 import {
@@ -70,6 +73,10 @@ import {
   parseCvss31Vector,
   PENTEST_TAXONOMY_PRESETS,
 } from './pentestUtils';
+
+const WriteupWorkbenchModal = React.lazy(() =>
+  import('./WriteupWorkbenchModal').then((module) => ({ default: module.WriteupWorkbenchModal })),
+);
 
 const SEVERITY_CARD: Record<WriteupSeverity, string> = {
   critica: 'border-rose-700/70 bg-rose-950/55 hover:bg-rose-900/55',
@@ -122,6 +129,7 @@ type RecoveryDraft = {
   baseUpdatedAt: string; savedAt?: string; title: string; status: WriteupStatus; severity: WriteupSeverity;
   cvssScore: string; cvssVector: string; cweId: string; cveId: string; targetScope: string;
   executiveSummary: string; markdown: string; findings: WriteupStructuredFinding[]; prospectId: string; projectId: string;
+  workbench?: WriteupWorkbench;
   boardDrafts?: WhiteboardRecoveryDraft[];
   workspaceMode?: WorkspaceMode;
   activeBoardId?: string | null;
@@ -152,6 +160,12 @@ const isRecoveryDraft = (value: unknown): value is RecoveryDraft => {
     Number.isFinite(draft.editorSession.scrollTop) && draft.editorSession.scrollTop >= 0
   );
   const workspaceModeValid = draft.workspaceMode === undefined || ['markdown', 'whiteboard', 'dual', 'findings', 'assets'].includes(draft.workspaceMode);
+  const recoveredWorkbench = draft.workbench as WriteupWorkbench | undefined;
+  const workbenchValid = recoveredWorkbench === undefined || (
+    Boolean(recoveredWorkbench) && Array.isArray(recoveredWorkbench.machines) && recoveredWorkbench.machines.length <= 100 &&
+    Array.isArray(recoveredWorkbench.evidence) && recoveredWorkbench.evidence.length <= 200 &&
+    JSON.stringify(recoveredWorkbench).length <= 1_000_000
+  );
   return typeof draft.baseUpdatedAt === 'string' && typeof draft.title === 'string' &&
     ['borrador', 'en_revision', 'finalizado', 'entregado'].includes(draft.status || '') &&
     ['critica', 'alta', 'media', 'baja', 'informativa'].includes(draft.severity || '') &&
@@ -159,7 +173,7 @@ const isRecoveryDraft = (value: unknown): value is RecoveryDraft => {
     typeof draft.cweId === 'string' && typeof draft.cveId === 'string' &&
     typeof draft.targetScope === 'string' && typeof draft.executiveSummary === 'string' &&
     typeof draft.markdown === 'string' && Array.isArray(draft.findings) &&
-    typeof draft.prospectId === 'string' && typeof draft.projectId === 'string' && boardDraftsValid && editorSessionValid && workspaceModeValid &&
+    typeof draft.prospectId === 'string' && typeof draft.projectId === 'string' && boardDraftsValid && editorSessionValid && workspaceModeValid && workbenchValid &&
     (draft.activeBoardId === undefined || draft.activeBoardId === null || typeof draft.activeBoardId === 'string');
 };
 
@@ -174,6 +188,7 @@ const recoveryDraftMatchesServer = (draft: RecoveryDraft, server: WriteupDetail)
   draft.executiveSummary === (server.executive_summary || '') &&
   draft.markdown === (server.markdown_content || '') &&
   JSON.stringify(draft.findings) === JSON.stringify(server.findings || []) &&
+  JSON.stringify(draft.workbench || EMPTY_WRITEUP_WORKBENCH) === JSON.stringify(server.workbench || EMPTY_WRITEUP_WORKBENCH) &&
   (draft.prospectId || null) === (server.prospect_id ?? null) &&
   (draft.projectId || null) === (server.project_id ?? null);
 
@@ -196,6 +211,7 @@ export const WriteupsView: React.FC = () => {
   const [items, setItems] = useState<WriteupSummary[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<WriteupDetail | null>(null);
+  const [workbenchPanel, setWorkbenchPanel] = useState<{ tab: 'evidence' | 'progress' | 'snippets' | 'publish'; focusEvidenceId?: string | null } | null>(null);
   const [editLockState, setEditLockState] = useState<WriteupEditLockState>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [detailError, setDetailError] = useState('');
@@ -547,6 +563,7 @@ export const WriteupsView: React.FC = () => {
   const [targetScope, setTargetScope] = useState('');
   const [execSummary, setExecSummary] = useState('');
   const [markdown, setMarkdown] = useState('');
+  const [workbench, setWorkbench] = useState<WriteupWorkbench>(EMPTY_WRITEUP_WORKBENCH);
   const [revisionDiff, setRevisionDiff] = useState<DiffLine[]>([]);
   const [diffLoading, setDiffLoading] = useState(false);
   const [diffError, setDiffError] = useState('');
@@ -630,7 +647,7 @@ export const WriteupsView: React.FC = () => {
     const draft: RecoveryDraft = {
       baseUpdatedAt: detail.updated_at, savedAt: new Date().toISOString(), title, status: statusVal, severity,
       cvssScore, cvssVector, cweId, cveId, targetScope, executiveSummary: execSummary, markdown, findings,
-      prospectId, projectId, boardDrafts: pendingBoardDrafts, workspaceMode: mode, activeBoardId,
+      prospectId, projectId, workbench, boardDrafts: pendingBoardDrafts, workspaceMode: mode, activeBoardId,
       editorSession: editorSessionRef.current[id],
     };
     setLocalDraftSavedAt(null);
@@ -652,7 +669,7 @@ export const WriteupsView: React.FC = () => {
     });
     localDraftPersistPromiseRef.current = persist;
     return () => { draftWriteGeneration.current += 1; };
-  }, [detail?.id, detail?.updated_at, isUnlocked, draftRecoveryKey, dirty, editVersion, editorSessionRevision, boardRecoveryDrafts, title, statusVal, severity, cvssScore, cvssVector, cweId, cveId, targetScope, execSummary, markdown, findings, prospectId, projectId, mode, activeBoardId, showToast]);
+  }, [detail?.id, detail?.updated_at, isUnlocked, draftRecoveryKey, dirty, editVersion, editorSessionRevision, boardRecoveryDrafts, title, statusVal, severity, cvssScore, cvssVector, cweId, cveId, targetScope, execSummary, markdown, findings, prospectId, projectId, workbench, mode, activeBoardId, showToast]);
   const changedRevisionSections = useMemo(() => {
     const snapshot = diffRevision?.snapshot;
     if (!snapshot || !detail) return [];
@@ -743,6 +760,7 @@ export const WriteupsView: React.FC = () => {
     setTargetScope('');
     setExecSummary('');
     setMarkdown('');
+    setWorkbench(EMPTY_WRITEUP_WORKBENCH);
     setFindings([]);
     setProspectId('');
     setProjectId('');
@@ -759,6 +777,7 @@ export const WriteupsView: React.FC = () => {
     setTotal(0);
     setHasMore(false);
     setShowExportModal(false);
+    setWorkbenchPanel(null);
     setLightboxAsset(null);
     setDiffRevision(null);
     setShowRevisionHistory(false);
@@ -779,6 +798,7 @@ export const WriteupsView: React.FC = () => {
     setTargetScope(data.target_scope || '');
     setExecSummary(data.executive_summary || '');
     setMarkdown(data.markdown_content || '');
+    setWorkbench(data.workbench || EMPTY_WRITEUP_WORKBENCH);
     setFindings(data.findings || []);
     setProspectId(data.prospect_id || '');
     setProjectId(data.project_id || '');
@@ -799,10 +819,12 @@ export const WriteupsView: React.FC = () => {
       draft.cvssVector !== (server.cvss_vector || '') || draft.cweId !== (server.cwe_id || '') || draft.cveId !== (server.cve_id || '') ||
       draft.targetScope !== (server.target_scope || '') || draft.executiveSummary !== (server.executive_summary || '') ||
       draft.markdown !== (server.markdown_content || '') || JSON.stringify(draft.findings) !== JSON.stringify(server.findings || []) ||
+      JSON.stringify(draft.workbench || EMPTY_WRITEUP_WORKBENCH) !== JSON.stringify(server.workbench || EMPTY_WRITEUP_WORKBENCH) ||
       draft.prospectId !== (server.prospect_id || '') || draft.projectId !== (server.project_id || '') || (draft.boardDrafts?.length || 0) > 0;
     setTitle(draft.title); setStatusVal(draft.status); setSeverity(draft.severity);
     setCvssScore(draft.cvssScore); setCvssVector(draft.cvssVector); setCweId(draft.cweId); setCveId(draft.cveId);
     setTargetScope(draft.targetScope); setExecSummary(draft.executiveSummary); setMarkdown(draft.markdown);
+    setWorkbench(draft.workbench || EMPTY_WRITEUP_WORKBENCH);
     setFindings(draft.findings); setProspectId(draft.prospectId); setProjectId(draft.projectId);
     const recoveredBoards = Object.fromEntries((draft.boardDrafts || []).map(board => [board.boardId, board]));
     const recoveredBoardIds = Object.fromEntries((draft.boardDrafts || []).map(board => [board.boardId, true as const]));
@@ -1263,6 +1285,7 @@ export const WriteupsView: React.FC = () => {
       findings,
       prospectId,
       projectId,
+      workbench,
       boardDrafts: Object.values(boardRecoveryDraftsRef.current),
       workspaceMode: mode,
       activeBoardId,
@@ -1554,6 +1577,10 @@ export const WriteupsView: React.FC = () => {
       reportValidationError(`Un informe puede tener hasta ${MAX_FINDINGS_COUNT} hallazgos.`);
       return false;
     }
+    if (workbench.machines.length > 100 || workbench.evidence.length > 200 || JSON.stringify(workbench).length > 1_000_000) {
+      reportValidationError('El laboratorio del informe supera el límite admitido. Reduce el número o el tamaño de sus bloques.');
+      return false;
+    }
     if (
       (markdownOverride ?? markdown).length > MAX_REPORT_TEXT_LENGTH ||
       execSummary.length > 25000 || cweId.length > 32 || cveId.length > 64 || targetScope.length > 500 ||
@@ -1591,6 +1618,7 @@ export const WriteupsView: React.FC = () => {
         executive_summary: execSummary,
         markdown_content: markdownOverride ?? markdown,
         findings,
+        workbench,
         prospect_id: prospectId || null,
         project_id: projectId || null,
         expected_updated_at: expectedUpdatedAtOverride || detail.updated_at,
@@ -2250,6 +2278,25 @@ export const WriteupsView: React.FC = () => {
     return sha256;
   };
 
+  const navigateToFindingFromWorkbench = (findingId: string) => {
+    setWorkbenchPanel(null);
+    setMode('findings');
+    window.setTimeout(() => {
+      document.getElementById(`writeup-finding-${encodeURIComponent(findingId)}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 80);
+  };
+
+  const insertWorkbenchSnippet = (snippet: string) => {
+    if (isWriteupEditingBlocked) {
+      showToast('Recupera la reserva de edición antes de insertar contenido.', 'warning');
+      return;
+    }
+    setMarkdown((current) => `${current}${current && !current.endsWith('\n') ? '\n' : ''}${snippet}`);
+    setMode('markdown');
+    markDirty();
+    showToast('Fragmento insertado al final del informe.', 'success');
+  };
+
   if (!isUnlocked) {
     return (
       <div className="flex min-h-[40vh] flex-col items-center justify-center p-4 text-center sm:min-h-[70vh] sm:p-6">
@@ -2514,37 +2561,6 @@ export const WriteupsView: React.FC = () => {
                   className="writeup-header-title h-10 min-w-[120px] w-48 max-w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-sm font-bold text-white"
                 />
 
-                <button
-                  type="button"
-                  disabled={editLockState?.kind === 'acquiring'}
-                  onClick={() => {
-                    if (detail.manual_locked || editLockState?.kind === 'manual') {
-                      void handleToggleManualLock();
-                    } else if (editLockState?.kind === 'blocked' || editLockState?.kind === 'unavailable') {
-                      void acquireEditLease(detail.id).then((acquired) => {
-                        if (acquired) showToast('Reserva de edición recuperada.', 'success');
-                      });
-                    } else {
-                      void handleToggleManualLock();
-                    }
-                  }}
-                  aria-pressed={detail.manual_locked || editLockState?.kind === 'manual'}
-                  aria-label={detail.manual_locked || editLockState?.kind === 'manual'
-                    ? 'Desbloquear edición'
-                    : editLockState?.kind === 'blocked' || editLockState?.kind === 'unavailable'
-                      ? 'Reintentar reserva de edición'
-                      : 'Bloquear edición'}
-                  title={detail.manual_locked || editLockState?.kind === 'manual'
-                    ? 'Desbloquear edición'
-                    : editLockState?.kind === 'blocked' || editLockState?.kind === 'unavailable'
-                      ? 'Reintentar reserva de edición'
-                      : 'Bloquear edición'}
-                  className={`writeup-header-compact-button inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-300 ${detail.manual_locked || editLockState?.kind === 'manual'
-                    ? 'border border-amber-700/60 bg-amber-950/40 text-amber-200 hover:bg-amber-900/50'
-                    : 'bg-slate-800 text-slate-200 hover:bg-slate-700'} disabled:cursor-wait disabled:opacity-50`}
-                >
-                  {detail.manual_locked || editLockState?.kind === 'manual' ? <Unlock className="h-4 w-4" aria-hidden="true" /> : <Lock className="h-4 w-4" aria-hidden="true" />}
-                </button>
                 </div>
 
                 <div className="writeup-header-workspace-row">
@@ -2585,11 +2601,49 @@ export const WriteupsView: React.FC = () => {
                   </div>
                 )}
                 </div>
-              </div>
-
               <div className="writeup-header-action-row">
               <div className="writeup-header-actions" role="toolbar" aria-label="Acciones del informe">
                 <div className="writeup-header-action-group" role="group" aria-label="Paneles del informe">
+                <button
+                  type="button"
+                  onClick={() => setWorkbenchPanel({ tab: 'evidence' })}
+                  aria-label="Abrir laboratorio del informe"
+                  title="Evidencias, progreso y fragmentos reutilizables"
+                  className={`writeup-header-compact-button inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border ${workbenchPanel ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200' : 'border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white'}`}
+                >
+                  <ClipboardList className="h-4 w-4" aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  disabled={editLockState?.kind === 'acquiring'}
+                  onClick={() => {
+                    if (detail.manual_locked || editLockState?.kind === 'manual') {
+                      void handleToggleManualLock();
+                    } else if (editLockState?.kind === 'blocked' || editLockState?.kind === 'unavailable') {
+                      void acquireEditLease(detail.id).then((acquired) => {
+                        if (acquired) showToast('Reserva de edición recuperada.', 'success');
+                      });
+                    } else {
+                      void handleToggleManualLock();
+                    }
+                  }}
+                  aria-pressed={detail.manual_locked || editLockState?.kind === 'manual'}
+                  aria-label={detail.manual_locked || editLockState?.kind === 'manual'
+                    ? 'Desbloquear edición'
+                    : editLockState?.kind === 'blocked' || editLockState?.kind === 'unavailable'
+                      ? 'Reintentar reserva de edición'
+                      : 'Bloquear edición'}
+                  title={detail.manual_locked || editLockState?.kind === 'manual'
+                    ? 'Desbloquear edición'
+                    : editLockState?.kind === 'blocked' || editLockState?.kind === 'unavailable'
+                      ? 'Reintentar reserva de edición'
+                      : 'Bloquear edición'}
+                  className={`writeup-header-compact-button inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-300 ${detail.manual_locked || editLockState?.kind === 'manual'
+                    ? 'border border-amber-700/60 bg-amber-950/40 text-amber-200 hover:bg-amber-900/50'
+                    : 'bg-slate-800 text-slate-200 hover:bg-slate-700'} disabled:cursor-wait disabled:opacity-50`}
+                >
+                  {detail.manual_locked || editLockState?.kind === 'manual' ? <Unlock className="h-4 w-4" aria-hidden="true" /> : <Lock className="h-4 w-4" aria-hidden="true" />}
+                </button>
                 <button
                   type="button"
                   onClick={() => setShowCorrelations((visible) => !visible)}
@@ -2714,6 +2768,7 @@ export const WriteupsView: React.FC = () => {
                   {saveError ? `No se pudo guardar: ${saveError}` : 'Copia local no disponible; vuelve a la pizarra para reintentar'}
                 </div>
               )}
+              </div>
               </div>
 
               {/* Compact summary badge line when metadata tray is collapsed */}
@@ -2894,6 +2949,7 @@ export const WriteupsView: React.FC = () => {
                   onCreateCitation={handleCreateCitation}
                   onSave={() => void handleSaveWriteup(false)}
                   onInspectAsset={setLightboxAsset}
+                  onOpenWorkbench={(tab) => setWorkbenchPanel({ tab })}
                   readOnly={isWriteupEditingBlocked}
                   editorSession={editorSessionRef.current[detail.id]}
                   onEditorSessionChange={(session) => recordEditorSession(detail.id, session)}
@@ -2948,6 +3004,7 @@ export const WriteupsView: React.FC = () => {
                     onCreateCitation={handleCreateCitation}
                     onSave={() => void handleSaveWriteup(false)}
                     onInspectAsset={setLightboxAsset}
+                    onOpenWorkbench={(tab) => setWorkbenchPanel({ tab })}
                     readOnly={isWriteupEditingBlocked}
                     editorSession={editorSessionRef.current[detail.id]}
                     onEditorSessionChange={(session) => recordEditorSession(detail.id, session)}
@@ -3073,7 +3130,7 @@ export const WriteupsView: React.FC = () => {
 
                   <div className="space-y-3">
                     {findings.map((f, idx) => (
-                      <div key={`${f.id}-${idx}`} className="bg-slate-950/70 border border-slate-800 rounded-xl p-3 space-y-2.5 text-xs">
+                      <div id={`writeup-finding-${encodeURIComponent(f.id)}`} key={`${f.id}-${idx}`} className="scroll-mt-4 bg-slate-950/70 border border-slate-800 rounded-xl p-3 space-y-2.5 text-xs">
                         <div className="grid grid-cols-2 sm:grid-cols-6 gap-2">
                           <input
                             type="text"
@@ -3081,8 +3138,16 @@ export const WriteupsView: React.FC = () => {
                             maxLength={64}
                             onChange={(e) => {
                               const next = [...findings];
+                              const previousId = next[idx].id;
                               next[idx] = { ...f, id: e.target.value };
                               setFindings(next);
+                              if (previousId !== e.target.value) setWorkbench((current) => ({
+                                ...current,
+                                evidence: current.evidence.map((item) => ({
+                                  ...item,
+                                  finding_ids: item.finding_ids.map((id) => id === previousId ? e.target.value : id),
+                                })),
+                              }));
                               markDirty();
                             }}
                             placeholder="ID (H-01)"
@@ -3170,7 +3235,15 @@ export const WriteupsView: React.FC = () => {
                             <button
                               type="button"
                               onClick={() => {
+                                const removedId = f.id;
                                 setFindings(findings.filter((_, i) => i !== idx));
+                                setWorkbench((current) => ({
+                                  ...current,
+                                  evidence: current.evidence.map((item) => ({
+                                    ...item,
+                                    finding_ids: item.finding_ids.filter((id) => id !== removedId),
+                                  })),
+                                }));
                                 markDirty();
                               }}
                               className="p-1.5 rounded text-rose-400 hover:bg-rose-950/40"
@@ -3180,6 +3253,22 @@ export const WriteupsView: React.FC = () => {
                           </div>
                         </div>
 
+                        <div className="space-y-1">
+                          <span className="text-slate-300">Evidencias vinculadas</span>
+                          {evidenceForFinding(workbench, f.id).length > 0 && <div className="flex flex-wrap gap-1.5 py-1">{evidenceForFinding(workbench, f.id).map((evidence) => <button key={evidence.id} type="button" onClick={() => setWorkbenchPanel({ tab: 'evidence', focusEvidenceId: evidence.id })} className="inline-flex min-h-8 items-center gap-1 rounded border border-slate-700 px-2 text-emerald-300 hover:bg-slate-800"><ClipboardList className="h-3.5 w-3.5" />{evidence.title || 'Evidencia sin título'}</button>)}</div>}
+                          {detail.assets.length === 0 ? <p className="text-slate-400">Agrega una imagen al informe para vincularla.</p> : detail.assets.map((asset) => (
+                            <label key={asset.id} className="flex items-center gap-2 py-1">
+                              <input type="checkbox" checked={(f.evidence_asset_ids || []).includes(asset.id)} onChange={(event) => {
+                                const ids = f.evidence_asset_ids || [];
+                                const next = [...findings];
+                                next[idx] = { ...f, evidence_asset_ids: event.target.checked ? [...ids, asset.id] : ids.filter(id => id !== asset.id) };
+                                setFindings(next); markDirty();
+                              }} />
+                              <span className="min-w-0 truncate">{asset.caption || asset.filename}</span>
+                              <button type="button" onClick={() => setLightboxAsset(asset)} className="text-emerald-300 hover:underline">Ver</button>
+                            </label>
+                          ))}
+                        </div>
                         {/* OWASP / CWE / MITRE ATT&CK Preset Bar + Affected Target */}
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                           <select
@@ -3405,6 +3494,7 @@ export const WriteupsView: React.FC = () => {
                             )}
                             <div className="flex-1 min-w-0 text-xs">
                               <div className="font-medium text-slate-200 truncate">{asset.filename}</div>
+                              {findings.filter(finding => (finding.evidence_asset_ids || []).includes(asset.id)).map(finding => <button key={finding.id} type="button" className="block text-emerald-300 hover:underline" onClick={() => { void handleWorkspaceModeChange('findings'); }}>Hallazgo: {finding.title || finding.id}</button>)}
                               <div className="text-[11px] text-slate-400 tabular-nums">
                                 {asset.mime_type} · {(asset.optimized_size_bytes / 1024).toFixed(1)} KB ({savedPct}% ahorro)
                               </div>
@@ -3577,10 +3667,30 @@ export const WriteupsView: React.FC = () => {
 
       {showExportModal && detail && (
                   <WriteupExportModal
-          writeup={detail}
+          writeup={{ ...detail, markdown_content: markdown, findings, workbench }}
           onClose={() => setShowExportModal(false)}
           onExport={handleExport}
         />
+      )}
+
+      {workbenchPanel && detail && (
+        <React.Suspense fallback={<div role="status" className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 p-4 text-sm text-slate-300">Abriendo herramientas del informe…</div>}>
+          <WriteupWorkbenchModal
+            writeup={{ ...detail, markdown_content: markdown, findings, workbench }}
+            value={workbench}
+            findings={findings}
+            assets={detail.assets}
+            markdown={markdown}
+            readOnly={isWriteupEditingBlocked}
+            initialTab={workbenchPanel.tab}
+            focusEvidenceId={workbenchPanel.focusEvidenceId}
+            onChange={(next) => { setWorkbench(next); markDirty(); }}
+            onInsertSnippet={insertWorkbenchSnippet}
+            onNavigateFinding={navigateToFindingFromWorkbench}
+            onInspectAsset={(asset) => { setWorkbenchPanel(null); setLightboxAsset(asset); }}
+            onClose={() => setWorkbenchPanel(null)}
+          />
+        </React.Suspense>
       )}
 
       {/* Evidence Image / Video Lightbox Modal */}

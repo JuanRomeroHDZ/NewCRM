@@ -12,7 +12,7 @@ from sqlalchemy.orm.attributes import flag_modified
 from app.models import (
     ClientIncome, DomainRenewal, EmailAccount, InternalProject, OneTimeExpense,
     PasswordHistory, PaymentMethod, PlatformAccount, Prospect, SecureResource, UserSettings,
-    Writeup, WriteupAsset, WriteupBoard, WriteupCitation, WriteupRevision,
+    Writeup, WriteupAsset, WriteupBoard, WriteupCitation, WriteupRevision, WriteupSnippet,
 )
 from app.security.crypto import (
     BYTES_ENC_PREFIX,
@@ -39,10 +39,11 @@ NOTE_FIELDS = {
     EmailAccount: ("notes",), PlatformAccount: ("notes",), PaymentMethod: ("billing_notes",),
     Prospect: ("notes",), ClientIncome: ("notes",), DomainRenewal: ("notes",),
     OneTimeExpense: ("notes",), InternalProject: ("notes",), SecureResource: ("notes", "encrypted_content"),
-    Writeup: ("encrypted_markdown", "encrypted_executive_summary", "encrypted_findings_json"),
+    Writeup: ("encrypted_markdown", "encrypted_executive_summary", "encrypted_findings_json", "encrypted_workbench_json"),
     WriteupBoard: ("encrypted_scene_json", "encrypted_svg_snapshot"),
     WriteupCitation: ("quoted_text", "note"),
     WriteupRevision: ("encrypted_markdown", "encrypted_snapshot"),
+    WriteupSnippet: ("encrypted_template",),
 }
 MODELS = tuple(dict.fromkeys((*SECRET_FIELDS, *NOTE_FIELDS, WriteupAsset)))
 
@@ -107,8 +108,14 @@ async def rekey_vault(db: AsyncSession, old_key: bytes, new_key: bytes) -> None:
         raise RekeyError("No se pudo verificar la clave de la bóveda.")
 
     if db.bind and db.bind.dialect.name == "postgresql":
-        tables = sorted({model.__tablename__ for model in (*MODELS, UserSettings)})
-        await db.execute(text("LOCK TABLE " + ", ".join('"' + table + '"' for table in tables) + " IN SHARE ROW EXCLUSIVE MODE"))
+        table_models = {model.__table__.fullname: model for model in (*MODELS, UserSettings)}
+        quote_identifier = db.bind.dialect.identifier_preparer.quote
+        quoted_tables = ", ".join(
+            quote_identifier(model.__table__.name, force=True)
+            for _, model in sorted(table_models.items())
+        )
+        # SQL identifiers cannot be bound as parameters; quote only model-owned names.
+        await db.execute(text(f"LOCK TABLE {quoted_tables} IN SHARE ROW EXCLUSIVE MODE"))
 
     for model in MODELS:
         rows = (await db.execute(select(model))).scalars().all()

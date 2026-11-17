@@ -121,8 +121,8 @@
 .board-toolbar-container { container-name: boardToolbar; }
 
 .writeup-header-context-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
 }
@@ -135,15 +135,26 @@
   align-items: center;
   gap: 8px;
 }
-.writeup-header-identity-row { flex: 1 1 auto; }
+.writeup-header-identity-row { flex: 1 1 220px; }
 .writeup-header-title { flex: 1 1 12rem; max-width: 18rem; }
-.writeup-header-workspace-row { flex-wrap: wrap; justify-content: flex-end; }
+.writeup-header-workspace-row { flex: 0 1 auto; flex-wrap: wrap; justify-content: flex-start; }
+.writeup-header-workspace-select select {
+  background-color: transparent;
+  border-color: transparent;
+  color: #cbd5e1;
+}
+.writeup-header-workspace-select select:hover {
+  background-color: rgb(15 118 110 / 0.2);
+  color: #f1f5f9;
+}
+.writeup-header-workspace-select option { background: #0f172a; color: #f1f5f9; }
 .writeup-header-board-row select { min-width: 0; }
 .writeup-header-action-row {
   display: flex;
+  flex: 0 1 auto;
   min-width: 0;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: space-between;
   flex-wrap: wrap;
   gap: 8px;
 }
@@ -269,6 +280,48 @@
   color: #ecfdf5;
 }
 
+/* Las herramientas conservan su área de clic sin dibujar una tarjeta por icono. */
+.writeups-view .writeup-header-compact-button,
+.writeups-view .writeup-header-more-summary,
+.writeups-view .writeup-header-identity-row > button,
+.writeups-view .board-tool-controls > button,
+.writeups-view .board-tool-controls > details > summary,
+.writeups-view .board-toolbar-actions > button,
+.writeups-view .writeup-markdown-editor [role="region"][aria-label^="Herramientas de edición"] > div > button,
+.writeups-view .writeup-markdown-editor [role="region"][aria-label^="Todas las herramientas"] > div > button,
+.writeups-view .writeup-markdown-editor [role="region"] > div > details > summary,
+.writeups-view .writeup-markdown-editor .writeup-toolbar-compact-button {
+  background: transparent;
+  border-color: transparent;
+  color: #cbd5e1;
+  box-shadow: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.writeups-view .writeup-header-compact-button:hover,
+.writeups-view .writeup-header-more-summary:hover,
+.writeups-view .writeup-header-identity-row > button:hover,
+.writeups-view .board-tool-controls > button:hover,
+.writeups-view .board-tool-controls > details > summary:hover,
+.writeups-view .board-toolbar-actions > button:hover,
+.writeups-view .writeup-markdown-editor [role="region"] > div > button:hover,
+.writeups-view .writeup-markdown-editor [role="region"] > div > details > summary:hover,
+.writeups-view .writeup-markdown-editor .writeup-toolbar-compact-button:hover {
+  background: rgb(15 118 110 / 0.2);
+  color: #99f6e4;
+}
+.writeups-view .writeup-markdown-editor [role="region"] > div > button > svg:not([class~="h-3"]):not([class~="w-3"]) {
+  color: inherit;
+}
+.writeups-view .board-tool-controls > button[aria-pressed="true"],
+.writeups-view .writeup-markdown-editor [role="region"][aria-label^="Herramientas de edición"] button[aria-pressed="true"] {
+  background: transparent;
+  border-color: transparent;
+  color: #f1f5f9;
+  box-shadow: inset 0 -2px #5eead4;
+}
+
 @container writeupHeader (max-width: 760px) {
   .writeup-header-compact-button {
     width: 40px;
@@ -289,9 +342,8 @@
 }
 
 @container writeupHeader (max-width: 720px) {
-  .writeup-header-context-row { grid-template-columns: minmax(0, 1fr); }
-  .writeup-header-identity-row { width: 100%; }
-  .writeup-header-workspace-row { width: 100%; justify-content: flex-start; }
+  .writeup-header-identity-row { flex: 1 1 200px; }
+  .writeup-header-workspace-row { justify-content: flex-start; }
   .writeup-header-title { width: auto; min-width: 0; }
 }
 
@@ -760,14 +812,6 @@ details[open] > summary:not([data-caret="manual"])::after {
 
   .writeups-view :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]), select, textarea) {
     font-size: 16px;
-  }
-}
-
-@media (min-width: 640px) and (max-width: 1023px) {
-  .writeups-view .writeup-markdown-editor :is(button, select, summary),
-  .writeups-view .board-toolbar-container :is(button, select, summary) {
-    min-width: 44px;
-    min-height: 44px;
   }
 }
 
