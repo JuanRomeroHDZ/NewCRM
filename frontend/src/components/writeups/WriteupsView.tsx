@@ -10,6 +10,7 @@ import {
   CopyPlus,
   Download,
   MoreVertical,
+  PanelsTopLeft,
   Film,
   GitCompare,
   History,
@@ -1213,9 +1214,32 @@ export const WriteupsView: React.FC = () => {
 
   const persistDraftBeforeNavigation = async (nextAction: string) => {
     const pendingBoardCount = Object.keys(unsavedBoardIdsRef.current).length;
-    if (!detail || !draftRecoveryKey || !isUnlocked) {
-      showToast(`No se puede conservar el borrador antes de que ${nextAction}; vuelve a desbloquear la bóveda e inténtalo de nuevo.`, 'warning');
+    if (!detail && !selectedIdRef.current) {
+      // A first report has no server-backed draft to preserve yet. Requiring a
+      // local recovery copy here made creating the first report impossible.
+      if (!isUnlocked) {
+        showToast('Desbloquea la bóveda antes de crear un informe.', 'warning');
+        return false;
+      }
+      return true;
+    }
+    if (!detail) {
+      showToast('El informe actual todavía se está cargando. Espera un momento e inténtalo de nuevo.', 'warning');
       return false;
+    }
+    if (!isUnlocked) {
+      showToast('La bóveda está bloqueada. Desbloquéala antes de cambiar de informe.', 'warning');
+      return false;
+    }
+    if (!draftRecoveryKey) {
+      if (pendingBoardCount) await new Promise<void>(resolve => window.setTimeout(resolve, 400));
+      if (Object.keys(unsavedBoardIdsRef.current).length > 0) {
+        showToast('La pizarra todavía tiene cambios pendientes. Espera a que termine de guardar antes de cambiar de informe.', 'warning');
+        return false;
+      }
+      if (!dirty && !editorDirtyRef.current) return true;
+      showToast('La copia local cifrada no está disponible; guardaré los cambios del informe en el servidor antes de continuar.', 'info');
+      return await handleSaveWriteup(false);
     }
     if (pendingBoardCount) await new Promise<void>(resolve => window.setTimeout(resolve, 400));
     const reportId = detail.id;
@@ -2465,7 +2489,8 @@ export const WriteupsView: React.FC = () => {
           <>
             {/* Compact Responsive Header Bar */}
             <div className="writeup-header-container p-2.5 sm:p-3 border-b border-slate-800 bg-slate-900/95 space-y-2">
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="writeup-header-context-row">
+                <div className="writeup-header-identity-row">
                 <button
                   type="button"
                   onClick={() => handleManualReportListChange()}
@@ -2520,9 +2545,10 @@ export const WriteupsView: React.FC = () => {
                 >
                   {detail.manual_locked || editLockState?.kind === 'manual' ? <Unlock className="h-4 w-4" aria-hidden="true" /> : <Lock className="h-4 w-4" aria-hidden="true" />}
                 </button>
+                </div>
 
-                <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-                <label className="relative inline-flex max-w-full items-center">
+                <div className="writeup-header-workspace-row">
+                <label className="writeup-header-workspace-select relative inline-flex max-w-full items-center">
                   <span className="sr-only">Área de trabajo</span>
                     <select value={mode} aria-label="Área de trabajo" onChange={(event) => void handleWorkspaceModeChange(event.target.value as WorkspaceMode, true)} className="min-h-10 max-w-full appearance-none rounded-lg border border-slate-700 bg-slate-950 pl-3 pr-9 text-xs text-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300">
                     <option value="markdown">Informe</option>
@@ -2535,7 +2561,7 @@ export const WriteupsView: React.FC = () => {
                 </label>
 
                 {(mode === 'dual' || mode === 'whiteboard') && (
-                  <div className="flex items-center gap-1.5 text-xs">
+                  <div className="writeup-header-board-row text-xs">
                     <select
                       value={activeBoard?.id || ''}
                       onChange={(e) => void handleSelectBoard(e.target.value)}
@@ -2550,29 +2576,30 @@ export const WriteupsView: React.FC = () => {
                       type="button"
                       disabled={isWriteupEditingBlocked}
                       onClick={handleCreateBoard}
-                      aria-label="Crear nueva pizarra"
-                      className="h-10 px-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center gap-1"
+                      aria-label="Crear una nueva pizarra"
+                      className="writeup-header-compact-button inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-800 text-slate-200 hover:bg-slate-700 disabled:opacity-50"
                       title="Nueva pizarra"
                     >
-                      <Plus className="w-3.5 h-3.5" />
-                      <span className="hidden sm:inline">Pizarra</span>
+                      <PanelsTopLeft className="h-4 w-4" aria-hidden="true" />
                     </button>
                   </div>
                 )}
-
+                </div>
               </div>
 
+              <div className="writeup-header-action-row">
+              <div className="writeup-header-actions" role="toolbar" aria-label="Acciones del informe">
+                <div className="writeup-header-action-group" role="group" aria-label="Paneles del informe">
                 <button
                   type="button"
                   onClick={() => setShowCorrelations((visible) => !visible)}
                   aria-expanded={showCorrelations}
                   aria-controls="writeup-correlations-panel"
                   aria-label="Mostrar u ocultar correlaciones"
-                  className={`writeup-header-compact-button inline-flex items-center gap-1 rounded-lg border px-2 py-1.5 text-xs ${showCorrelations ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200' : 'border-slate-700 bg-slate-800 text-slate-300 hover:text-white'}`}
+                  className={`writeup-header-compact-button h-10 w-10 shrink-0 justify-center rounded-lg border ${showCorrelations ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200' : 'border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white'}`}
                   title="Detectar coincidencias con otros informes"
                 >
-                  <GitCompare className="h-3.5 w-3.5" aria-hidden="true" />
-                  <span className="writeup-header-action-label">Correlaciones</span>
+                  <GitCompare className="h-4 w-4" aria-hidden="true" />
                 </button>
 
                 <button
@@ -2580,49 +2607,34 @@ export const WriteupsView: React.FC = () => {
                   onClick={() => setShowMetadata((v) => !v)}
                   aria-label="Mostrar u ocultar detalles del informe"
                   aria-expanded={showMetadata}
-                  className={`writeup-header-compact-button px-2 py-1.5 rounded-lg text-xs flex items-center gap-1 border ${
+                  className={`writeup-header-compact-button h-10 w-10 shrink-0 justify-center rounded-lg border ${
                     showMetadata ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-200' : 'bg-slate-800 border-slate-700 text-slate-300'
                   }`}
                   title="Mostrar u ocultar detalles del informe y sus relaciones"
                 >
-                  <SlidersHorizontal className="w-3.5 h-3.5" />
-                    <span className="writeup-header-action-label">Detalles</span>
+                  <SlidersHorizontal className="h-4 w-4" aria-hidden="true" />
                 </button>
-
-                <div className="writeup-header-actions flex max-w-full flex-wrap items-center justify-end gap-1 ml-auto">
-                  {staleCount > 0 && (
-                    <span className="px-1.5 py-1 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[11px] flex items-center gap-1" title="Cita(s) desactualizada(s)">
-                      <AlertTriangle className="w-3.5 h-3.5" />
-                      {staleCount}
-                    </span>
-                  )}
-
+                {staleCount > 0 && (
+                  <span className="writeup-header-stale-count" title="Citas desactualizadas" aria-label={`${staleCount} citas desactualizadas`}>
+                    <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />
+                    {staleCount}
+                  </span>
+                )}
+                </div>
+                <span className="writeup-header-action-divider" aria-hidden="true" />
+                <div className="writeup-header-action-group" role="group" aria-label="Guardar, historial y exportación">
                   <button
                     type="button"
                     disabled={saving || isWriteupEditingBlocked}
                     onClick={() => void handleSaveWriteup(false)}
                     aria-label={saving ? 'Guardando informe' : dirty ? 'Guardar cambios del informe' : 'Informe guardado'}
                     className={`writeup-header-compact-button h-10 w-10 shrink-0 justify-center rounded-lg text-xs font-semibold flex items-center ${
-                      dirty ? 'bg-indigo-600 hover:bg-indigo-500 text-white' : 'bg-slate-800 hover:bg-slate-700 text-slate-200'
+                      dirty ? 'bg-emerald-700 hover:bg-emerald-600 text-white' : 'bg-slate-800 hover:bg-slate-700 text-slate-200'
                     }`}
                     title={saving ? 'Guardando informe' : dirty ? 'Guardar cambios del informe' : 'Informe guardado'}
                   >
-                    <Save className="w-3.5 h-3.5" />
+                    <Save className="h-4 w-4" aria-hidden="true" />
                   </button>
-                  <span role="status" className={saveError ? 'text-xs text-rose-300' : 'text-xs text-slate-400'}>
-                  {saveError ? `No se pudo guardar: ${saveError}` : localDraftError ? 'Copia local no disponible; vuelve a la pizarra para reintentar' : ''}
-                  </span>
-                  {recoveryCandidates.length > 0 && (
-                    <button type="button" onClick={() => setShowRecovery(true)} className="rounded-lg border border-amber-700/70 bg-amber-950/50 px-3 py-2 text-xs text-amber-100 hover:bg-amber-900/60" aria-label={`Ver ${recoveryCandidates.length} copias locales recuperables`}>
-                      Recuperación local · {recoveryCandidates.length}
-                    </button>
-                  )}
-                  {newRecoveryCopyAvailable && <button type="button" onClick={() => void refreshRecoveryCopies()} className="rounded-lg border border-cyan-700/70 bg-cyan-950/50 px-3 py-2 text-xs text-cyan-100 hover:bg-cyan-900/60">Buscar copias de otras pestañas</button>}
-                  {saveConflict && <button type="button" onClick={async () => {
-                    try { if (detail) { const latest = await api.getWriteup(detail.id); writeupVersionByReportRef.current[detail.id] = latest.updated_at; setConflictServer(latest); } }
-                    catch { /* Keep the last retrieved version and permit retry. */ }
-                    setShowConflict(true);
-                  }} className="rounded-lg bg-amber-900 px-3 py-2 text-xs text-white hover:bg-amber-800">Comparar versiones</button>}
 
                   <button
                     type="button"
@@ -2647,43 +2659,61 @@ export const WriteupsView: React.FC = () => {
                   </button>
 
                   <details className="relative">
-                    <summary data-caret="manual" aria-label="Más acciones del informe" title="Más acciones del informe" className="writeup-header-more-summary flex h-10 w-10 cursor-pointer list-none items-center justify-center rounded-lg bg-slate-800 text-xs text-slate-200 hover:bg-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 [&::-webkit-details-marker]:hidden"><MoreVertical className="h-4 w-4" aria-hidden="true" /></summary>
+                    <summary data-caret="manual" aria-label="Más acciones del informe" title="Más acciones del informe" className="writeup-header-more-summary relative flex h-10 w-10 cursor-pointer list-none items-center justify-center rounded-lg bg-slate-800 text-xs text-slate-200 hover:bg-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 [&::-webkit-details-marker]:hidden"><MoreVertical className="h-4 w-4" aria-hidden="true" />{(recoveryCandidates.length > 0 || newRecoveryCopyAvailable || saveConflict) && <span className="writeup-header-pending-dot" aria-hidden="true" />}</summary>
                     <div className="absolute right-0 z-30 mt-1 grid min-w-48 gap-1 rounded-lg border border-slate-700 bg-slate-900 p-2 shadow-xl">
+                  {recoveryCandidates.length > 0 && (
+                    <button type="button" onClick={() => setShowRecovery(true)} className="writeup-header-menu-item" aria-label={`Ver ${recoveryCandidates.length} copias locales recuperables`}>
+                      <RefreshCw className="h-4 w-4 text-amber-300" aria-hidden="true" />
+                      <span>Recuperación local ({recoveryCandidates.length})</span>
+                    </button>
+                  )}
+                  {newRecoveryCopyAvailable && <button type="button" onClick={() => void refreshRecoveryCopies()} className="writeup-header-menu-item"><RefreshCw className="h-4 w-4" aria-hidden="true" /><span>Buscar copias de otras pestañas</span></button>}
+                  {saveConflict && <button type="button" onClick={async () => {
+                    try { if (detail) { const latest = await api.getWriteup(detail.id); writeupVersionByReportRef.current[detail.id] = latest.updated_at; setConflictServer(latest); } }
+                    catch { /* Keep the last retrieved version and permit retry. */ }
+                    setShowConflict(true);
+                  }} className="writeup-header-menu-item"><GitCompare className="h-4 w-4 text-amber-300" aria-hidden="true" /><span>Comparar versiones</span></button>}
                   <button
                     type="button"
                     disabled={isWriteupEditingBlocked}
                     onClick={() => void handleCreateMilestone()}
-                    className="p-1.5 sm:px-2 sm:py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs flex items-center gap-1"
+                    className="writeup-header-menu-item"
                     title="Guardar una versión importante con nombre"
                     aria-label="Hito · Nombrar versión importante"
                   >
-                    <History className="w-3.5 h-3.5" />
+                    <History className="h-4 w-4" aria-hidden="true" />
                     <span>Crear hito</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => void handleCloneWriteup()}
-                    className="p-1.5 sm:px-2 sm:py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs flex items-center gap-1"
+                    className="writeup-header-menu-item"
                     title="Duplicar informe con sus hallazgos, texto y pizarras"
                     aria-label="Duplicar informe"
                   >
-                    <CopyPlus className="w-3.5 h-3.5 text-cyan-300" />
+                    <CopyPlus className="h-4 w-4" aria-hidden="true" />
                     <span>Duplicar informe</span>
                   </button>
                   <button
                     type="button"
                     disabled={isWriteupEditingBlocked}
                     onClick={handleDeleteWriteup}
-                    className="flex items-center gap-1 rounded-lg px-2 py-1.5 text-left text-slate-400 hover:bg-rose-950/40 hover:text-rose-400"
+                    className="writeup-header-menu-item writeup-header-menu-danger"
                     title="Eliminar informe"
                     aria-label="Eliminar informe"
                   >
-                    <Trash2 className="w-4 h-4" /> <span className="ml-1 text-xs">Eliminar informe</span>
+                    <Trash2 className="h-4 w-4" aria-hidden="true" /> <span>Eliminar informe</span>
                   </button>
                     </div>
                   </details>
                 </div>
+              </div>
+              {(saveError || localDraftError) && (
+                <div role="status" aria-live="polite" className="writeup-header-save-status">
+                  {saveError ? `No se pudo guardar: ${saveError}` : 'Copia local no disponible; vuelve a la pizarra para reintentar'}
+                </div>
+              )}
               </div>
 
               {/* Compact summary badge line when metadata tray is collapsed */}

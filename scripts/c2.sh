@@ -48,6 +48,57 @@ c2_worker_imports() {
     "$VENV/bin/python" -c 'import os, secrets; os.environ["C2_WORKER_SECRET"] = secrets.token_hex(32); from app.c2_worker import app; assert app' >/dev/null 2>&1
 }
 
+# If the lock is already held, verify the worker and its mode before reporting
+# success. This avoids the confusing "already active" followed by "failed"
+# output when ./lessso is run a second time.
+c2_active_mode() {
+  python3 - "$RUNTIME/worker.sock" <<'PY'
+import json
+import os
+import socket
+import sys
+
+sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+sock.settimeout(2)
+try:
+    sock.connect(sys.argv[1])
+    request = (
+        b"GET /c2/meta HTTP/1.1\r\n"
+        b"Host: localhost\r\n"
+        b"Connection: close\r\n"
+        b"X-C2-Internal-Secret: " + os.environ.get("C2_WORKER_SECRET", "").encode() + b"\r\n\r\n"
+    )
+    sock.sendall(request)
+    response = bytearray()
+    while True:
+        chunk = sock.recv(4096)
+        if not chunk:
+            break
+        response.extend(chunk)
+    head, separator, body = response.partition(b"\r\n\r\n")
+    if not separator or not head.startswith(b"HTTP/1.1 200"):
+        raise SystemExit(1)
+    if b"transfer-encoding: chunked" in head.lower():
+        decoded = bytearray()
+        while body:
+            size_line, marker, remainder = body.partition(b"\r\n")
+            if not marker:
+                raise SystemExit(1)
+            size = int(size_line.split(b";", 1)[0], 16)
+            if size == 0:
+                break
+            decoded.extend(remainder[:size])
+            body = remainder[size + 2:]
+        body = bytes(decoded)
+    payload = json.loads(body)
+    print("demo" if payload.get("demo_mode") else "real")
+except (OSError, ValueError, json.JSONDecodeError):
+    raise SystemExit(1)
+finally:
+    sock.close()
+PY
+}
+
 if [[ "$MODE" == menu ]]; then
   show_crm
   if [[ ! -t 0 ]]; then
@@ -106,10 +157,8 @@ PY
         exit 1
       fi
       echo 'Confirma con la contraseña de tu usuario del sistema si sudo la solicita.'
-      if ! sudo -k -v; then
-        echo 'No se pudieron validar los permisos de administrador; el servicio C2 no se inició.' >&2
-        exit 1
-      fi
+      # Ejecutar sudo una sola vez evita pedir la contraseña durante la
+      # validación y volver a pedirla al iniciar el worker.
       exec sudo -- "$0" _run_real
     fi
     exec "$0" "_run_$MODE"
@@ -135,7 +184,21 @@ PY
     touch "$RUNTIME/worker.lock"
     chmod 666 "$RUNTIME/worker.lock"
     exec 9>"$RUNTIME/worker.lock"
-    flock -n 9 || { echo 'El servicio C2 ya está activo.' >&2; exit 1; }
+    if ! flock -n 9; then
+      active_mode="$(c2_active_mode 2>/dev/null || true)"
+      requested_mode=real
+      [[ "$MODE" == _run_demo ]] && requested_mode=demo
+      if [[ "$active_mode" == "$requested_mode" ]]; then
+        echo "C2 ya está activo y responde en modo ${requested_mode}."
+        exit 0
+      fi
+      if [[ -n "$active_mode" ]]; then
+        echo "C2 ya está activo en modo ${active_mode}; detén ese servicio antes de cambiar a modo ${requested_mode}." >&2
+      else
+        echo 'Otro proceso conserva el bloqueo de C2, pero el worker no responde. Detén la sesión anterior antes de reintentarlo.' >&2
+      fi
+      exit 1
+    fi
     # No se cargan los secretos del CRM en el proceso con privilegios.
     export PYTHONPATH="$PROJECT_DIR/backend"
     export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
