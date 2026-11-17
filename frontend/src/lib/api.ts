@@ -91,6 +91,27 @@ export interface WriteupRevisionFilters {
 
 let currentVaultToken: string | null = localStorage.getItem('emailsaver_vault_token');
 let currentUserToken: string | null = sessionStorage.getItem('emailsaver_user_token');
+const activeWriteupEditLeases = new Map<string, { token: string; clientId: string }>();
+
+export function setWriteupEditLease(writeupId: string, token: string, clientId: string) {
+  activeWriteupEditLeases.set(writeupId, { token, clientId });
+}
+
+export function clearWriteupEditLease(writeupId?: string) {
+  if (writeupId) activeWriteupEditLeases.delete(writeupId);
+  else activeWriteupEditLeases.clear();
+}
+
+function addWriteupEditLeaseHeaders(endpoint: string, headers: Record<string, string>): Record<string, string> {
+  const reportId = endpoint.match(/^\/writeups\/([^/?]+)/)?.[1];
+  const lease = reportId ? activeWriteupEditLeases.get(reportId) : undefined;
+  if (!reportId || !lease) return headers;
+  return {
+    ...headers,
+    'X-Writeup-Edit-Lease': lease.token,
+    'X-Writeup-Client-ID': lease.clientId,
+  };
+}
 
 export function setApiVaultToken(token: string | null) {
   currentVaultToken = token;
@@ -192,6 +213,12 @@ async function handleApiErrorResponse(endpoint: string, response: Response, requ
       window.dispatchEvent(new CustomEvent('vault_locked'));
     }
   }
+  if (response.status === 423) {
+    const result = await response.json().catch(() => null);
+    if (typeof result?.detail === 'string') {
+      throw new ApiError(result.detail, 'http', { status: response.status });
+    }
+  }
   if ((endpoint === '/auth/bootstrap-account' || endpoint === '/users') &&
       (response.status === 400 || response.status === 409)) {
     const result = await response.json().catch(() => null);
@@ -226,7 +253,7 @@ async function readApiJson<T>(response: Response): Promise<T> {
 }
 
 async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-  const headers = buildAuthHeaders(options.headers as Record<string, string> | undefined, true);
+  const headers = addWriteupEditLeaseHeaders(endpoint, buildAuthHeaders(options.headers as Record<string, string> | undefined, true));
   const response = await fetchApiResponse(`${API_BASE}${endpoint}`, {
     ...options,
     headers,
@@ -242,7 +269,7 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
 }
 
 async function requestUpdatedAtHeader(endpoint: string, options: RequestInit = {}): Promise<string | null> {
-  const headers = buildAuthHeaders(options.headers as Record<string, string> | undefined, true);
+  const headers = addWriteupEditLeaseHeaders(endpoint, buildAuthHeaders(options.headers as Record<string, string> | undefined, true));
   const response = await fetchApiResponse(`${API_BASE}${endpoint}`, { ...options, headers });
   if (!response.ok) await handleApiErrorResponse(endpoint, response, headers);
   return response.headers.get('X-Writeup-Updated-At');
@@ -269,7 +296,7 @@ async function requestPage<T>(endpoint: string, offset: number, limit: number): 
 
 async function requestBlobResponse(endpoint: string, options: RequestInit = {}): Promise<{ blob: Blob; filename: string; sha256?: string }> {
   const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
-  const headers = buildAuthHeaders(options.headers as Record<string, string> | undefined, !isFormData);
+  const headers = addWriteupEditLeaseHeaders(endpoint, buildAuthHeaders(options.headers as Record<string, string> | undefined, !isFormData));
   const response = await fetchApiResponse(`${API_BASE}${endpoint}`, {
     ...options,
     headers,
@@ -307,7 +334,26 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ master_password })
     }),
-  lockVault: () => request<{ message: string }>('/auth/lock', { method: 'POST' }),
+  lockVault: async () => {
+    // Release any active writeup lease while the vault token is still valid.
+    // Bound the wait so a stalled release cannot delay a security lock.
+    const writeupIds = [...activeWriteupEditLeases.keys()];
+    if (writeupIds.length) {
+      const controller = new AbortController();
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      try {
+        await Promise.race([
+          Promise.allSettled(writeupIds.map((id) => api.releaseWriteupEditLease(id, controller.signal))),
+          new Promise<void>((resolve) => { timer = setTimeout(resolve, 350); }),
+        ]);
+      } finally {
+        if (timer !== undefined) clearTimeout(timer);
+        controller.abort();
+        clearWriteupEditLease();
+      }
+    }
+    return request<{ message: string }>('/auth/lock', { method: 'POST' });
+  },
 
   // Emails
   getEmails: (search?: string, provider?: string) => {
@@ -615,6 +661,36 @@ export const api = {
   ) => request<CoreUser>(`/users/${userId}`, { method: 'PATCH', body: JSON.stringify(payload) }),
 
   // Pentest Writeups & Whiteboards
+  acquireWriteupEditLease: async (writeupId: string, clientId: string) => {
+    const lease = await request<{ acquired: true; token: string; client_id: string; holder: string; expires_at: string; ttl_seconds: number }>(
+      `/writeups/${writeupId}/edit-lease`, { method: 'POST', body: JSON.stringify({ client_id: clientId }) },
+    );
+    setWriteupEditLease(writeupId, lease.token, clientId);
+    return lease;
+  },
+  renewWriteupEditLease: async (writeupId: string, clientId: string) => {
+    const lease = await request<{ acquired: true; token: string; client_id: string; holder: string; expires_at: string; ttl_seconds: number }>(
+      `/writeups/${writeupId}/edit-lease`, { method: 'POST', body: JSON.stringify({ client_id: clientId }) },
+    );
+    setWriteupEditLease(writeupId, lease.token, clientId);
+    return lease;
+  },
+  releaseWriteupEditLease: async (writeupId: string, signal?: AbortSignal) => {
+    const leaseBeingReleased = activeWriteupEditLeases.get(writeupId);
+    try {
+      return await request<{ released: boolean }>(`/writeups/${writeupId}/edit-lease`, { method: 'DELETE', signal });
+    } finally {
+      // A slow release response must not erase a newer lease acquired for the
+      // same writeup while the request was in flight.
+      if (activeWriteupEditLeases.get(writeupId) === leaseBeingReleased) {
+        clearWriteupEditLease(writeupId);
+      }
+    }
+  },
+  setWriteupManualLock: (writeupId: string) =>
+    request<{ manual_locked: boolean; manual_locked_by: string | null; manual_locked_at: string | null }>(`/writeups/${writeupId}/manual-lock`, { method: 'POST' }),
+  clearWriteupManualLock: (writeupId: string) =>
+    request<{ manual_locked: boolean; manual_locked_by: string | null; manual_locked_at: string | null }>(`/writeups/${writeupId}/manual-lock`, { method: 'DELETE' }),
   listWriteups: (filters?: { status?: string; severity?: string; prospect_id?: string; project_id?: string; q?: string }) => {
     const params = new URLSearchParams();
     if (filters?.status) params.append('status', filters.status);
@@ -720,8 +796,8 @@ export const api = {
     if (caption) form.append('caption', caption);
     if (convertToGif) form.append('convert_to_gif', 'true');
     if (expectedUpdatedAt) form.append('expected_updated_at', expectedUpdatedAt);
-    const headers = buildAuthHeaders(undefined, false);
     const endpoint = `/writeups/${writeupId}/assets`;
+    const headers = addWriteupEditLeaseHeaders(endpoint, buildAuthHeaders(undefined, false));
     const response = await fetchApiResponse(`${API_BASE}${endpoint}`, {
       method: 'POST',
       headers,
@@ -801,6 +877,7 @@ export const api = {
       toc_depth?: number;
       include_figure_index?: boolean;
       include_table_index?: boolean;
+      font_size_pt?: number;
       watermark_text?: string;
       rendered_diagrams?: Record<string, string>;
     }

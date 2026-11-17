@@ -14,6 +14,7 @@ interface WriteupExportModalProps {
     toc_depth?: number;
     include_figure_index?: boolean;
     include_table_index?: boolean;
+    font_size_pt?: number;
     watermark_text?: string;
     rendered_diagrams?: Record<string, string>;
   }) => Promise<string | undefined>;
@@ -51,6 +52,7 @@ export const WriteupExportModal: React.FC<WriteupExportModalProps> = ({ writeup,
   const [tocDepth, setTocDepth] = useState(6);
   const [includeFigures, setIncludeFigures] = useState(false);
   const [includeTables, setIncludeTables] = useState(false);
+  const [fontSizePt, setFontSizePt] = useState(11);
   const [watermarkText, setWatermarkText] = useState('');
   const [exporting, setExporting] = useState(false);
   const [lastSha, setLastSha] = useState<string | null>(null);
@@ -100,6 +102,7 @@ export const WriteupExportModal: React.FC<WriteupExportModalProps> = ({ writeup,
     [writeup.markdown_content]
   );
   const supportsDocumentIndexes = ['pdf', 'docx', 'html', 'md', 'md_zip'].includes(selectedFormat);
+  const supportsTypography = ['pdf', 'docx', 'html'].includes(selectedFormat);
 
   const handleRunExport = async () => {
     if (exportingRef.current) return;
@@ -120,6 +123,7 @@ export const WriteupExportModal: React.FC<WriteupExportModalProps> = ({ writeup,
         toc_depth: tocDepth,
         include_figure_index: includeFigures,
         include_table_index: includeTables,
+        font_size_pt: fontSizePt,
         watermark_text: watermarkText.trim() || undefined,
         rendered_diagrams: renderedDiagrams,
       });
@@ -188,6 +192,12 @@ export const WriteupExportModal: React.FC<WriteupExportModalProps> = ({ writeup,
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-950/70 p-4 rounded-xl border border-slate-800">
+            {supportsTypography && <label className="flex items-center gap-2 text-xs text-slate-200">
+              Tamaño del texto
+              <select value={fontSizePt} onChange={(event) => setFontSizePt(Number(event.target.value))} className="min-h-9 rounded-md border border-slate-700 bg-slate-950 px-2 text-white">
+                {[8, 9, 10, 11, 12, 13, 14, 16, 18].map((size) => <option key={size} value={size}>{size} pt</option>)}
+              </select>
+            </label>}
             <label className="flex items-start gap-2.5 cursor-pointer">
               <input
                 type="checkbox"

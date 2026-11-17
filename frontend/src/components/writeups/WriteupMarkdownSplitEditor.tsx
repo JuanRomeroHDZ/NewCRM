@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { marked } from 'marked';
 import {
   Anchor,
   Binary,
@@ -37,6 +36,7 @@ import {
   Strikethrough,
   Table,
   Tag,
+  Underline,
 } from 'lucide-react';
 import { WriteupAsset, WriteupBoard, WriteupSeverity } from '../../types';
 import { useVault } from '../../context/VaultContext';
@@ -59,11 +59,18 @@ import {
 } from './pentestUtils';
 import { MarkdownRichPreview } from './MarkdownRichPreview';
 import { MAX_REPORT_TEXT_LENGTH } from './writeupLimits';
+import { createColoredUnderlineOpeningTag, indentMarkdownLines, transformMarkdownList, type MarkdownListStyle } from './markdownEditing';
 
 interface JumpTarget {
   line: number;
   anchorId: string;
   ts: number;
+}
+
+export interface WriteupEditorSessionState {
+  selectionStart: number;
+  selectionEnd: number;
+  scrollTop: number;
 }
 
 interface WriteupMarkdownSplitEditorProps {
@@ -85,10 +92,13 @@ interface WriteupMarkdownSplitEditorProps {
   onSave?: () => void;
   onInspectAsset?: (asset: WriteupAsset) => void;
   jumpTarget?: JumpTarget | null;
+  readOnly?: boolean;
+  editorSession?: WriteupEditorSessionState;
+  onEditorSessionChange?: (session: WriteupEditorSessionState) => void;
 }
 
 type ToolGroupFilter = 'all' | 'text' | 'blocks' | 'media' | 'pentest';
-type InlineTray = 'none' | 'templates' | 'cvss' | 'code' | 'mermaid' | 'outline' | 'pentest_kit' | 'table' | 'label';
+type InlineTray = 'none' | 'templates' | 'cvss' | 'code' | 'mermaid' | 'outline' | 'pentest_kit' | 'table' | 'label' | 'caption';
 
 const CODE_LANGUAGES = ['http', 'bash', 'python', 'sql', 'javascript', 'json', 'yaml', 'powershell', 'c', 'xml', 'plaintext'];
 const MAX_CITATION_LENGTH = 5000;
@@ -113,6 +123,9 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
   onSave,
   onInspectAsset,
   jumpTarget,
+  readOnly = false,
+  editorSession,
+  onEditorSessionChange,
 }) => {
   const { showToast } = useVault();
   const [redactPreview, setRedactPreview] = useState(false);
@@ -129,12 +142,40 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
   const [tableCells, setTableCells] = useState<string[][]>([['Nombre', 'Descripción'], ['', ''], ['', '']]);
   const [labelColor, setLabelColor] = useState('jade');
   const [labelSize, setLabelSize] = useState('normal');
+  const [underlineColor, setUnderlineColor] = useState('#A98242');
+  const [captionKind, setCaptionKind] = useState<'figure' | 'image' | 'table'>('figure');
+  const [captionTitle, setCaptionTitle] = useState('');
+  const [captionDescription, setCaptionDescription] = useState('');
+  const [captionSource, setCaptionSource] = useState('');
   const [kitFeedback, setKitFeedback] = useState('');
   const [splitView, setSplitView] = useState<'split' | 'edit' | 'preview'>('edit');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const workspaceRef = useRef<HTMLDivElement>(null);
   const [sideBySideAvailable, setSideBySideAvailable] = useState(false);
+  const editorSessionRestoredRef = useRef(false);
+
+  const captureEditorSession = (textarea: HTMLTextAreaElement) => {
+    onEditorSessionChange?.({
+      selectionStart: textarea.selectionStart,
+      selectionEnd: textarea.selectionEnd,
+      scrollTop: textarea.scrollTop,
+    });
+  };
+
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea || !editorSession || editorSessionRestoredRef.current) return;
+    editorSessionRestoredRef.current = true;
+    requestAnimationFrame(() => {
+      const current = textareaRef.current;
+      if (!current) return;
+      const start = Math.min(editorSession.selectionStart, current.value.length);
+      const end = Math.min(Math.max(start, editorSession.selectionEnd), current.value.length);
+      current.setSelectionRange(start, end);
+      current.scrollTop = editorSession.scrollTop;
+    });
+  }, [editorSession, markdown]);
 
   useEffect(() => {
     const workspace = workspaceRef.current;
@@ -208,45 +249,18 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
     });
   };
 
-  const applyListStyle = (style: 'bullet' | 'ordered' | 'task' | 'done' | 'nested-bullet' | 'nested-ordered' | 'square' | 'circle' | 'alpha' | 'alpha-upper' | 'roman' | 'roman-upper') => {
+  const applyListStyle = (style: MarkdownListStyle) => {
     const ta = textareaRef.current;
     const source = ta?.value ?? markdown;
     const start = ta?.selectionStart ?? source.length;
     const end = ta?.selectionEnd ?? start;
-    const lineStart = source.lastIndexOf('\n', Math.max(0, start - 1)) + 1;
-    const endSearch = Math.max(start, end - 1);
-    const nextNewline = source.indexOf('\n', endSearch);
-    const lineEnd = nextNewline < 0 ? source.length : nextNewline;
-    const selectedLines = source.slice(lineStart, lineEnd).split(/\r?\n/);
-    const cleanItem = (line: string) => line.replace(/^\s*(?:(?:[-+*])\s+(?:\[[ xX]\]\s*)?|\d+[.)]\s*)/, '').trim();
-    const content = selectedLines.map(cleanItem).filter(Boolean);
-    const items = content.length ? content : ['Elemento'];
-    const prefixStyles: Partial<Record<typeof style, (index: number) => string>> = {
-      bullet: () => '- ',
-      ordered: (index) => `${index + 1}. `,
-      task: () => '- [ ] ',
-      done: () => '- [x] ',
-      'nested-bullet': () => '  - ',
-      'nested-ordered': (index) => `  ${index + 1}. `,
-    };
-    let replacement: string;
-    const prefix = prefixStyles[style];
-    if (prefix) {
-      replacement = items.map((item, index) => `${prefix(index)}${item}`).join('\n');
-    } else {
-      const listTag = style === 'square' || style === 'circle' ? 'ul' : 'ol';
-      const listType = style === 'square' ? 'square' : style === 'circle' ? 'circle' : style === 'alpha' ? 'a' : style === 'alpha-upper' ? 'A' : style === 'roman' ? 'i' : 'I';
-      const renderedItems = items.map((item) => `<li>${marked.parseInline(item, { async: false }).trim()}</li>`).join('\n');
-      replacement = `<${listTag} type="${listType}">\n${renderedItems}\n</${listTag}>`;
-    }
-    const next = source.slice(0, lineStart) + replacement + source.slice(lineEnd);
-    onChange(next);
+    const result = transformMarkdownList(source, start, end, style);
+    onChange(result.markdown);
     setActiveTray('none');
     requestAnimationFrame(() => {
       if (!ta) return;
       ta.focus();
-      const cursor = lineStart + replacement.length;
-      ta.setSelectionRange(cursor, cursor);
+      ta.setSelectionRange(result.selectionStart, result.selectionEnd);
     });
   };
 
@@ -276,6 +290,10 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
   };
 
   const handlePaste = async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    if (readOnly) {
+      e.preventDefault();
+      return;
+    }
     const items = e.clipboardData?.items;
     if (!items) return;
     for (let i = 0; i < items.length; i++) {
@@ -290,6 +308,10 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
   };
 
   const handleDrop = async (e: React.DragEvent<HTMLTextAreaElement>) => {
+    if (readOnly) {
+      e.preventDefault();
+      return;
+    }
     const file = e.dataTransfer?.files?.[0];
     if (file && (file.type.startsWith('image/') || file.type.startsWith('video/'))) {
       e.preventDefault();
@@ -401,6 +423,18 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (readOnly) return;
+    if (e.key === 'Tab' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      e.preventDefault();
+      const ta = e.currentTarget;
+      const result = indentMarkdownLines(ta.value, ta.selectionStart, ta.selectionEnd, e.shiftKey ? 'outdent' : 'indent');
+      onChange(result.markdown);
+      requestAnimationFrame(() => {
+        ta.focus();
+        ta.setSelectionRange(result.selectionStart, result.selectionEnd);
+      });
+      return;
+    }
     if (!(e.ctrlKey || e.metaKey)) return;
     const key = e.key.toLowerCase();
     if (key === 'b') {
@@ -416,7 +450,7 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
   };
 
   const handleWorkspaceKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey || e.key.toLowerCase() !== 's' || !onSave) return;
+    if (readOnly || !(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey || e.key.toLowerCase() !== 's' || !onSave) return;
     e.preventDefault();
     onSave();
   };
@@ -426,6 +460,7 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
     <div onKeyDownCapture={handleWorkspaceKeyDown} className="writeup-markdown-editor writeup-editor-container flex min-w-0 max-w-full flex-col h-full min-h-[300px] bg-slate-950 border border-slate-800 rounded-xl overflow-visible">
       {/* Compact toolbar: category, actions and view controls share one row. */}
       <div className={`relative z-20 flex min-w-0 items-center gap-1 border-b border-slate-800 bg-slate-900/95 px-2 py-1.5 ${toolFilter === 'all' ? 'flex-wrap' : ''}`}>
+        <fieldset disabled={readOnly} className="contents">
         {splitView !== 'preview' && <label className="relative inline-flex shrink-0 items-center">
             <span className="sr-only">Categoría de herramientas</span>
             <select value={toolFilter} onChange={(event) => setToolFilter(event.target.value as ToolGroupFilter)} title={toolFilter === 'all' ? 'Todas las herramientas' : undefined} className="min-h-9 w-28 appearance-none rounded-lg border border-slate-700 bg-slate-950 pl-2 pr-6 text-xs text-slate-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300">
@@ -464,6 +499,13 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
             <button type="button" onClick={() => insertAtCursor('~~', true, '~~', 'tachado')} title="Tachado" aria-label="Tachado" className="p-1.5 rounded hover:bg-slate-800 text-slate-300">
               <Strikethrough className="w-4 h-4" />
             </button>
+            <button type="button" onClick={() => insertAtCursor(createColoredUnderlineOpeningTag(underlineColor), true, '</u>', 'subrayado')} title="Subrayar con color" aria-label="Subrayar texto con el color elegido" className="p-1.5 rounded hover:bg-slate-800 text-slate-300">
+              <Underline className="w-4 h-4" />
+            </button>
+            <label title="Elegir color del subrayado" className="flex h-8 w-9 cursor-pointer items-center justify-center rounded hover:bg-slate-800 focus-within:outline focus-within:outline-2 focus-within:outline-emerald-300">
+              <span className="sr-only">Color del subrayado</span>
+              <input type="color" aria-label="Color del subrayado" value={underlineColor} onChange={(event) => setUnderlineColor(event.target.value)} className="h-5 w-5 cursor-pointer border-0 bg-transparent p-0" />
+            </label>
               </div>
             </details>
             <button type="button" onClick={() => insertAtCursor('[', true, '](https://)', 'texto_enlace')} title="Enlace en el informe" aria-label="Enlace" className="p-1.5 rounded hover:bg-slate-800 text-slate-300">
@@ -511,6 +553,17 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
               className="p-1.5 rounded hover:bg-slate-800 text-slate-300"
             >
               <Table className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => toggleTray('caption')}
+              aria-label="Añadir título, descripción y fuente a una figura o tabla"
+              aria-expanded={activeTray === 'caption'}
+              title="Rótulo para figura, imagen o tabla"
+              className={`inline-flex min-h-9 items-center gap-1 rounded px-2 text-xs ${activeTray === 'caption' ? 'bg-slate-700 text-white' : 'text-slate-300 hover:bg-slate-800'}`}
+            >
+              <Tag className="h-3.5 w-3.5" aria-hidden="true" />
+              <span>Rótulo</span>
             </button>
             <button
               type="button"
@@ -667,13 +720,14 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
           </div>
         )}
         </div>}
+        </fieldset>
         <div className={`flex shrink-0 items-center gap-1 ${toolFilter === 'all' ? 'order-2 ml-auto' : ''}`}>
           <button type="button" onClick={() => { if (splitView === 'preview') setSplitView('edit'); toggleTray('outline'); }} aria-label="Índice del informe" aria-expanded={activeTray === 'outline' && splitView !== 'preview'} title="Índice del informe" className={`inline-flex h-9 w-9 items-center justify-center rounded-lg border focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-300 ${activeTray === 'outline' && splitView !== 'preview' ? 'border-emerald-600 bg-emerald-900 text-white' : 'border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700'}`}><ListTree className="h-4 w-4" aria-hidden="true" /></button>
           <button
             type="button"
             onClick={() => setRedactPreview((v) => !v)}
             aria-pressed={redactPreview}
-            aria-label={redactPreview ? 'Mostrar vista para cliente' : 'Mostrar vista interna'}
+            aria-label={redactPreview ? 'Mostrar vista interna' : 'Mostrar vista para cliente'}
             className={`writeup-toolbar-compact-button min-h-9 px-3 py-1 rounded-lg text-xs flex items-center gap-1.5 border shrink-0 ${
               redactPreview
                 ? 'bg-emerald-600/20 border-emerald-500/40 text-emerald-300'
@@ -695,6 +749,7 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
           </label>
         </div>
       </div>
+      <fieldset disabled={readOnly} className="contents">
       {splitView !== 'preview' && <>
 
       {/* Inline Collapsible Tool Trays (never clipped on narrow/medium screens!) */}
@@ -747,6 +802,40 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
               insertAtCursor(`\n${row(header)}\n| ${header.map(() => '---').join(' | ')} |\n${tableCells.slice(1).map(row).join('\n')}\n`);
               setActiveTray('none');
             }}>Insertar tabla</button>
+          </div>
+        </div>
+      )}
+      {activeTray === 'caption' && (
+        <div className="space-y-2 border-t border-slate-800 bg-slate-900/80 p-3 text-xs text-slate-200">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-4">
+            <label className="flex min-w-0 flex-col gap-1">Objeto
+              <select value={captionKind} onChange={(event) => setCaptionKind(event.target.value as typeof captionKind)} className="min-h-9 rounded border border-slate-700 bg-slate-950 px-2 text-slate-100">
+                <option value="figure">Figura</option><option value="image">Imagen</option><option value="table">Tabla</option>
+              </select>
+            </label>
+            <label className="flex min-w-0 flex-col gap-1 sm:col-span-3">Título
+              <input value={captionTitle} onChange={(event) => setCaptionTitle(event.target.value)} maxLength={240} placeholder="Relación entre…" className="min-h-9 rounded border border-slate-700 bg-slate-950 px-2 text-slate-100 placeholder:text-slate-500" />
+            </label>
+            <label className="flex min-w-0 flex-col gap-1 sm:col-span-2">Descripción (opcional)
+              <input value={captionDescription} onChange={(event) => setCaptionDescription(event.target.value)} maxLength={500} placeholder="Qué muestra el objeto" className="min-h-9 rounded border border-slate-700 bg-slate-950 px-2 text-slate-100 placeholder:text-slate-500" />
+            </label>
+            <label className="flex min-w-0 flex-col gap-1 sm:col-span-2">Fuente (opcional)
+              <input value={captionSource} onChange={(event) => setCaptionSource(event.target.value)} maxLength={500} placeholder="URL o Elaboración propia (2026)" className="min-h-9 rounded border border-slate-700 bg-slate-950 px-2 text-slate-100 placeholder:text-slate-500" />
+            </label>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" className="min-h-9 rounded bg-slate-700 px-3 font-medium text-white hover:bg-slate-600" onClick={() => {
+              const title = captionTitle.replace(/[\r\n]+/g, ' ').trim();
+              if (!title) { showToast('Escribe un título para el objeto.', 'warning'); return; }
+              const lines = [
+                `${captionKind === 'table' ? 'Tabla' : captionKind === 'image' ? 'Imagen' : 'Figura'}: ${title}`,
+                ...(captionDescription.trim() ? [`Descripción: ${captionDescription.replace(/[\r\n]+/g, ' ').trim()}`] : []),
+                ...(captionSource.trim() ? [`Fuente: ${captionSource.replace(/[\r\n]+/g, ' ').trim()}`] : []),
+              ];
+              insertAtCursor(`\n${lines.join('\n')}\n\n`);
+              setActiveTray('none');
+            }}>Insertar rótulo</button>
+            <span className="text-[11px] text-slate-400">Después, coloca la imagen o tabla debajo del rótulo. La vista previa y la exportación lo agrupan.</span>
           </div>
         </div>
       )}
@@ -806,7 +895,9 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
         </div>
       )}
 
-      {activeTray === 'outline' && (
+      </>}
+      </fieldset>
+      {splitView !== 'preview' && activeTray === 'outline' && (
         <div className="px-3 py-2.5 bg-slate-900 border-b border-slate-800 space-y-2 text-xs max-h-56 overflow-y-auto" aria-label="Índice interno del informe">
           <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-300">
             <span className="font-semibold text-slate-100">Índice del informe</span>
@@ -825,6 +916,8 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
         </div>
       )}
 
+      <fieldset disabled={readOnly} className="contents">
+      {splitView !== 'preview' && <>
       {activeTray === 'pentest_kit' && (
         <div className="px-3 py-2.5 bg-slate-900 border-b border-slate-800 space-y-2.5 text-xs max-h-72 overflow-y-auto">
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1054,6 +1147,7 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
         </div>
       )}
       </>}
+      </fieldset>
 
       {/* Editor + Live Preview Panes */}
       <div ref={workspaceRef} className={`flex-1 grid min-h-0 min-w-0 max-w-full ${sideBySide ? 'grid-cols-2' : 'grid-cols-1'} ${splitView === 'split' && !sideBySideAvailable ? 'overflow-y-auto' : ''}`}>
@@ -1063,15 +1157,19 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
               ref={textareaRef}
               value={markdown}
               maxLength={MAX_REPORT_TEXT_LENGTH}
+              readOnly={readOnly}
               onChange={(e) => onChange(e.target.value)}
               onKeyDown={handleKeyDown}
               onPaste={handlePaste}
               onDrop={handleDrop}
+              onSelect={(event) => captureEditorSession(event.currentTarget)}
+              onScroll={(event) => captureEditorSession(event.currentTarget)}
+              onBlur={(event) => captureEditorSession(event.currentTarget)}
               aria-label="Contenido Markdown del informe"
               lang="es"
               spellCheck={false}
               placeholder="Escribe el informe. Pega imágenes con Ctrl+V; Ctrl+S guarda; Ctrl+B/I/K aplica formato."
-            className="flex-1 w-full min-h-[280px] bg-slate-950 text-slate-100 font-mono text-base sm:text-sm leading-6 p-3.5 sm:p-4 resize-none focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-300"
+            className={`flex-1 w-full min-h-[280px] bg-slate-950 text-slate-100 font-mono text-base sm:text-sm leading-6 p-3.5 sm:p-4 resize-none focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-300 ${readOnly ? 'cursor-text' : ''}`}
             />
             {assets.some((asset) => asset.mime_type.startsWith('image/') && markdown.includes(`asset://${asset.id}`) && assetObjectUrls[asset.id]) && (
               <div className="flex max-h-32 gap-3 overflow-auto border-t border-slate-800 bg-slate-900/60 p-2" aria-label="Imágenes incluidas en el informe">

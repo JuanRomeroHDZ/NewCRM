@@ -678,6 +678,9 @@ export interface WriteupSummary {
 }
 
 export interface WriteupDetail extends WriteupSummary {
+  manual_locked?: boolean;
+  manual_locked_by?: string | null;
+  manual_locked_at?: string | null;
   cvss_vector?: string | null;
   markdown_content: string;
   executive_summary?: string | null;

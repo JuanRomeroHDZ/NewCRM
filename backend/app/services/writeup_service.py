@@ -16,6 +16,7 @@ from app.models.writeups import (
     WriteupBoard,
     WriteupCitation,
     WriteupExportLog,
+    WriteupEditLock,
     WriteupRevision,
 )
 from app.security.crypto import decrypt_note, encrypt_note
@@ -287,6 +288,7 @@ async def build_writeup_detail_dict(db: AsyncSession, writeup: Writeup) -> dict:
             .limit(20)
         )
     ).scalars().all()
+    edit_lock = await db.get(WriteupEditLock, writeup.id)
 
     return {
         "id": writeup.id,
@@ -308,6 +310,9 @@ async def build_writeup_detail_dict(db: AsyncSession, writeup: Writeup) -> dict:
         "citations_count": len(citations),
         "updated_at": writeup.updated_at,
         "created_at": writeup.created_at,
+        "manual_locked": bool(edit_lock and edit_lock.manual_locked_at),
+        "manual_locked_by": edit_lock.manual_locked_by_name if edit_lock and edit_lock.manual_locked_at else None,
+        "manual_locked_at": edit_lock.manual_locked_at if edit_lock else None,
         "markdown_content": markdown_text,
         "executive_summary": exec_summary,
         "findings": findings,
@@ -338,6 +343,7 @@ async def build_export_context(
     toc_depth: int = 6,
     include_figure_index: bool = False,
     include_table_index: bool = False,
+    font_size_pt: int = 11,
     watermark_text: str | None = None,
     rendered_diagrams: dict[str, str] | None = None,
 ) -> ExportBundleContext:
@@ -390,6 +396,7 @@ async def build_export_context(
         toc_depth=toc_depth,
         include_figure_index=include_figure_index,
         include_table_index=include_table_index,
+        font_size_pt=max(8, min(18, int(font_size_pt or 11))),
         watermark_text=watermark_text or writeup_defaults.get("watermark_default"),
         organization_name=writeup_defaults.get("organization_name"),
         rendered_diagrams=sanitized_diagrams,

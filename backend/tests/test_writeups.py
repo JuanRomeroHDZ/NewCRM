@@ -5,10 +5,13 @@ import zipfile
 from httpx import ASGITransport, AsyncClient
 from PIL import Image
 import pytest
+from datetime import timedelta
 from sqlalchemy import func, select
 from app.models.core import User
 from app.main import app
 from app.models.writeups import Writeup, WriteupAsset, WriteupRevision
+from app.models.writeups import WriteupEditLock
+from app.models import utc_now
 from app.security.crypto import BYTES_ENC_PREFIX, NOTE_ENC_PREFIX, hash_master_password
 from app.services.core_auth import create_user_session
 
@@ -22,6 +25,175 @@ def _make_jpeg_with_exif(width: int = 2400, height: int = 1200) -> bytes:
     buf = io.BytesIO()
     img.save(buf, format="JPEG", exif=exif, quality=92)
     return buf.getvalue()
+
+
+async def _lease_headers(client, writeup_id: str, headers: dict[str, str], client_id: str = "writeup-test-editor-0001") -> dict[str, str]:
+    response = await client.post(
+        f"/api/v1/writeups/{writeup_id}/edit-lease",
+        headers=headers,
+        json={"client_id": client_id},
+    )
+    assert response.status_code == 200, response.text
+    return {
+        **headers,
+        "X-Writeup-Edit-Lease": response.json()["token"],
+        "X-Writeup-Client-ID": client_id,
+    }
+
+
+@pytest.mark.asyncio
+async def test_manual_writeup_lock_is_persistent_but_does_not_block_reading_or_preview(client, auth_token):
+    headers = {"X-Vault-Token": auth_token}
+    created = await client.post("/api/v1/writeups", headers=headers, json={"title": "Informe bloqueado", "markdown_content": "# Evidencia"})
+    assert created.status_code == 201
+    writeup_id = created.json()["id"]
+    headers = await _lease_headers(client, writeup_id, headers)
+
+    locked = await client.post(f"/api/v1/writeups/{writeup_id}/manual-lock", headers=headers)
+    assert locked.status_code == 200
+    assert locked.json()["manual_locked"] is True
+
+    revoked = await client.post("/api/v1/auth/lock", headers={"X-Vault-Token": auth_token})
+    assert revoked.status_code == 200
+    second_vault = await client.post("/api/v1/auth/unlock", json={"master_password": "MasterPasswordTest123!"})
+    assert second_vault.status_code == 200
+    second_headers = {"X-Vault-Token": second_vault.json()["token"]}
+    # A vault-only lock has no durable user identity; reopening the vault
+    # rotates its token, so another valid unlocked vault can release it.
+    other_unlock = await client.delete(f"/api/v1/writeups/{writeup_id}/manual-lock", headers=second_headers)
+    assert other_unlock.status_code == 200
+    relocked = await client.post(f"/api/v1/writeups/{writeup_id}/manual-lock", headers=second_headers)
+    assert relocked.status_code == 200
+    revoked_again = await client.post("/api/v1/auth/lock", headers=second_headers)
+    assert revoked_again.status_code == 200
+    third_vault = await client.post("/api/v1/auth/unlock", json={"master_password": "MasterPasswordTest123!"})
+    assert third_vault.status_code == 200
+    other_headers = {"X-Vault-Token": third_vault.json()["token"]}
+
+    detail = await client.get(f"/api/v1/writeups/{writeup_id}", headers=other_headers)
+    assert detail.status_code == 200
+    assert detail.json()["manual_locked"] is True
+    assert detail.json()["markdown_content"] == "# Evidencia"
+    preview = await client.post(f"/api/v1/writeups/{writeup_id}/preview", headers=other_headers)
+    assert preview.status_code == 200
+    export = await client.post(
+        f"/api/v1/writeups/{writeup_id}/export",
+        headers=other_headers,
+        json={"format": "json", "font_size_pt": 18},
+    )
+    assert export.status_code == 200
+
+    for invalid_font_size in (7, 19):
+        invalid_export = await client.post(
+            f"/api/v1/writeups/{writeup_id}/export",
+            headers=other_headers,
+            json={"format": "json", "font_size_pt": invalid_font_size},
+        )
+        assert invalid_export.status_code == 422
+
+    blocked = await client.patch(f"/api/v1/writeups/{writeup_id}", headers=other_headers, json={"title": "No debe cambiar"})
+    assert blocked.status_code == 423
+    assert "bloqueado" in blocked.json()["detail"].lower()
+    blocked_board = await client.post(
+        f"/api/v1/writeups/{writeup_id}/boards",
+        headers=other_headers,
+        json={"title": "No debe crear", "scene_json": "{}", "element_count": 0},
+    )
+    assert blocked_board.status_code == 423
+    blocked_delete = await client.delete(f"/api/v1/writeups/{writeup_id}", headers=other_headers)
+    assert blocked_delete.status_code == 423
+
+    unlocked = await client.delete(f"/api/v1/writeups/{writeup_id}/manual-lock", headers=other_headers)
+    assert unlocked.status_code == 200 and unlocked.json()["manual_locked"] is False
+    headers = await _lease_headers(client, writeup_id, other_headers)
+    updated = await client.patch(f"/api/v1/writeups/{writeup_id}", headers=headers, json={"title": "Edición permitida"})
+    assert updated.status_code == 200
+    assert updated.json()["title"] == "Edición permitida"
+
+
+@pytest.mark.asyncio
+async def test_writeup_edit_lease_is_exclusive_and_release_and_expiry_reopen_editing(client, db_session, auth_token):
+    base_headers = {"X-Vault-Token": auth_token}
+    created = await client.post("/api/v1/writeups", headers=base_headers, json={"title": "Informe con reserva"})
+    assert created.status_code == 201
+    writeup_id = created.json()["id"]
+
+    unreserved_write = await client.patch(f"/api/v1/writeups/{writeup_id}", headers=base_headers, json={"title": "Sin reserva"})
+    assert unreserved_write.status_code == 423
+
+    first = await client.post(f"/api/v1/writeups/{writeup_id}/edit-lease", headers=base_headers, json={"client_id": "editor-tab-a-0001"})
+    assert first.status_code == 200
+    first_lease = first.json()
+    assert first_lease["ttl_seconds"] == 90
+    assert first_lease["token"]
+
+    missing_token_renew = await client.post(
+        f"/api/v1/writeups/{writeup_id}/edit-lease",
+        headers=base_headers,
+        json={"client_id": first_lease["client_id"]},
+    )
+    assert missing_token_renew.status_code == 423
+    wrong_token_renew = await client.post(
+        f"/api/v1/writeups/{writeup_id}/edit-lease",
+        headers={**base_headers, "X-Writeup-Edit-Lease": "invalid-token", "X-Writeup-Client-ID": first_lease["client_id"]},
+        json={"client_id": first_lease["client_id"]},
+    )
+    assert wrong_token_renew.status_code == 423
+    wrong_client_renew = await client.post(
+        f"/api/v1/writeups/{writeup_id}/edit-lease",
+        headers={**base_headers, "X-Writeup-Edit-Lease": first_lease["token"], "X-Writeup-Client-ID": "editor-tab-b-0002"},
+        json={"client_id": first_lease["client_id"]},
+    )
+    assert wrong_client_renew.status_code == 423
+
+    legitimate_renew = await client.post(
+        f"/api/v1/writeups/{writeup_id}/edit-lease",
+        headers={**base_headers, "X-Writeup-Edit-Lease": first_lease["token"], "X-Writeup-Client-ID": first_lease["client_id"]},
+        json={"client_id": first_lease["client_id"]},
+    )
+    assert legitimate_renew.status_code == 200
+    first_lease = legitimate_renew.json()
+
+    second = await client.post(f"/api/v1/writeups/{writeup_id}/edit-lease", headers=base_headers, json={"client_id": "editor-tab-b-0002"})
+    assert second.status_code == 423
+    assert "reservado" in second.json()["detail"].lower()
+
+    second_vault = await client.post("/api/v1/auth/unlock", json={"master_password": "MasterPasswordTest123!"})
+    assert second_vault.status_code == 200
+    other_session_headers = {"X-Vault-Token": second_vault.json()["token"]}
+    other_session_renew = await client.post(
+        f"/api/v1/writeups/{writeup_id}/edit-lease",
+        headers=other_session_headers,
+        json={"client_id": "editor-tab-a-0001"},
+    )
+    assert other_session_renew.status_code == 423
+
+    blocked = await client.patch(f"/api/v1/writeups/{writeup_id}", headers=base_headers, json={"title": "Sin reserva"})
+    assert blocked.status_code == 423
+
+    first_headers = {**base_headers, "X-Writeup-Edit-Lease": first_lease["token"], "X-Writeup-Client-ID": first_lease["client_id"]}
+    updated = await client.patch(f"/api/v1/writeups/{writeup_id}", headers=first_headers, json={"title": "Con reserva"})
+    assert updated.status_code == 200
+    assert (await client.get(f"/api/v1/writeups/{writeup_id}", headers=base_headers)).status_code == 200
+
+    released = await client.delete(f"/api/v1/writeups/{writeup_id}/edit-lease", headers=first_headers)
+    assert released.status_code == 200 and released.json()["released"] is True
+    second = await client.post(f"/api/v1/writeups/{writeup_id}/edit-lease", headers=other_session_headers, json={"client_id": "editor-tab-b-0002"})
+    assert second.status_code == 200
+
+    lock_row = await db_session.get(WriteupEditLock, writeup_id)
+    lock_row.lease_expires_at = utc_now() - timedelta(seconds=1)
+    await db_session.commit()
+    expired_lease_write = await client.patch(f"/api/v1/writeups/{writeup_id}", headers=base_headers, json={"title": "Reserva vencida"})
+    assert expired_lease_write.status_code == 423
+    after_expiry = await _lease_headers(client, writeup_id, other_session_headers, "writeup-test-editor-0003")
+    reacquired_write = await client.patch(f"/api/v1/writeups/{writeup_id}", headers=after_expiry, json={"title": "Reserva renovada"})
+    assert reacquired_write.status_code == 200
+
+
+def test_writeup_router_has_no_put_mutation_without_lock_guard():
+    writeup_routes = [route for route in app.routes if getattr(route, "path", "").startswith("/api/v1/writeups")]
+    assert not any("PUT" in getattr(route, "methods", set()) for route in writeup_routes)
 
 
 @pytest.mark.asyncio
@@ -152,6 +324,7 @@ async def test_writeups_crud_encryption_and_revisions(client, db_session, auth_t
     assert create_res.status_code == 201
     created = create_res.json()
     writeup_id = created["id"]
+    headers = await _lease_headers(client, writeup_id, headers)
     assert len(created["boards"]) == 1
 
     # Verify encryption at rest in DB
@@ -190,6 +363,7 @@ async def test_revision_restores_metadata_findings_boards_and_prior_state(client
     headers = {"X-Vault-Token": auth_token}
     created = (await client.post("/api/v1/writeups", headers=headers, json={"title": "Original", "markdown_content": "# Original", "severity": "alta"})).json()
     wid = created["id"]
+    headers = await _lease_headers(client, wid, headers)
     bid = created["boards"][0]["id"]
     board = await client.patch(f"/api/v1/writeups/{wid}/boards/{bid}", headers=headers, json={"title": "Mapa original", "scene_json": '{"elements":[]}'})
     assert board.status_code == 200
@@ -245,6 +419,7 @@ async def test_writeup_asset_optimization_exif_strip_and_encryption(client, db_s
         json={"title": "Prueba de Evidencia Visual", "markdown_content": "# Evidencias\n"},
     )
     writeup_id = create_res.json()["id"]
+    headers = await _lease_headers(client, writeup_id, headers)
 
     # Reject non-image spoofed payload
     bad_upload = await client.post(
@@ -313,6 +488,7 @@ async def test_writeup_board_xss_citations_and_multi_format_exports(client, auth
     detail = create_res.json()
     writeup_id = detail["id"]
     board_id = detail["boards"][0]["id"]
+    headers = await _lease_headers(client, writeup_id, headers)
 
     # Attach an image asset so exports embed both asset:// and board://
     up_res = await client.post(
@@ -472,6 +648,7 @@ async def test_writeups_preserved_across_vault_rekey(client, auth_token):
     )
     assert created.status_code == 201
     wid = created.json()["id"]
+    headers = await _lease_headers(client, wid, headers)
     up = await client.post(
         f"/api/v1/writeups/{wid}/assets",
         headers=headers,
@@ -511,6 +688,7 @@ async def test_writeup_animated_gif_preserved_and_video_conversion(client, auth_
     )
     assert created.status_code == 201
     wid = created.json()["id"]
+    headers = await _lease_headers(client, wid, headers)
 
     # Build a 3-frame animated GIF and verify animation & metadata stripping are preserved
     frames = [
@@ -677,6 +855,7 @@ async def test_concurrent_editor_cannot_overwrite_or_restore_newer_report(client
     assert created.status_code == 201
     report = created.json()
     report_id = report["id"]
+    headers = await _lease_headers(client, report_id, headers)
     original_version = report["updated_at"]
     first = await client.patch(f"/api/v1/writeups/{report_id}", headers=headers, json={
         "expected_updated_at": original_version, "markdown_content": "Cambios de la primera sesión",
@@ -711,6 +890,7 @@ async def test_two_writeup_sessions_reject_stale_board_citation_and_evidence_mut
     report = created.json()
     report_id = report["id"]
     board_id = report["boards"][0]["id"]
+    headers = await _lease_headers(client, report_id, headers)
     stale_version = report["updated_at"]
 
     # Separate HTTP clients model two browsers that loaded the same report version.
@@ -760,8 +940,7 @@ async def test_two_writeup_sessions_reject_stale_board_citation_and_evidence_mut
         assert accepted.status_code == 201
         assert accepted.json()["writeup_updated_at"] != current_version
 
-    # Older API clients remain compatible during rollout; a successful legacy mutation
-    # still advances the parent token, and the current detail exposes it to clients.
+    # The active editor lease is required across all child-resource mutation routes.
     legacy_board = await client.post(
         f"/api/v1/writeups/{report_id}/boards", headers=headers,
         json={"title": "Pizarra de cliente antiguo"},

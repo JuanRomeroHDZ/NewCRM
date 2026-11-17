@@ -5,6 +5,24 @@ from app.database import Base
 from app.models import gen_uuid, utc_now
 
 
+class WriteupEditLock(Base):
+    """Persistent manual read-only lock and expiring single-editor lease for a writeup."""
+
+    __tablename__ = "writeup_edit_locks"
+
+    writeup_id: Mapped[str] = mapped_column(String(36), ForeignKey("writeups.id", ondelete="CASCADE"), primary_key=True)
+    manual_locked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    manual_locked_by_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("core_users.id", ondelete="SET NULL"), nullable=True)
+    manual_locked_by_vault_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    manual_locked_by_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    lease_client_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    lease_user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("core_users.id", ondelete="SET NULL"), nullable=True)
+    lease_vault_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    lease_token_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    lease_holder_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+
+
 class Writeup(Base):
     """Pentesting technical writeup with encrypted markdown, summary, and CRM linkage."""
 

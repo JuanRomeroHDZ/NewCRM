@@ -40,17 +40,17 @@ export const DashboardProspectsSection: React.FC<DashboardProspectsSectionProps>
           Prospectos y páginas demo
         </h2>
         {recontactCount > 0 && (
-          <button type="button" onClick={onOpenProspects} className="inline-flex items-center gap-1.5 rounded-lg bg-amber-500/15 px-2.5 py-1 text-[11px] font-semibold text-amber-300 hover:bg-amber-500/25">
+          <button type="button" onClick={onOpenProspects} className="inline-flex min-h-11 items-center gap-1.5 rounded-lg bg-amber-500/15 px-2.5 py-1 text-[11px] font-semibold text-amber-300 hover:bg-amber-500/25">
             <BellRing size={11} aria-hidden="true" />
             <span>{recontactCount} por contactar</span>
           </button>
         )}
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        <button type="button" onClick={onCreateProspect} className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-obsidian-border bg-obsidian-surface px-3 text-xs font-medium text-white hover:bg-obsidian-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400">
+        <button type="button" onClick={onCreateProspect} className="inline-flex min-h-11 items-center gap-1 rounded-lg border border-obsidian-border bg-obsidian-surface px-3 text-xs font-medium text-white hover:bg-obsidian-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400">
           <Plus size={13} aria-hidden="true" /> Nuevo prospecto
         </button>
-        <button type="button" onClick={onOpenProspects} className="inline-flex min-h-9 items-center gap-1 rounded-lg px-2 text-xs font-medium text-indigo-400 hover:text-indigo-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400">
+        <button type="button" onClick={onOpenProspects} className="inline-flex min-h-11 items-center gap-1 rounded-lg px-2 text-xs font-medium text-indigo-400 hover:text-indigo-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400">
           Ver todos <ArrowRight size={13} aria-hidden="true" />
         </button>
       </div>
@@ -119,28 +119,28 @@ const ProspectSummary: React.FC<ProspectSummaryProps> = ({ prospect, nowMs, onOp
 
       <div className="flex min-w-0 flex-wrap items-center gap-1.5 border-t border-obsidian-border/60 pt-2">
         {prospect.demo_url && (
-          <a href={prospect.demo_url} target="_blank" rel="noopener noreferrer" aria-label={`Abrir página demo de ${prospect.company_name}`} className="inline-flex items-center gap-1 rounded-md border border-indigo-500/25 bg-indigo-500/10 px-2 py-1 text-[10px] font-medium text-indigo-300 hover:bg-indigo-500/20">
+          <a href={prospect.demo_url} target="_blank" rel="noopener noreferrer" aria-label={`Abrir página demo de ${prospect.company_name}`} className="inline-flex min-h-11 items-center gap-1 rounded-md border border-obsidian-border bg-obsidian-surface px-2 py-1 text-[10px] font-medium text-white hover:bg-obsidian-accent">
             <Globe size={11} aria-hidden="true" /> Demo <ExternalLink size={9} aria-hidden="true" />
           </a>
         )}
         {prospect.whatsapp && (
-          <button type="button" onClick={(event) => onQuickContact(event, prospect, 'whatsapp')} aria-label={`Enviar seguimiento por WhatsApp a ${prospect.company_name}`} className="inline-flex items-center gap-1 rounded-md border border-emerald-500/25 bg-emerald-500/10 px-2 py-1 text-[10px] font-medium text-emerald-300 hover:bg-emerald-500/20">
+          <button type="button" onClick={(event) => onQuickContact(event, prospect, 'whatsapp')} aria-label={`Enviar seguimiento por WhatsApp a ${prospect.company_name}`} className="inline-flex min-h-11 items-center gap-1 rounded-md border border-obsidian-border bg-obsidian-surface px-2 py-1 text-[10px] font-medium text-white hover:bg-obsidian-card">
             <MessageCircle size={11} aria-hidden="true" /> WhatsApp
           </button>
         )}
         {prospect.contact_email && (
-          <button type="button" onClick={(event) => onQuickContact(event, prospect, 'email')} aria-label={`Preparar correo para ${prospect.company_name}`} className="inline-flex items-center gap-1 rounded-md border border-cyan-500/25 bg-cyan-500/10 px-2 py-1 text-[10px] font-medium text-cyan-300 hover:bg-cyan-500/20">
+          <button type="button" onClick={(event) => onQuickContact(event, prospect, 'email')} aria-label={`Preparar correo para ${prospect.company_name}`} className="inline-flex min-h-11 items-center gap-1 rounded-md border border-obsidian-border bg-obsidian-surface px-2 py-1 text-[10px] font-medium text-white hover:bg-obsidian-card">
             <Mail size={11} aria-hidden="true" /> Correo
           </button>
         )}
-        <button type="button" onClick={(event) => onQuickContact(event, prospect, 'template_copy')} aria-label={`Copiar mensaje de seguimiento para ${prospect.company_name}`} className="inline-flex items-center gap-1 rounded-md border border-obsidian-border bg-obsidian-panel px-2 py-1 text-[10px] font-medium text-obsidian-muted hover:text-white">
+        <button type="button" onClick={(event) => onQuickContact(event, prospect, 'template_copy')} aria-label={`Copiar mensaje de seguimiento para ${prospect.company_name}`} className="inline-flex min-h-11 items-center gap-1 rounded-md border border-obsidian-border bg-obsidian-surface px-2 py-1 text-[10px] font-medium text-white hover:bg-obsidian-card">
           <Copy size={11} aria-hidden="true" /> Copiar
         </button>
-        <button type="button" onClick={onOpen} className="rounded-md px-2 py-1 text-[10px] font-medium text-obsidian-muted hover:text-white">
+        <button type="button" onClick={onOpen} className="min-h-11 rounded-md px-2 py-1 text-[10px] font-medium text-obsidian-muted hover:text-white">
           Registrar contacto
         </button>
         {!prospect.responded_at ? (
-          <button type="button" onClick={(event) => onMarkResponded(event, prospect)} className="ml-auto inline-flex items-center gap-1 rounded-md bg-emerald-600 px-2 py-1 text-[10px] font-semibold text-white hover:bg-emerald-500">
+          <button type="button" onClick={(event) => onMarkResponded(event, prospect)} className="ml-auto inline-flex min-h-11 items-center gap-1 rounded-md border border-obsidian-border bg-obsidian-surface px-2 py-1 text-[10px] font-semibold text-white hover:bg-obsidian-card">
             <CheckCircle2 size={11} aria-hidden="true" /> Respondió
           </button>
         ) : (

@@ -9,6 +9,20 @@ if (( EUID == 0 )); then
 fi
 
 prepare_installation() {
+  for dependency in python3 openssl docker; do
+    if ! command -v "$dependency" >/dev/null 2>&1; then
+      echo "Falta $dependency. Instálalo antes de iniciar LESSSO." >&2
+      return 1
+    fi
+  done
+  if ! docker compose version >/dev/null 2>&1; then
+    echo 'Falta Docker Compose v2 o posterior. Instala el complemento Docker Compose.' >&2
+    return 1
+  fi
+  if ! docker info >/dev/null 2>&1; then
+    echo 'Docker no está disponible para este usuario. Inicia Docker y comprueba sus permisos con docker info.' >&2
+    return 1
+  fi
   python3 - <<'PY' || return 1
 from pathlib import Path
 import os, secrets
@@ -45,10 +59,19 @@ PY
 }
 
 prepare_c2() {
-  if [[ ! -x backend/.venv-c2/bin/python ]] ||
-     ! backend/.venv-c2/bin/python -c 'import uvicorn, scapy' >/dev/null 2>&1; then
-    echo 'Preparando C2 por primera vez...'
+  local c2_python="backend/.venv-c2/bin/python"
+  local import_check='import os, secrets; os.environ["C2_WORKER_SECRET"] = secrets.token_hex(32); from app.c2_worker import app; assert app'
+  if [[ ! -x "$c2_python" ]] ||
+     ! PYTHONPATH="$PWD/backend" \
+       "$c2_python" -c "$import_check" >/dev/null 2>&1; then
+    echo 'Preparando o reparando el entorno de C2 (dependencias del backend)...'
     ./scripts/c2.sh setup || return 1
+  fi
+
+  if ! PYTHONPATH="$PWD/backend" \
+    "$c2_python" -c "$import_check" >/dev/null 2>&1; then
+    echo 'El entorno de C2 sigue incompleto después de instalar las dependencias. Revisa el error de instalación y backend/requirements.txt.' >&2
+    return 1
   fi
 }
 

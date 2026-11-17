@@ -40,6 +40,14 @@ PY
   printf '\nDirección del CRM (cuando esté encendido): https://%s\n' "$address"
 }
 
+# Comprueba el entrypoint real con una clave ficticia. Importar el módulo no
+# arranca el servidor ni ejecuta operaciones de red; sí detecta dependencias
+# ausentes que una comprobación parcial de uvicorn/scapy dejaría pasar.
+c2_worker_imports() {
+  PYTHONPATH="$PROJECT_DIR/backend" \
+    "$VENV/bin/python" -c 'import os, secrets; os.environ["C2_WORKER_SECRET"] = secrets.token_hex(32); from app.c2_worker import app; assert app' >/dev/null 2>&1
+}
+
 if [[ "$MODE" == menu ]]; then
   show_crm
   if [[ ! -t 0 ]]; then
@@ -81,6 +89,10 @@ PY
     ;;
   start|demo)
     test -x "$VENV/bin/python" || { echo 'Abre ./lessso para preparar C2.' >&2; exit 1; }
+    if ! c2_worker_imports; then
+      echo 'El entorno de C2 no puede cargar app.c2_worker. Abre ./lessso y elige la opción 3 para instalar o reparar sus dependencias.' >&2
+      exit 1
+    fi
     show_crm
     printf 'Abre Red y Lab con tu cuenta de propietario y la bóveda desbloqueada.\n'
     printf 'Para cerrar C2 y realizar la limpieza, pulsa Ctrl+C en esta terminal.\n\n'

@@ -1,5 +1,8 @@
 import json
-from datetime import datetime, timezone
+import hashlib
+import hmac
+import secrets
+from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, Response, UploadFile, status
 from sqlalchemy import case, delete, desc, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,6 +15,7 @@ from app.models.writeups import (
     WriteupAsset,
     WriteupBoard,
     WriteupCitation,
+    WriteupEditLock,
     WriteupExportLog,
     WriteupRevision,
 )
@@ -27,6 +31,7 @@ from app.schemas.writeups import (
     WriteupCreate,
     WriteupDetailOut,
     WriteupExportRequest,
+    WriteupEditLeaseAcquire,
     WriteupPreviewOut,
     WriteupRevisionOut,
     WriteupRevisionAuthorOut,
@@ -65,6 +70,7 @@ from app.services.writeup_service import (
 
 
 WRITEUP_ROLES = {"owner", "business_admin", "operator"}
+WRITEUP_EDIT_LEASE_SECONDS = 90
 
 
 async def _lock_writeup_for_resource_mutation(
@@ -123,10 +129,99 @@ async def require_writeup_access(request: Request, db: AsyncSession = Depends(ge
     return None
 
 
+def _vault_session_fingerprint(request: Request) -> str | None:
+    token = request.headers.get("X-Vault-Token")
+    return hashlib.sha256(token.encode("utf-8")).hexdigest() if token else None
+
+
+def _lease_request_matches(lock: WriteupEditLock, request: Request, user: User | None) -> bool:
+    token = request.headers.get("X-Writeup-Edit-Lease", "")
+    client_id = request.headers.get("X-Writeup-Client-ID", "")
+    if not token or not client_id or not lock.lease_token_hash:
+        return False
+    if not hmac.compare_digest(hashlib.sha256(token.encode("utf-8")).hexdigest(), lock.lease_token_hash):
+        return False
+    if client_id != lock.lease_client_id:
+        return False
+    if lock.lease_user_id:
+        return bool(user and user.id == lock.lease_user_id)
+    return bool(_vault_session_fingerprint(request) and _vault_session_fingerprint(request) == lock.lease_vault_hash)
+
+
+async def enforce_writeup_edit_lock(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(require_writeup_access),
+) -> None:
+    """Protect mutations server-side while leaving reads, previews and exports available."""
+    if request.method in {"GET", "HEAD", "OPTIONS"}:
+        return
+    path = request.url.path.rstrip("/")
+    if path.endswith(("/manual-lock", "/edit-lease", "/clone", "/export", "/preview")):
+        return
+    writeup_id = request.path_params.get("writeup_id")
+    if not writeup_id:
+        return
+
+    # Require a server-issued lease for every mutation. Creating the row here
+    # also closes the legacy-client loophole where an unreserved write could
+    # race the first editor to acquire a lease.
+    lock = await _get_writeup_lock_record(db, writeup_id, create=True)
+    assert lock is not None
+    if lock.manual_locked_at:
+        raise HTTPException(status_code=423, detail=f"Este writeup está bloqueado para edición por {lock.manual_locked_by_name or 'otro usuario'}.")
+    now = utc_now()
+    lease_is_active = bool(lock.lease_expires_at and lock.lease_expires_at > now)
+    lease_matches = lease_is_active and _lease_request_matches(lock, request, current_user)
+    if not lease_matches:
+        if not lease_is_active:
+            detail = "La reserva de edición no está activa o venció. Vuelve a abrir el informe para reservarlo antes de guardar."
+        else:
+            holder = lock.lease_holder_name or "otra sesión"
+            detail = f"Este writeup está reservado para edición por {holder}. Inténtalo cuando venza o se libere la reserva."
+        raise HTTPException(status_code=423, detail=detail)
+
+
+async def _get_writeup_lock_record(db: AsyncSession, writeup_id: str, *, create: bool = False) -> WriteupEditLock | None:
+    if create:
+        writeup = (await db.execute(
+            select(Writeup).where(Writeup.id == writeup_id, Writeup.is_deleted == False).with_for_update()  # noqa: E712
+        )).scalar_one_or_none()
+        if not writeup:
+            raise HTTPException(status_code=404, detail="Writeup no encontrado.")
+        # Serialize creation of the lock row for databases without row-level locks.
+        await db.execute(
+            update(Writeup)
+            .where(Writeup.id == writeup_id, Writeup.is_deleted == False)  # noqa: E712
+            .values(updated_at=Writeup.updated_at)
+            .execution_options(synchronize_session=False)
+        )
+    lock = (await db.execute(
+        select(WriteupEditLock).where(WriteupEditLock.writeup_id == writeup_id).with_for_update()
+    )).scalar_one_or_none()
+    if lock or not create:
+        return lock
+    lock = WriteupEditLock(writeup_id=writeup_id)
+    db.add(lock)
+    await db.flush()
+    return lock
+
+
+def _is_manual_lock_owner(lock: WriteupEditLock, user: User | None) -> bool:
+    if user and user.role == "owner":
+        return True
+    if lock.manual_locked_by_id:
+        return bool(user and user.id == lock.manual_locked_by_id)
+    # Vault-only sessions have no durable user identity and their token rotates
+    # whenever the vault is reopened. The route already requires a valid,
+    # unlocked vault session, so any such session can release this manual lock.
+    return True
+
+
 router = APIRouter(
     prefix="/writeups",
     tags=["Pentest Writeups & Whiteboards"],
-    dependencies=[Depends(require_vault_unlocked)],
+    dependencies=[Depends(require_vault_unlocked), Depends(enforce_writeup_edit_lock)],
 )
 
 
@@ -275,6 +370,127 @@ async def get_writeup(
 ):
     writeup = await get_writeup_or_404(db, writeup_id)
     return await build_writeup_detail_dict(db, writeup)
+
+
+@router.post("/{writeup_id}/manual-lock")
+async def set_writeup_manual_lock(
+    writeup_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(require_writeup_access),
+):
+    """Set a persistent read-only lock. Reading and exporting stay available."""
+    await get_writeup_or_404(db, writeup_id)
+    lock = await _get_writeup_lock_record(db, writeup_id, create=True)
+    assert lock is not None
+    if lock.manual_locked_at and not _is_manual_lock_owner(lock, current_user):
+        raise HTTPException(status_code=423, detail=f"Este writeup ya está bloqueado por {lock.manual_locked_by_name or 'otro usuario'}.")
+    if lock.lease_expires_at and lock.lease_expires_at > utc_now() and not _lease_request_matches(lock, request, current_user):
+        raise HTTPException(status_code=423, detail=f"El writeup está en edición por {lock.lease_holder_name or 'otra sesión'}; no se puede bloquear hasta que libere la reserva.")
+    lock.manual_locked_at = lock.manual_locked_at or utc_now()
+    lock.manual_locked_by_id = current_user.id if current_user else None
+    lock.manual_locked_by_vault_hash = _vault_session_fingerprint(request)
+    lock.manual_locked_by_name = current_user.username if current_user else "Sesión de bóveda"
+    lock.lease_client_id = None
+    lock.lease_user_id = None
+    lock.lease_vault_hash = None
+    lock.lease_token_hash = None
+    lock.lease_holder_name = None
+    lock.lease_expires_at = None
+    await db.commit()
+    return {"manual_locked": True, "manual_locked_by": lock.manual_locked_by_name, "manual_locked_at": lock.manual_locked_at}
+
+
+@router.delete("/{writeup_id}/manual-lock")
+async def clear_writeup_manual_lock(
+    writeup_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(require_writeup_access),
+):
+    lock = await _get_writeup_lock_record(db, writeup_id)
+    if not lock or not lock.manual_locked_at:
+        await get_writeup_or_404(db, writeup_id)
+        return {"manual_locked": False, "manual_locked_by": None, "manual_locked_at": None}
+    if not _is_manual_lock_owner(lock, current_user):
+        raise HTTPException(status_code=403, detail="Solo quien bloqueó el writeup o una persona propietaria puede desbloquearlo.")
+    lock.manual_locked_at = None
+    lock.manual_locked_by_id = None
+    lock.manual_locked_by_vault_hash = None
+    lock.manual_locked_by_name = None
+    await db.commit()
+    return {"manual_locked": False, "manual_locked_by": None, "manual_locked_at": None}
+
+
+@router.post("/{writeup_id}/edit-lease")
+async def acquire_writeup_edit_lease(
+    writeup_id: str,
+    payload: WriteupEditLeaseAcquire,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(require_writeup_access),
+):
+    """Acquire or renew a per-tab editing reservation with a short expiry."""
+    await get_writeup_or_404(db, writeup_id)
+    lock = await _get_writeup_lock_record(db, writeup_id, create=True)
+    assert lock is not None
+    if lock.manual_locked_at:
+        raise HTTPException(status_code=423, detail=f"Este writeup está bloqueado para edición por {lock.manual_locked_by_name or 'otro usuario'}.")
+
+    now = utc_now()
+    fingerprint = _vault_session_fingerprint(request)
+    same_principal = (
+        bool(current_user and current_user.id == lock.lease_user_id)
+        if lock.lease_user_id
+        else bool(fingerprint and fingerprint == lock.lease_vault_hash)
+    )
+    lease_is_active = bool(lock.lease_expires_at and lock.lease_expires_at > now)
+    if lease_is_active:
+        same_lease = lock.lease_client_id == payload.client_id and same_principal
+        if not same_lease or not _lease_request_matches(lock, request, current_user):
+            raise HTTPException(
+                status_code=423,
+                detail=f"Este writeup está reservado para edición por {lock.lease_holder_name or 'otra sesión'} hasta {lock.lease_expires_at.isoformat()}.",
+            )
+
+    token = secrets.token_urlsafe(32)
+    lock.lease_client_id = payload.client_id
+    lock.lease_user_id = current_user.id if current_user else None
+    lock.lease_vault_hash = fingerprint
+    lock.lease_token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    lock.lease_holder_name = current_user.username if current_user else "Esta sesión"
+    lock.lease_expires_at = now + timedelta(seconds=WRITEUP_EDIT_LEASE_SECONDS)
+    await db.commit()
+    return {
+        "acquired": True,
+        "token": token,
+        "client_id": payload.client_id,
+        "holder": lock.lease_holder_name,
+        "expires_at": lock.lease_expires_at,
+        "ttl_seconds": WRITEUP_EDIT_LEASE_SECONDS,
+    }
+
+
+@router.delete("/{writeup_id}/edit-lease")
+async def release_writeup_edit_lease(
+    writeup_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(require_writeup_access),
+):
+    lock = await _get_writeup_lock_record(db, writeup_id)
+    if not lock:
+        await get_writeup_or_404(db, writeup_id)
+        return {"released": False}
+    if not _lease_request_matches(lock, request, current_user):
+        return {"released": False}
+    lock.lease_client_id = None
+    lock.lease_user_id = None
+    lock.lease_vault_hash = None
+    lock.lease_token_hash = None
+    lock.lease_holder_name = None
+    lock.lease_expires_at = None
+    await db.commit()
+    return {"released": True}
 
 
 @router.patch("/{writeup_id}", response_model=WriteupDetailOut)
@@ -896,6 +1112,7 @@ async def export_writeup(
         toc_depth=payload.toc_depth,
         include_figure_index=payload.include_figure_index,
         include_table_index=payload.include_table_index,
+        font_size_pt=payload.font_size_pt,
         watermark_text=payload.watermark_text,
         rendered_diagrams=payload.rendered_diagrams,
     )

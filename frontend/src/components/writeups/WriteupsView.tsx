@@ -14,6 +14,7 @@ import {
   GitCompare,
   History,
   Image as ImageIcon,
+  Lock,
   Maximize2,
   PanelLeftClose,
   PanelLeftOpen,
@@ -27,12 +28,13 @@ import {
   SlidersHorizontal,
   Trash2,
   Upload,
+  Unlock,
   X,
 } from 'lucide-react';
 import { useVault } from '../../context/VaultContext';
 import { useC2 } from '../../context/C2Context';
 import { EmptyState } from '../common/EmptyState';
-import { api } from '../../lib/api';
+import { api, clearWriteupEditLease } from '../../lib/api';
 import { ApiError } from '../../lib/apiErrors';
 import { formatApiDateTime, parseApiDate } from '../../lib/dates';
 import { deriveDraftKey, draftStorageKey, encryptDraft, listDraftCopies, readDraft, removeDraft, storeEncryptedDraft } from '../../lib/writeupDraftRecovery';
@@ -53,7 +55,7 @@ import {
 } from '../../types';
 import { PentestWhiteboard, type WhiteboardRecoveryDraft } from './PentestWhiteboard';
 import { WriteupExportModal } from './WriteupExportModal';
-import { WriteupMarkdownSplitEditor } from './WriteupMarkdownSplitEditor';
+import { WriteupMarkdownSplitEditor, type WriteupEditorSessionState } from './WriteupMarkdownSplitEditor';
 import { MarkdownRichPreview } from './MarkdownRichPreview';
 import { WriteupCorrelationsPanel } from './WriteupCorrelationsPanel';
 import { correlateWriteup } from '../../lib/writeupCorrelations';
@@ -119,8 +121,17 @@ type RecoveryDraft = {
   cvssScore: string; cvssVector: string; cweId: string; cveId: string; targetScope: string;
   executiveSummary: string; markdown: string; findings: WriteupStructuredFinding[]; prospectId: string; projectId: string;
   boardDrafts?: WhiteboardRecoveryDraft[];
+  workspaceMode?: WorkspaceMode;
+  activeBoardId?: string | null;
+  editorSession?: WriteupEditorSessionState;
 };
 type RecoveryCandidate = { storageKey: string; legacy: boolean; draft: RecoveryDraft };
+type WriteupEditLockState =
+  | { kind: 'acquiring' }
+  | { kind: 'owned'; expiresAt: string }
+  | { kind: 'blocked' | 'unavailable'; message: string }
+  | { kind: 'manual' }
+  | null;
 
 const isRecoveryDraft = (value: unknown): value is RecoveryDraft => {
   if (!value || typeof value !== 'object') return false;
@@ -133,6 +144,12 @@ const isRecoveryDraft = (value: unknown): value is RecoveryDraft => {
     Number.isInteger(board.elementCount) && board.elementCount >= 0 && board.elementCount <= 10_000 &&
     Number.isInteger(board.sceneGeneration) && board.sceneGeneration >= 0
   ));
+  const editorSessionValid = draft.editorSession === undefined || (
+    Number.isInteger(draft.editorSession.selectionStart) && draft.editorSession.selectionStart >= 0 &&
+    Number.isInteger(draft.editorSession.selectionEnd) && draft.editorSession.selectionEnd >= draft.editorSession.selectionStart &&
+    Number.isFinite(draft.editorSession.scrollTop) && draft.editorSession.scrollTop >= 0
+  );
+  const workspaceModeValid = draft.workspaceMode === undefined || ['markdown', 'whiteboard', 'dual', 'findings', 'assets'].includes(draft.workspaceMode);
   return typeof draft.baseUpdatedAt === 'string' && typeof draft.title === 'string' &&
     ['borrador', 'en_revision', 'finalizado', 'entregado'].includes(draft.status || '') &&
     ['critica', 'alta', 'media', 'baja', 'informativa'].includes(draft.severity || '') &&
@@ -140,7 +157,8 @@ const isRecoveryDraft = (value: unknown): value is RecoveryDraft => {
     typeof draft.cweId === 'string' && typeof draft.cveId === 'string' &&
     typeof draft.targetScope === 'string' && typeof draft.executiveSummary === 'string' &&
     typeof draft.markdown === 'string' && Array.isArray(draft.findings) &&
-    typeof draft.prospectId === 'string' && typeof draft.projectId === 'string' && boardDraftsValid;
+    typeof draft.prospectId === 'string' && typeof draft.projectId === 'string' && boardDraftsValid && editorSessionValid && workspaceModeValid &&
+    (draft.activeBoardId === undefined || draft.activeBoardId === null || typeof draft.activeBoardId === 'string');
 };
 
 const recoveryDraftMatchesServer = (draft: RecoveryDraft, server: WriteupDetail) =>
@@ -176,10 +194,12 @@ export const WriteupsView: React.FC = () => {
   const [items, setItems] = useState<WriteupSummary[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<WriteupDetail | null>(null);
+  const [editLockState, setEditLockState] = useState<WriteupEditLockState>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [detailError, setDetailError] = useState('');
   const [creatingWriteup, setCreatingWriteup] = useState(false);
   const [activeBoardId, setActiveBoardId] = useState<string | null>(null);
+  const [editorSessionRevision, setEditorSessionRevision] = useState(0);
   const [mode, setMode] = useState<WorkspaceMode>(() =>
     typeof window !== 'undefined' && window.innerWidth >= 1280 ? 'dual' : 'markdown'
   );
@@ -220,6 +240,7 @@ export const WriteupsView: React.FC = () => {
   const [localDraftSavedAt, setLocalDraftSavedAt] = useState<Date | null>(null);
   const [localDraftError, setLocalDraftError] = useState(false);
   const [editVersion, setEditVersion] = useState(0);
+  const isWriteupEditingBlocked = Boolean(detail?.manual_locked || editLockState?.kind === 'acquiring' || editLockState?.kind === 'blocked' || editLockState?.kind === 'unavailable' || editLockState?.kind === 'manual');
   const draftVersion = useRef(0);
   const editorDirtyRef = useRef(false);
   const boardRecoveryDraftsRef = useRef<Record<string, WhiteboardRecoveryDraft>>({});
@@ -232,7 +253,13 @@ export const WriteupsView: React.FC = () => {
   const saveInFlight = useRef(false);
   const lastAutoRevision = useRef(0);
   const autoSaveRef = useRef<() => void>(() => {});
-  const markDirty = () => { draftVersion.current += 1; editorDirtyRef.current = true; setEditVersion(draftVersion.current); setDirty(true); };
+  const markDirty = () => {
+    if (isWriteupEditingBlocked) return;
+    draftVersion.current += 1;
+    editorDirtyRef.current = true;
+    setEditVersion(draftVersion.current);
+    setDirty(true);
+  };
   const [showExportModal, setShowExportModal] = useState(false);
   const [lightboxAsset, setLightboxAsset] = useState<WriteupAsset | null>(null);
   const [diffRevision, setDiffRevision] = useState<WriteupRevision | null>(null);
@@ -371,6 +398,24 @@ export const WriteupsView: React.FC = () => {
   const [jumpTarget, setJumpTarget] = useState<{ line: number; anchorId: string; ts: number } | null>(null);
   const assetUrlsRef = useRef<Record<string, string>>({});
   const selectedIdRef = useRef<string | null>(selectedId);
+  const editClientIdRef = useRef<string | null>(null);
+  const activeEditLeaseRef = useRef<{ writeupId: string; clientId: string; expiresAt: string } | null>(null);
+  const pendingEditLeaseRef = useRef<Record<string, Promise<boolean>>>({});
+  const editorSessionRef = useRef<Record<string, WriteupEditorSessionState>>({});
+  const editorSessionPersistTimerRef = useRef<number | null>(null);
+  const recordEditorSession = (id: string, session: WriteupEditorSessionState) => {
+    const previous = editorSessionRef.current[id];
+    if (previous && previous.selectionStart === session.selectionStart && previous.selectionEnd === session.selectionEnd && previous.scrollTop === session.scrollTop) return;
+    editorSessionRef.current[id] = session;
+    if (editorSessionPersistTimerRef.current !== null) window.clearTimeout(editorSessionPersistTimerRef.current);
+    editorSessionPersistTimerRef.current = window.setTimeout(() => {
+      editorSessionPersistTimerRef.current = null;
+      setEditorSessionRevision((revision) => revision + 1);
+    }, 350);
+  };
+  if (!editClientIdRef.current) {
+    editClientIdRef.current = `writeup-${typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`}`;
+  }
   const mediaTabUploadRef = useRef<HTMLInputElement>(null);
   const modalDialogRef = useRef<HTMLDivElement>(null);
   const modalCloseRef = useRef<HTMLButtonElement>(null);
@@ -578,9 +623,14 @@ export const WriteupsView: React.FC = () => {
     const id = detail?.id;
     const generation = ++draftWriteGeneration.current;
     const pendingBoardDrafts = Object.values(boardRecoveryDrafts);
-    if (!id || !isUnlocked || !draftRecoveryKey || (!dirty && pendingBoardDrafts.length === 0)) return;
+    if (!id || !isUnlocked || !draftRecoveryKey) return;
     const storageKey = draftStorageKey(id);
-    const draft: RecoveryDraft = { baseUpdatedAt: detail.updated_at, savedAt: new Date().toISOString(), title, status: statusVal, severity, cvssScore, cvssVector, cweId, cveId, targetScope, executiveSummary: execSummary, markdown, findings, prospectId, projectId, boardDrafts: pendingBoardDrafts };
+    const draft: RecoveryDraft = {
+      baseUpdatedAt: detail.updated_at, savedAt: new Date().toISOString(), title, status: statusVal, severity,
+      cvssScore, cvssVector, cweId, cveId, targetScope, executiveSummary: execSummary, markdown, findings,
+      prospectId, projectId, boardDrafts: pendingBoardDrafts, workspaceMode: mode, activeBoardId,
+      editorSession: editorSessionRef.current[id],
+    };
     setLocalDraftSavedAt(null);
     setLocalDraftError(false);
     const persist = encryptDraft(draftRecoveryKey, storageKey, draft).then(ciphertext => {
@@ -600,7 +650,7 @@ export const WriteupsView: React.FC = () => {
     });
     localDraftPersistPromiseRef.current = persist;
     return () => { draftWriteGeneration.current += 1; };
-  }, [detail?.id, detail?.updated_at, isUnlocked, draftRecoveryKey, dirty, editVersion, boardRecoveryDrafts, title, statusVal, severity, cvssScore, cvssVector, cweId, cveId, targetScope, execSummary, markdown, findings, prospectId, projectId, showToast]);
+  }, [detail?.id, detail?.updated_at, isUnlocked, draftRecoveryKey, dirty, editVersion, editorSessionRevision, boardRecoveryDrafts, title, statusVal, severity, cvssScore, cvssVector, cweId, cveId, targetScope, execSummary, markdown, findings, prospectId, projectId, mode, activeBoardId, showToast]);
   const changedRevisionSections = useMemo(() => {
     const snapshot = diffRevision?.snapshot;
     if (!snapshot || !detail) return [];
@@ -616,6 +666,32 @@ export const WriteupsView: React.FC = () => {
   }, [diffRevision, detail, title, statusVal, severity, cvssScore, cvssVector, cweId, cveId, targetScope, prospectId, projectId, execSummary, findings]);
 
   useEffect(() => {
+    const lease = activeEditLeaseRef.current;
+    if (!detail?.id || !lease || lease.writeupId !== detail.id) return;
+    const timer = window.setInterval(async () => {
+      try {
+        const renewed = await api.renewWriteupEditLease(lease.writeupId, lease.clientId);
+        if (activeEditLeaseRef.current?.writeupId !== lease.writeupId) return;
+        activeEditLeaseRef.current = { ...lease, expiresAt: renewed.expires_at };
+        setEditLockState({ kind: 'owned', expiresAt: renewed.expires_at });
+      } catch (error) {
+        if (activeEditLeaseRef.current?.writeupId !== lease.writeupId) return;
+        activeEditLeaseRef.current = null;
+        clearWriteupEditLease(lease.writeupId);
+        const message = error instanceof Error ? error.message : 'Se perdió la reserva de edición.';
+        setEditLockState({ kind: error instanceof ApiError && error.status === 423 ? 'blocked' : 'unavailable', message });
+        showToast('Se perdió la reserva de edición. El borrador cifrado local se conserva; ya no se enviarán cambios hasta recuperar el acceso.', 'warning');
+      }
+    }, 30_000);
+    return () => window.clearInterval(timer);
+  }, [detail?.id, editLockState?.kind, showToast]);
+
+  useEffect(() => () => {
+    const lease = activeEditLeaseRef.current;
+    if (lease) void api.releaseWriteupEditLease(lease.writeupId);
+  }, []);
+
+  useEffect(() => {
     return () => {
       Object.values(assetUrlsRef.current).forEach((u) => URL.revokeObjectURL(u));
     };
@@ -623,6 +699,10 @@ export const WriteupsView: React.FC = () => {
 
   useEffect(() => {
     if (isUnlocked) return;
+    const activeLease = activeEditLeaseRef.current;
+    if (activeLease) void api.releaseWriteupEditLease(activeLease.writeupId);
+    activeEditLeaseRef.current = null;
+    setEditLockState(null);
     // Locking must not treat a pending local copy as a successfully saved draft.
     draftWriteGeneration.current += 1;
     listRequestVersion.current += 1;
@@ -710,9 +790,14 @@ export const WriteupsView: React.FC = () => {
     setShowConflict(false);
   };
 
-  const restoreRecoveryCandidate = (candidate: RecoveryCandidate) => {
-    const draft = candidate.draft;
-    recoveredSourceRef.current = candidate.storageKey;
+  const applyRecoveryDraft = (draft: RecoveryDraft, server: WriteupDetail, sourceKey: string) => {
+    recoveredSourceRef.current = sourceKey;
+    const contentChanged = draft.title !== server.title || draft.status !== server.status || draft.severity !== server.severity ||
+      draft.cvssScore !== (server.cvss_score === null || server.cvss_score === undefined ? '' : String(server.cvss_score)) ||
+      draft.cvssVector !== (server.cvss_vector || '') || draft.cweId !== (server.cwe_id || '') || draft.cveId !== (server.cve_id || '') ||
+      draft.targetScope !== (server.target_scope || '') || draft.executiveSummary !== (server.executive_summary || '') ||
+      draft.markdown !== (server.markdown_content || '') || JSON.stringify(draft.findings) !== JSON.stringify(server.findings || []) ||
+      draft.prospectId !== (server.prospect_id || '') || draft.projectId !== (server.project_id || '') || (draft.boardDrafts?.length || 0) > 0;
     setTitle(draft.title); setStatusVal(draft.status); setSeverity(draft.severity);
     setCvssScore(draft.cvssScore); setCvssVector(draft.cvssVector); setCweId(draft.cweId); setCveId(draft.cveId);
     setTargetScope(draft.targetScope); setExecSummary(draft.executiveSummary); setMarkdown(draft.markdown);
@@ -724,14 +809,32 @@ export const WriteupsView: React.FC = () => {
     boardEditRevisionsRef.current = Object.fromEntries((draft.boardDrafts || []).map(board => [board.boardId, board.sceneGeneration]));
     setBoardRecoveryDrafts(recoveredBoards);
     setUnsavedBoardIds(recoveredBoardIds);
-    markDirty();
+    if (draft.workspaceMode) {
+      workspaceModeManuallySelectedRef.current = true;
+      setMode(draft.workspaceMode);
+    }
+    if (draft.activeBoardId && server.boards.some(board => board.id === draft.activeBoardId)) setActiveBoardId(draft.activeBoardId);
+    if (draft.editorSession) editorSessionRef.current[server.id] = draft.editorSession;
+    if (contentChanged) draftVersion.current += 1;
+    editorDirtyRef.current = contentChanged;
+    if (contentChanged) setEditVersion(draftVersion.current);
+    setDirty(contentChanged);
     setShowRecovery(false);
-    if (detail && draft.baseUpdatedAt !== detail.updated_at) {
+    if (contentChanged && draft.baseUpdatedAt !== server.updated_at) {
       setSaveConflict(true);
-      setConflictServer(detail);
+      setConflictServer(server);
       setSaveError('El informe cambió en otra sesión. Tus cambios siguen aquí; compáralos antes de continuar.');
       setShowConflict(true);
     }
+  };
+
+  const restoreRecoveryCandidate = (candidate: RecoveryCandidate) => {
+    if (isWriteupEditingBlocked || !detail) {
+      showToast('Este writeup está en solo lectura. Desbloquéalo o espera a que termine la reserva de edición para restaurar el borrador.', 'warning');
+      return;
+    }
+    const draft = candidate.draft;
+    applyRecoveryDraft(draft, detail, candidate.storageKey);
   };
 
   const discoverRecoveryCopies = useCallback(async (id: string, server: WriteupDetail): Promise<RecoveryCandidate[]> => {
@@ -946,6 +1049,91 @@ export const WriteupsView: React.FC = () => {
     }
   };
 
+  const acquireEditLease = useCallback(async (id: string) => {
+    const pending = pendingEditLeaseRef.current[id];
+    if (pending) return pending;
+    const clientId = editClientIdRef.current;
+    if (!clientId) return false;
+    const request = (async () => {
+      if (selectedIdRef.current === id) setEditLockState({ kind: 'acquiring' });
+      try {
+        const lease = await api.acquireWriteupEditLease(id, clientId);
+        if (selectedIdRef.current !== id) {
+          await api.releaseWriteupEditLease(id);
+          return false;
+        }
+        activeEditLeaseRef.current = { writeupId: id, clientId, expiresAt: lease.expires_at };
+        setEditLockState({ kind: 'owned', expiresAt: lease.expires_at });
+        return true;
+      } catch (error) {
+        clearWriteupEditLease(id);
+        if (activeEditLeaseRef.current?.writeupId === id) activeEditLeaseRef.current = null;
+        if (selectedIdRef.current === id) {
+          const message = error instanceof Error ? error.message : 'No se pudo reservar este writeup para edición.';
+          setEditLockState({ kind: error instanceof ApiError && error.status === 423 ? 'blocked' : 'unavailable', message });
+        }
+        return false;
+      }
+    })();
+    pendingEditLeaseRef.current[id] = request;
+    try {
+      return await request;
+    } finally {
+      if (pendingEditLeaseRef.current[id] === request) delete pendingEditLeaseRef.current[id];
+    }
+  }, []);
+
+  const releaseEditLease = useCallback(async (id: string) => {
+    if (activeEditLeaseRef.current?.writeupId !== id) return;
+    try {
+      await api.releaseWriteupEditLease(id);
+    } catch {
+      clearWriteupEditLease(id);
+      if (selectedIdRef.current === id) showToast('La reserva no se pudo liberar ahora; vencerá automáticamente en 90 segundos.', 'warning');
+    } finally {
+      if (activeEditLeaseRef.current?.writeupId === id) activeEditLeaseRef.current = null;
+    }
+  }, [showToast]);
+
+  const handleToggleManualLock = async () => {
+    if (!detail || editLockState?.kind === 'acquiring') return;
+    const writeupId = detail.id;
+    try {
+      if (detail.manual_locked || editLockState?.kind === 'manual') {
+        await api.clearWriteupManualLock(writeupId);
+        if (selectedIdRef.current !== writeupId) return;
+        setDetail((current) => current?.id === writeupId ? {
+          ...current,
+          manual_locked: false,
+          manual_locked_by: null,
+          manual_locked_at: null,
+        } : current);
+        setEditLockState({ kind: 'acquiring' });
+        if (await acquireEditLease(writeupId)) {
+          if (selectedIdRef.current === writeupId) showToast('Edición desbloqueada y reservada para esta sesión', 'success');
+        } else if (selectedIdRef.current === writeupId) {
+          showToast('Se quitó el bloqueo, pero no se pudo reservar la edición. Reintenta antes de cambiar el informe.', 'warning');
+        }
+        return;
+      }
+
+      const result = await api.setWriteupManualLock(writeupId);
+      if (activeEditLeaseRef.current?.writeupId === writeupId) activeEditLeaseRef.current = null;
+      clearWriteupEditLease(writeupId);
+      if (selectedIdRef.current !== writeupId) return;
+      setDetail((current) => current?.id === writeupId ? {
+        ...current,
+        manual_locked: true,
+        manual_locked_by: result.manual_locked_by,
+        manual_locked_at: result.manual_locked_at,
+      } : current);
+      setEditLockState({ kind: 'manual' });
+      showToast('Edición bloqueada. La lectura y exportación siguen disponibles.', 'success');
+    } catch (error) {
+      if (selectedIdRef.current === writeupId) showToast(error instanceof Error ? error.message : 'No se pudo cambiar el bloqueo del informe.', 'error');
+    }
+  };
+
   const loadDetail = useCallback(async (id: string) => {
     if (!isUnlocked) return;
     const version = ++detailRequestVersion.current;
@@ -955,6 +1143,7 @@ export const WriteupsView: React.FC = () => {
     setNewRecoveryCopyAvailable(false);
     setLocalDraftSavedAt(null);
     setLocalDraftError(false);
+    setEditLockState({ kind: 'acquiring' });
     lastAutoRevision.current = 0;
     setLastSavedAt(null);
     setSaveError('');
@@ -964,12 +1153,26 @@ export const WriteupsView: React.FC = () => {
       const data = await api.getWriteup(id);
       if (version !== detailRequestVersion.current) return;
       hydrateDraft(data);
+      const leaseOwned = data.manual_locked
+        ? (setEditLockState({ kind: 'manual' }), false)
+        : await acquireEditLease(id);
+      if (version !== detailRequestVersion.current || selectedIdRef.current !== id) return;
       if (draftRecoveryKey) {
         try {
           const needsRecovery = await discoverRecoveryCopies(id, data);
           if (version !== detailRequestVersion.current || selectedIdRef.current !== id) return;
-          if (needsRecovery.length) {
-            setRecoveryCandidates(needsRecovery.sort((a, b) => (b.draft.savedAt || '').localeCompare(a.draft.savedAt || '')));
+          const currentTabCopy = draftStorageKey(id);
+          const resumable = leaseOwned
+            ? needsRecovery.find(candidate => candidate.storageKey === currentTabCopy && candidate.draft.baseUpdatedAt === data.updated_at)
+            : undefined;
+          if (resumable) {
+            applyRecoveryDraft(resumable.draft, data, resumable.storageKey);
+          }
+          const remainingRecovery = resumable
+            ? needsRecovery.filter(candidate => candidate.storageKey !== resumable.storageKey)
+            : needsRecovery;
+          if (remainingRecovery.length) {
+            setRecoveryCandidates(remainingRecovery.sort((a, b) => (b.draft.savedAt || '').localeCompare(a.draft.savedAt || '')));
             setShowRecovery(true);
           }
         } catch {
@@ -995,7 +1198,7 @@ export const WriteupsView: React.FC = () => {
     } finally {
       if (version === detailRequestVersion.current) setLoadingDetail(false);
     }
-  }, [isUnlocked, preloadAssetUrls, draftRecoveryKey, discoverRecoveryCopies]);
+  }, [isUnlocked, preloadAssetUrls, draftRecoveryKey, discoverRecoveryCopies, acquireEditLease]);
 
   useEffect(() => {
     void loadList();
@@ -1007,22 +1210,56 @@ export const WriteupsView: React.FC = () => {
     }
   }, [selectedId, isUnlocked, loadDetail]);
 
-  const confirmDiscardDraft = async (nextAction: string) => {
+  const persistDraftBeforeNavigation = async (nextAction: string) => {
     const pendingBoardCount = Object.keys(unsavedBoardIdsRef.current).length;
-    if (!dirty && pendingBoardCount === 0) return true;
-    const accepted = await confirm({
-      title: 'Cambios sin guardar',
-      message: `Tienes cambios sin guardar${pendingBoardCount ? `, incluidas ${pendingBoardCount} pizarra(s)` : ''}. Si ${nextAction}, se descartarán de esta sesión. La copia cifrada local se conservará para recuperarla.`,
-      confirmLabel: 'Descartar cambios',
-      cancelLabel: 'Seguir editando',
-      tone: 'warning',
-    });
-    if (!accepted) return false;
-    // Let the canvas publish its short-debounced snapshot, then wait for the
-    // encrypted recovery write before changing reports.
+    if (!detail || !draftRecoveryKey || !isUnlocked) {
+      showToast(`No se puede conservar el borrador antes de que ${nextAction}; vuelve a desbloquear la bóveda e inténtalo de nuevo.`, 'warning');
+      return false;
+    }
     if (pendingBoardCount) await new Promise<void>(resolve => window.setTimeout(resolve, 400));
-    const localCopySaved = await localDraftPersistPromiseRef.current;
-    if (!localCopySaved) showToast('No se pudo confirmar la copia local cifrada. Los cambios se descartarán al continuar.', 'warning');
+    const reportId = detail.id;
+    const sourceVersion = draftVersion.current;
+    const boardSnapshot = JSON.stringify(boardRecoveryDraftsRef.current);
+    const editorSessionSnapshot = JSON.stringify(editorSessionRef.current[reportId] ?? null);
+    const storageKey = draftStorageKey(reportId);
+    const draft: RecoveryDraft = {
+      baseUpdatedAt: detail.updated_at,
+      savedAt: new Date().toISOString(),
+      title,
+      status: statusVal,
+      severity,
+      cvssScore,
+      cvssVector,
+      cweId,
+      cveId,
+      targetScope,
+      executiveSummary: execSummary,
+      markdown,
+      findings,
+      prospectId,
+      projectId,
+      boardDrafts: Object.values(boardRecoveryDraftsRef.current),
+      workspaceMode: mode,
+      activeBoardId,
+      editorSession: editorSessionRef.current[reportId],
+    };
+    const generation = ++draftWriteGeneration.current;
+    try {
+      const ciphertext = await encryptDraft(draftRecoveryKey, storageKey, draft);
+      if (generation !== draftWriteGeneration.current || selectedIdRef.current !== reportId || sourceVersion !== draftVersion.current || boardSnapshot !== JSON.stringify(boardRecoveryDraftsRef.current) || editorSessionSnapshot !== JSON.stringify(editorSessionRef.current[reportId] ?? null)) {
+        showToast(`El borrador cambió mientras ${nextAction}; vuelve a intentarlo para asegurar la copia más reciente.`, 'warning');
+        return false;
+      }
+      storeEncryptedDraft(storageKey, ciphertext);
+      recoveredSourceRef.current = storageKey;
+      localDraftPersistPromiseRef.current = Promise.resolve(true);
+      setLocalDraftSavedAt(new Date());
+      setLocalDraftError(false);
+    } catch {
+      setLocalDraftError(true);
+      showToast(`No se pudo confirmar la copia cifrada antes de que ${nextAction}. El informe permanece abierto para no perder cambios.`, 'error');
+      return false;
+    }
     editorDirtyRef.current = false;
     setDirty(false);
     clearInMemoryBoardDrafts();
@@ -1037,12 +1274,15 @@ export const WriteupsView: React.FC = () => {
     if (selectionInProgressRef.current) return;
     selectionInProgressRef.current = true;
     try {
-      if (!(await confirmDiscardDraft('cambias de informe'))) return;
+      const previousId = selectedIdRef.current;
+      if (!(await persistDraftBeforeNavigation('cambies de informe'))) return;
+      if (previousId) await releaseEditLease(previousId);
       detailRequestVersion.current += 1;
       clearAssetUrlCache();
       selectedIdRef.current = id;
       setSelectedId(id);
       setDetail(null);
+      setEditLockState({ kind: 'acquiring' });
       setRevisions([]);
       setDetailError('');
       editorDirtyRef.current = false;
@@ -1074,7 +1314,9 @@ export const WriteupsView: React.FC = () => {
         showToast(`El título no puede superar ${MAX_REPORT_TITLE_LENGTH} caracteres.`, 'warning');
         return;
       }
-      if (!(await confirmDiscardDraft('creas un informe')) || !isUnlocked) return;
+      const previousId = selectedIdRef.current;
+      if (!(await persistDraftBeforeNavigation('crees un informe')) || !isUnlocked) return;
+      if (previousId) await releaseEditLease(previousId);
       setCreatingWriteup(true);
       const created = await api.createWriteup({
         title: cleanTitle,
@@ -1085,6 +1327,7 @@ export const WriteupsView: React.FC = () => {
       detailRequestVersion.current += 1;
       selectedIdRef.current = created.id;
       setSelectedId(created.id);
+      setEditLockState({ kind: 'acquiring' });
       clearAssetUrlCache();
       hydrateDraft(created);
       await loadList();
@@ -1120,7 +1363,9 @@ export const WriteupsView: React.FC = () => {
         showToast('El título debe tener al menos 2 caracteres.', 'warning');
         return;
       }
-      if (!(await confirmDiscardDraft('importas la sesión C2')) || !isUnlocked) return;
+      const previousId = selectedIdRef.current;
+      if (!(await persistDraftBeforeNavigation('importes la sesión C2')) || !isUnlocked) return;
+      if (previousId) await releaseEditLease(previousId);
 
       const sections: string[] = [
         `# ${cleanTitle} {#c2-resumen}`,
@@ -1230,6 +1475,7 @@ export const WriteupsView: React.FC = () => {
       detailRequestVersion.current += 1;
       selectedIdRef.current = created.id;
       setSelectedId(created.id);
+      setEditLockState({ kind: 'acquiring' });
       clearAssetUrlCache();
       hydrateDraft(created);
       await loadList();
@@ -1254,6 +1500,10 @@ export const WriteupsView: React.FC = () => {
     revisionTypeOverride?: WriteupRevision['change_type'],
   ) => {
     if (!detail || saveInFlight.current) return false;
+    if (isWriteupEditingBlocked) {
+      if (!automatic) showToast('La edición está bloqueada en esta sesión. Tus cambios locales siguen guardados.', 'warning');
+      return false;
+    }
     if (saveConflict) { setShowConflict(true); return false; }
     const savedVersion = draftVersion.current;
     const reportValidationError = (message: string) => {
@@ -1397,16 +1647,16 @@ export const WriteupsView: React.FC = () => {
   };
 
   autoSaveRef.current = () => {
-    if (dirty && !saveInFlight.current && !saveConflict) {
+    if (dirty && !isWriteupEditingBlocked && !saveInFlight.current && !saveConflict) {
       void handleSaveWriteup(Date.now() - lastAutoRevision.current >= 60_000, undefined, true);
     }
   };
 
   useEffect(() => {
-    if (!dirty || !detail || !isUnlocked) return;
+    if (!dirty || !detail || !isUnlocked || isWriteupEditingBlocked) return;
     const delay = window.setTimeout(() => autoSaveRef.current(), 2500);
     return () => window.clearTimeout(delay);
-  }, [dirty, detail?.id, isUnlocked, editVersion]);
+  }, [dirty, detail?.id, isUnlocked, isWriteupEditingBlocked, editVersion]);
 
   useEffect(() => {
     const pending = dirty || Object.keys(unsavedBoardIds).length > 0;
@@ -1419,10 +1669,10 @@ export const WriteupsView: React.FC = () => {
   }, [dirty, unsavedBoardIds, saving, saveError, localDraftError, localDraftSavedAt, lastSavedAt, systemLocale]);
 
   useEffect(() => {
-    if (!dirty || !detail || !isUnlocked) return;
+    if (!dirty || !detail || !isUnlocked || isWriteupEditingBlocked) return;
     const interval = window.setInterval(() => autoSaveRef.current(), 10_000);
     return () => window.clearInterval(interval);
-  }, [dirty, detail?.id, isUnlocked]);
+  }, [dirty, detail?.id, isUnlocked, isWriteupEditingBlocked]);
 
   useEffect(() => {
     if (!dirty && Object.keys(unsavedBoardIds).length === 0) return;
@@ -1432,7 +1682,7 @@ export const WriteupsView: React.FC = () => {
   }, [dirty, unsavedBoardIds]);
 
   const handleDeleteWriteup = async () => {
-    if (!detail) return;
+    if (!detail || isWriteupEditingBlocked) return;
     const confirmed = await confirm({
       title: 'Eliminar informe',
       message: `¿Eliminar el informe "${detail.title}"?`,
@@ -1461,7 +1711,7 @@ export const WriteupsView: React.FC = () => {
     file: File,
     convertToGif = false
   ): Promise<{ id: string; filename: string } | null> => {
-    if (!detail) return null;
+    if (!detail || isWriteupEditingBlocked) return null;
     try {
       const uploaded = await api.uploadWriteupAsset(detail.id, file, undefined, convertToGif, detail.updated_at);
       await updateWriteupVersion(detail.id, uploaded.writeup_updated_at);
@@ -1488,7 +1738,7 @@ export const WriteupsView: React.FC = () => {
   };
 
   const handleConvertVideoToGif = async (assetId: string) => {
-    if (!detail) return;
+    if (!detail || isWriteupEditingBlocked) return;
     setConvertingAssetId(assetId);
     try {
       const gifAsset = await api.convertWriteupVideoToGif(detail.id, assetId, { expectedUpdatedAt: detail.updated_at });
@@ -1508,7 +1758,7 @@ export const WriteupsView: React.FC = () => {
   };
 
   const handleSaveBoard = async (boardId: string, sceneJson: string, svgSnapshot: string, elementCount: number): Promise<boolean> => {
-    if (!detail) return false;
+    if (!detail || isWriteupEditingBlocked) return false;
     const reportId = detail.id;
     const requestKey = `${reportId}:${boardId}`;
     const existing = boardSavePromisesRef.current[requestKey];
@@ -1651,7 +1901,7 @@ export const WriteupsView: React.FC = () => {
   };
 
   const handleCreateBoard = async () => {
-    if (!detail) return;
+    if (!detail || isWriteupEditingBlocked) return;
     const name = await prompt({
       title: 'Nueva pizarra',
       message: 'Nombre de la nueva pizarra:',
@@ -1684,7 +1934,7 @@ export const WriteupsView: React.FC = () => {
   };
 
   const handleDeleteAsset = async (asset: WriteupAsset) => {
-    if (!detail) return;
+    if (!detail || isWriteupEditingBlocked) return;
     const confirmed = await confirm({
       title: 'Eliminar evidencia multimedia',
       message: `¿Eliminar "${asset.filename}" de este informe?`,
@@ -1710,6 +1960,7 @@ export const WriteupsView: React.FC = () => {
   };
 
   const handleRestoreRevision = async (rev: WriteupRevision, closeDiffModal = false) => {
+    if (isWriteupEditingBlocked) return;
     if (saveInFlight.current) {
       showToast('Espera a que termine el guardado antes de restaurar.', 'warning');
       return;
@@ -1848,7 +2099,7 @@ export const WriteupsView: React.FC = () => {
     quoted_text: string;
     markdown_content: string;
   }): Promise<boolean> => {
-    if (!detail) return false;
+    if (!detail || isWriteupEditingBlocked) return false;
     const targetBoardId = activeBoardId || detail.boards[0]?.id;
     if (!targetBoardId) {
       showToast('Crea una pizarra primero para enlazar citaciones', 'warning');
@@ -1886,7 +2137,7 @@ export const WriteupsView: React.FC = () => {
   };
 
   const handleDeleteCitation = async (citationId: string) => {
-    if (!detail) return;
+    if (!detail || isWriteupEditingBlocked) return;
     try {
       const updatedAt = await api.deleteWriteupCitation(detail.id, citationId, detail.updated_at);
       await updateWriteupVersion(detail.id, updatedAt);
@@ -1956,6 +2207,7 @@ export const WriteupsView: React.FC = () => {
     toc_depth?: number;
     include_figure_index?: boolean;
     include_table_index?: boolean;
+    font_size_pt?: number;
     watermark_text?: string;
     rendered_diagrams?: Record<string, string>;
   }) => {
@@ -2226,6 +2478,7 @@ export const WriteupsView: React.FC = () => {
                 <input
                   type="text"
                   value={title}
+                  disabled={isWriteupEditingBlocked}
                   onChange={(e) => {
                     setTitle(e.target.value);
                     markDirty();
@@ -2262,6 +2515,7 @@ export const WriteupsView: React.FC = () => {
                     </select>
                     <button
                       type="button"
+                      disabled={isWriteupEditingBlocked}
                       onClick={handleCreateBoard}
                       aria-label="Crear nueva pizarra"
                       className="h-10 px-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center gap-1"
@@ -2302,6 +2556,34 @@ export const WriteupsView: React.FC = () => {
                 </button>
 
                 <div className="writeup-header-actions flex max-w-full flex-wrap items-center justify-end gap-1 ml-auto">
+                  <button
+                    type="button"
+                    disabled={editLockState?.kind === 'acquiring'}
+                    onClick={() => {
+                      if (detail.manual_locked || editLockState?.kind === 'manual') {
+                        void handleToggleManualLock();
+                      } else if (editLockState?.kind === 'blocked' || editLockState?.kind === 'unavailable') {
+                        void acquireEditLease(detail.id).then((acquired) => {
+                          if (acquired) showToast('Reserva de edición recuperada.', 'success');
+                        });
+                      } else {
+                        void handleToggleManualLock();
+                      }
+                    }}
+                    aria-label={detail.manual_locked || editLockState?.kind === 'manual'
+                      ? 'Desbloquear edición'
+                      : editLockState?.kind === 'blocked' || editLockState?.kind === 'unavailable'
+                        ? 'Reintentar reserva de edición'
+                        : 'Bloquear edición'}
+                    title={detail.manual_locked || editLockState?.kind === 'manual'
+                      ? 'Desbloquear edición'
+                      : editLockState?.kind === 'blocked' || editLockState?.kind === 'unavailable'
+                        ? 'Reintentar reserva de edición'
+                        : 'Bloquear edición'}
+                    className="writeup-header-compact-button h-10 w-10 shrink-0 justify-center rounded-lg bg-slate-800 text-slate-200 hover:bg-slate-700 disabled:cursor-wait disabled:opacity-50"
+                  >
+                    {detail.manual_locked || editLockState?.kind === 'manual' ? <Unlock className="h-4 w-4" aria-hidden="true" /> : <Lock className="h-4 w-4" aria-hidden="true" />}
+                  </button>
                   {staleCount > 0 && (
                     <span className="px-1.5 py-1 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[11px] flex items-center gap-1" title="Cita(s) desactualizada(s)">
                       <AlertTriangle className="w-3.5 h-3.5" />
@@ -2311,7 +2593,7 @@ export const WriteupsView: React.FC = () => {
 
                   <button
                     type="button"
-                    disabled={saving}
+                    disabled={saving || isWriteupEditingBlocked}
                     onClick={() => void handleSaveWriteup(false)}
                     aria-label={saving ? 'Guardando informe' : dirty ? 'Guardar cambios del informe' : 'Informe guardado'}
                     className={`writeup-header-compact-button h-10 w-10 shrink-0 justify-center rounded-lg text-xs font-semibold flex items-center ${
@@ -2363,6 +2645,7 @@ export const WriteupsView: React.FC = () => {
                     <div className="absolute right-0 z-30 mt-1 grid min-w-48 gap-1 rounded-lg border border-slate-700 bg-slate-900 p-2 shadow-xl">
                   <button
                     type="button"
+                    disabled={isWriteupEditingBlocked}
                     onClick={() => void handleCreateMilestone()}
                     className="p-1.5 sm:px-2 sm:py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs flex items-center gap-1"
                     title="Guardar una versión importante con nombre"
@@ -2384,6 +2667,7 @@ export const WriteupsView: React.FC = () => {
                   </button>
                   <button
                     type="button"
+                    disabled={isWriteupEditingBlocked}
                     onClick={handleDeleteWriteup}
                     className="flex items-center gap-1 rounded-lg px-2 py-1.5 text-left text-slate-400 hover:bg-rose-950/40 hover:text-rose-400"
                     title="Eliminar informe"
@@ -2409,6 +2693,7 @@ export const WriteupsView: React.FC = () => {
 
               {/* Progressive Disclosure Advanced Metadata & CRM Tray */}
               {showMetadata && (
+                <fieldset disabled={isWriteupEditingBlocked} className="contents">
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6 gap-2 pt-1 text-xs">
                 <select
                   value={severity}
@@ -2521,10 +2806,28 @@ export const WriteupsView: React.FC = () => {
                     ))}
                   </select>
                 </div>
+                </fieldset>
               )}
 
 
             </div>
+
+            {editLockState?.kind === 'manual' || detail.manual_locked ? (
+              <div role="status" aria-live="polite" className="flex flex-wrap items-center gap-2 border-b border-slate-800 bg-slate-950/80 px-3 py-2 text-xs text-slate-300">
+                <Lock className="h-4 w-4 shrink-0 text-obsidian-gold" aria-hidden="true" />
+                <span>Edición bloqueada manualmente{detail.manual_locked_by ? ` por ${detail.manual_locked_by}` : ''}. Puedes leer y exportar el informe.</span>
+              </div>
+            ) : editLockState?.kind === 'blocked' || editLockState?.kind === 'unavailable' ? (
+              <div role="status" aria-live="polite" className="flex flex-wrap items-center gap-2 border-b border-slate-800 bg-slate-950/80 px-3 py-2 text-xs text-slate-300">
+                <Lock className="h-4 w-4 shrink-0 text-obsidian-gold" aria-hidden="true" />
+                <span>{editLockState.message} El borrador local cifrado se conserva; puedes seguir leyendo y exportar.</span>
+              </div>
+            ) : editLockState?.kind === 'acquiring' ? (
+              <div role="status" aria-live="polite" className="flex items-center gap-2 border-b border-slate-800 bg-slate-950/80 px-3 py-2 text-xs text-slate-400">
+                <RefreshCw className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                <span>Reservando edición…</span>
+              </div>
+            ) : null}
 
             <div id="writeup-correlations-panel" hidden={!showCorrelations}>
               <WriteupCorrelationsPanel
@@ -2555,6 +2858,9 @@ export const WriteupsView: React.FC = () => {
                   onCreateCitation={handleCreateCitation}
                   onSave={() => void handleSaveWriteup(false)}
                   onInspectAsset={setLightboxAsset}
+                  readOnly={isWriteupEditingBlocked}
+                  editorSession={editorSessionRef.current[detail.id]}
+                  onEditorSessionChange={(session) => recordEditorSession(detail.id, session)}
                   onApplyCvss={(score, vector, sev) => {
                     setCvssScore(score.toFixed(1));
                     setCvssVector(vector);
@@ -2576,6 +2882,7 @@ export const WriteupsView: React.FC = () => {
                   assetLoadErrors={failedAssetIds}
                   targetScope={targetScope}
                   findings={findings}
+                  readOnly={isWriteupEditingBlocked}
                   onSaveBoard={handleSaveBoard}
                   onDirtyChange={onCurrentBoardDirtyChange}
                   onDraftChange={onCurrentBoardDraftChange}
@@ -2605,6 +2912,9 @@ export const WriteupsView: React.FC = () => {
                     onCreateCitation={handleCreateCitation}
                     onSave={() => void handleSaveWriteup(false)}
                     onInspectAsset={setLightboxAsset}
+                    readOnly={isWriteupEditingBlocked}
+                    editorSession={editorSessionRef.current[detail.id]}
+                    onEditorSessionChange={(session) => recordEditorSession(detail.id, session)}
                     onApplyCvss={(score, vector, sev) => {
                       setCvssScore(score.toFixed(1));
                       setCvssVector(vector);
@@ -2623,6 +2933,7 @@ export const WriteupsView: React.FC = () => {
                       assetLoadErrors={failedAssetIds}
                       targetScope={targetScope}
                       findings={findings}
+                      readOnly={isWriteupEditingBlocked}
                       onSaveBoard={handleSaveBoard}
                       onDirtyChange={onCurrentBoardDirtyChange}
                       onDraftChange={onCurrentBoardDraftChange}
@@ -2639,6 +2950,7 @@ export const WriteupsView: React.FC = () => {
               )}
 
               {mode === 'findings' && (
+                <fieldset disabled={isWriteupEditingBlocked} className="contents">
                 <div className="h-full overflow-y-auto space-y-4 pr-1">
                   {/* SVG Findings Severity Matrix */}
                   <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-3.5 space-y-2.5">
@@ -2984,6 +3296,7 @@ export const WriteupsView: React.FC = () => {
                     ))}
                   </div>
                 </div>
+                </fieldset>
               )}
 
               {mode === 'assets' && (
@@ -2999,12 +3312,14 @@ export const WriteupsView: React.FC = () => {
                             type="checkbox"
                             checked={convertUploadToGif}
                             onChange={(e) => setConvertUploadToGif(e.target.checked)}
+                          disabled={isWriteupEditingBlocked}
                             className="accent-indigo-500"
                           />
                           Video→GIF
                         </label>
                         <button
                           type="button"
+                          disabled={isWriteupEditingBlocked}
                           onClick={() => mediaTabUploadRef.current?.click()}
                           className="px-2.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium flex items-center gap-1"
                         >
@@ -3070,7 +3385,7 @@ export const WriteupsView: React.FC = () => {
                             {isVideo && (
                               <button
                                 type="button"
-                                disabled={convertingAssetId === asset.id}
+                                disabled={isWriteupEditingBlocked || convertingAssetId === asset.id}
                                 onClick={() => void handleConvertVideoToGif(asset.id)}
                                 className="px-2 py-1 rounded bg-emerald-600/20 hover:bg-emerald-600/35 border border-emerald-500/30 text-emerald-300 text-[11px] flex items-center gap-1 shrink-0"
                                 title="Convertir este video a GIF animado sin metadatos"
@@ -3081,6 +3396,7 @@ export const WriteupsView: React.FC = () => {
                             )}
                             <button
                               type="button"
+                              disabled={isWriteupEditingBlocked}
                               onClick={() => {
                                 setMarkdown((prev) => `${prev}\n![${asset.filename}](asset://${asset.id})\n`);
                                 markDirty();
@@ -3093,6 +3409,7 @@ export const WriteupsView: React.FC = () => {
                             </button>
                             <button
                               type="button"
+                              disabled={isWriteupEditingBlocked}
                               onClick={() => void handleDeleteAsset(asset)}
                               className="p-1.5 rounded text-slate-400 hover:text-rose-400"
                               title="Eliminar medio"

@@ -249,6 +249,37 @@ function escapeHtmlAttr(value: string): string {
   return value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+interface WriteupObjectCaption {
+  title?: string;
+  description?: string;
+  source?: string;
+}
+
+function parseWriteupObjectCaption(lines: string[]): WriteupObjectCaption {
+  const caption: WriteupObjectCaption = {};
+  for (const line of lines) {
+    const figureNumber = line.match(/^Figura\s+(\d+\.)\s*(.*)$/i);
+    if (figureNumber && !caption.title) {
+      caption.title = `Figura ${figureNumber[1]} ${figureNumber[2]}`.trim();
+      continue;
+    }
+    const match = line.match(/^(Figura|Imagen|Tabla|Descripción|Fuente)\s*:\s*(.*)$/i);
+    if (!match) continue;
+    const value = match[2].trim();
+    if (/^descripci[oó]n$/i.test(match[1])) caption.description = value;
+    else if (/^fuente$/i.test(match[1])) caption.source = value;
+    else if (!caption.title) caption.title = `${match[1]}: ${value}`;
+  }
+  return caption;
+}
+
+function renderCaptionLines(caption: WriteupObjectCaption): string {
+  return [caption.title, caption.description ? `Descripción: ${caption.description}` : '', caption.source ? `Fuente: ${caption.source}` : '']
+    .filter(Boolean)
+    .map((line) => `<span class="block">${escapeHtmlAttr(line!)}</span>`)
+    .join('');
+}
+
 export const MarkdownRichPreview: React.FC<MarkdownRichPreviewProps> = ({
   markdown,
   redactPreview,
@@ -310,6 +341,35 @@ export const MarkdownRichPreview: React.FC<MarkdownRichPreviewProps> = ({
       return `<span id="${anchor}" class="ml-1 px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 font-mono text-[10px]">#${anchor}</span>`;
     });
 
+    // Pair academic captions with the image immediately below. Captions remain
+    // plain text in Markdown so exports and indexing can consume the same contract.
+    const captionLine = '(?:Figura(?:\\s+\\d+\\.)?\\s*:\\s*|Figura\\s+\\d+\\.\\s*|Imagen\\s*:\\s*|Descripción\\s*:\\s*|Fuente\\s*:\\s*)';
+    const captionedImagePattern = new RegExp(
+      `(^|\\n)((?:[ \\t]*${captionLine}[^\\n]*(?:\\n|$)(?:[ \\t]*\\n)*)+)[ \\t]*\\n*!\\[([^\\]]*)\\]\\(asset:\\/\\/([a-zA-Z0-9_-]+)\\)`,
+      'gim',
+    );
+    text = text.replace(captionedImagePattern, (_whole, prefix: string, captionBlock: string, alt: string, assetId: string) => {
+      const caption = parseWriteupObjectCaption(captionBlock.split(/\r?\n/).map((line) => line.trim()).filter(Boolean));
+      const url = assetObjectUrls[assetId];
+      const meta = assetMap[assetId];
+      const safeAlt = escapeHtmlAttr(alt || meta?.filename || 'Evidencia');
+      const captionHtml = renderCaptionLines(caption);
+      let mediaHtml: string;
+      if (!url) {
+        mediaHtml = `<div class="p-3 my-2 rounded border border-slate-700 bg-slate-900 text-xs text-slate-400">Cargando evidencia ${escapeHtmlAttr(assetId)}...</div>`;
+      } else if (meta?.mime_type?.startsWith('video/')) {
+        mediaHtml = `<video controls loop muted playsinline src="${escapeHtmlAttr(url)}" class="w-full max-h-[380px] rounded-lg border border-slate-700 bg-black"></video>`;
+      } else {
+        mediaHtml = `<button type="button" data-asset-id="${escapeHtmlAttr(assetId)}" aria-label="Abrir evidencia ${safeAlt}" class="block max-w-full rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"><img src="${escapeHtmlAttr(url)}" alt="${safeAlt}" class="max-w-full rounded-lg border border-slate-700 cursor-zoom-in hover:border-indigo-500/70 transition-colors" /></button>`;
+      }
+      const legacyAlt = !captionHtml && alt ? `<span class="block">${safeAlt}</span>` : '';
+      const figureHtml = `<figure class="my-3">${mediaHtml}${captionHtml || legacyAlt ? `<figcaption class="mt-1 text-xs text-slate-400">${captionHtml || legacyAlt}</figcaption>` : ''}</figure>`;
+      const idx = counter++;
+      const placeholder = `@@WRITEUP_EMBED_${idx}@@`;
+      tokens.push({ placeholder, seg: { kind: 'html', html: figureHtml } });
+      return `${prefix}\n\n${placeholder}\n\n`;
+    });
+
     // 4. Assets (images, animated GIFs/WebPs, and videos)
     text = text.replace(/!\[([^\]]*)\]\(asset:\/\/([a-zA-Z0-9_-]+)\)/g, (_, alt: string, assetId: string) => {
       const url = assetObjectUrls[assetId];
@@ -354,10 +414,30 @@ export const MarkdownRichPreview: React.FC<MarkdownRichPreviewProps> = ({
       return `<div class="code-block-wrap relative my-3 rounded-xl border border-slate-800 bg-[#050912] overflow-hidden"><div class="flex items-center justify-between px-3 py-1 bg-slate-900/90 border-b border-slate-800 text-[10px] font-mono uppercase text-slate-400"><span>${escapeHtmlAttr(label)}</span><button type="button" data-copy-code="1" class="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 normal-case font-sans text-[10px]">Copiar</button></div><pre class="!my-0 !border-0 !rounded-none"><code class="hljs language-${escapeHtmlAttr(label)}">${highlighted}</code></pre></div>`;
     };
 
+    const captionedTablePattern = /(^|\n)((?:[ \t]*(?:Tabla\s*:\s*|Descripci[oó]n\s*:\s*|Fuente\s*:\s*)[^\n]*(?:\n|$)(?:[ \t]*\n)*)+)[ \t]*\n*((?:\|[^\n]*(?:\n|$)){2,})/gim;
+    text = text.replace(captionedTablePattern, (_whole, prefix: string, captionBlock: string, tableMarkdown: string) => {
+      const caption = parseWriteupObjectCaption(captionBlock.split(/\r?\n/).map((line) => line.trim()).filter(Boolean));
+      const parsedTable = marked.parse(tableMarkdown.trim(), { async: false, gfm: true, breaks: true, renderer }) as string;
+      const safeTable = DOMPurify.sanitize(parsedTable, {
+        ADD_TAGS: ['table', 'thead', 'tbody', 'tr', 'th', 'td', 'caption'],
+        ADD_ATTR: ['class'],
+        FORBID_TAGS: ['script', 'iframe', 'object', 'embed', 'form', 'style'],
+        FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover'],
+      });
+      const captionTitle = (caption.title || '').replace(/^Tabla\s*:\s*/i, '');
+      const tableWithCaption = safeTable.replace(/<table([^>]*)>/i, `<table$1>${captionTitle ? `<caption class="mb-1 text-left text-xs font-semibold text-slate-200">${escapeHtmlAttr(captionTitle)}</caption>` : ''}`);
+      const detailsHtml = renderCaptionLines({ description: caption.description, source: caption.source });
+      const tableFigure = `<figure class="my-3 min-w-0 overflow-x-auto">${tableWithCaption}${detailsHtml ? `<figcaption class="mt-1 text-xs text-slate-400">${detailsHtml}</figcaption>` : ''}</figure>`;
+      const idx = counter++;
+      const placeholder = `@@WRITEUP_EMBED_${idx}@@`;
+      tokens.push({ placeholder, seg: { kind: 'html', html: tableFigure } });
+      return `${prefix}\n\n${placeholder}\n\n`;
+    });
+
     const parsed = marked.parse(text, { async: false, gfm: true, breaks: true, renderer }) as string;
     const withCallouts = enhanceCallouts(parsed);
     const cleanHtml = DOMPurify.sanitize(withCallouts, {
-      ADD_TAGS: ['details', 'summary', 'kbd', 'mark', 'video', 'source', 'figure', 'figcaption', 'input', 'button'],
+      ADD_TAGS: ['details', 'summary', 'kbd', 'mark', 'video', 'source', 'figure', 'figcaption', 'caption', 'input', 'button'],
       ADD_ATTR: ['open', 'controls', 'loop', 'muted', 'playsinline', 'src', 'type', 'checked', 'disabled', 'class', 'id', 'aria-label', 'data-copy-code', 'data-asset-id'],
       ALLOWED_URI_REGEXP: /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|sms|cid|xmpp|blob):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i,
       FORBID_TAGS: ['script', 'iframe', 'object', 'embed', 'form', 'style'],

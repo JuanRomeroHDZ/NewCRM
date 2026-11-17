@@ -13,6 +13,17 @@ async def test_history_filters_metadata_without_loading_markdown_and_fetches_sel
     )
     assert created.status_code == 201
     writeup_id = created.json()["id"]
+    lease = await client.post(
+        f"/api/v1/writeups/{writeup_id}/edit-lease",
+        headers=headers,
+        json={"client_id": "history-test-editor-0001"},
+    )
+    assert lease.status_code == 200, lease.text
+    headers = {
+        **headers,
+        "X-Writeup-Edit-Lease": lease.json()["token"],
+        "X-Writeup-Client-ID": lease.json()["client_id"],
+    }
 
     saved = await client.patch(
         f"/api/v1/writeups/{writeup_id}",

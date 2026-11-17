@@ -43,13 +43,43 @@ const sectionViews: Record<SectionType, React.LazyExoticComponent<React.Componen
   c2_opsec: C2WorkspaceShell,
 };
 
+class SectionErrorBoundary extends React.Component<
+  { children: React.ReactNode; onBack: () => void },
+  { failed: boolean }
+> {
+  state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  render() {
+    if (!this.state.failed) return this.props.children;
+    return (
+      <section role="alert" className="mx-auto mt-8 max-w-lg rounded-xl border border-obsidian-border bg-obsidian-panel p-5 text-obsidian-text">
+        <h2 className="text-lg font-semibold text-white">No se pudo abrir este apartado</h2>
+        <p className="mt-2 text-sm text-obsidian-muted">La vista no terminó de cargarse. Puedes volver al resumen o recargar la aplicación.</p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button type="button" onClick={this.props.onBack} className="min-h-11 rounded-lg border border-obsidian-border px-4 text-sm text-white hover:bg-obsidian-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-300">Ir al resumen</button>
+          <button type="button" onClick={() => window.location.reload()} className="min-h-11 rounded-lg border border-obsidian-border bg-obsidian-panel px-4 text-sm font-semibold text-white hover:bg-obsidian-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-300">Recargar</button>
+        </div>
+      </section>
+    );
+  }
+}
+
 export const SectionRenderer: React.FC = () => {
-  const { activeSection } = useVault();
+  const { activeSection, setActiveSection } = useVault();
   const ActiveView = sectionViews[activeSection];
+  const isC2Section = activeSection.startsWith('c2_');
 
   return (
     <Suspense fallback={<div className="p-6 text-sm text-obsidian-muted" role="status">Cargando vista…</div>}>
-      <ActiveView />
+      {isC2Section ? <ActiveView /> : (
+        <SectionErrorBoundary key={activeSection} onBack={() => setActiveSection('dashboard')}>
+          <ActiveView />
+        </SectionErrorBoundary>
+      )}
     </Suspense>
   );
 };

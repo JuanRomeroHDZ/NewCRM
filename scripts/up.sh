@@ -9,6 +9,20 @@ if (( EUID == 0 )); then
 fi
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
+for dependency in python3 openssl docker; do
+  if ! command -v "$dependency" >/dev/null 2>&1; then
+    echo "Falta $dependency. Instálalo antes de iniciar LESSSO." >&2
+    exit 1
+  fi
+done
+if ! docker compose version >/dev/null 2>&1; then
+  echo 'Falta Docker Compose v2 o posterior. Instala el complemento Docker Compose.' >&2
+  exit 1
+fi
+if ! docker info >/dev/null 2>&1; then
+  echo 'Docker no está disponible para este usuario. Inicia Docker y comprueba sus permisos con docker info.' >&2
+  exit 1
+fi
 RUNTIME_FILE=".env.runtime"
 CHOOSE_PORTS=false
 CHOOSE_ADDRESS=false
@@ -72,12 +86,32 @@ is_ours() {
     --format '{{.Ports}}' | grep -Eq "[^0-9]${1}->"
 }
 
+# Puertos bloqueados para HTTP(S) por Fetch; también se comprueban al
+# recuperar valores guardados o generados automáticamente.
+browser_safe_port() {
+  [[ "$1" =~ ^[0-9]{1,5}$ ]] || return 1
+  local port=$((10#$1))
+  (( port >= 1 && port <= 65535 )) || return 1
+  case "$port" in
+    1|7|9|11|13|15|17|19|20|21|22|23|25|37|42|43|53|69|77|79|87|95|101|102|103|104|109|110|111|113|115|117|119|123|135|137|139|143|161|179|389|427|465|512|513|514|515|526|530|531|532|540|548|554|556|563|587|601|636|989|990|993|995|1719|1720|1723|2049|3659|4045|4190|5060|5061|6000|6566|6665|6666|6667|6668|6669|6679|6697|10080) return 1 ;;
+  esac
+}
+
 pick_port() {
   local current="${1:-}" avoid="${2:-}"
-  if [ -n "$current" ] && [ "$current" != "$avoid" ] && { is_free "$current" || is_ours "$current"; }; then
+  if [ -n "$current" ] && browser_safe_port "$current" && [ "$current" != "$avoid" ] && { is_free "$current" || is_ours "$current"; }; then
     printf '%s' "$current"
   else
-    free_port
+    local candidate
+    for _ in {1..10}; do
+      candidate="$(free_port)" || return 1
+      if [[ "$candidate" != "$avoid" ]] && browser_safe_port "$candidate"; then
+        printf '%s' "$candidate"
+        return 0
+      fi
+    done
+    echo 'No se encontró un segundo puerto libre. Intenta seleccionar los puertos manualmente.' >&2
+    return 1
   fi
 }
 
@@ -156,6 +190,10 @@ if $CHOOSE_PORTS; then
   for port in "$PORT" "$HTTPS_PORT"; do
     if [[ ! "$port" =~ ^[0-9]{1,5}$ ]] || (( 10#$port < 1 || 10#$port > 65535 )); then
       echo 'Escribe puertos numéricos entre 1 y 65535.' >&2
+      exit 1
+    fi
+    if ! browser_safe_port "$port"; then
+      echo "El puerto $port está bloqueado por los navegadores. Elige otro, por ejemplo 8080 o 8443." >&2
       exit 1
     fi
     if ! is_free "$port" && ! is_ours "$port"; then

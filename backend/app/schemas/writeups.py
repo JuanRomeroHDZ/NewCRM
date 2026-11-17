@@ -218,6 +218,7 @@ class WriteupExportRequest(BaseModel):
     toc_depth: int = Field(default=6, ge=1, le=6)
     include_figure_index: bool = False
     include_table_index: bool = False
+    font_size_pt: int = Field(default=11, ge=8, le=18)
     watermark_text: str | None = Field(default=None, max_length=120)
     rendered_diagrams: dict[str, str] = Field(default_factory=dict)
 
@@ -275,6 +276,13 @@ class WriteupDetailOut(WriteupSummaryOut):
     citations: list[WriteupCitationOut]
     assets: list[WriteupAssetOut]
     export_logs: list[WriteupExportLogOut]
+    manual_locked: bool = False
+    manual_locked_by: str | None = None
+    manual_locked_at: datetime | None = None
+
+
+class WriteupEditLeaseAcquire(BaseModel):
+    client_id: str = Field(..., min_length=16, max_length=128, pattern=r"^[A-Za-z0-9_-]+$")
 
 
 class WriteupPreviewOut(BaseModel):

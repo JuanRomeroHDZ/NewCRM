@@ -145,3 +145,37 @@ test('alta inicial conserva el motivo del conflicto y distingue la bóveda venci
     globalThis.fetch = originalFetch;
   }
 });
+
+test('libera las reservas de writeup antes de bloquear la bóveda', async () => {
+  const originalFetch = globalThis.fetch;
+  const requests = [];
+  apiClient.clearWriteupEditLease();
+  apiClient.setApiVaultToken('vault-before-lock');
+  globalThis.fetch = async (input, init = {}) => {
+    const url = new URL(String(input), 'https://lesso.test');
+    const method = init.method || 'GET';
+    requests.push({ path: url.pathname, method, headers: new Headers(init.headers) });
+    if (url.pathname.endsWith('/edit-lease') && method === 'POST') {
+      return Response.json({ acquired: true, token: 'lease-token', client_id: 'editor-client-0001', holder: 'test', expires_at: '2026-11-16T12:00:00Z', ttl_seconds: 90 });
+    }
+    if (url.pathname.endsWith('/edit-lease') && method === 'DELETE') return Response.json({ released: true });
+    if (url.pathname === '/api/v1/auth/lock') return Response.json({ message: 'locked' });
+    throw new Error(`Request inesperada: ${method} ${url.pathname}`);
+  };
+  try {
+    await apiClient.api.acquireWriteupEditLease('writeup-1', 'editor-client-0001');
+    await apiClient.api.lockVault();
+    assert.deepEqual(requests.map(({ path, method }) => [method, path]), [
+      ['POST', '/api/v1/writeups/writeup-1/edit-lease'],
+      ['DELETE', '/api/v1/writeups/writeup-1/edit-lease'],
+      ['POST', '/api/v1/auth/lock'],
+    ]);
+    assert.equal(requests[1].headers.get('X-Writeup-Edit-Lease'), 'lease-token');
+    assert.equal(requests[1].headers.get('X-Writeup-Client-ID'), 'editor-client-0001');
+    assert.equal(requests[1].headers.get('X-Vault-Token'), 'vault-before-lock');
+  } finally {
+    apiClient.clearWriteupEditLease();
+    apiClient.setApiVaultToken(null);
+    globalThis.fetch = originalFetch;
+  }
+});

@@ -13,6 +13,8 @@ import unicodedata
 import zipfile
 from typing import Any, Callable
 import docx
+from docx.enum.section import WD_SECTION_START
+from docx.enum.text import WD_TAB_ALIGNMENT, WD_TAB_LEADER
 from docx.shared import Inches, Pt, RGBColor
 import markdown as md_lib
 import nh3
@@ -39,10 +41,10 @@ ALLOWED_HTML_TAGS = {
     "caption",
 }
 ALLOWED_HTML_ATTRS = {
-    "a": {"href", "title", "id"},
+    "a": {"href", "title", "id", "class"},
     "code": {"class"},
     "details": {"open"},
-    "div": {"class", "id"},
+    "div": {"class", "id", "data-kind", "data-title", "data-description", "data-source", "data-number"},
     "figcaption": {"class"},
     "figure": {"class", "id"},
     "h1": {"id"}, "h2": {"id"}, "h3": {"id"}, "h4": {"id"}, "h5": {"id"}, "h6": {"id"},
@@ -54,8 +56,16 @@ ALLOWED_HTML_ATTRS = {
     "span": {"id", "class", "data-anchor"},
     "td": {"align"},
     "th": {"align"},
+    "u": {"style"},
     "video": {"src", "controls", "loop", "muted", "playsinline", "class"},
 }
+
+
+def _safe_export_attribute(tag: str, attribute: str, value: str) -> str | None:
+    if tag == "u" and attribute == "style":
+        match = re.fullmatch(r"\s*text-decoration-color:\s*(#[0-9a-fA-F]{6})\s*;\s*text-decoration-thickness:\s*1px\s*;?\s*", value)
+        return f"text-decoration-color: {match.group(1)}; text-decoration-thickness: 1px;" if match else None
+    return value
 
 SEVERITY_COLORS = {
     "critica": "#dc2626",
@@ -101,6 +111,7 @@ class ExportBundleContext:
     include_table_index: bool = False
     watermark_text: str | None = None
     organization_name: str | None = None
+    font_size_pt: int = 11
     rendered_diagrams: dict[str, str] = field(default_factory=dict)
 
 
@@ -205,6 +216,7 @@ def _render_writeup_labels_html(text: str) -> str:
 def _preprocess_markdown_for_html(ctx: ExportBundleContext, *, embed_video: bool = True) -> str:
     text = apply_redaction_markers(ctx.markdown_content, ctx.redact_for_client)
     text = _render_writeup_labels_html(text)
+    text = _markdown_object_caption_markers(text)
     text = ANCHOR_PATTERN.sub(
         lambda m: f'<span id="{m.group(1)}" class="writeup-anchor" data-anchor="{m.group(1)}"></span>',
         text,
@@ -271,8 +283,292 @@ def _html_attribute(fragment: str, name: str) -> str | None:
     return match.group(2) if match else None
 
 
-def render_sanitized_html_fragment(ctx: ExportBundleContext, *, embed_video: bool = True, always_toc: bool = False) -> str:
-    """Compiles Markdown into strictly sanitized HTML safe for preview, HTML, and PDF exports."""
+_CAPTION_DIRECTIVE = re.compile(r"^\s*(Figura|Imagen|Tabla)(?:\s+\d+)?\s*[.:]\s*(.*?)\s*$|^\s*(Descripci[oó]n|Fuente)\s*:\s*(.*?)\s*$", re.I)
+
+
+def _caption_directives_before(text: str, offset: int, kind: str) -> dict[str, str]:
+    """Reads the compact caption block immediately before a Markdown object."""
+    lines = (text or "")[:offset].splitlines()
+    cursor = len(lines) - 1
+    while cursor >= 0 and not lines[cursor].strip():
+        cursor -= 1
+    fields: dict[str, str] = {}
+    title_keys = {"figure": {"figura", "imagen"}, "table": {"tabla"}}.get(kind, set())
+    while cursor >= 0:
+        match = _CAPTION_DIRECTIVE.match(lines[cursor])
+        if not match:
+            break
+        key = (match.group(1) or match.group(3)).casefold()
+        value = (match.group(2) if match.group(1) else match.group(4)).strip()
+        if key in title_keys:
+            if "title" in fields:
+                break
+            fields["title"] = value
+        elif key.startswith("descripci"):
+            fields["description"] = value
+        elif key == "fuente":
+            fields["source"] = value
+        else:
+            break
+        cursor -= 1
+    return fields
+
+
+def _markdown_object_caption_markers(text: str, numbers: dict[tuple[str, int], int] | None = None) -> str:
+    """Turns Figura/Tabla, Descripción and Fuente lines into export-only metadata."""
+    lines = (text or "").splitlines()
+    output: list[str] = []
+    index = 0
+    fence_character: str | None = None
+    fence_length = 0
+
+    def object_starts(kind: str, position: int) -> bool:
+        if position >= len(lines):
+            return False
+        candidate = lines[position].strip()
+        if kind == "figure":
+            return bool(re.match(r"^!\[[^\]]*\]\(|^<(?:figure|img)\b", candidate, re.I))
+        if re.match(r"^<table\b", candidate, re.I):
+            return True
+        return (
+            position + 1 < len(lines)
+            and "|" in candidate
+            and bool(re.match(r"^\s*\|?\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)+\|?\s*$", lines[position + 1]))
+        )
+
+    while index < len(lines):
+        fence = re.match(r"^\s*(`{3,}|~{3,})", lines[index])
+        if fence:
+            token = fence.group(1)
+            if fence_character is None:
+                fence_character, fence_length = token[0], len(token)
+            elif token[0] == fence_character and len(token) >= fence_length:
+                fence_character, fence_length = None, 0
+            output.append(lines[index])
+            index += 1
+            continue
+        if fence_character is not None:
+            output.append(lines[index])
+            index += 1
+            continue
+        match = _CAPTION_DIRECTIVE.match(lines[index])
+        key = (match.group(1) or match.group(3)).casefold() if match else ""
+        kind = "figure" if key in {"figura", "imagen"} else "table" if key == "tabla" else ""
+        if not match or not kind:
+            output.append(lines[index])
+            index += 1
+            continue
+
+        fields = {"title": (match.group(2) if match.group(1) else match.group(4)).strip()}
+        cursor = index + 1
+        while cursor < len(lines):
+            if not lines[cursor].strip():
+                lookahead = cursor
+                while lookahead < len(lines) and not lines[lookahead].strip():
+                    lookahead += 1
+                if lookahead >= len(lines) or not _CAPTION_DIRECTIVE.match(lines[lookahead]):
+                    cursor = lookahead
+                    break
+                cursor = lookahead
+                continue
+            directive = _CAPTION_DIRECTIVE.match(lines[cursor])
+            if not directive:
+                break
+            field_key = (directive.group(1) or directive.group(3)).casefold()
+            if field_key.startswith("descripci"):
+                fields["description"] = (directive.group(2) if directive.group(1) else directive.group(4)).strip()
+            elif field_key == "fuente":
+                fields["source"] = (directive.group(2) if directive.group(1) else directive.group(4)).strip()
+            else:
+                break
+            cursor += 1
+
+        target = cursor
+        while target < len(lines) and not lines[target].strip():
+            target += 1
+        if not object_starts(kind, target):
+            output.extend(lines[index:cursor if cursor > index else index + 1])
+            index = cursor if cursor > index else index + 1
+            continue
+
+        attrs = [f'data-kind="{kind}"']
+        number = (numbers or {}).get((kind, target + 1))
+        if number:
+            attrs.append(f'data-number="{number}"')
+        for key in ("title", "description", "source"):
+            if fields.get(key):
+                attrs.append(f'data-{key}="{html_lib.escape(fields[key], quote=True)}"')
+        output.append('<div class="writeup-object-caption" ' + " ".join(attrs) + "></div>")
+        output.extend(lines[cursor:target])
+        index = target
+    return "\n".join(output)
+
+
+def _caption_markup(title: str, description: str = "", source: str = "", *, kind: str) -> str:
+    safe_title = html_lib.escape(title.strip())
+    prefix = "Figura" if kind == "figure" else "Tabla"
+    parts = [f"<strong>{prefix}: {safe_title}</strong>"]
+    if description.strip():
+        parts.append(f'<span class="caption-description">{html_lib.escape(description.strip())}</span>')
+    if source.strip():
+        parts.append(f'<small class="caption-source">Fuente: {html_lib.escape(source.strip())}</small>')
+    return "<br />".join(parts)
+
+
+def _caption_fields_from_html(inner: str, kind: str) -> dict[str, str]:
+    first_line = re.split(r'<br\b[^>]*>|<small\b', inner, maxsplit=1, flags=re.I)[0]
+    title = _plain_html_text(first_line)
+    if kind == "table":
+        title = re.sub(r"^Tabla\s*(?:\d+\s*[.:]\s*|:\s*)", "", title, flags=re.I)
+    else:
+        title = re.sub(r"^(?:Figura|Imagen)\s*(?:\d+\s*[.:]\s*|:\s*)", "", title, flags=re.I)
+    fields = {"title": title.strip()} if title.strip() else {}
+    description = re.search(r'<span\b[^>]*class=["\']caption-description["\'][^>]*>([\s\S]*?)</span\s*>', inner, re.I)
+    source = re.search(r'<small\b[^>]*>([\s\S]*?)</small\s*>', inner, re.I)
+    if description:
+        fields["description"] = _plain_html_text(description.group(1))
+    if source:
+        fields["source"] = re.sub(r"^Fuente\s*:\s*", "", _plain_html_text(source.group(1)), flags=re.I)
+    return fields
+
+
+def _apply_html_caption_markers(raw_html: str) -> str:
+    marker = re.compile(r'<div\b([^>]*\bclass\s*=\s*(["\'])writeup-object-caption\2[^>]*)>\s*</div\s*>', re.I)
+    output: list[str] = []
+    cursor = 0
+    for match in marker.finditer(raw_html):
+        if match.start() < cursor:
+            continue
+        attrs = match.group(1)
+        kind = _html_attribute(attrs, "data-kind") or "figure"
+        title = html_lib.unescape(_html_attribute(attrs, "data-title") or "")
+        description = html_lib.unescape(_html_attribute(attrs, "data-description") or "")
+        source = html_lib.unescape(_html_attribute(attrs, "data-source") or "")
+        caption = _caption_markup(title, description, source, kind=kind)
+        tail = raw_html[match.end():]
+        whitespace = re.match(r"\s*", tail).group(0)
+        rest = tail[len(whitespace):]
+        replacement = ""
+        target_length = 0
+        if kind == "figure":
+            figure = re.match(r'(<figure\b[^>]*>)([\s\S]*?)</figure\s*>', rest, re.I)
+            if figure:
+                body = re.sub(r'<figcaption\b[^>]*>[\s\S]*?</figcaption\s*>', "", figure.group(2), flags=re.I)
+                replacement = f'<figure{figure.group(1)[7:]}{body}<figcaption>{caption}</figcaption></figure>'
+                target_length = figure.end()
+            else:
+                image_paragraph = re.match(r'<p>\s*(<img\b[^>]*>)\s*</p>', rest, re.I)
+                image_match = None if image_paragraph else re.match(r'<img\b[^>]*>', rest, re.I)
+                image_tag = image_paragraph.group(1) if image_paragraph else image_match.group(0) if image_match else ""
+                if image_tag:
+                    replacement = f'<figure class="writeup-figure">{image_tag}<figcaption>{caption}</figcaption></figure>'
+                    target_length = image_paragraph.end() if image_paragraph else image_match.end()
+        else:
+            table = re.match(r'(<table\b[^>]*>)([\s\S]*?)</table\s*>', rest, re.I)
+            if table:
+                body = re.sub(r'<caption\b[^>]*>[\s\S]*?</caption\s*>', "", table.group(2), flags=re.I)
+                replacement = f'{table.group(1)}<caption>{caption}</caption>{body}</table>'
+                target_length = table.end()
+        if not replacement:
+            continue
+        output.append(raw_html[cursor:match.start()])
+        output.append(replacement)
+        cursor = match.end() + len(whitespace) + target_length
+    output.append(raw_html[cursor:])
+    return "".join(output)
+
+
+def _render_markdown_caption_markers(text: str) -> str:
+    """Renders editor caption directives as portable HTML captions in Markdown exports."""
+    lines = (text or "").splitlines()
+    output: list[str] = []
+    index = 0
+    marker_pattern = re.compile(r'<div\b([^>]*\bclass\s*=\s*(["\'])writeup-object-caption\2[^>]*)>\s*</div\s*>', re.I)
+    while index < len(lines):
+        marker = marker_pattern.match(lines[index].strip())
+        if not marker:
+            output.append(lines[index])
+            index += 1
+            continue
+        attrs = marker.group(1)
+        kind = _html_attribute(attrs, "data-kind") or "figure"
+        title = html_lib.unescape(_html_attribute(attrs, "data-title") or "")
+        description = html_lib.unescape(_html_attribute(attrs, "data-description") or "")
+        source = html_lib.unescape(_html_attribute(attrs, "data-source") or "")
+        try:
+            number = max(1, min(100_000, int(_html_attribute(attrs, "data-number") or "1")))
+        except ValueError:
+            number = 1
+        if kind not in {"figure", "table"}:
+            kind = "figure"
+        target = index + 1
+        while target < len(lines) and not lines[target].strip():
+            target += 1
+        if target >= len(lines):
+            index += 1
+            continue
+        candidate = lines[target].strip()
+        if kind == "figure":
+            image = re.match(r'!\[([^\]]*)\]\(([^)\s]+)(?:\s+["\']([^"\']*)["\'])?\)', candidate)
+            if image:
+                alt = html_lib.escape(image.group(1), quote=True)
+                raw_src = image.group(2)
+                if not re.match(r"^(?:https?://|/(?!/)|(?:data:image/(?:png|jpeg|gif|webp|svg\+xml);base64,)|(?:assets|boards)/)", raw_src, re.I):
+                    output.append(f"![{image.group(1)}]({raw_src})")
+                    index = target + 1
+                    continue
+                src = html_lib.escape(raw_src, quote=True)
+                caption = [f'<strong>Figura {number}. {html_lib.escape(title or image.group(1) or "Imagen")}</strong>']
+                if description:
+                    caption.append(f'<span class="caption-description">{html_lib.escape(description)}</span>')
+                if source:
+                    caption.append(f'<small class="caption-source">Fuente: {html_lib.escape(source)}</small>')
+                output.append(f'<figure class="writeup-figure"><img src="{src}" alt="{alt}" /><figcaption>{"<br />".join(caption)}</figcaption></figure>')
+                index = target + 1
+                continue
+        else:
+            pipe_table = (
+                target + 1 < len(lines)
+                and "|" in candidate
+                and bool(re.match(r"^\s*\|?\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)+\|?\s*$", lines[target + 1]))
+            )
+            if pipe_table:
+                rows, next_index = _pipe_table_rows(lines, target)
+                title_html = f'<strong>Tabla {number}. {html_lib.escape(title or "Datos")}</strong>'
+                details = [title_html]
+                if description:
+                    details.append(f'<span class="caption-description">{html_lib.escape(description)}</span>')
+                if source:
+                    details.append(f'<small class="caption-source">Fuente: {html_lib.escape(source)}</small>')
+                header = rows[0] if rows else []
+                body_rows = rows[1:] if rows else []
+                head_html = "<thead><tr>" + "".join(f"<th>{html_lib.escape(cell)}</th>" for cell in header) + "</tr></thead>"
+                rows_html = "".join("<tr>" + "".join(f"<td>{html_lib.escape(cell)}</td>" for cell in row) + "</tr>" for row in body_rows)
+                output.append(f'<table><caption>{"<br />".join(details)}</caption>{head_html}<tbody>{rows_html}</tbody></table>')
+                index = next_index
+                continue
+
+        closing_tag = "</figure>" if kind == "figure" else "</table>"
+        end = target + 1
+        if re.search(r"^<(?:figure|img|table)\b", candidate, re.I):
+            while end < len(lines) and not re.search(re.escape(closing_tag), "\n".join(lines[target:end]), re.I):
+                end += 1
+        fragment = "\n".join([lines[index], *lines[target:end]])
+        rendered = _apply_html_caption_markers(fragment)
+        label = "Figura" if kind == "figure" else "Tabla"
+        rendered = rendered.replace(f"<strong>{label}: ", f"<strong>{label} {number}. ")
+        output.append(rendered)
+        index = end
+    return "\n".join(output)
+
+
+def _compile_sanitized_html_parts(
+    ctx: ExportBundleContext,
+    *,
+    embed_video: bool = True,
+    always_toc: bool = False,
+) -> tuple[list[str], str]:
+    """Compiles safe standalone index pages and the sanitized Markdown body."""
     processed_md = _preprocess_markdown_for_html(ctx, embed_video=embed_video)
     if ctx.include_toc and "[TOC]" not in processed_md and (always_toc or len(processed_md) > 400):
         processed_md = "[TOC]\n\n" + processed_md
@@ -282,76 +578,131 @@ def render_sanitized_html_fragment(ctx: ExportBundleContext, *, embed_video: boo
         extension_configs={"toc": {"toc_depth": f"1-{ctx.toc_depth}"}},
         output_format="html5",
     )
-    indexes: list[str] = []
-    if ctx.include_figure_index:
-        entries: list[str] = []
-        figure_ranges: list[tuple[int, int]] = []
+    toc_html = ""
+    if ctx.include_toc:
+        toc_match = re.search(r'<div\b[^>]*class="toc"[^>]*>[\s\S]*?</div\s*>', raw_html, re.I)
+        if toc_match:
+            toc_html = toc_match.group(0)
+            raw_html = raw_html[:toc_match.start()] + raw_html[toc_match.end():]
+    raw_html = _apply_html_caption_markers(raw_html)
 
-        def index_figure(match: re.Match[str]) -> str:
-            number = len(entries) + 1
-            original = match.group(0)
-            opening = match.group(1)
-            body = match.group(2)
-            existing_anchor = _html_attribute(opening, "id")
-            anchor = existing_anchor or f"export-figure-{number}"
-            caption = re.search(r'<figcaption\b[^>]*>([\s\S]*?)</figcaption\s*>', body, re.I)
-            image = re.search(r'<img\b([^>]*)>', body, re.I)
-            image_label = (_html_attribute(image.group(1), "alt") or "") if image else ""
-            label = _plain_html_text(caption.group(1)) if caption else html_lib.unescape(image_label)
-            entries.append(f'<li><a href="#{html_lib.escape(anchor, quote=True)}">Figura {number} · {html_lib.escape(label or f"Figura {number}")}</a></li>')
-            figure_ranges.append((match.start(), match.end()))
-            if existing_anchor:
-                return original
-            return f'<figure id="{anchor}"{opening}>{body}</figure>'
+    figure_items: list[str] = []
+    figure_number = 0
 
-        raw_html = re.sub(r'<figure\b([^>]*)>([\s\S]*?)</figure\s*>', index_figure, raw_html, flags=re.I)
-        figure_ranges = [(match.start(), match.end()) for match in re.finditer(r'<figure\b[^>]*>[\s\S]*?</figure\s*>', raw_html, re.I)]
+    def caption_title(fragment: str, kind: str = "figure") -> str:
+        first_line = re.split(r'<br\b[^>]*>|<small\b|<span\b[^>]*class="caption-description"', fragment, maxsplit=1, flags=re.I)[0]
+        label = _plain_html_text(first_line)
+        if kind == "table":
+            label = re.sub(r"^Tabla\s*(?:\d+\s*[.:]\s*|:\s*)", "", label, flags=re.I)
+        else:
+            label = re.sub(r"^(?:Figura|Imagen)\s*(?:\d+\s*[.:]\s*|:\s*)", "", label, flags=re.I)
+        return label.strip()
 
-        def index_image(match: re.Match[str]) -> str:
-            if any(start <= match.start() < end for start, end in figure_ranges):
-                return match.group(0)
-            number = len(entries) + 1
-            tag = match.group(0)
-            existing_id = _html_attribute(tag, "id")
-            anchor = existing_id or f"export-figure-{number}"
-            label = html_lib.unescape(_html_attribute(tag, "alt") or _html_attribute(tag, "title") or "")
-            entries.append(f'<li><a href="#{html_lib.escape(anchor, quote=True)}">Figura {number} · {html_lib.escape(label or f"Figura {number}")}</a></li>')
-            if existing_id:
-                return tag
-            return re.sub(r'<img\b', f'<img id="{anchor}"', tag, count=1, flags=re.I)
+    def strip_caption_prefix(inner: str, kind: str) -> str:
+        prefix = r"^(?:Tabla)\s*(?:\d+\s*[.:]\s*|:\s*)" if kind == "table" else r"^(?:Figura|Imagen)\s*(?:\d+\s*[.:]\s*|:\s*)"
+        strong = re.match(r"^(\s*<strong\b[^>]*>)([\s\S]*?)(</strong\s*>)([\s\S]*)$", inner, re.I)
+        if strong:
+            stripped = re.sub(prefix, "", strong.group(2), count=1, flags=re.I)
+            if stripped != strong.group(2):
+                return strong.group(1) + stripped + strong.group(3) + strong.group(4)
+        return re.sub(prefix, "", inner, count=1, flags=re.I)
 
-        raw_html = re.sub(r'<img\b[^>]*>', index_image, raw_html, flags=re.I)
-        if entries:
-            indexes.append('<div class="export-index"><strong>Índice de figuras e imágenes</strong><ul>' + ''.join(entries) + '</ul></div>')
-    if ctx.include_table_index:
-        tables: list[str] = []
-        def index_table(match: re.Match[str]) -> str:
-            number = len(tables) + 1
-            opening = match.group(0)
-            existing_id = _html_attribute(opening, "id")
-            anchor = existing_id or f"export-table-{number}"
-            full = raw_html[match.start():]
-            body = re.match(r'<table\b[^>]*>([\s\S]*?)</table\s*>', full, re.I)
-            table_body = body.group(1) if body else ""
-            caption = re.search(r'<caption\b[^>]*>([\s\S]*?)</caption\s*>', table_body, re.I)
-            headers = re.findall(r'<th\b[^>]*>([\s\S]*?)</th\s*>', table_body, re.I)
-            label = _plain_html_text(caption.group(1)) if caption else " · ".join(_plain_html_text(header) for header in headers[:6])
-            tables.append(f'<li><a href="#{html_lib.escape(anchor, quote=True)}">Tabla {number}{f" · {html_lib.escape(label)}" if label else ""}</a></li>')
-            if existing_id:
-                return opening
-            return re.sub(r'<table\b', f'<table id="{anchor}"', opening, count=1, flags=re.I)
-        raw_html = re.sub(r'<table\b[^>]*>', index_table, raw_html, flags=re.I)
-        if tables:
-            indexes.append('<div class="export-index"><strong>Índice de tablas</strong><ul>' + ''.join(tables) + '</ul></div>')
-    if indexes:
-        raw_html = ''.join(indexes) + raw_html
-    return nh3.clean(
-        raw_html,
-        tags=ALLOWED_HTML_TAGS,
-        attributes=ALLOWED_HTML_ATTRS,
-        url_schemes={"data", "http", "https", "mailto"},
-        link_rel="noopener noreferrer",
-    )
+    def numbered_caption(inner: str, number: int, fallback: str) -> tuple[str, str]:
+        title = caption_title(inner) or fallback or f"Figura {number}"
+        cleaned = strip_caption_prefix(inner, "figure")
+        return f"<strong>Figura {number}. </strong>{cleaned}", title
+
+    def index_figure(match: re.Match[str]) -> str:
+        nonlocal figure_number
+        figure_number += 1
+        opening, body = match.group(1), match.group(2)
+        existing_anchor = _html_attribute(opening, "id")
+        anchor = existing_anchor or f"export-figure-{figure_number}"
+        image = re.search(r'<img\b([^>]*)>', body, re.I)
+        image_label = (_html_attribute(image.group(1), "alt") or _html_attribute(image.group(1), "title") or "") if image else ""
+        caption = re.search(r'<figcaption\b[^>]*>([\s\S]*?)</figcaption\s*>', body, re.I)
+        caption_inner, label = numbered_caption(caption.group(1), figure_number, html_lib.unescape(image_label)) if caption else (f"<strong>Figura {figure_number}. </strong>{html_lib.escape(html_lib.unescape(image_label) or 'Imagen')}", html_lib.unescape(image_label) or "Imagen")
+        if caption:
+            body = body[:caption.start()] + f'<figcaption class="figure-caption">{caption_inner}</figcaption>' + body[caption.end():]
+        else:
+            body += f'<figcaption class="figure-caption">{caption_inner}</figcaption>'
+        figure_items.append(f'<li><a href="#{html_lib.escape(anchor, quote=True)}">Figura {figure_number}. {html_lib.escape(label)}</a></li>')
+        id_attr = "" if existing_anchor else f' id="{anchor}"'
+        return f'<figure{id_attr}{opening}>{body}</figure>'
+
+    raw_html = re.sub(r'<figure\b([^>]*)>([\s\S]*?)</figure\s*>', index_figure, raw_html, flags=re.I)
+    figure_ranges = [(match.start(), match.end()) for match in re.finditer(r'<figure\b[^>]*>[\s\S]*?</figure\s*>', raw_html, re.I)]
+
+    # Markdown images are promoted to figures so they receive a small, numbered caption in every rendered format.
+    def index_standalone_image(match: re.Match[str]) -> str:
+        nonlocal figure_number
+        if any(start <= match.start() < end for start, end in figure_ranges):
+            return match.group(0)
+        tag = match.group(1) if match.group(1) else match.group(0)
+        figure_number += 1
+        existing_image_id = _html_attribute(tag, "id")
+        anchor = existing_image_id or f"export-figure-{figure_number}"
+        alt = html_lib.unescape(_html_attribute(tag, "alt") or _html_attribute(tag, "title") or "Imagen")
+        label = alt or "Imagen"
+        figure_items.append(f'<li><a href="#{html_lib.escape(anchor, quote=True)}">Figura {figure_number}. {html_lib.escape(label)}</a></li>')
+        figure_id_attr = "" if existing_image_id else f' id="{anchor}"'
+        # Keep the complete image tag intact while avoiding a block figure nested inside its Markdown paragraph.
+        figure_markup = f'<figure class="writeup-figure"{figure_id_attr}>{tag}<figcaption class="figure-caption"><strong>Figura {figure_number}. </strong>{html_lib.escape(label)}</figcaption></figure>'
+        return figure_markup
+
+    raw_html = re.sub(r'<p>\s*(<img\b[^>]*>)\s*</p>|<img\b[^>]*>', index_standalone_image, raw_html, flags=re.I)
+
+    table_items: list[str] = []
+    table_number = 0
+
+    def index_table(match: re.Match[str]) -> str:
+        nonlocal table_number
+        table_number += 1
+        full = match.group(0)
+        opening = match.group(1)
+        body = match.group(2)
+        existing_anchor = _html_attribute(opening, "id")
+        anchor = existing_anchor or f"export-table-{table_number}"
+        caption = re.search(r'<caption\b[^>]*>([\s\S]*?)</caption\s*>', body, re.I)
+        headers = re.findall(r'<th\b[^>]*>([\s\S]*?)</th\s*>', body, re.I)
+        fallback = " · ".join(_plain_html_text(header) for header in headers[:6]) or "Datos de la tabla"
+        inner = caption.group(1) if caption else html_lib.escape(fallback)
+        label = caption_title(inner, "table")
+        if not label:
+            label = _plain_html_text(inner).strip() or fallback
+        inner = strip_caption_prefix(inner, "table")
+        caption_html = f'<caption class="table-caption"><strong>Tabla {table_number}. </strong>{inner}</caption>'
+        if caption:
+            body = body[:caption.start()] + caption_html + body[caption.end():]
+        else:
+            body = caption_html + body
+        id_attr = "" if existing_anchor else f' id="{anchor}"'
+        table_items.append(f'<li><a href="#{html_lib.escape(anchor, quote=True)}">Tabla {table_number}. {html_lib.escape(label)}</a></li>')
+        return f'<table{id_attr}{opening}>{body}</table>'
+
+    raw_html = re.sub(r'<table\b([^>]*)>([\s\S]*?)</table\s*>', index_table, raw_html, flags=re.I)
+
+    index_pages: list[str] = []
+    if toc_html:
+        index_pages.append('<div class="document-index-page"><h1>Tabla de contenido</h1>' + toc_html + '</div>')
+    if ctx.include_figure_index and figure_items:
+        index_pages.append('<div class="document-index-page"><h1>Índice de figuras e imágenes</h1><ul>' + ''.join(figure_items) + '</ul></div>')
+    if ctx.include_table_index and table_items:
+        index_pages.append('<div class="document-index-page"><h1>Índice de tablas</h1><ul>' + ''.join(table_items) + '</ul></div>')
+    clean_options = {
+        "tags": ALLOWED_HTML_TAGS,
+        "attributes": ALLOWED_HTML_ATTRS,
+        "attribute_filter": _safe_export_attribute,
+        "url_schemes": {"data", "http", "https", "mailto"},
+        "link_rel": "noopener noreferrer",
+    }
+    return [nh3.clean(page, **clean_options) for page in index_pages], nh3.clean(raw_html, **clean_options)
+
+
+def render_sanitized_html_fragment(ctx: ExportBundleContext, *, embed_video: bool = True, always_toc: bool = False) -> str:
+    """Compiles Markdown into strictly sanitized HTML safe for preview, HTML, and PDF exports."""
+    index_pages, body = _compile_sanitized_html_parts(ctx, embed_video=embed_video, always_toc=always_toc)
+    return "".join(index_pages) + body
 
 
 def _build_findings_html(ctx: ExportBundleContext) -> str:
@@ -406,9 +757,29 @@ def _build_citations_html(ctx: ExportBundleContext) -> str:
     )
 
 
-def build_standalone_html_document(ctx: ExportBundleContext, *, embed_video: bool = True) -> str:
+def build_standalone_html_document(
+    ctx: ExportBundleContext,
+    *,
+    embed_video: bool = True,
+    pdf_section: str = "all",
+    page_refs: dict[str, int] | None = None,
+) -> str:
     """Produces a zero-external-dependency HTML5 report document."""
-    body_html = render_sanitized_html_fragment(ctx, embed_video=embed_video, always_toc=True)
+    index_pages, markdown_body = _compile_sanitized_html_parts(ctx, embed_video=embed_video, always_toc=True)
+    indexes_html = "".join(index_pages)
+    if pdf_section == "frontmatter" and page_refs:
+        def add_page_ref(match: re.Match[str]) -> str:
+            anchor = html_lib.unescape(match.group(1))
+            page = page_refs.get(anchor)
+            suffix = f'<span class="index-page-number">{page}</span>' if page else ""
+            link = match.group(0)
+            label = re.search(r"<a\b[^>]*>([\s\S]*?)</a>", link, re.I)
+            if not label:
+                return link
+            opening = re.sub(r"<a\b", '<a class="has-page-ref"', link[:label.start(1)], count=1, flags=re.I)
+            return opening + '<span class="index-entry-label">' + label.group(1) + "</span>" + suffix + "</a>"
+
+        indexes_html = re.sub(r'<a\b[^>]*href="#([^"]+)"[^>]*>[\s\S]*?</a>', add_page_ref, indexes_html, flags=re.I)
     watermark = html_lib.escape(ctx.watermark_text or settings.WRITEUP_WATERMARK_DEFAULT)
     watermark_block = f"<div class='watermark'>{watermark}</div>" if ctx.include_watermark else ""
     exec_text = apply_redaction_markers(ctx.executive_summary or "", ctx.redact_for_client)
@@ -424,8 +795,37 @@ def build_standalone_html_document(ctx: ExportBundleContext, *, embed_video: boo
     )
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     target_scope = html_lib.escape(apply_redaction_markers(ctx.target_scope or "No especificado", ctx.redact_for_client))
-
+    font_size_pt = max(8, min(18, int(ctx.font_size_pt or 11)))
     org_name = html_lib.escape(ctx.organization_name or settings.WRITEUP_ORGANIZATION_NAME)
+    cover_html = f"""
+  <section class="cover" aria-label="Portada del informe">
+    <header class="letterhead"><span>{org_name}</span>{watermark_block}</header>
+    <div class="cover-content">
+      <p class="cover-subtitle">INFORME DE SEGURIDAD</p>
+      <h1>{html_lib.escape(ctx.title)}</h1>
+      <p>Alcance: {target_scope}</p>
+    </div>
+    <footer class="cover-footer">{redacted_badge}<br>Generado: {generated_at} · Estado: {html_lib.escape(ctx.status)} · Severidad: {html_lib.escape(ctx.severity.upper())}</footer>
+  </section>"""
+    preamble_html = f"""
+  <section class="report-preamble">
+    <div class="meta-grid">
+      <div><strong>CVSS:</strong> {f"{ctx.cvss_score:.1f}" if ctx.cvss_score is not None else "N/A"}</div>
+      <div><strong>Vector:</strong> {html_lib.escape(ctx.cvss_vector or "N/A")}</div>
+      <div><strong>CWE / CVE:</strong> {html_lib.escape(ctx.cwe_id or "-")} / {html_lib.escape(ctx.cve_id or "-")}</div>
+      <div class="scope-meta"><strong>Alcance autorizado:</strong> {target_scope}</div>
+    </div>
+    {exec_block}
+  </section>"""
+    report_html = f'<div class="report-content"><main class="markdown-body">{markdown_body}</main>{_build_findings_html(ctx)}{_build_citations_html(ctx)}</div>'
+
+    if pdf_section == "frontmatter":
+        document_body = cover_html + indexes_html + preamble_html
+    elif pdf_section == "report":
+        document_body = report_html
+    else:
+        document_body = cover_html + indexes_html + preamble_html + report_html
+
     return f"""<!DOCTYPE html>
 <html lang="es">
 <head>
@@ -436,11 +836,26 @@ def build_standalone_html_document(ctx: ExportBundleContext, *, embed_video: boo
   @page {{
     size: A4;
     margin: 20mm 16mm 20mm 16mm;
-    @bottom-right {{ content: "Página " counter(page) " de " counter(pages); font-size: 9pt; color: #64748b; }}
+    @bottom-right {{ content: ""; font-size: 9pt; color: #64748b; }}
 
   }}
-  body {{ font-family: "Liberation Serif", "DejaVu Serif", Georgia, serif; color: #171717; line-height: 1.55; max-width: 850px; margin: 0 auto; padding: 32px; background: white; font-size: 11pt; }}
+  @page frontmatter {{ size: A4; margin: 20mm 16mm 20mm 16mm; @bottom-right {{ content: ""; }} }}
+  @page report-content {{ size: A4; margin: 20mm 16mm 20mm 16mm; @bottom-right {{ content: "Página " counter(page) " de " counter(pages); font-size: 9pt; color: #64748b; }} }}
+  body {{ font-family: "Liberation Serif", "DejaVu Serif", Georgia, serif; color: #171717; line-height: 1.55; max-width: 850px; margin: 0 auto; padding: 32px; background: white; font-size: {font_size_pt}pt; }}
+  .cover, .document-index-page, .report-preamble {{ page: frontmatter; }}
+  .report-content {{ page: report-content; }}
   .cover {{ min-height: 70vh; display: flex; flex-direction: column; break-after: page; page-break-after: always; }}
+  .document-index-page {{ box-sizing: border-box; min-height: 235mm; padding: 0; break-after: page; page-break-after: always; }}
+  .document-index-page h1 {{ font-size: 19pt; margin: 0 0 18pt; color: #171717; }}
+  .document-index-page ul {{ margin: 0; padding-left: 1.2em; }}
+  .document-index-page li {{ margin: 0 0 5pt; }}
+  .document-index-page a {{ display: flex; justify-content: space-between; gap: 16px; text-decoration: none; }}
+  .document-index-page a.has-page-ref {{ display: table; width: 100%; text-decoration: none; }}
+  .index-entry-label, .index-page-number {{ display: table-cell; border-bottom: 1px dotted #9aa1a8; }}
+  .index-entry-label {{ width: 99%; }}
+  .index-page-number {{ width: 1%; padding-left: 10px; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }}
+  .document-index-page a:not(.has-page-ref)::after {{ content: leader(".") target-counter(attr(href), page); }}
+  .index-page-number {{ flex: 0 0 auto; color: #555; font-variant-numeric: tabular-nums; }}
   .letterhead {{ display: flex; justify-content: space-between; gap: 16px; border-bottom: 2px solid #075c4c; padding-bottom: 12px; color: #075c4c; font: bold 10pt "Liberation Sans", sans-serif; overflow-wrap: anywhere; }}
   .watermark {{ color: #555; font: 9pt "Liberation Sans", sans-serif; text-align: right; }}
   .cover-content {{ margin: auto 0; padding: 48px 0; }}
@@ -449,21 +864,28 @@ def build_standalone_html_document(ctx: ExportBundleContext, *, embed_video: boo
   .cover-footer {{ border-top: 1px solid #b8c7c2; padding-top: 12px; color: #555; font: 9pt "Liberation Sans", sans-serif; }}
   .badge, .mode-pill {{ font: 9pt "Liberation Sans", sans-serif; font-weight: 700; letter-spacing: .02em; }}
   .mode-pill {{ margin-left: 12px; color: #555; }}
-  .meta-grid {{ display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px 16px; padding: 0 0 14px; border-bottom: 1px solid #bbb; font-size: 10pt; overflow-wrap: anywhere; }}
+  .meta-grid {{ display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px 16px; padding: 0 0 14px; border-bottom: 1px solid #bbb; font-size: .9em; overflow-wrap: anywhere; }}
+  .scope-meta {{ grid-column: span 3; }}
   .section-box {{ margin: 28px 0; }}
   a {{ color: #075c4c; text-decoration-thickness: 1px; text-underline-offset: 3px; }}
-  .toc, .export-index {{ margin: 28px 0; padding: 14px 18px; background: #f3f7f5; border: 1px solid #ccdcd5; font: 10pt/1.6 "Liberation Sans", sans-serif; }}
-  .toc::before {{ content: "Contenido"; display: block; color: #075c4c; font-weight: 700; margin-bottom: 6px; }}
+  .toc {{ margin: 0; padding: 0; font: .92em/1.7 "Liberation Sans", sans-serif; }}
   .toc ul {{ margin: 0; padding-left: 1.25em; }}
   .toc > ul {{ padding-left: 1em; }}
   .toc a {{ text-decoration: none; }}
   .toc a:hover, .toc a:focus {{ text-decoration: underline; }}
-  h2 {{ font-size: 16pt; margin: 28px 0 10px; border-bottom: 1px solid #bbb; padding-bottom: 4px; }}
-  h3 {{ font-size: 13pt; }}
-  .meta-table, table {{ width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 9pt; }}
-  th, td {{ border-bottom: 1px solid #bbb; padding: 7px 6px; text-align: left; vertical-align: top; overflow-wrap: anywhere; }}
+  .markdown-body h1 {{ font-size: 1.8em; line-height: 1.2; margin: 1.4em 0 .5em; break-after: avoid; }}
+  .markdown-body h2 {{ font-size: 1.55em; line-height: 1.25; margin: 1.35em 0 .45em; border-bottom: 1px solid #bbb; padding-bottom: 4px; break-after: avoid; }}
+  .markdown-body h3 {{ font-size: 1.3em; line-height: 1.3; margin: 1.2em 0 .4em; break-after: avoid; }}
+  .markdown-body h4 {{ font-size: 1.15em; margin: 1.1em 0 .35em; break-after: avoid; }}
+  .markdown-body h5 {{ font-size: 1.05em; margin: 1em 0 .3em; break-after: avoid; }}
+  .markdown-body h6 {{ font-size: .95em; margin: 1em 0 .3em; break-after: avoid; }}
+  .meta-table, table {{ width: 100%; table-layout: fixed; border-collapse: collapse; margin: 14px 0; font-size: .82em; }}
+  th, td {{ border-bottom: 1px solid #bbb; padding: 6px 5px; text-align: left; vertical-align: top; overflow-wrap: anywhere; word-break: break-word; }}
   th {{ border-top: 1px solid #555; border-bottom: 1px solid #555; font-weight: 700; }}
-  caption {{ text-align: left; font-weight: 700; padding: 6px 0; }}
+  caption {{ caption-side: top; text-align: left; font-weight: 400; padding: 0 0 7px; color: #3f4650; font-size: .9em; line-height: 1.45; }}
+  caption strong, figcaption strong {{ color: #171717; font-weight: 700; }}
+  .caption-description {{ display: block; margin-top: 2px; color: #42484f; }}
+  .caption-source {{ display: block; margin-top: 2px; color: #60666d; font-size: .9em; }}
   thead {{ display: table-header-group; }}
   tr, figure {{ break-inside: avoid; }}
   pre {{ background: #f4f4f4; border: 1px solid #ccc; color: #171717; padding: 10px; overflow-x: auto; font-size: 9pt; white-space: pre-wrap; overflow-wrap: anywhere; }}
@@ -484,29 +906,11 @@ def build_standalone_html_document(ctx: ExportBundleContext, *, embed_video: boo
   .writeup-label-pequena {{ font-size: .8em; }}
   .writeup-label-normal {{ font-size: .95em; }}
   .writeup-label-grande {{ font-size: 1.15em; }}
-  @media print {{ body {{ padding: 0; }} .cover {{ min-height: 220mm; }} a {{ color: inherit; }} }}
+  @media print {{ body {{ padding: 0; }} .cover {{ min-height: 220mm; }} a {{ color: inherit; }} .document-index-page {{ break-after: page; page-break-after: always; }} }}
 </style>
 </head>
 <body>
-  <section class="cover" aria-label="Portada del informe">
-    <header class="letterhead"><span>{org_name}</span>{watermark_block}</header>
-    <div class="cover-content">
-      <p class="cover-subtitle">INFORME DE SEGURIDAD</p>
-      <h1>{html_lib.escape(ctx.title)}</h1>
-      <p>Alcance: {target_scope}</p>
-    </div>
-    <footer class="cover-footer">{redacted_badge}<br>Generado: {generated_at} · Estado: {html_lib.escape(ctx.status)} · Severidad: {html_lib.escape(ctx.severity.upper())}</footer>
-  </section>
-  <div class="meta-grid">
-    <div><strong>CVSS:</strong> {f"{ctx.cvss_score:.1f}" if ctx.cvss_score is not None else "N/A"}</div>
-    <div><strong>Vector:</strong> {html_lib.escape(ctx.cvss_vector or "N/A")}</div>
-    <div><strong>CWE / CVE:</strong> {html_lib.escape(ctx.cwe_id or "-")} / {html_lib.escape(ctx.cve_id or "-")}</div>
-    <div style="grid-column: span 3;"><strong>Alcance autorizado:</strong> {target_scope}</div>
-  </div>
-  {exec_block}
-  <main class="markdown-body">{body_html}</main>
-  {_build_findings_html(ctx)}
-  {_build_citations_html(ctx)}
+  {document_body}
 </body>
 </html>"""
 
@@ -571,14 +975,16 @@ def _extract_document_index(text: str) -> list[_DocumentIndexEntry]:
     for match in figure_pattern.finditer(masked):
         caption = re.search(r"<figcaption\b[^>]*>([\s\S]*?)</figcaption\s*>", match.group(2), re.I)
         image = re.search(r"<img\b[^>]*\balt\s*=\s*([\"'])(.*?)\1[^>]*>", match.group(2), re.I)
-        add("figure", caption.group(1) if caption else (image.group(2) if image else "Figura"), match.start())
+        directive = _caption_directives_before(masked, match.start(), "figure")
+        add("figure", directive.get("title") or (caption.group(1) if caption else (image.group(2) if image else "Figura")), match.start())
         object_ranges.append((match.start(), match.end(), "figure"))
 
     for match in re.finditer(r"<table\b[^>]*>[\s\S]*?</table\s*>", masked, re.I):
         body = match.group(0)
         caption = re.search(r"<caption\b[^>]*>([\s\S]*?)</caption\s*>", body, re.I)
         headers = re.findall(r"<th\b[^>]*>([\s\S]*?)</th\s*>", body, re.I)
-        add("table", caption.group(1) if caption else " · ".join(headers[:6]), match.start())
+        directive = _caption_directives_before(masked, match.start(), "table")
+        add("table", caption.group(1) if caption else directive.get("title") or " · ".join(headers[:6]), match.start())
         object_ranges.append((match.start(), match.end(), "table"))
 
     figure_spans = [(start, end) for start, end, kind in object_ranges if kind == "figure"]
@@ -586,7 +992,8 @@ def _extract_document_index(text: str) -> list[_DocumentIndexEntry]:
         if any(start <= match.start() < end for start, end in figure_spans):
             continue
         alt = re.search(r"\b(?:alt|title)\s*=\s*([\"'])(.*?)\1", match.group(1), re.I)
-        add("figure", alt.group(2) if alt else "Imagen", match.start())
+        directive = _caption_directives_before(masked, match.start(), "figure")
+        add("figure", directive.get("title") or (alt.group(2) if alt else "Imagen"), match.start())
         object_ranges.append((match.start(), match.end(), "figure"))
 
     # Mermaid fences render as figures in HTML/PDF and Word even though the source remains code.
@@ -597,7 +1004,8 @@ def _extract_document_index(text: str) -> list[_DocumentIndexEntry]:
     for match in re.finditer(r"!\[([^\]]*)\]\(([^)\s]+)(?:\s+[\"'][^\"']*[\"'])?\)", masked):
         if any(start <= match.start() < end for start, end, _kind in object_ranges):
             continue
-        add("figure", match.group(1) or "Imagen", match.start())
+        directive = _caption_directives_before(masked, match.start(), "figure")
+        add("figure", directive.get("title") or match.group(1) or "Imagen", match.start())
         object_ranges.append((match.start(), match.end(), "figure"))
 
     lines = masked.splitlines(keepends=True)
@@ -606,7 +1014,8 @@ def _extract_document_index(text: str) -> list[_DocumentIndexEntry]:
         current = line.rstrip("\r\n")
         if index + 1 < len(lines) and "|" in current and re.match(r"^\s*\|?\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)+\|?\s*$", lines[index + 1].strip()):
             if not any(start <= line_offset < end for start, end, kind in object_ranges if kind == "table"):
-                label = " · ".join(cell.strip() for cell in current.strip().strip("|").split("|") if cell.strip())
+                directive = _caption_directives_before(masked, line_offset, "table")
+                label = directive.get("title") or " · ".join(cell.strip() for cell in current.strip().strip("|").split("|") if cell.strip())
                 add("table", label, line_offset)
                 object_ranges.append((line_offset, line_offset + len(line), "table"))
         line_offset += len(line)
@@ -658,20 +1067,43 @@ def _markdown_index_sections(entries: list[_DocumentIndexEntry], ctx: ExportBund
     return "\n\n".join(blocks)
 
 
-def _export_markdown_text(ctx: ExportBundleContext) -> str:
+def _export_markdown_text(ctx: ExportBundleContext, *, bundle_assets: bool = False) -> str:
     text = apply_redaction_markers(ctx.markdown_content, ctx.redact_for_client)
 
     def _rewrite_asset(match: re.Match[str]) -> str:
         asset_id = match.group(1)
         asset = ctx.assets_by_id.get(asset_id)
-        return f"assets/{asset['filename']}" if asset else match.group(0)
+        if not asset:
+            return match.group(0)
+        if bundle_assets:
+            return f"assets/{asset['filename']}"
+        raw = decrypt_asset_bytes(asset["encrypted_blob"])
+        encoded = base64.b64encode(raw).decode("ascii")
+        return f"data:{asset['mime_type']};base64,{encoded}"
 
     def _rewrite_board(match: re.Match[str]) -> str:
         board_id = match.group(1)
-        return f"boards/board_{board_id[:8]}.svg" if board_id in ctx.boards_by_id else match.group(0)
+        board = ctx.boards_by_id.get(board_id)
+        if not board:
+            return match.group(0)
+        if bundle_assets:
+            return f"boards/board_{board_id[:8]}.svg"
+        svg = sanitize_svg_content(board.get("svg_snapshot") or "")
+        if not svg:
+            return match.group(0)
+        return f"data:image/svg+xml;base64,{base64.b64encode(svg.encode('utf-8')).decode('ascii')}"
 
     text = MD_LINK_ASSET_PATTERN.sub(_rewrite_asset, text)
     text = MD_LINK_BOARD_PATTERN.sub(_rewrite_board, text)
+    source_entries = _extract_document_index(text)
+    caption_counts = {"figure": 0, "table": 0}
+    caption_numbers: dict[tuple[str, int], int] = {}
+    for entry in source_entries:
+        if entry.kind in caption_counts:
+            caption_counts[entry.kind] += 1
+            caption_numbers[(entry.kind, entry.line)] = caption_counts[entry.kind]
+    text = _markdown_object_caption_markers(text, caption_numbers)
+    text = _render_markdown_caption_markers(text)
     entries = _extract_document_index(text)
     index_sections = _markdown_index_sections(entries, ctx)
     text = _add_markdown_index_anchors(text, entries)
@@ -696,7 +1128,7 @@ def _build_md_artifact(ctx: ExportBundleContext) -> tuple[bytes, str, str]:
 def _build_md_zip_artifact(ctx: ExportBundleContext) -> tuple[bytes, str, str]:
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED) as zf:
-        zf.writestr(f"{ctx.slug}.md", _export_markdown_text(ctx).encode("utf-8"))
+        zf.writestr(f"{ctx.slug}.md", _export_markdown_text(ctx, bundle_assets=True).encode("utf-8"))
         asset_manifest = []
         for asset in ctx.assets_by_id.values():
             raw = decrypt_asset_bytes(asset["encrypted_blob"])
@@ -732,8 +1164,22 @@ def _build_html_artifact(ctx: ExportBundleContext) -> tuple[bytes, str, str]:
 
 
 def _build_pdf_artifact(ctx: ExportBundleContext) -> tuple[bytes, str, str]:
-    html_doc = build_standalone_html_document(ctx, embed_video=False)
-    pdf_bytes = WeasyHTML(string=html_doc, url_fetcher=_ssrf_safe_url_fetcher).write_pdf()
+    report_html = build_standalone_html_document(ctx, embed_video=False, pdf_section="report")
+    report_document = WeasyHTML(string=report_html, url_fetcher=_ssrf_safe_url_fetcher).render()
+    page_refs = {
+        anchor: page_number
+        for page_number, page in enumerate(report_document.pages, start=1)
+        for anchor in page.anchors
+    }
+    frontmatter_html = build_standalone_html_document(
+        ctx,
+        embed_video=False,
+        pdf_section="frontmatter",
+        page_refs=page_refs,
+    )
+    frontmatter_document = WeasyHTML(string=frontmatter_html, url_fetcher=_ssrf_safe_url_fetcher).render()
+    combined = frontmatter_document.copy([*frontmatter_document.pages, *report_document.pages])
+    pdf_bytes = combined.write_pdf()
     return pdf_bytes, "application/pdf", f"{ctx.slug}.pdf"
 
 
@@ -743,29 +1189,55 @@ def _add_png_picture(document: Any, png_bytes: bytes, caption: str | None = None
     document.add_picture(buf, width=Inches(5.8))
     picture_paragraph = document.paragraphs[-1]
     if caption:
-        style_names = {s.name for s in document.styles}
-        document.add_paragraph(caption, style="Caption" if "Caption" in style_names else None)
+        _add_docx_caption_text(document, caption)
     return picture_paragraph
+
+
+def _add_docx_caption_text(document: Any, caption: str) -> Any:
+    style_names = {style.name for style in document.styles}
+    paragraph = document.add_paragraph(style="Caption" if "Caption" in style_names else None)
+    paragraph.paragraph_format.keep_together = True
+    lines = caption.splitlines()
+    for index, line in enumerate(lines):
+        if index:
+            paragraph.add_run().add_break()
+        run = paragraph.add_run(line)
+        run.font.name = "Liberation Sans"
+        run.font.size = Pt(9 if index == 0 else 8)
+        run.bold = index == 0
+    return paragraph
 
 
 def _add_docx_label_runs(paragraph: Any, text: str) -> None:
     """Format known labels while leaving code spans and other text intact."""
+    underline_pattern = re.compile(r'<u\s+style="text-decoration-color:\s*(#[0-9a-fA-F]{6});\s*text-decoration-thickness:\s*1px;"\s*>(.*?)</u>', re.I | re.S)
     colors = {"jade": "075C4C", "rojo": "9B1C1C", "azul": "174D86", "dorado": "74510C", "neutro": "303030"}
     sizes = {"pequena": 9, "normal": 11, "grande": 14}
+    def add_plain(segment: str) -> None:
+        offset = 0
+        for match in _LABEL_OR_CODE.finditer(segment):
+            paragraph.add_run(segment[offset:match.start()])
+            if match.group(1):
+                paragraph.add_run(match.group(1))
+            else:
+                color, size, content = match.group(3, 4, 5)
+                run = paragraph.add_run(content)
+                run.bold = True
+                run.font.name = "Liberation Sans"
+                run.font.color.rgb = RGBColor.from_string(colors[color])
+                run.font.size = Pt(sizes[size])
+            offset = match.end()
+        paragraph.add_run(segment[offset:])
     offset = 0
-    for match in _LABEL_OR_CODE.finditer(text):
-        paragraph.add_run(text[offset:match.start()])
-        if match.group(1):
-            paragraph.add_run(match.group(1))
-        else:
-            color, size, content = match.group(3, 4, 5)
-            run = paragraph.add_run(content)
-            run.bold = True
-            run.font.name = "Liberation Sans"
-            run.font.color.rgb = RGBColor.from_string(colors[color])
-            run.font.size = Pt(sizes[size])
+    for match in underline_pattern.finditer(text):
+        add_plain(text[offset:match.start()])
+        run = paragraph.add_run(html_lib.unescape(match.group(2)))
+        underline = docx.oxml.OxmlElement("w:u")
+        underline.set(docx.oxml.ns.qn("w:val"), "single")
+        underline.set(docx.oxml.ns.qn("w:color"), match.group(1)[1:].upper())
+        run._element.get_or_add_rPr().append(underline)
         offset = match.end()
-    paragraph.add_run(text[offset:])
+    add_plain(text[offset:])
 
 
 def _add_docx_bookmark(paragraph: Any, name: str, bookmark_id: int) -> None:
@@ -797,6 +1269,24 @@ def _add_docx_internal_link(paragraph: Any, text: str, anchor: str) -> None:
     paragraph._p.append(hyperlink)
 
 
+def _add_docx_field(paragraph: Any, instruction: str, placeholder: str = "1") -> None:
+    field = docx.oxml.OxmlElement("w:fldSimple")
+    field.set(docx.oxml.ns.qn("w:instr"), instruction)
+    run = docx.oxml.OxmlElement("w:r")
+    value = docx.oxml.OxmlElement("w:t")
+    value.text = placeholder
+    run.append(value)
+    field.append(run)
+    paragraph._p.append(field)
+
+
+def _add_docx_index_entry(paragraph: Any, label: str, anchor: str) -> None:
+    paragraph.paragraph_format.tab_stops.add_tab_stop(Inches(6.4), WD_TAB_ALIGNMENT.RIGHT, WD_TAB_LEADER.DOTS)
+    _add_docx_internal_link(paragraph, label, anchor)
+    paragraph.add_run("\t")
+    _add_docx_field(paragraph, f"PAGEREF {anchor} \\h")
+
+
 def _html_table_rows(html_table: str) -> list[list[str]]:
     rows: list[list[str]] = []
     for row in re.findall(r"<tr\b[^>]*>([\s\S]*?)</tr\s*>", html_table, re.I):
@@ -823,10 +1313,18 @@ def _pipe_table_rows(lines: list[str], start: int) -> tuple[list[list[str]], int
     return rows, cursor
 
 
-def _append_docx_table(document: Any, rows: list[list[str]], bookmark: tuple[str, int] | None = None) -> None:
+def _append_docx_table(
+    document: Any,
+    rows: list[list[str]],
+    bookmark: tuple[str, int] | None = None,
+    caption: str | None = None,
+    font_size_pt: int = 11,
+) -> None:
     normalized = [row for row in rows if row]
     if not normalized:
         return
+    if caption:
+        _add_docx_caption_text(document, caption)
     columns = max(len(row) for row in normalized)
     table = document.add_table(rows=len(normalized), cols=columns)
     table.style = "Table Grid"
@@ -837,6 +1335,9 @@ def _append_docx_table(document: Any, rows: list[list[str]], bookmark: tuple[str
             if row_index == 0:
                 for run in cell.paragraphs[0].runs:
                     run.bold = True
+            for paragraph in cell.paragraphs:
+                for run in paragraph.runs:
+                    run.font.size = Pt(max(7, round(font_size_pt * 0.8, 1)))
     if bookmark:
         _add_docx_bookmark(table.cell(0, 0).paragraphs[0], bookmark[0], bookmark[1])
 
@@ -869,14 +1370,20 @@ def _append_docx_asset(document: Any, ctx: ExportBundleContext, asset_id: str, c
 
 def _build_docx_artifact(ctx: ExportBundleContext) -> tuple[bytes, str, str]:
     document = docx.Document()
+    font_size_pt = max(8, min(18, int(ctx.font_size_pt or 11)))
     normal = document.styles["Normal"]
     normal.font.name = "Liberation Serif"
-    normal.font.size = Pt(11)
+    normal.font.size = Pt(font_size_pt)
     normal.paragraph_format.space_after = Pt(6)
-    for style_name in ("Title", "Heading 1", "Heading 2", "Heading 3", "Heading 4", "Heading 5", "Heading 6"):
+    heading_scales = (1.75, 1.5, 1.3, 1.15, 1.05, 0.95)
+    for heading_level, scale in enumerate(heading_scales, start=1):
+        style_name = f"Heading {heading_level}"
         style = document.styles[style_name]
         style.font.name = "Liberation Serif"
+        style.font.size = Pt(round(font_size_pt * scale, 1))
+        style.font.bold = True
         style.font.color.rgb = RGBColor(23, 23, 23)
+    document.styles["Title"].font.name = "Liberation Serif"
     letterhead = document.add_paragraph()
     brand = letterhead.add_run(ctx.organization_name or settings.WRITEUP_ORGANIZATION_NAME)
     brand.font.name = "Liberation Sans"
@@ -907,6 +1414,49 @@ def _build_docx_artifact(ctx: ExportBundleContext) -> tuple[bytes, str, str]:
         run.font.size = Pt(9)
         run.font.color.rgb = RGBColor(85, 85, 85)
     document.add_page_break()
+    body_md = ANCHOR_PATTERN.sub("", apply_redaction_markers(ctx.markdown_content, ctx.redact_for_client))
+    index_entries = _extract_document_index(body_md)
+    word_anchor_by_position: dict[tuple[str, int], tuple[str, int]] = {}
+    for bookmark_id, entry in enumerate(index_entries, start=1):
+        word_anchor_by_position[(entry.kind, entry.offset)] = (f"lesssow{bookmark_id}", bookmark_id)
+
+    index_pages_added = False
+
+    def begin_index_page(title: str) -> None:
+        nonlocal index_pages_added
+        if index_pages_added:
+            document.add_page_break()
+        document.add_heading(title, level=1)
+        index_pages_added = True
+
+    if ctx.include_toc:
+        headings = [entry for entry in index_entries if entry.kind == "heading" and entry.level <= ctx.toc_depth]
+        if headings:
+            begin_index_page("Tabla de contenido")
+            for entry in headings:
+                paragraph = document.add_paragraph()
+                paragraph.paragraph_format.left_indent = Inches(max(0, entry.level - 1) * 0.18)
+                anchor = word_anchor_by_position[(entry.kind, entry.offset)][0]
+                _add_docx_index_entry(paragraph, entry.label, anchor)
+    if ctx.include_figure_index:
+        figures = [entry for entry in index_entries if entry.kind == "figure"]
+        if figures:
+            begin_index_page("Índice de figuras e imágenes")
+            for number, entry in enumerate(figures, 1):
+                paragraph = document.add_paragraph()
+                anchor = word_anchor_by_position[(entry.kind, entry.offset)][0]
+                _add_docx_index_entry(paragraph, f"Figura {number}. {entry.label}", anchor)
+    if ctx.include_table_index:
+        tables = [entry for entry in index_entries if entry.kind == "table"]
+        if tables:
+            begin_index_page("Índice de tablas")
+            for number, entry in enumerate(tables, 1):
+                paragraph = document.add_paragraph()
+                anchor = word_anchor_by_position[(entry.kind, entry.offset)][0]
+                _add_docx_index_entry(paragraph, f"Tabla {number}. {entry.label}", anchor)
+
+    if index_pages_added:
+        document.add_page_break()
 
     meta_table = document.add_table(rows=4, cols=2)
     meta_rows = [
@@ -923,34 +1473,20 @@ def _build_docx_artifact(ctx: ExportBundleContext) -> tuple[bytes, str, str]:
         document.add_heading("Resumen Ejecutivo", level=1)
         document.add_paragraph(apply_redaction_markers(ctx.executive_summary, ctx.redact_for_client))
 
-    body_md = ANCHOR_PATTERN.sub("", apply_redaction_markers(ctx.markdown_content, ctx.redact_for_client))
-    index_entries = _extract_document_index(body_md)
-    word_anchor_by_position: dict[tuple[str, int], tuple[str, int]] = {}
-    for bookmark_id, entry in enumerate(index_entries, start=1):
-        word_anchor_by_position[(entry.kind, entry.offset)] = (f"lesssow{bookmark_id}", bookmark_id)
-
-    if ctx.include_toc:
-        headings = [entry for entry in index_entries if entry.kind == "heading" and entry.level <= ctx.toc_depth]
-        if headings:
-            document.add_heading("Contenido", level=1)
-            for entry in headings:
-                paragraph = document.add_paragraph(style="List Bullet")
-                paragraph.paragraph_format.left_indent = Inches(max(0, entry.level - 1) * 0.18)
-                _add_docx_internal_link(paragraph, entry.label, word_anchor_by_position[(entry.kind, entry.offset)][0])
-    if ctx.include_figure_index:
-        figures = [entry for entry in index_entries if entry.kind == "figure"]
-        if figures:
-            document.add_heading("Índice de figuras e imágenes", level=1)
-            for number, entry in enumerate(figures, 1):
-                paragraph = document.add_paragraph(style="List Bullet")
-                _add_docx_internal_link(paragraph, f"Figura {number} · {entry.label}", word_anchor_by_position[(entry.kind, entry.offset)][0])
-    if ctx.include_table_index:
-        tables = [entry for entry in index_entries if entry.kind == "table"]
-        if tables:
-            document.add_heading("Índice de tablas", level=1)
-            for number, entry in enumerate(tables, 1):
-                paragraph = document.add_paragraph(style="List Bullet")
-                _add_docx_internal_link(paragraph, f"Tabla {number} · {entry.label}", word_anchor_by_position[(entry.kind, entry.offset)][0])
+    body_section = document.add_section(WD_SECTION_START.NEW_PAGE)
+    page_numbering = docx.oxml.OxmlElement("w:pgNumType")
+    page_numbering.set(docx.oxml.ns.qn("w:start"), "1")
+    body_section._sectPr.append(page_numbering)
+    body_section.footer.is_linked_to_previous = False
+    footer = body_section.footer.paragraphs[0]
+    footer.alignment = docx.enum.text.WD_ALIGN_PARAGRAPH.RIGHT
+    footer.add_run("Página ")
+    _add_docx_field(footer, "PAGE")
+    footer.add_run(" de ")
+    _add_docx_field(footer, "SECTIONPAGES")
+    update_fields = docx.oxml.OxmlElement("w:updateFields")
+    update_fields.set(docx.oxml.ns.qn("w:val"), "true")
+    document.settings._element.append(update_fields)
 
     entries_by_line: dict[str, dict[int, list[_DocumentIndexEntry]]] = {
         "heading": {}, "figure": {}, "table": {},
@@ -958,6 +1494,51 @@ def _build_docx_artifact(ctx: ExportBundleContext) -> tuple[bytes, str, str]:
     for entry in index_entries:
         entries_by_line[entry.kind].setdefault(entry.line, []).append(entry)
     consumed_by_line: dict[tuple[str, int], int] = {}
+
+    object_number_by_position: dict[tuple[str, int], int] = {}
+    object_counters: dict[str, int] = {"figure": 0, "table": 0}
+    for entry in index_entries:
+        if entry.kind in object_counters:
+            object_counters[entry.kind] += 1
+            object_number_by_position[(entry.kind, entry.offset)] = object_counters[entry.kind]
+
+    pending_caption: dict[str, str] = {}
+
+    def docx_object_caption(kind: str, entry: _DocumentIndexEntry | None, fallback: str = "", html_inner: str | None = None) -> str:
+        fields = _caption_fields_from_html(html_inner, kind) if html_inner is not None else {}
+        fields.update(pending_caption)
+        pending_caption.clear()
+        number = object_number_by_position.get((kind, entry.offset), 1) if entry else 1
+        title = fields.get("title") or (entry.label if entry else "") or fallback or ("Imagen" if kind == "figure" else "Datos")
+        title = re.sub(r"^(?:Figura|Imagen|Tabla)\s*(?:\d+\s*[.:]\s*|:\s*)", "", title, flags=re.I).strip()
+        label = "Figura" if kind == "figure" else "Tabla"
+        lines = [f"{label} {number}. {title}"]
+        if fields.get("description"):
+            lines.append(fields["description"])
+        if fields.get("source"):
+            lines.append(f"Fuente: {fields['source']}")
+        return "\n".join(lines)
+
+    def trailing_caption_lines(next_line: int) -> int:
+        cursor = next_line
+        while cursor < len(lines) and not lines[cursor].strip():
+            cursor += 1
+        captured = False
+        while cursor < len(lines):
+            directive = _CAPTION_DIRECTIVE.match(lines[cursor].strip())
+            if not directive:
+                break
+            key = (directive.group(1) or directive.group(3)).casefold()
+            value = (directive.group(2) if directive.group(1) else directive.group(4)).strip()
+            if key.startswith("descripci"):
+                pending_caption["description"] = value
+            elif key == "fuente":
+                pending_caption["source"] = value
+            else:
+                break
+            captured = True
+            cursor += 1
+        return cursor if captured else next_line
 
     def take_entry(kind: str, line_number: int) -> _DocumentIndexEntry | None:
         candidates = entries_by_line.get(kind, {}).get(line_number, [])
@@ -988,19 +1569,24 @@ def _build_docx_artifact(ctx: ExportBundleContext) -> tuple[bytes, str, str]:
                 raw_block = "\n".join(code_lines)
                 diagram_svg = ctx.rendered_diagrams.get(_diagram_sha256(raw_block)) if code_lang == "mermaid" else None
                 diagram_png = _svg_to_png_bytes(diagram_svg) if diagram_svg else None
+                figure_entry = take_entry("figure", code_start_line) if code_lang == "mermaid" else None
+                after_diagram = trailing_caption_lines(index + 1) if code_lang == "mermaid" else index + 1
+                figure_caption = docx_object_caption("figure", figure_entry, "Diagrama Mermaid") if code_lang == "mermaid" else None
                 if diagram_png:
-                    paragraph = _add_png_picture(document, diagram_png, "Diagrama Mermaid")
+                    paragraph = _add_png_picture(document, diagram_png, figure_caption)
                 else:
                     code_p = document.add_paragraph(raw_block)
                     if code_p.runs:
                         code_p.runs[0].font.name = "Courier New"
                         code_p.runs[0].font.size = Pt(9)
                     paragraph = code_p
+                    if figure_caption:
+                        _add_docx_caption_text(document, figure_caption)
                 if code_lang == "mermaid":
-                    entry = take_entry("figure", code_start_line)
-                    bookmark = make_bookmark(entry)
+                    bookmark = make_bookmark(figure_entry)
                     if bookmark:
                         _add_docx_bookmark(paragraph, bookmark[0], bookmark[1])
+                    index = after_diagram - 1
                 code_lines.clear()
                 code_lang = ""
                 fence_character = None
@@ -1018,6 +1604,23 @@ def _build_docx_artifact(ctx: ExportBundleContext) -> tuple[bytes, str, str]:
             index += 1
             continue
 
+        caption_directive = _CAPTION_DIRECTIVE.match(stripped)
+        if caption_directive:
+            directive_key = (caption_directive.group(1) or caption_directive.group(3)).casefold()
+            directive_value = (caption_directive.group(2) if caption_directive.group(1) else caption_directive.group(4)).strip()
+            if directive_key in {"figura", "imagen"}:
+                pending_caption["kind"] = "figure"
+                pending_caption["title"] = directive_value
+            elif directive_key == "tabla":
+                pending_caption["kind"] = "table"
+                pending_caption["title"] = directive_value
+            elif directive_key.startswith("descripci"):
+                pending_caption["description"] = directive_value
+            elif directive_key == "fuente":
+                pending_caption["source"] = directive_value
+            index += 1
+            continue
+
         if re.search(r"<table\b", stripped, re.I):
             html_lines = [line]
             while not re.search(r"</table\s*>", "\n".join(html_lines), re.I) and index + 1 < len(lines):
@@ -1025,15 +1628,20 @@ def _build_docx_artifact(ctx: ExportBundleContext) -> tuple[bytes, str, str]:
                 html_lines.append(lines[index])
             html_table = "\n".join(html_lines)
             entry = take_entry("table", line_number)
-            _append_docx_table(document, _html_table_rows(html_table), make_bookmark(entry))
-            index += 1
+            next_index = trailing_caption_lines(index + 1)
+            caption_match = re.search(r"<caption\b[^>]*>([\s\S]*?)</caption\s*>", html_table, re.I)
+            table_caption = docx_object_caption("table", entry, html_inner=caption_match.group(1) if caption_match else None)
+            _append_docx_table(document, _html_table_rows(html_table), make_bookmark(entry), table_caption, font_size_pt)
+            index = next_index
             continue
 
         if index + 1 < len(lines) and "|" in stripped and re.match(r"^\s*\|?\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)+\|?\s*$", lines[index + 1]):
             table_rows, next_index = _pipe_table_rows(lines, index)
             entry = take_entry("table", line_number)
-            _append_docx_table(document, table_rows, make_bookmark(entry))
-            index = next_index
+            next_index = trailing_caption_lines(next_index)
+            table_caption = docx_object_caption("table", entry)
+            _append_docx_table(document, table_rows, make_bookmark(entry), table_caption, font_size_pt)
+            index = trailing_caption_lines(next_index)
             continue
 
         if re.search(r"<figure\b", stripped, re.I):
@@ -1046,16 +1654,19 @@ def _build_docx_artifact(ctx: ExportBundleContext) -> tuple[bytes, str, str]:
             bookmark = make_bookmark(entry)
             img = re.search(r"<img\b([^>]*)>", html_figure, re.I)
             caption = re.search(r"<figcaption\b[^>]*>([\s\S]*?)</figcaption\s*>", html_figure, re.I)
-            label = _plain_html_text(caption.group(1)) if caption else (entry.label if entry else "Imagen")
+            image_alt = (_html_attribute(img.group(1), "alt") or "Imagen") if img else "Imagen"
+            next_index = trailing_caption_lines(index + 1)
+            figure_caption = docx_object_caption("figure", entry, image_alt, caption.group(1) if caption else None)
             src = re.search(r"\bsrc\s*=\s*([\"'])(.*?)\1", img.group(1), re.I).group(2) if img and re.search(r"\bsrc\s*=\s*([\"'])(.*?)\1", img.group(1), re.I) else ""
             asset_id = re.match(r"asset://([a-zA-Z0-9_-]{1,64})$", src)
-            if asset_id and _append_docx_asset(document, ctx, asset_id.group(1), label, bookmark):
+            if asset_id and _append_docx_asset(document, ctx, asset_id.group(1), figure_caption, bookmark):
                 pass
             else:
-                paragraph = document.add_paragraph(f"[Imagen: {label}]")
+                paragraph = document.add_paragraph(f"[Imagen: {image_alt}]")
+                _add_docx_caption_text(document, figure_caption)
                 if bookmark:
                     _add_docx_bookmark(paragraph, bookmark[0], bookmark[1])
-            index += 1
+            index = next_index
             continue
 
         if re.search(r"<img\b", stripped, re.I):
@@ -1065,14 +1676,17 @@ def _build_docx_artifact(ctx: ExportBundleContext) -> tuple[bytes, str, str]:
             alt = re.search(r"\b(?:alt|title)\s*=\s*([\"'])(.*?)\1", img.group(1), re.I) if img else None
             src = re.search(r"\bsrc\s*=\s*([\"'])(.*?)\1", img.group(1), re.I) if img else None
             label = _plain_html_text(alt.group(2)) if alt else (entry.label if entry else "Imagen")
+            next_index = trailing_caption_lines(index + 1)
+            figure_caption = docx_object_caption("figure", entry, label)
             asset_id = re.match(r"asset://([a-zA-Z0-9_-]{1,64})$", src.group(2)) if src else None
-            if asset_id and _append_docx_asset(document, ctx, asset_id.group(1), label, bookmark):
+            if asset_id and _append_docx_asset(document, ctx, asset_id.group(1), figure_caption, bookmark):
                 pass
             else:
                 paragraph = document.add_paragraph(f"[Imagen: {label}]")
+                _add_docx_caption_text(document, figure_caption)
                 if bookmark:
                     _add_docx_bookmark(paragraph, bookmark[0], bookmark[1])
-            index += 1
+            index = next_index
             continue
 
         html_heading = re.match(r"<h([1-6])\b[^>]*>(.*?)</h\1\s*>", stripped, re.I)
@@ -1117,18 +1731,26 @@ def _build_docx_artifact(ctx: ExportBundleContext) -> tuple[bytes, str, str]:
 
         asset_match = ASSET_MD_IMG_PATTERN.search(stripped)
         if asset_match:
-            caption, asset_id = asset_match.group(1), asset_match.group(2)
+            alt, asset_id = asset_match.group(1), asset_match.group(2)
             asset = ctx.assets_by_id.get(asset_id)
             if asset:
+                next_index = trailing_caption_lines(index + 1)
+                entry = take_entry("figure", line_number)
+                caption = docx_object_caption("figure", entry, alt or asset.get("filename", "Imagen"))
                 if str(asset.get("mime_type") or "").lower().startswith("video/"):
-                    paragraph = document.add_paragraph(f"[Evidencia en video adjunta en paquete HTML/ZIP: {caption or asset.get('filename')}]")
-                    bookmark = make_bookmark(take_entry("figure", line_number))
+                    paragraph = document.add_paragraph(f"[Evidencia en video adjunta en paquete HTML/ZIP: {alt or asset.get('filename')}]")
+                    _add_docx_caption_text(document, caption)
+                    bookmark = make_bookmark(entry)
                     if bookmark:
                         _add_docx_bookmark(paragraph, bookmark[0], bookmark[1])
-                    index += 1
+                    index = next_index
                     continue
-                _append_docx_asset(document, ctx, asset_id, caption, make_bookmark(take_entry("figure", line_number)))
-                index += 1
+                if not _append_docx_asset(document, ctx, asset_id, caption, make_bookmark(entry)):
+                    paragraph = document.add_paragraph(f"[Imagen: {alt or 'Imagen'}]")
+                    _add_docx_caption_text(document, caption)
+                    if (bookmark := make_bookmark(entry)):
+                        _add_docx_bookmark(paragraph, bookmark[0], bookmark[1])
+                index = next_index
                 continue
 
         board_match = BOARD_MD_IMG_PATTERN.search(stripped)
@@ -1136,43 +1758,52 @@ def _build_docx_artifact(ctx: ExportBundleContext) -> tuple[bytes, str, str]:
             caption, board_id = board_match.group(1), board_match.group(2)
             board = ctx.boards_by_id.get(board_id)
             label = caption or (board["title"] if board else board_id)
+            next_index = trailing_caption_lines(index + 1)
+            entry = take_entry("figure", line_number)
+            figure_caption = docx_object_caption("figure", entry, label)
             board_png = _svg_to_png_bytes((board or {}).get("svg_snapshot") or "") if board else None
             if board_png:
-                paragraph = _add_png_picture(document, board_png, label)
+                paragraph = _add_png_picture(document, board_png, figure_caption)
             else:
                 paragraph = document.add_paragraph(f"[Diagrama de Pizarra adjunto: {label} (ver paquete HTML/ZIP/PDF para gráfico vectorial)]")
-            bookmark = make_bookmark(take_entry("figure", line_number))
+                _add_docx_caption_text(document, figure_caption)
+            bookmark = make_bookmark(entry)
             if bookmark:
                 _add_docx_bookmark(paragraph, bookmark[0], bookmark[1])
-            index += 1
+            index = next_index
             continue
 
         markdown_images = list(re.finditer(r"!\[([^\]]*)\]\(([^)\s]+)(?:\s+[\"'][^\"']*[\"'])?\)", stripped))
         if markdown_images:
             remainder = stripped
+            next_index = trailing_caption_lines(index + 1)
             for image_match in markdown_images:
                 alt, src = image_match.group(1), image_match.group(2)
                 entry = take_entry("figure", line_number)
                 bookmark = make_bookmark(entry)
+                figure_caption = docx_object_caption("figure", entry, alt or "Imagen")
                 asset_id = re.match(r"asset://([a-zA-Z0-9_-]{1,64})$", src)
                 board_id = re.match(r"board://([a-zA-Z0-9_-]{1,64})$", src)
-                if asset_id and _append_docx_asset(document, ctx, asset_id.group(1), alt, bookmark):
+                if asset_id and _append_docx_asset(document, ctx, asset_id.group(1), figure_caption, bookmark):
                     pass
                 elif board_id:
                     board = ctx.boards_by_id.get(board_id.group(1))
                     board_label = alt or (board or {}).get("title", "Diagrama")
                     board_png = _svg_to_png_bytes((board or {}).get("svg_snapshot") or "") if board else None
-                    paragraph = _add_png_picture(document, board_png, board_label) if board_png else document.add_paragraph(f"[Diagrama de Pizarra adjunto: {board_label}]")
+                    paragraph = _add_png_picture(document, board_png, figure_caption) if board_png else document.add_paragraph(f"[Diagrama de Pizarra adjunto: {board_label}]")
+                    if not board_png:
+                        _add_docx_caption_text(document, figure_caption)
                     if bookmark:
                         _add_docx_bookmark(paragraph, bookmark[0], bookmark[1])
                 else:
                     paragraph = document.add_paragraph(f"[Imagen: {alt or 'Imagen'}]")
+                    _add_docx_caption_text(document, figure_caption)
                     if bookmark:
                         _add_docx_bookmark(paragraph, bookmark[0], bookmark[1])
                 remainder = remainder.replace(image_match.group(0), "", 1)
             if remainder.strip():
                 _add_docx_label_runs(document.add_paragraph(), remainder.strip())
-            index += 1
+            index = next_index
             continue
 
         if re.match(r"^[-*+]\s+\[[ xX]\]\s+", stripped):

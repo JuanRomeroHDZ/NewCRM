@@ -596,7 +596,7 @@ details[open] > summary:not([data-caret="manual"])::after {
 }
 
 .writeups-view :is(button, input, select, textarea, summary, a[href]):focus-visible {
-  outline: 2px solid #a5b4fc;
+  outline: 2px solid #6ee7b7;
   outline-offset: 2px;
 }
 
@@ -612,6 +612,14 @@ details[open] > summary:not([data-caret="manual"])::after {
 
   .writeups-view :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]), select, textarea) {
     font-size: 16px;
+  }
+}
+
+@media (min-width: 640px) and (max-width: 1023px) {
+  .writeups-view .writeup-markdown-editor :is(button, select, summary),
+  .writeups-view .board-toolbar-container :is(button, select, summary) {
+    min-width: 44px;
+    min-height: 44px;
   }
 }
 

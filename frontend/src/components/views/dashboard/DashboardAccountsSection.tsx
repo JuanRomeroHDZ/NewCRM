@@ -33,10 +33,10 @@ export const DashboardAccountsSection: React.FC<DashboardAccountsSectionProps> =
           <span className="text-xs text-obsidian-muted">{emails.length}</span>
         </div>
         <div className="flex shrink-0 items-center gap-1">
-          <button type="button" onClick={onCreateEmail} aria-label="Agregar correo principal" className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-obsidian-border bg-obsidian-surface px-3 text-xs font-medium text-white hover:bg-obsidian-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400">
+          <button type="button" onClick={onCreateEmail} aria-label="Agregar correo principal" className="inline-flex min-h-11 items-center gap-1 rounded-lg border border-obsidian-border bg-obsidian-surface px-3 text-xs font-medium text-white hover:bg-obsidian-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400">
             <Mail size={13} aria-hidden="true" /> Agregar
           </button>
-          <button type="button" onClick={onOpenEmails} className="inline-flex min-h-9 items-center gap-1 rounded-lg px-2 text-xs text-indigo-400 hover:text-indigo-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400">
+          <button type="button" onClick={onOpenEmails} className="inline-flex min-h-11 items-center gap-1 rounded-lg px-2 text-xs text-indigo-400 hover:text-indigo-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400">
             Ver todos <ArrowRight size={12} aria-hidden="true" />
           </button>
         </div>
@@ -49,7 +49,7 @@ export const DashboardAccountsSection: React.FC<DashboardAccountsSectionProps> =
             .sort((a, b) => (b.platform_count + (b.prospect_count || 0)) - (a.platform_count + (a.prospect_count || 0)))
             .slice(0, 5)
             .map((email) => (
-              <button key={email.id} type="button" onClick={() => onOpenEmail(email.id)} className="group flex w-full min-w-0 items-center justify-between gap-3 py-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400">
+              <button key={email.id} type="button" onClick={() => onOpenEmail(email.id)} className="group flex min-h-11 w-full min-w-0 items-center justify-between gap-3 py-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400">
                 <div className="flex min-w-0 items-center gap-3">
                   <PlatformIcon name={email.provider} size="sm" />
                   <div className="min-w-0">
@@ -86,7 +86,7 @@ export const DashboardAccountsSection: React.FC<DashboardAccountsSectionProps> =
           <Clock size={15} className="shrink-0 text-indigo-400" aria-hidden="true" />
           <span className="truncate">Próximos cobros</span>
         </h2>
-        <button type="button" onClick={onOpenSubscriptions} className="inline-flex shrink-0 items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300">
+        <button type="button" onClick={onOpenSubscriptions} className="inline-flex min-h-11 shrink-0 items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300">
           Ver todos <ArrowRight size={12} aria-hidden="true" />
         </button>
       </div>
@@ -96,7 +96,7 @@ export const DashboardAccountsSection: React.FC<DashboardAccountsSectionProps> =
       ) : (
         <div className="divide-y divide-obsidian-border/70">
           {renewals.slice(0, 3).map((renewal) => (
-            <button key={renewal.id} type="button" onClick={onOpenSubscriptions} className="flex w-full min-w-0 items-center justify-between gap-2 py-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400">
+            <button key={renewal.id} type="button" onClick={onOpenSubscriptions} className="flex min-h-11 w-full min-w-0 items-center justify-between gap-2 py-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400">
               <span className="min-w-0">
                 <span className="block truncate text-xs font-semibold text-white" title={renewal.domain_or_service}>{renewal.domain_or_service}</span>
                 <span className="block truncate text-[10px] text-amber-300">{renewal.client_name} · {renewal.days_remaining <= 0 ? 'Vencido' : `En ${renewal.days_remaining} días`}</span>
@@ -105,7 +105,7 @@ export const DashboardAccountsSection: React.FC<DashboardAccountsSectionProps> =
             </button>
           ))}
           {upcomingBills.slice(0, 5).map((bill) => (
-            <button key={bill.id} type="button" onClick={() => onOpenPlatform(bill.id)} className="flex w-full min-w-0 items-center justify-between gap-2 py-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400">
+            <button key={bill.id} type="button" onClick={() => onOpenPlatform(bill.id)} className="flex min-h-11 w-full min-w-0 items-center justify-between gap-2 py-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400">
               <span className="flex min-w-0 items-center gap-2">
                 <PlatformIcon name={bill.name} iconUrl={bill.icon_url} size="sm" />
                 <span className="min-w-0">
@@ -113,7 +113,7 @@ export const DashboardAccountsSection: React.FC<DashboardAccountsSectionProps> =
                   <span className="block truncate text-[10px] font-mono text-obsidian-muted">{bill.next_billing_date}</span>
                 </span>
               </span>
-              <span className="shrink-0 text-xs font-mono font-semibold text-emerald-400">${bill.subscription_cost} {bill.currency}</span>
+              <span className="shrink-0 text-xs font-mono font-semibold text-white">${bill.subscription_cost} {bill.currency}</span>
             </button>
           ))}
         </div>
