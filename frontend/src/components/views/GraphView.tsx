@@ -711,8 +711,9 @@ export const GraphView: React.FC = () => {
     <div
       role="group"
       aria-label="Datos de prueba del mapa"
-      className="fixed bottom-2 left-1/2 z-50 flex max-w-[calc(100vw-1rem)] -translate-x-1/2 gap-0.5 overflow-x-auto rounded-lg border border-slate-300 bg-slate-100 p-1 font-sans text-[11px] text-slate-700 shadow-lg"
+      className="fixed bottom-2 left-1/2 z-50 flex max-w-[calc(100vw-1rem)] -translate-x-1/2 gap-1 overflow-x-auto rounded-lg border border-obsidian-border bg-obsidian-panel p-1 font-sans text-xs text-obsidian-text shadow-lg"
     >
+      {/* [Control especializado] Cambia el dataset de prueba del grafo en desarrollo. */}
       {GRAPH_FIXTURE_MODES.map((option) => (
         <button
           key={option.value}
@@ -720,9 +721,7 @@ export const GraphView: React.FC = () => {
           aria-pressed={fixtureMode === option.value}
           title={option.title}
           onClick={() => selectFixtureMode(option.value)}
-          className={`min-h-11 shrink-0 touch-manipulation rounded-md px-2 font-medium ${
-            fixtureMode === option.value ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-600 hover:text-slate-950'
-          }`}
+          className="ui-action-toggle shrink-0 touch-manipulation rounded-md px-2"
         >
           {option.label}
         </button>
@@ -799,7 +798,8 @@ export const GraphView: React.FC = () => {
         className={`absolute ${mapOverlayBottomClass} right-3 z-10 flex flex-col gap-1 rounded-xl border border-obsidian-border bg-obsidian-panel/90 p-1.5 text-obsidian-muted shadow-xl sm:right-6`}
       >
         <details className="relative text-xs">
-          <summary aria-label="Filtros y nodos del mapa" className="flex min-h-11 min-w-11 touch-manipulation cursor-pointer list-none items-center justify-center rounded-lg active:bg-obsidian-surface hover:bg-obsidian-surface hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent [&::-webkit-details-marker]:hidden">
+          {/* [Menú y selector] Abre filtros y ajustes de visibilidad del mapa. */}
+          <summary data-caret="manual" aria-label="Filtros y nodos del mapa" className="ui-action-icon touch-manipulation list-none [&::-webkit-details-marker]:hidden">
             <ListFilter size={16} aria-hidden="true" /><span className="sr-only">Filtros y nodos del mapa</span>
           </summary>
           <div className="absolute bottom-0 right-full mr-2 flex w-[min(13rem,calc(100vw-5.5rem))] max-h-[min(70dvh,32rem)] flex-col gap-1 overflow-y-auto rounded-xl border border-obsidian-border bg-obsidian-panel p-1.5 shadow-xl">
@@ -870,11 +870,11 @@ export const GraphView: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => selectGraphNode(node)}
-                          className="ui-nav-action w-full flex-col items-start break-words touch-manipulation"
+                          className="ui-nav-action w-full min-w-0 flex-col items-start gap-1 break-all py-2 text-left touch-manipulation"
                         >
                           {/* [Navegación] Selecciona el nodo y abre su detalle cuando existe. */}
                           <span className="block text-[10px] text-obsidian-muted">{getNodeTypeLabel(node.type)}</span>
-                          <span>{node.label}</span>
+                          <span className="max-w-full">{node.label}</span>
                         </button>
                       ) : (
                         <span className="block break-words rounded-md px-2 py-1 text-xs text-obsidian-muted">

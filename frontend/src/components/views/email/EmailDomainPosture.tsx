@@ -72,7 +72,8 @@ export const EmailDomainPosture: React.FC<Props> = ({ domains }) => {
 
   return (
     <details className="rounded-xl border border-obsidian-border bg-obsidian-panel">
-      <summary data-caret="manual" className="flex min-h-[44px] cursor-pointer list-none items-center gap-2 rounded-xl px-4 text-[13px] font-semibold text-obsidian-text hover:bg-obsidian-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent marker:hidden">
+      {/* [Navegación] Despliega la configuración y verificación DNS del dominio. */}
+      <summary data-caret="manual" className="ui-nav-action w-full list-none rounded-xl text-[13px] font-semibold marker:hidden">
         <Globe2 size={16} className="shrink-0 text-obsidian-muted" aria-hidden="true" />
         Comprobar configuración del dominio de correo
         <ChevronDown size={16} className="ml-auto shrink-0 text-obsidian-muted" aria-hidden="true" />
@@ -85,7 +86,8 @@ export const EmailDomainPosture: React.FC<Props> = ({ domains }) => {
           </select>
           <label htmlFor={selectorId} className="block text-[11px] font-medium text-obsidian-muted">Selector DKIM (opcional)</label>
           <input id={selectorId} value={selector} maxLength={63} onChange={(event) => { setSelector(event.target.value.replace(/[^a-zA-Z0-9-]/g, '')); setResult(null); setError(''); }} placeholder="p. ej. google o selector1" className="min-h-[44px] w-full rounded-lg border border-obsidian-border bg-obsidian-bg px-3 text-xs text-white placeholder:text-obsidian-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400" />
-          <button type="button" onClick={() => void inspect()} disabled={loading || !domain} className="inline-flex min-h-[44px] items-center gap-2 rounded-lg bg-indigo-600 px-4 text-xs font-semibold text-white hover:bg-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 disabled:cursor-wait disabled:opacity-60">
+          {/* [Acción principal] Consulta los registros públicos del dominio. */}
+          <button type="button" onClick={() => void inspect()} disabled={loading || !domain} className="ui-action-primary">
             {loading ? <LoaderCircle size={16} className="animate-spin" aria-hidden="true" /> : <Search size={16} aria-hidden="true" />}
             {loading ? 'Consultando…' : 'Consultar DNS'}
           </button>

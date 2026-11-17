@@ -39,6 +39,7 @@ interface SubscriptionsListsProps {
   billingHistory: BillingRecord[];
   realProfit: RealProfitSummary;
   profitCurrencyView: string;
+  usdRate: number;
   baseCurrency: string;
   formatAmount: (value: number | string | undefined | null, decimals?: number) => string;
   isUnlocked: boolean;
@@ -72,7 +73,7 @@ export const SubscriptionsLists: React.FC<SubscriptionsListsProps> = ({
   billingHistory,
   realProfit,
   profitCurrencyView,
-  baseCurrency,
+  usdRate,
   formatAmount,
   isUnlocked,
   openUnlockModal,
@@ -93,7 +94,7 @@ export const SubscriptionsLists: React.FC<SubscriptionsListsProps> = ({
   handleDeleteExpense,
   handleDeletePaymentMethod,
 }) => {
-  const isProfitBase = profitCurrencyView === baseCurrency;
+  const isProfitBase = profitCurrencyView === 'MXN';
   const showIncome = mode === 'all' || mode === 'income';
   const showServices = mode === 'all' || mode === 'services';
   const showExpenses = mode === 'all' || mode === 'expenses';
@@ -155,16 +156,13 @@ export const SubscriptionsLists: React.FC<SubscriptionsListsProps> = ({
                       <button
                         type="button"
                         onClick={() => handleToggleIncomeStatus(inc)}
-                        className={`inline-flex min-h-11 items-center gap-2 rounded-lg border px-3 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-accent ${
-                          isPaid
-                            ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/25'
-                            : 'bg-amber-500/15 text-amber-300 border-amber-500/30 hover:bg-amber-500/25'
-                        }`}
+                        aria-pressed={isPaid}
+                        className="ui-action-toggle"
                         title="Cambiar estado del pago"
                         aria-label={`Pago ${isPaid ? 'cobrado' : 'pendiente por cobrar'} de ${inc.client_name}. Cambiar estado`}
                       >
                         {isPaid ? 'Cobrado' : 'Pendiente por cobrar'}
-                        <RefreshCw size={14} aria-hidden="true" />
+                        <RefreshCw size={16} aria-hidden="true" />
                       </button>
                       {inc.is_recurring && (
                         <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-obsidian-surface text-obsidian-muted border border-obsidian-border">
@@ -256,16 +254,18 @@ export const SubscriptionsLists: React.FC<SubscriptionsListsProps> = ({
             <span>Agregar servicio</span>
           </button>
           <details className="group basis-full border-t border-obsidian-border/50 pt-2 text-[11px]">
-            <summary className="inline-flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-lg px-2 text-obsidian-muted hover:bg-obsidian-surface hover:text-obsidian-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent [&::-webkit-details-marker]:hidden">
+            {/* [Menú y selector] Despliega la estimación anual de costos. */}
+            <summary data-caret="manual" className="ui-nav-action w-full cursor-pointer list-none text-[11px] [&::-webkit-details-marker]:hidden">
               <span>Costos anuales estimados</span>
               <span className="text-[10px]">Opcional</span>
+              <ChevronDown size={16} className="ml-auto shrink-0 transition-transform group-open:rotate-180" aria-hidden="true" />
             </summary>
             <div className="flex flex-wrap gap-x-4 gap-y-1 pb-1 font-mono">
               <span className="text-obsidian-muted">
-                Por mi cuenta: <strong className="text-obsidian-text">${formatAmount(realProfit.myRenewalsYearlyMXN)} MXN/año</strong>
+                Por mi cuenta: <strong className="text-obsidian-text">{profitCurrencyView === 'USD' && usdRate <= 0 ? 'Sin tipo de cambio' : `$${formatAmount(profitCurrencyView === 'USD' ? realProfit.myRenewalsYearlyMXN / usdRate : realProfit.myRenewalsYearlyMXN)} ${profitCurrencyView}/año`}</strong>
               </span>
               <span className="text-obsidian-muted">
-                Por cuenta del cliente: <strong className="text-obsidian-text">${formatAmount(realProfit.clientRenewalsYearlyMXN)} MXN/año</strong>
+                Por cuenta del cliente: <strong className="text-obsidian-text">{profitCurrencyView === 'USD' && usdRate <= 0 ? 'Sin tipo de cambio' : `$${formatAmount(profitCurrencyView === 'USD' ? realProfit.clientRenewalsYearlyMXN / usdRate : realProfit.clientRenewalsYearlyMXN)} ${profitCurrencyView}/año`}</strong>
               </span>
             </div>
           </details>
@@ -334,7 +334,8 @@ export const SubscriptionsLists: React.FC<SubscriptionsListsProps> = ({
                     </div>
                   </div>
                   <details className="group mt-1.5">
-                    <summary data-caret="manual" className="inline-flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-lg px-2 text-xs text-obsidian-muted hover:bg-obsidian-surface hover:text-obsidian-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent [&::-webkit-details-marker]:hidden">
+                    {/* [Acción secundaria] Expande los detalles del servicio. */}
+                    <summary data-caret="manual" className="ui-nav-action w-full cursor-pointer list-none text-xs [&::-webkit-details-marker]:hidden">
                       <span>Ver detalles</span>
                       <ChevronDown size={16} aria-hidden="true" className="transition-transform group-open:rotate-180" />
                     </summary>

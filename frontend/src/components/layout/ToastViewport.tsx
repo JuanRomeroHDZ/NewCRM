@@ -1,4 +1,5 @@
 import React from 'react';
+import { X } from 'lucide-react';
 import { useVault } from '../../context/VaultContext';
 
 export const ToastViewport: React.FC = () => {
@@ -24,13 +25,14 @@ export const ToastViewport: React.FC = () => {
           }`}
         >
           <span className="min-w-0 break-words">{toast.message}</span>
+          {/* [Icono] Descarta la notificación actual. */}
           <button
             type="button"
             onClick={() => dismissToast(toast.id)}
             aria-label="Cerrar notificación"
-            className="shrink-0 inline-flex items-center justify-center min-w-[44px] min-h-[44px] rounded-lg p-1 text-white/60 hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+            className="ui-action-icon shrink-0"
           >
-            <span aria-hidden="true" className="text-base font-bold leading-none">&times;</span>
+            <X size={16} aria-hidden="true" />
           </button>
         </div>
       ))}

@@ -66,7 +66,7 @@ function OverviewRows({ links, onOpen }: { links: ChildLink[]; onOpen: (id: Sect
     <nav aria-label="Secciones del módulo" className="divide-y divide-obsidian-border">
       {/* [Navegación] Cada fila abre el área de trabajo correspondiente. */}
       {links.map(({ id, label, description, icon: Icon }) => (
-        <button key={id} type="button" onClick={() => onOpen(id)} className="ui-nav-action group min-h-[60px] w-full min-w-0 gap-3 py-3 focus-visible:ring-inset">
+        <button key={id} type="button" onClick={() => onOpen(id)} className="ui-nav-action group min-h-[60px] w-full min-w-0 gap-3 rounded-none border-0 px-3 py-3 focus-visible:ring-inset">
           <Icon size={18} className="shrink-0 text-obsidian-muted" aria-hidden="true" />
           <span className="min-w-0 flex-1">
             <span className="block truncate text-sm font-medium text-obsidian-text">{label}</span>
@@ -150,6 +150,7 @@ export const ModuleOverviewView: React.FC = () => {
             { label: 'Prospectos', value: count(prospects.length) },
             { label: 'Con demo', value: count(prospects.filter((item) => Boolean(item.demo_url)).length) },
             { label: 'Seguimientos pendientes', value: count(followups.length) },
+            { label: 'Con respuesta', value: count(prospects.filter((item) => Boolean(item.responded_at)).length) },
           ];
         } else failed = true;
       } else if (activeSection === 'overview_communications') {
@@ -160,7 +161,10 @@ export const ModuleOverviewView: React.FC = () => {
         failed = !emails || !platforms || !graph;
         nextMetrics = [
           ...(emails ? [{ label: 'Correos principales', value: count(emails.length), detail: `${count(emails.filter((item) => item.two_factor_method !== 'none').length)} con verificación en dos pasos` }] : []),
-          ...(platforms ? [{ label: 'Servicios vinculados', value: count(platforms.length) }] : []),
+          ...(platforms ? [
+            { label: 'Servicios vinculados', value: count(platforms.length), detail: `${count(platforms.filter((item) => item.subscription_status === 'active').length)} activos · ${count(platforms.filter((item) => item.subscription_status === 'free_trial').length)} en prueba` },
+            { label: 'Acceso a servicios', value: `${count(platforms.filter((item) => item.access_type === 'sso').length)} con correo`, detail: `${count(platforms.filter((item) => item.access_type === 'own_password').length)} con contraseña propia` },
+          ] : []),
           ...(graph ? [{ label: 'Conexiones registradas', value: count(graph.links.length), detail: `${count(graph.nodes.length)} elementos en el mapa` }] : []),
         ];
       } else if (activeSection === 'overview_security') {
@@ -186,7 +190,7 @@ export const ModuleOverviewView: React.FC = () => {
         const trash = result[1].status === 'fulfilled' ? result[1].value as unknown[] : null;
         failed = !logs || !trash;
         nextMetrics = [
-          ...(logs ? [{ label: 'Registros de actividad', value: count(logs.total), detail: logs.items.length ? 'Se consultó el registro más reciente.' : 'Sin actividad registrada.' }] : []),
+          ...(logs ? [{ label: 'Registros de actividad', value: count(logs.total), detail: logs.items.length ? `Último evento: ${logs.items[0].action} · ${logs.items[0].entity_type}` : 'Sin actividad registrada.' }] : []),
           ...(trash ? [{ label: 'Elementos en papelera', value: count(trash.length) }] : []),
         ];
       }

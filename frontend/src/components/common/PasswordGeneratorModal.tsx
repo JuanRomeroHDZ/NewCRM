@@ -124,13 +124,13 @@ export const PasswordGeneratorModal: React.FC = () => {
             aria-label="Cerrar generador"
             className="ui-action-icon"
           >
-            <X size={18} />
+            <X size={16} aria-hidden="true" />
           </button>
         </div>
 
         {/* Display Box */}
         <div className="mb-5 p-4 rounded-xl bg-obsidian-bg border border-obsidian-border flex items-center justify-between gap-3 group">
-          <span className="font-mono text-sm text-cyan-200 tracking-wider break-all select-all font-medium">
+          <span className="font-mono text-sm text-obsidian-text tracking-wider break-all select-all font-medium">
             {generatedPassword || (generationError ? 'Sin contraseña generada' : 'Generando...')}
           </span>
           <div className="flex items-center gap-1.5 flex-shrink-0">
@@ -142,7 +142,7 @@ export const PasswordGeneratorModal: React.FC = () => {
               aria-label="Regenerar contraseña"
               className="ui-action-icon"
             >
-              <RefreshCw size={15} className={isGenerating ? 'animate-spin' : ''} />
+              <RefreshCw size={16} className={isGenerating ? 'animate-spin' : ''} aria-hidden="true" />
             </button>
             <button
               type="button"
@@ -152,12 +152,12 @@ export const PasswordGeneratorModal: React.FC = () => {
             >
               {copied ? (
                 <>
-                  <Check size={14} />
+                  <Check size={16} aria-hidden="true" />
                   <span>Copiado</span>
                 </>
               ) : (
                 <>
-                  <Copy size={14} />
+                  <Copy size={16} aria-hidden="true" />
                   <span>Copiar</span>
                 </>
               )}
@@ -220,7 +220,7 @@ export const PasswordGeneratorModal: React.FC = () => {
               max={mode === 'random' ? 48 : 32}
               value={length}
               onChange={(e) => setLength(Number(e.target.value))}
-              className="w-full h-1.5 bg-obsidian-surface rounded-lg appearance-none cursor-pointer accent-indigo-500"
+              className="w-full h-1.5 bg-obsidian-surface rounded-lg appearance-none cursor-pointer accent-obsidian-accent"
             />
           </div>
 
@@ -230,7 +230,7 @@ export const PasswordGeneratorModal: React.FC = () => {
                 type="checkbox"
                 checked={includeUpper}
                 onChange={(e) => setIncludeUpper(e.target.checked)}
-                className="rounded border-obsidian-border bg-obsidian-bg text-indigo-600 focus:ring-0"
+                className="rounded border-obsidian-border bg-obsidian-bg accent-obsidian-accent"
               />
               <span className="text-obsidian-text">Mayúsculas (A-Z)</span>
             </label>
@@ -240,7 +240,7 @@ export const PasswordGeneratorModal: React.FC = () => {
                 type="checkbox"
                 checked={includeLower}
                 onChange={(e) => setIncludeLower(e.target.checked)}
-                className="rounded border-obsidian-border bg-obsidian-bg text-indigo-600 focus:ring-0"
+                className="rounded border-obsidian-border bg-obsidian-bg accent-obsidian-accent"
               />
               <span className="text-obsidian-text">Minúsculas (a-z)</span>
             </label>
@@ -250,7 +250,7 @@ export const PasswordGeneratorModal: React.FC = () => {
                 type="checkbox"
                 checked={includeDigits}
                 onChange={(e) => setIncludeDigits(e.target.checked)}
-                className="rounded border-obsidian-border bg-obsidian-bg text-indigo-600 focus:ring-0"
+                className="rounded border-obsidian-border bg-obsidian-bg accent-obsidian-accent"
               />
               <span className="text-obsidian-text">Números (0-9)</span>
             </label>
@@ -260,7 +260,7 @@ export const PasswordGeneratorModal: React.FC = () => {
                 type="checkbox"
                 checked={includeSymbols}
                 onChange={(e) => setIncludeSymbols(e.target.checked)}
-                className="rounded border-obsidian-border bg-obsidian-bg text-indigo-600 focus:ring-0"
+                className="rounded border-obsidian-border bg-obsidian-bg accent-obsidian-accent"
               />
               <span className="text-obsidian-text">Símbolos (!@#$)</span>
             </label>
@@ -270,7 +270,7 @@ export const PasswordGeneratorModal: React.FC = () => {
                 type="checkbox"
                 checked={avoidAmbiguous}
                 onChange={(e) => setAvoidAmbiguous(e.target.checked)}
-                className="rounded border-obsidian-border bg-obsidian-bg text-indigo-600 focus:ring-0"
+                className="rounded border-obsidian-border bg-obsidian-bg accent-obsidian-accent"
               />
               <span className="text-obsidian-text">Evitar caracteres ambiguos (0, O, I, l, 1)</span>
             </label>

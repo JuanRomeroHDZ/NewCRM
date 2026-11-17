@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { DollarSign, Globe, Plus } from 'lucide-react';
+import { DollarSign, Globe, Plus, X } from 'lucide-react';
 import { useVault } from '../../../context/VaultContext';
 import { api } from '../../../lib/api';
 import { INPUT_LIMITS, isValidCalendarDate } from '../../../lib/validation';
@@ -255,10 +255,10 @@ export const InspectorFinanceForms: React.FC<InspectorFinanceFormsProps> = ({
             type="button"
             onClick={() => setShowAddIncome(!showAddIncome)}
             aria-expanded={showAddIncome}
-            className="ui-action-secondary"
+            className={showAddIncome ? 'ui-action-secondary' : 'ui-action-primary'}
           >
-            {/* [Acción secundaria] Muestra u oculta el formulario de pago. */}
-            <Plus size={16} aria-hidden="true" />
+            {/* [Acción principal / secundaria] Abre el alta de pago o cierra el formulario. */}
+            {showAddIncome ? <X size={16} aria-hidden="true" /> : <Plus size={16} aria-hidden="true" />}
             <span>{showAddIncome ? 'Cerrar' : 'Registrar Pago'}</span>
           </button>
         </div>
@@ -291,7 +291,7 @@ export const InspectorFinanceForms: React.FC<InspectorFinanceFormsProps> = ({
               onChange={(e) => setIncConcept(e.target.value)}
               placeholder="Concepto (ej. Anticipo 50% Página Web)"
               aria-label="Concepto del pago"
-              className="min-h-[44px] w-full rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 text-xs text-white focus:border-indigo-400 focus:outline-none"
+              className="min-h-[44px] w-full rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 text-xs text-white "
             />
             <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-3">
               <input
@@ -304,13 +304,13 @@ export const InspectorFinanceForms: React.FC<InspectorFinanceFormsProps> = ({
                 onChange={(e) => setIncAmount(e.target.value)}
                 placeholder="Monto"
                 aria-label="Monto del pago"
-                className="min-h-[44px] rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 font-mono text-xs text-white focus:border-indigo-400 focus:outline-none"
+                className="min-h-[44px] rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 font-mono text-xs text-white "
               />
               <select
                 value={incCurrency}
                 onChange={(e) => setIncCurrency(e.target.value)}
                 aria-label="Moneda del pago"
-                className="min-h-[44px] rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 text-xs text-white focus:border-indigo-400 focus:outline-none"
+                className="min-h-[44px] rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 text-xs text-white "
               >
                 {supportedCurrencies.map((curr) => (
                   <option key={curr.code} value={curr.code}>
@@ -322,7 +322,7 @@ export const InspectorFinanceForms: React.FC<InspectorFinanceFormsProps> = ({
                 value={incStatus}
                 onChange={(e) => setIncStatus(e.target.value as 'cobrado' | 'pendiente')}
                 aria-label="Estado del pago"
-                className="min-h-[44px] rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 text-xs text-white focus:border-indigo-400 focus:outline-none"
+                className="min-h-[44px] rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 text-xs text-white "
               >
                 <option value="cobrado">Cobrado</option>
                 <option value="pendiente">Pendiente</option>
@@ -333,7 +333,7 @@ export const InspectorFinanceForms: React.FC<InspectorFinanceFormsProps> = ({
                 value={incCategory}
                 onChange={(e) => setIncCategory(e.target.value)}
                 aria-label="Categoría del pago"
-                className="min-h-[44px] rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 text-xs text-white focus:border-indigo-400 focus:outline-none"
+                className="min-h-[44px] rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 text-xs text-white "
               >
                 {INCOME_CATEGORY_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>
@@ -347,7 +347,7 @@ export const InspectorFinanceForms: React.FC<InspectorFinanceFormsProps> = ({
                 value={incDate}
                 onChange={(e) => setIncDate(e.target.value)}
                 aria-label="Fecha del pago"
-                className="min-h-[44px] rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 font-mono text-xs text-white focus:border-indigo-400 focus:outline-none"
+                className="min-h-[44px] rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 font-mono text-xs text-white "
               />
             </div>
             <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
@@ -423,10 +423,10 @@ export const InspectorFinanceForms: React.FC<InspectorFinanceFormsProps> = ({
             type="button"
             onClick={() => setShowAddDomain(!showAddDomain)}
             aria-expanded={showAddDomain}
-            className="ui-action-secondary"
+            className={showAddDomain ? 'ui-action-secondary' : 'ui-action-primary'}
           >
-            {/* [Acción secundaria] Muestra u oculta el formulario de servicio. */}
-            <Plus size={16} aria-hidden="true" />
+            {/* [Acción principal / secundaria] Abre el alta de servicio o cierra el formulario. */}
+            {showAddDomain ? <X size={16} aria-hidden="true" /> : <Plus size={16} aria-hidden="true" />}
             <span>{showAddDomain ? 'Cerrar' : 'Asociar'}</span>
           </button>
         </div>
@@ -443,14 +443,14 @@ export const InspectorFinanceForms: React.FC<InspectorFinanceFormsProps> = ({
               onChange={(e) => setDomName(e.target.value)}
               placeholder="Dominio o Servicio (ej. www.cliente.com)"
               aria-label="Nombre del dominio o servicio"
-              className="min-h-[44px] w-full rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 text-xs text-white focus:border-indigo-400 focus:outline-none"
+              className="min-h-[44px] w-full rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 text-xs text-white "
             />
             <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
               <select
                 value={domType}
                 onChange={(e) => setDomType(e.target.value)}
                 aria-label="Tipo de servicio"
-                className="min-h-[44px] rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 text-xs text-white focus:border-indigo-400 focus:outline-none"
+                className="min-h-[44px] rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 text-xs text-white "
               >
                 {RENEWAL_SERVICE_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>
@@ -465,7 +465,7 @@ export const InspectorFinanceForms: React.FC<InspectorFinanceFormsProps> = ({
                 onChange={(e) => setDomProvider(e.target.value)}
                 placeholder="Proveedor (ej. Namecheap)"
                 aria-label="Proveedor del servicio"
-                className="min-h-[44px] rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 text-xs text-white focus:border-indigo-400 focus:outline-none"
+                className="min-h-[44px] rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 text-xs text-white "
               />
             </div>
             <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-3">
@@ -478,7 +478,7 @@ export const InspectorFinanceForms: React.FC<InspectorFinanceFormsProps> = ({
                 onChange={(e) => setDomCost(e.target.value)}
                 placeholder="Costo base"
                 aria-label="Costo base de renovación"
-                className="min-h-[44px] rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 font-mono text-xs text-white focus:border-indigo-400 focus:outline-none"
+                className="min-h-[44px] rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 font-mono text-xs text-white "
               />
               <input
                 type="number"
@@ -489,13 +489,13 @@ export const InspectorFinanceForms: React.FC<InspectorFinanceFormsProps> = ({
                 onChange={(e) => setDomCharge(e.target.value)}
                 placeholder="Cobro cliente"
                 aria-label="Cobro al cliente"
-                className="min-h-[44px] rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 font-mono text-xs text-white focus:border-indigo-400 focus:outline-none"
+                className="min-h-[44px] rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 font-mono text-xs text-white "
               />
               <select
                 value={domCurrency}
                 onChange={(e) => setDomCurrency(e.target.value)}
                 aria-label="Moneda de renovación"
-                className="min-h-[44px] rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 text-xs text-white focus:border-indigo-400 focus:outline-none"
+                className="min-h-[44px] rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 text-xs text-white "
               >
                 {supportedCurrencies.map((curr) => (
                   <option key={curr.code} value={curr.code}>
@@ -509,7 +509,7 @@ export const InspectorFinanceForms: React.FC<InspectorFinanceFormsProps> = ({
                 value={domPaidBy}
                 onChange={(e) => setDomPaidBy(e.target.value as 'me' | 'client')}
                 aria-label="Responsable del pago"
-                className="min-h-[44px] rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 text-xs text-white focus:border-indigo-400 focus:outline-none"
+                className="min-h-[44px] rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 text-xs text-white "
               >
                 <option value="client">Por cuenta del cliente</option>
                 <option value="me">Por mi cuenta</option>
@@ -520,7 +520,7 @@ export const InspectorFinanceForms: React.FC<InspectorFinanceFormsProps> = ({
                 value={domDate}
                 onChange={(e) => setDomDate(e.target.value)}
                 aria-label="Fecha de renovación"
-                className="min-h-[44px] rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 font-mono text-xs text-white focus:border-indigo-400 focus:outline-none"
+                className="min-h-[44px] rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 font-mono text-xs text-white "
               />
               <button
                 type="submit"

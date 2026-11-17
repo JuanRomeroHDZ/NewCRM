@@ -76,8 +76,10 @@ class ModalLoadBoundary extends React.Component<
           <h2 id="modal-load-error-title" className="font-serif text-lg font-semibold text-white">No se pudo abrir la ventana</h2>
           <p className="mt-2 text-sm text-obsidian-muted">La vista no terminó de cargarse. Puedes cerrarla o recargar la aplicación.</p>
           <div className="mt-4 flex flex-wrap gap-2">
-            <button type="button" onClick={this.props.onClose} className="min-h-[44px] rounded-lg border border-obsidian-border px-4 text-sm text-white hover:bg-obsidian-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300">Cerrar</button>
-            <button type="button" onClick={() => window.location.reload()} className="min-h-[44px] rounded-lg bg-indigo-600 px-4 text-sm font-semibold text-white hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300">Recargar</button>
+            {/* [Acción secundaria] Cierra el aviso y vuelve a la tarea anterior. */}
+            <button type="button" onClick={this.props.onClose} className="ui-action-secondary">Cerrar</button>
+            {/* [Acción secundaria] Vuelve a cargar la vista después del error. */}
+            <button type="button" onClick={() => window.location.reload()} className="ui-action-secondary">Recargar</button>
           </div>
         </div>
       </div>

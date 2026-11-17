@@ -321,10 +321,10 @@ export const ProspectsView: React.FC = () => {
                   >
                     {/* [Navegación] Abre el detalle del prospecto seleccionado. */}
                     <div className="min-w-0 flex-1 space-y-1">
-                      <span className="block break-words text-sm font-medium text-white">
+                      <span className="block break-words text-sm font-medium text-white [overflow-wrap:anywhere]">
                         {prospect.company_name}
                       </span>
-                      <span className="block break-words text-xs text-obsidian-muted">
+                      <span className="block break-words text-xs text-obsidian-muted [overflow-wrap:anywhere]">
                         {prospect.contact_name || prospect.contact_email || 'Sin contacto registrado'}
                       </span>
                       <div className="flex flex-wrap items-center gap-2 pt-0.5 text-[11px]">

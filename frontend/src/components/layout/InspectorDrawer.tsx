@@ -330,6 +330,7 @@ export const InspectorDrawer: React.FC = () => {
 
   return (
     <>
+      {/* [Acción secundaria] El fondo cierra el inspector; su superficie cubre la pantalla. */}
       <button
         type="button"
         aria-label="Cerrar inspector lateral"
@@ -388,7 +389,7 @@ export const InspectorDrawer: React.FC = () => {
               aria-label="Cerrar inspector"
               className="ui-action-icon"
             >
-              <X size={17} aria-hidden="true" />
+              <X size={16} aria-hidden="true" />
             </button>
           </div>
         </div>
@@ -464,7 +465,7 @@ export const InspectorDrawer: React.FC = () => {
       <div className={`min-h-0 min-w-0 flex-1 overflow-y-auto break-words p-3 [overflow-wrap:anywhere] sm:p-5 ${isProspect ? 'space-y-3' : 'space-y-5'}`}>
         {loading ? (
           <div role="status" className="flex flex-col items-center justify-center py-12 text-xs text-obsidian-muted">
-            <div className="mb-2 h-6 w-6 animate-spin rounded-full border-2 border-indigo-500/30 border-t-indigo-500" />
+            <div className="mb-2 h-6 w-6 animate-spin rounded-full border-2 border-obsidian-border border-t-obsidian-accent" />
             Cargando detalles...
           </div>
         ) : fetchError ? (
@@ -500,11 +501,12 @@ export const InspectorDrawer: React.FC = () => {
                     {emailData.inbox_url && (
                       <div className="flex items-center justify-between gap-2 border-b border-obsidian-border py-3">
                         <span className="text-obsidian-muted">Bandeja de Entrada</span>
+                        {/* [Navegación] Abre el webmail asociado al correo. */}
                         <a
                           href={emailData.inbox_url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex min-h-[44px] items-center gap-2 font-medium text-obsidian-text hover:text-white"
+                          className="ui-nav-link inline-flex min-h-[44px] items-center gap-2 font-medium"
                         >
                           <span>Abrir Webmail</span>
                           <ExternalLink size={16} aria-hidden="true" />
@@ -661,11 +663,12 @@ export const InspectorDrawer: React.FC = () => {
                     {platformData.login_url && (
                       <div className="flex items-center justify-between gap-2 border-b border-obsidian-border py-3">
                         <span className="shrink-0 text-obsidian-muted">Enlace de Acceso</span>
+                        {/* [Navegación] Abre el sitio de acceso de la plataforma. */}
                         <a
                           href={platformData.login_url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex min-h-[44px] max-w-[200px] items-center gap-2 truncate font-medium text-obsidian-text hover:text-white"
+                          className="ui-nav-link inline-flex min-h-[44px] max-w-[200px] items-center gap-2 truncate font-medium"
                         >
                           <span className="truncate">{platformData.login_url}</span>
                           <ExternalLink size={16} className="flex-shrink-0" aria-hidden="true" />

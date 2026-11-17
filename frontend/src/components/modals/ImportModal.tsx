@@ -199,9 +199,9 @@ export const ImportModal: React.FC = () => {
             disabled={loading}
             onClick={closeWhenIdle}
             aria-label="Cerrar importador"
-            className="inline-flex min-w-[44px] min-h-[44px] items-center justify-center p-2 text-obsidian-muted hover:text-white rounded-lg hover:bg-obsidian-surface flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 disabled:opacity-50"
+            className="ui-action-icon flex-shrink-0"
           >
-            <X size={18} aria-hidden="true" />
+            <X size={16} aria-hidden="true" />
           </button>
         </div>
 
@@ -211,6 +211,7 @@ export const ImportModal: React.FC = () => {
             {loading && <p role="status" className="text-obsidian-muted">Importando registros. Espera a que termine antes de cerrar.</p>}
             <div>
               <span className="text-obsidian-text font-medium block mb-1.5">Origen de los Datos</span>
+              {/* [Estado seleccionable] El formato activo se marca con aria-pressed. */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2" role="group" aria-label="Origen de los datos">
                 {[
                   { id: 'bitwarden', label: 'Bitwarden JSON' },
@@ -224,11 +225,7 @@ export const ImportModal: React.FC = () => {
                     disabled={loading}
                     aria-pressed={source === src.id}
                     onClick={() => setSource(src.id as any)}
-                    className={`p-2 rounded-xl text-center text-xs font-medium border transition-colors ${
-                      source === src.id
-                      ? 'bg-indigo-600 border-indigo-500 text-white'
-                        : 'bg-obsidian-bg border-obsidian-border text-obsidian-muted hover:text-white'
-                    }`}
+                    className="ui-action-toggle w-full px-2 text-center text-xs"
                   >
                     {src.label}
                   </button>
@@ -257,19 +254,21 @@ export const ImportModal: React.FC = () => {
             </div>
           </div>
 
+          {/* [Acción secundaria] Cancela la importación antes de procesarla. */}
           <div className="pt-3 border-t border-obsidian-border flex flex-wrap items-center justify-end gap-2.5 shrink-0">
             <button
               type="button"
               disabled={loading}
               onClick={closeWhenIdle}
-              className="min-h-[44px] px-4 py-2 text-xs font-medium text-obsidian-muted hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+              className="ui-action-secondary"
             >
               Cancelar
             </button>
+              {/* [Acción principal] Valida y procesa la importación solicitada. */}
             <button
               type="submit"
               disabled={loading || !inputText.trim()}
-              className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl bg-indigo-600 px-5 py-2 text-xs font-semibold text-white transition-colors hover:bg-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 disabled:opacity-50"
+              className="ui-action-primary"
             >
               {loading ? 'Procesando e Importando...' : 'Iniciar Importación Atómica'}
             </button>

@@ -495,7 +495,7 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
         {showGroup('text') && (
           <div className={`flex min-w-0 max-w-full items-center gap-0.5 pr-1.5 border-r border-obsidian-border ${toolFilter === 'all' ? 'flex-wrap' : 'shrink-0 flex-nowrap'}`}>
             <details className="relative shrink-0" onToggle={positionToolbarPopover} onClick={(event) => { if ((event.target as HTMLElement).closest('button')) event.currentTarget.open = false; }}>
-              <summary data-caret="manual" aria-label="Encabezados" title="Encabezados" className="flex min-h-[44px] cursor-pointer list-none items-center justify-center gap-0.5 rounded px-1 text-obsidian-muted hover:bg-obsidian-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent"><Heading1 className="h-4 w-4" /><ChevronDown className="h-3 w-3" aria-hidden="true" /></summary>
+              <summary data-caret="manual" aria-label="Encabezados" title="Encabezados" className="ui-action-secondary cursor-pointer list-none px-1 [&::-webkit-details-marker]:hidden"><Heading1 className="h-4 w-4" /><ChevronDown className="h-3 w-3" aria-hidden="true" /></summary>
               <div data-writeup-toolbar-popover className="absolute left-0 top-full z-50 mt-1 flex gap-1 rounded-lg border border-obsidian-borderLight bg-obsidian-panel p-1 shadow-xl">
             <button type="button" onClick={() => prefixLineAtCursor('# ')} title="Título H1" aria-label="Título H1" className="ui-action-icon">
               <Heading1 className="w-4 h-4" />
@@ -509,9 +509,9 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
             {[4, 5, 6].map((level) => <button key={level} type="button" onClick={() => prefixLineAtCursor(`${'#'.repeat(level)} `)} title={`Encabezado H${level}`} aria-label={`Encabezado H${level}`} className="ui-action-secondary">H{level}</button>)}
               </div>
             </details>
-            <button type="button" onClick={() => toggleTray('label')} aria-label="Insertar etiqueta semántica" aria-expanded={activeTray === 'label'} title="Etiqueta semántica" className="ui-action-secondary"><Tag className="h-4 w-4" /><ChevronDown className="h-3 w-3" aria-hidden="true" /></button>
+            <button type="button" onClick={() => toggleTray('label')} aria-label="Insertar etiqueta semántica" aria-expanded={activeTray === 'label'} aria-pressed={activeTray === 'label'} title="Etiqueta semántica" className="ui-action-toggle"><Tag className="h-4 w-4" /><ChevronDown className="h-3 w-3" aria-hidden="true" /></button>
             <details className="relative shrink-0" onToggle={positionToolbarPopover} onClick={(event) => { if ((event.target as HTMLElement).closest('button')) event.currentTarget.open = false; }}>
-              <summary data-caret="manual" aria-label="Formato de texto" title="Formato de texto" className="flex min-h-[44px] cursor-pointer list-none items-center justify-center gap-0.5 rounded px-1 text-obsidian-muted hover:bg-obsidian-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent"><Bold className="h-4 w-4" /><ChevronDown className="h-3 w-3" aria-hidden="true" /></summary>
+              <summary data-caret="manual" aria-label="Formato de texto" title="Formato de texto" className="ui-action-secondary cursor-pointer list-none px-1 [&::-webkit-details-marker]:hidden"><Bold className="h-4 w-4" /><ChevronDown className="h-3 w-3" aria-hidden="true" /></summary>
               <div data-writeup-toolbar-popover className="absolute left-0 top-full z-50 mt-1 flex gap-1 rounded-lg border border-obsidian-borderLight bg-obsidian-panel p-1 shadow-xl">
             <button type="button" onClick={() => insertAtCursor('**', true, '**', 'negrita')} title="Negrita" aria-label="Negrita" className="ui-action-icon">
               <Bold className="w-4 h-4" />
@@ -535,7 +535,7 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
               <Link className="w-4 h-4" />
             </button>
             <details className="relative shrink-0" onToggle={positionToolbarPopover} onClick={(event) => { if ((event.target as HTMLElement).closest('button')) event.currentTarget.open = false; }}>
-              <summary data-caret="manual" aria-label="Estilos de lista" title="Estilos de lista" className="flex min-h-[44px] cursor-pointer list-none items-center justify-center gap-0.5 rounded px-1 text-obsidian-muted hover:bg-obsidian-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent"><List className="h-4 w-4" aria-hidden="true" /><ChevronDown className="h-3 w-3" aria-hidden="true" /></summary>
+              <summary data-caret="manual" aria-label="Estilos de lista" title="Estilos de lista" className="ui-action-secondary cursor-pointer list-none px-1 [&::-webkit-details-marker]:hidden"><List className="h-4 w-4" aria-hidden="true" /><ChevronDown className="h-3 w-3" aria-hidden="true" /></summary>
               <div data-writeup-toolbar-popover className="absolute left-0 top-full z-50 mt-1 grid w-52 grid-cols-1 rounded-lg border border-obsidian-borderLight bg-obsidian-panel p-1 shadow-xl">
                 {([
                   ['bullet', 'Viñetas'], ['ordered', 'Numerada'], ['task', 'Lista de tareas'], ['done', 'Tareas completadas'],
@@ -571,7 +571,9 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
               onClick={() => toggleTray('table')}
               title="Insertar tabla"
               aria-label="Tabla"
-              className="ui-action-icon"
+              aria-expanded={activeTray === 'table'}
+              aria-pressed={activeTray === 'table'}
+              className="ui-action-toggle"
             >
               <Table className="w-4 h-4" />
             </button>
@@ -740,16 +742,12 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
             type="button"
             onClick={() => setRedactPreview((v) => !v)}
             aria-pressed={redactPreview}
-            aria-label={redactPreview ? 'Mostrar vista interna' : 'Mostrar vista para cliente'}
-            className={`writeup-toolbar-compact-button min-h-[44px] px-3 py-1 rounded-lg text-xs flex items-center gap-1.5 border shrink-0 ${
-              redactPreview
-                ? 'bg-obsidian-accent/10 border-obsidian-accent text-obsidian-accent'
-                : 'bg-obsidian-surface border-obsidian-borderLight text-obsidian-muted'
-            } focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent`}
+            aria-label="Vista para cliente"
+            className="ui-action-toggle writeup-toolbar-compact-button min-h-[44px] shrink-0 px-3"
             title="La vista para cliente oculta únicamente el texto marcado con {{redact:...}}; revisa el contenido antes de compartir"
           >
             {redactPreview ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-            <span className="writeup-editor-toolbar-label">{redactPreview ? 'Vista censurada' : 'Vista interna'}</span>
+            <span className="writeup-editor-toolbar-label">Vista para cliente</span>
           </button>
 
           <label className="writeup-view-mode-label relative inline-flex items-center">
@@ -926,7 +924,7 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
             </div>
           </div>
           <div role="group" aria-label="Tipo de índice" className="flex flex-wrap gap-1">
-            {([['headings', `Secciones (${outlineItems.length})`], ['table', `Tablas (${outlineObjects.filter((item) => item.kind === 'table').length})`], ['image', `Imágenes (${outlineObjects.filter((item) => item.kind === 'image').length})`]] as const).map(([value, label]) => <button key={value} type="button" aria-pressed={outlineKind === value} onClick={() => setOutlineKind(value)} className={`min-h-[44px] rounded-md px-2 text-xs focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent ${outlineKind === value ? 'bg-obsidian-accent/15 text-white' : 'bg-obsidian-surface text-obsidian-text hover:bg-obsidian-surface'}`}>{label}</button>)}
+            {([['headings', `Secciones (${outlineItems.length})`], ['table', `Tablas (${outlineObjects.filter((item) => item.kind === 'table').length})`], ['image', `Imágenes (${outlineObjects.filter((item) => item.kind === 'image').length})`]] as const).map(([value, label]) => <button key={value} type="button" aria-pressed={outlineKind === value} onClick={() => setOutlineKind(value)} className="ui-action-toggle px-2 text-xs">{label}</button>)}
           </div>
           {outlineKind === 'headings' ? (outlineItems.length ? <ul>{outlineItems.map((h, i) => <li key={`${h.line}-${i}`} style={{ paddingLeft: `${(h.level - 1) * 12}px` }}><button type="button" onClick={() => jumpToLine(h.line)} className="ui-menu-item w-full text-left"><span className="shrink-0 font-mono text-obsidian-muted">H{h.level}</span><span className="min-w-0 flex-1 truncate">{h.text}</span><span className="shrink-0 font-mono text-obsidian-muted">L{h.line}</span></button></li>)}</ul> : <p className="text-obsidian-muted">Agrega encabezados con # para navegar el informe.</p>) : (outlineObjects.some((item) => item.kind === outlineKind) ? <ul>{outlineObjects.filter((item) => item.kind === outlineKind).map((item, i) => <li key={`${item.line}-${i}`}><button type="button" onClick={() => jumpToLine(item.line)} className="ui-menu-item w-full text-left"><span className="min-w-0 flex-1 truncate">{item.text}</span><span className="shrink-0 font-mono text-obsidian-muted">L{item.line}</span></button></li>)}</ul> : <p className="text-obsidian-muted">No se encontraron {outlineKind === 'table' ? 'tablas' : 'imágenes'} en el Markdown.</p>)}
         </div>

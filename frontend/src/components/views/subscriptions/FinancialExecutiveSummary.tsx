@@ -51,8 +51,6 @@ export const FinancialExecutiveSummary: React.FC<FinancialExecutiveSummaryProps>
   pipelineCurrencyView,
   setPipelineCurrencyView,
   currencyOptions,
-  baseCurrency,
-  secondaryCurrency,
   supportedCurrencies,
   formatAmount,
   isEditingCap,
@@ -70,14 +68,20 @@ export const FinancialExecutiveSummary: React.FC<FinancialExecutiveSummaryProps>
   const capAmountId = useId();
   const capCurrencyId = useId();
 
-  const isProfitBase = profitCurrencyView === baseCurrency;
-  const isPipelineBase = pipelineCurrencyView === baseCurrency;
+  const baseCurrency = profitCurrencyView;
+  const isProfitBase = profitCurrencyView === 'MXN';
+  const displayMXN = (value: number | undefined) => isProfitBase ? (value ?? 0) : fin.usdRate > 0 ? (value ?? 0) / fin.usdRate : NaN;
+  const isPipelineBase = pipelineCurrencyView === 'MXN';
   const getNetTextClass = (amount: number) => amount > 0
     ? 'text-emerald-400'
     : amount < 0
       ? 'text-rose-400'
       : 'text-obsidian-muted';
   const hasUpcomingCharges = fin.criticalRenewals.length > 0 || fin.next30DaysTotalMXN > 0;
+
+  if (!(fin.usdRate > 0)) {
+    return <p role="status" className="border-b border-obsidian-border py-4 text-sm text-obsidian-muted">Actualiza el tipo de cambio para consultar los totales combinados.</p>;
+  }
 
   return (
     <div className="min-w-0 rounded-xl border border-obsidian-border bg-obsidian-panel p-3 sm:p-5 space-y-5">
@@ -200,14 +204,11 @@ export const FinancialExecutiveSummary: React.FC<FinancialExecutiveSummaryProps>
               7 Días
             </span>
           </div>
-          <div className="text-xl font-bold font-mono text-white truncate" title={`$${formatAmount(realProfit.totalWeeklyExpenseMXN)} ${baseCurrency}`}>
-            ${formatAmount(realProfit.totalWeeklyExpenseMXN)} <span className="text-[11px] font-sans text-obsidian-muted">{baseCurrency}</span>
-          </div>
-          <div className="text-xs font-mono text-obsidian-muted truncate">
-            ${formatAmount(realProfit.totalWeeklyExpenseUSD)} {secondaryCurrency}
+          <div className="text-xl font-bold font-mono text-white truncate" title={`$${formatAmount(displayMXN(realProfit.totalWeeklyExpenseMXN))} ${baseCurrency}`}>
+            ${formatAmount(displayMXN(realProfit.totalWeeklyExpenseMXN))} <span className="text-[11px] font-sans text-obsidian-muted">{baseCurrency}</span>
           </div>
           <div className="text-xs font-mono text-obsidian-muted truncate pt-1 border-t border-obsidian-border/40">
-            Fijo: ${formatAmount(realProfit.fixedWeeklyExpenseMXN)} • Variable: ${formatAmount(realProfit.variableWeekExpenseMXN)}
+            Fijo: ${formatAmount(displayMXN(realProfit.fixedWeeklyExpenseMXN))} • Variable: ${formatAmount(displayMXN(realProfit.variableWeekExpenseMXN))}
           </div>
         </div>
 
@@ -221,14 +222,11 @@ export const FinancialExecutiveSummary: React.FC<FinancialExecutiveSummaryProps>
               Mensual
             </span>
           </div>
-          <div className="text-xl font-bold font-mono text-white truncate" title={`$${formatAmount(realProfit.totalMonthlyExpenseMXN)} ${baseCurrency}`}>
-            ${formatAmount(realProfit.totalMonthlyExpenseMXN)} <span className="text-[11px] font-sans text-obsidian-muted">{baseCurrency}</span>
-          </div>
-          <div className="text-xs font-mono text-obsidian-muted truncate">
-            ${formatAmount(realProfit.totalMonthlyExpenseUSD)} {secondaryCurrency}
+          <div className="text-xl font-bold font-mono text-white truncate" title={`$${formatAmount(displayMXN(realProfit.totalMonthlyExpenseMXN))} ${baseCurrency}`}>
+            ${formatAmount(displayMXN(realProfit.totalMonthlyExpenseMXN))} <span className="text-[11px] font-sans text-obsidian-muted">{baseCurrency}</span>
           </div>
           <div className="text-xs font-mono text-obsidian-muted truncate pt-1 border-t border-obsidian-border/40">
-            Fijo: ${formatAmount(realProfit.fixedMonthlyExpenseMXN)} • Compras: ${formatAmount(realProfit.variableMonthExpenseMXN)}
+            Fijo: ${formatAmount(displayMXN(realProfit.fixedMonthlyExpenseMXN))} • Compras: ${formatAmount(displayMXN(realProfit.variableMonthExpenseMXN))}
           </div>
         </div>
 
@@ -242,14 +240,11 @@ export const FinancialExecutiveSummary: React.FC<FinancialExecutiveSummaryProps>
               12 Meses
             </span>
           </div>
-          <div className="text-xl font-bold font-mono text-white truncate" title={`$${formatAmount(realProfit.totalYearlyExpenseMXN)} ${baseCurrency}`}>
-            ${formatAmount(realProfit.totalYearlyExpenseMXN)} <span className="text-[11px] font-sans text-obsidian-muted">{baseCurrency}</span>
-          </div>
-          <div className="text-xs font-mono text-obsidian-muted truncate">
-            ${formatAmount(realProfit.totalYearlyExpenseUSD)} {secondaryCurrency}
+          <div className="text-xl font-bold font-mono text-white truncate" title={`$${formatAmount(displayMXN(realProfit.totalYearlyExpenseMXN))} ${baseCurrency}`}>
+            ${formatAmount(displayMXN(realProfit.totalYearlyExpenseMXN))} <span className="text-[11px] font-sans text-obsidian-muted">{baseCurrency}</span>
           </div>
           <div className="text-xs font-mono text-obsidian-muted truncate pt-1 border-t border-obsidian-border/40">
-            Fijo: ${formatAmount(realProfit.fixedYearlyExpenseMXN)} • Compras: ${formatAmount(realProfit.variableYearExpenseMXN)}
+            Fijo: ${formatAmount(displayMXN(realProfit.fixedYearlyExpenseMXN))} • Compras: ${formatAmount(displayMXN(realProfit.variableYearExpenseMXN))}
           </div>
         </div>
 
@@ -263,16 +258,16 @@ export const FinancialExecutiveSummary: React.FC<FinancialExecutiveSummaryProps>
           </div>
           <div
             className="break-words text-sm font-bold font-mono text-white"
-            title={`Promedio: $${formatAmount(fin.avgMonthlyPerActiveMXN)} ${baseCurrency} ($${formatAmount(fin.avgMonthlyPerActiveUSD)} ${secondaryCurrency})`}
+            title={`Promedio: $${formatAmount(displayMXN(fin.avgMonthlyPerActiveMXN))} ${baseCurrency}`}
           >
-            Prom: ${formatAmount(fin.avgMonthlyPerActiveMXN)} {baseCurrency} <span className="text-[10px] text-obsidian-muted">(${formatAmount(fin.avgMonthlyPerActiveUSD)} {secondaryCurrency})</span>
+            Prom: ${formatAmount(displayMXN(fin.avgMonthlyPerActiveMXN))} {baseCurrency}
           </div>
-          <div className={`text-xs font-mono truncate ${fin.totalOptimizationPotentialYearlyMXN > 0 ? 'text-emerald-400' : 'text-obsidian-muted'}`} title={`Ahorro potencial anual: $${formatAmount(fin.totalOptimizationPotentialYearlyMXN)} ${baseCurrency}`}>
-            Ahorro posible: ${formatAmount(fin.totalOptimizationPotentialYearlyMXN)} {baseCurrency}/año
+          <div className={`text-xs font-mono truncate ${fin.totalOptimizationPotentialYearlyMXN > 0 ? 'text-emerald-400' : 'text-obsidian-muted'}`} title={`Ahorro potencial anual: $${formatAmount(displayMXN(fin.totalOptimizationPotentialYearlyMXN))} ${baseCurrency}`}>
+            Ahorro posible: ${formatAmount(displayMXN(fin.totalOptimizationPotentialYearlyMXN))} {baseCurrency}/año
           </div>
           {fin.alreadySavedMonthlyMXN > 0 && (
             <div className="text-xs font-mono text-obsidian-muted truncate">
-              Ya ahorrado en pausadas: ${formatAmount(fin.alreadySavedMonthlyMXN)} {baseCurrency}/mes
+              Ya ahorrado en pausadas: ${formatAmount(displayMXN(fin.alreadySavedMonthlyMXN))} {baseCurrency}/mes
             </div>
           )}
         </div>
@@ -297,8 +292,7 @@ export const FinancialExecutiveSummary: React.FC<FinancialExecutiveSummaryProps>
                 <div className="font-bold text-white truncate">{fin.peakMonth.monthName}</div>
               </div>
               <div className="text-right font-mono flex-shrink-0">
-                <div className="text-obsidian-text font-bold">${formatAmount(fin.peakMonth.totalMXN)} {baseCurrency}</div>
-                <div className="text-[10px] text-obsidian-muted">${formatAmount(fin.peakMonth.totalUSD)} {secondaryCurrency}</div>
+                <div className="text-obsidian-text font-bold">${formatAmount(displayMXN(fin.peakMonth.totalMXN))} {baseCurrency}</div>
               </div>
             </div>
 
@@ -308,8 +302,7 @@ export const FinancialExecutiveSummary: React.FC<FinancialExecutiveSummaryProps>
                 <div className="font-bold text-white truncate">{fin.lowestMonth.monthName}</div>
               </div>
               <div className="text-right font-mono flex-shrink-0">
-                <div className="text-obsidian-text font-bold">${formatAmount(fin.lowestMonth.totalMXN)} {baseCurrency}</div>
-                <div className="text-[10px] text-obsidian-muted">${formatAmount(fin.lowestMonth.totalUSD)} {secondaryCurrency}</div>
+                <div className="text-obsidian-text font-bold">${formatAmount(displayMXN(fin.lowestMonth.totalMXN))} {baseCurrency}</div>
               </div>
             </div>
           </div>
@@ -332,8 +325,7 @@ export const FinancialExecutiveSummary: React.FC<FinancialExecutiveSummaryProps>
                 <div className="font-bold text-white truncate">{fin.peakWeek.label}</div>
               </div>
               <div className="text-right font-mono flex-shrink-0">
-                <div className="text-obsidian-text font-bold">${formatAmount(fin.peakWeek.totalMXN)} {baseCurrency}</div>
-                <div className="text-[10px] text-obsidian-muted">${formatAmount(fin.peakWeek.totalUSD)} {secondaryCurrency}</div>
+                <div className="text-obsidian-text font-bold">${formatAmount(displayMXN(fin.peakWeek.totalMXN))} {baseCurrency}</div>
               </div>
             </div>
 
@@ -343,8 +335,7 @@ export const FinancialExecutiveSummary: React.FC<FinancialExecutiveSummaryProps>
                 <div className="font-bold text-white truncate">{fin.lowestWeek.label}</div>
               </div>
               <div className="text-right font-mono flex-shrink-0">
-                <div className="text-obsidian-text font-bold">${formatAmount(fin.lowestWeek.totalMXN)} {baseCurrency}</div>
-                <div className="text-[10px] text-obsidian-muted">${formatAmount(fin.lowestWeek.totalUSD)} {secondaryCurrency}</div>
+                <div className="text-obsidian-text font-bold">${formatAmount(displayMXN(fin.lowestWeek.totalMXN))} {baseCurrency}</div>
               </div>
             </div>
           </div>
@@ -376,8 +367,7 @@ export const FinancialExecutiveSummary: React.FC<FinancialExecutiveSummaryProps>
                   </div>
                 </div>
                 <div className="text-right font-mono flex-shrink-0">
-                  <div className="text-white font-bold">${formatAmount(fin.topService.monthlyMXN)} {baseCurrency}</div>
-                  <div className="text-[10px] text-obsidian-muted">${formatAmount(fin.topService.monthlyUSD)} {secondaryCurrency}/mes</div>
+                  <div className="text-white font-bold">${formatAmount(displayMXN(fin.topService.monthlyMXN))} {baseCurrency}</div>
                 </div>
               </button>
 
@@ -392,8 +382,7 @@ export const FinancialExecutiveSummary: React.FC<FinancialExecutiveSummaryProps>
                     </div>
                   </div>
                   <div className="text-right font-mono flex-shrink-0">
-                    <div className="text-obsidian-text font-bold">${formatAmount(fin.topCategory.monthlyMXN)} {baseCurrency}</div>
-                    <div className="text-[10px] text-obsidian-muted">${formatAmount(fin.topCategory.monthlyUSD)} {secondaryCurrency}</div>
+                    <div className="text-obsidian-text font-bold">${formatAmount(displayMXN(fin.topCategory.monthlyMXN))} {baseCurrency}</div>
                   </div>
                 </div>
               )}
@@ -413,7 +402,7 @@ export const FinancialExecutiveSummary: React.FC<FinancialExecutiveSummaryProps>
               <span className="truncate">Cobros próximos</span>
             </span>
             <span className={`text-xs font-mono px-2 py-0.5 rounded border flex-shrink-0 ${hasUpcomingCharges ? 'text-amber-300 bg-amber-500/10 border-amber-500/20' : 'text-obsidian-muted bg-obsidian-surface border-obsidian-border'}`}>
-              30 días: ${formatAmount(fin.next30DaysTotalMXN, 0)} {baseCurrency}
+              30 días: ${formatAmount(displayMXN(fin.next30DaysTotalMXN), 0)} {baseCurrency}
             </span>
           </div>
 
@@ -448,7 +437,7 @@ export const FinancialExecutiveSummary: React.FC<FinancialExecutiveSummaryProps>
                         ${item.platform.subscription_cost} {item.platform.currency}
                       </div>
                       <div className="text-[10px] text-obsidian-muted">
-                        ${formatAmount(item.amountMXN)} {baseCurrency}
+                        ${formatAmount(displayMXN(item.amountMXN))} {baseCurrency}
                       </div>
                     </div>
                   </button>
@@ -557,10 +546,10 @@ export const FinancialExecutiveSummary: React.FC<FinancialExecutiveSummaryProps>
             <div className="space-y-2">
               <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-mono">
                 <span className="text-obsidian-muted">
-                  Gastando: <strong className="text-white">${formatAmount(fin.monthlyMXN)} {baseCurrency}</strong> ({budgetCapEval.usagePercent.toFixed(1)}%)
+                  Gastando: <strong className="text-white">${formatAmount(displayMXN(fin.monthlyMXN))} {baseCurrency}</strong> ({budgetCapEval.usagePercent.toFixed(1)}%)
                 </span>
                 <span className="text-obsidian-muted font-semibold">
-                  Límite: ${formatAmount(budgetCapEval.capMXN)} {baseCurrency} (${formatAmount(budgetCapEval.capUSD)} {secondaryCurrency})
+                  Límite: ${formatAmount(displayMXN(budgetCapEval.capMXN))} {baseCurrency}
                 </span>
               </div>
 
@@ -586,8 +575,8 @@ export const FinancialExecutiveSummary: React.FC<FinancialExecutiveSummaryProps>
                 </span>
                 <span>
                   {budgetCapEval.usagePercent >= 100
-                    ? `Excedido por $${formatAmount(fin.monthlyMXN - budgetCapEval.capMXN)} ${baseCurrency}`
-                    : `Disponible: $${formatAmount(budgetCapEval.capMXN - fin.monthlyMXN)} ${baseCurrency}`}
+                    ? `Excedido por $${formatAmount(displayMXN(fin.monthlyMXN - budgetCapEval.capMXN))} ${baseCurrency}`
+                    : `Disponible: $${formatAmount(displayMXN(budgetCapEval.capMXN - fin.monthlyMXN))} ${baseCurrency}`}
                 </span>
               </div>
             </div>
@@ -686,7 +675,7 @@ export const FinancialExecutiveSummary: React.FC<FinancialExecutiveSummaryProps>
           <div className="flex items-center gap-2 font-mono text-xs min-w-0">
             <TrendingDown size={16} className="text-obsidian-muted flex-shrink-0" aria-hidden="true" />
             <span className="truncate">
-              Suscripción más económica: <strong className="text-white">{fin.lowestPaidService.platform.name}</strong> (${formatAmount(fin.lowestPaidService.monthlyMXN)} {baseCurrency} / ${formatAmount(fin.lowestPaidService.monthlyUSD)} {secondaryCurrency})
+              Suscripción más económica: <strong className="text-white">{fin.lowestPaidService.platform.name}</strong> (${formatAmount(displayMXN(fin.lowestPaidService.monthlyMXN))} {baseCurrency})
             </span>
           </div>
         )}

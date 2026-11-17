@@ -658,8 +658,9 @@ export const C2WorkspaceShell: React.FC = () => {
         </div>
       )}
 
+      {/* [Estado seleccionable] El diagnóstico previo se despliega sin añadir otra tarjeta. */}
       <details className="rounded-lg border border-obsidian-border bg-obsidian-panel px-4 py-3 text-sm">
-        <summary className="flex min-h-[44px] cursor-pointer items-center rounded-lg px-2 font-medium text-white hover:bg-obsidian-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-accent">
+        <summary className="ui-action-toggle w-full cursor-pointer justify-start px-2 font-medium">
           {lang === 'es' ? 'Comprobación previa del módulo' : 'Module preflight check'}
         </summary>
         <div className="mt-3 space-y-2 text-xs text-slate-300">

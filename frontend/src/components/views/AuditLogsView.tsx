@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  Shield, Download, RefreshCw, Eye, EyeOff,
+  Shield, Download, RefreshCw, Eye, EyeOff, ChevronDown,
   Search, Lock, AlertTriangle, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import { useVault } from '../../context/VaultContext';
@@ -10,17 +10,10 @@ import { InfoTooltip } from '../common/InfoTooltip';
 import { EmptyState } from '../common/EmptyState';
 import { InlineErrorNotice } from '../common/InlineErrorNotice';
 import { INPUT_LIMITS } from '../../lib/validation';
+import { censorSensitiveText } from '../../lib/censorSensitiveText';
 
 const PAGE_SIZE = 25;
 const DETAIL_PREVIEW_LENGTH = 160;
-
-function censorSensitiveText(text?: string | null): string {
-  if (!text) return '';
-  return text
-    .replace(/([A-Z0-9.!#$%&'*+/=?^_`{|}~-]+)@([A-Z0-9.-]+\.[A-Z]{2,})/gi, (_match, local: string, domain: string) => `${local.slice(0, 1)}•••@${domain}`)
-    .replace(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g, (address) => address.split('.').map((part, index) => index === 3 ? part : '***').join('.'))
-    .replace(/\+?\d[\d ()-]{5,}\d/g, (phone) => phone.replace(/\d(?=(?:\D*\d){3})/g, '•'));
-}
 
 interface AuditDetailsProps {
   text?: string | null;
@@ -42,9 +35,11 @@ const AuditDetails: React.FC<AuditDetailsProps> = ({ text, entityType, entity, i
     <div className="min-w-0">
       <p className={`whitespace-pre-wrap break-words ${value ? '' : 'text-white/40'}`}>{preview}</p>
       <details className="group mt-1.5">
-        <summary className="inline-flex min-h-11 cursor-pointer list-none items-center text-[11px] font-medium text-obsidian-muted underline decoration-obsidian-borderLight underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent [&::-webkit-details-marker]:hidden">
+        {/* [Acción secundaria] Expande el registro para mostrar datos completos. */}
+        <summary data-caret="manual" className="ui-action-secondary cursor-pointer list-none text-[11px] [&::-webkit-details-marker]:hidden">
           <span className="group-open:hidden">Ver más</span>
           <span className="hidden group-open:inline">Ver menos</span>
+          <ChevronDown size={16} className="shrink-0 text-obsidian-muted transition-transform group-open:rotate-180" aria-hidden="true" />
         </summary>
         <div className="mt-2 space-y-2 border-t border-obsidian-border pt-2 text-[11px]">
           <p className="whitespace-pre-wrap break-words">{value || 'Este registro no incluye una descripción adicional.'}</p>
@@ -481,7 +476,7 @@ export const AuditLogsView: React.FC = () => {
                                 else next.add(log.id);
                                 return next;
                               })}
-                              className="mt-1 inline-flex min-h-11 items-center text-[11px] font-medium text-obsidian-muted underline decoration-obsidian-borderLight underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent"
+                              className="ui-action-secondary mt-1"
                             >
                               {isExpanded ? 'Ver menos' : 'Ver más'}
                             </button>

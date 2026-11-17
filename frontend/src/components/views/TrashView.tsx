@@ -8,6 +8,7 @@ import type { AuditLogItem, CoreUser } from '../../types';
 import { InfoTooltip } from '../common/InfoTooltip';
 import { EmptyState } from '../common/EmptyState';
 import { INPUT_LIMITS } from '../../lib/validation';
+import { censorSensitiveText } from '../../lib/censorSensitiveText';
 
 const TRASH_TYPE_LABELS: Record<string, string> = {
   email: 'Correo principal',
@@ -432,23 +433,23 @@ export const TrashView: React.FC = () => {
                       <div className="min-w-0 flex-1 space-y-1">
                         <div className="flex flex-wrap items-center gap-2 min-w-0">
                           <span className="font-semibold text-white text-xs break-words" title={item.title}>{item.title}</span>
-                          <span className="px-2 py-0.5 rounded text-[10px] font-semibold uppercase bg-obsidian-surface text-obsidian-muted border border-obsidian-border flex-shrink-0">
+                          <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-obsidian-surface text-obsidian-muted border border-obsidian-border flex-shrink-0">
                             {typeLabel}
                           </span>
-                          <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-obsidian-bg text-obsidian-muted border border-obsidian-border flex-shrink-0">
+                          <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-obsidian-bg text-obsidian-muted border border-obsidian-border flex-shrink-0">
                             {elapsedDays === 0 ? 'Eliminado hoy' : `En papelera hace ${elapsedDays} día(s)`}
                           </span>
                           {daysUntilHidden !== null && daysUntilHidden !== undefined ? (
-                            <span className="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/30 flex-shrink-0">
+                            <span className="px-2 py-0.5 rounded text-[11px] font-mono font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/30 flex-shrink-0">
                               Dejará de aparecer en {daysUntilHidden} día(s)
                             </span>
                           ) : (
-                            <span className="px-2 py-0.5 rounded text-[10px] font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 flex-shrink-0">
+                            <span className="px-2 py-0.5 rounded text-[11px] font-mono text-obsidian-muted bg-obsidian-surface border border-obsidian-border flex-shrink-0">
                               Conservación manual
                             </span>
                           )}
                         </div>
-                        <div className="text-[11px] text-obsidian-muted break-words" title={item.subtitle}>
+                        <div className="text-xs text-obsidian-muted break-words" title={item.subtitle}>
                           {item.subtitle ? `${item.subtitle} · ` : ''}Eliminado: {new Date(item.deleted_at).toLocaleString(locale)}
                         </div>
                       </div>
@@ -507,7 +508,7 @@ export const TrashView: React.FC = () => {
         /* Audit log list */
         <div className="rounded-xl bg-obsidian-panel border border-obsidian-border overflow-hidden">
           <div className="p-4 border-b border-obsidian-border bg-obsidian-surface/40 flex items-center justify-between text-xs">
-            <span className="font-semibold text-white">Actividad Reciente del Sistema</span>
+            <span className="font-semibold text-white">Actividad reciente del sistema</span>
             <span className="text-obsidian-muted font-mono">{auditLogs.length} registros</span>
           </div>
 
@@ -517,31 +518,34 @@ export const TrashView: React.FC = () => {
             </div>
           ) : (
             <div className="divide-y divide-obsidian-border max-h-[600px] overflow-y-auto">
-              {auditLogs.map((log) => (
+              {auditLogs.map((log) => {
+                const safeEntityName = censorSensitiveText(log.entity_name || log.entity_type);
+                const safeDetails = censorSensitiveText(log.details);
+                return (
                 <div key={log.id} className="p-3.5 hover:bg-obsidian-surface/40 transition-colors text-xs flex flex-col sm:flex-row sm:items-start justify-between gap-2 sm:gap-4 min-w-0">
                   <div className="space-y-1 min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2 min-w-0">
-                      <span className={`px-2 py-0.5 rounded border text-[10px] font-semibold uppercase flex-shrink-0 ${
+                      <span className={`px-2 py-0.5 rounded border text-[11px] font-semibold flex-shrink-0 ${
                         ['delete', 'auto_purge', 'permanent_delete'].includes(log.action)
                           ? 'border-rose-500/30 bg-rose-500/10 text-rose-300'
                           : 'border-obsidian-border bg-obsidian-surface text-obsidian-muted'
                       }`}>
                         {AUDIT_ACTION_LABELS[log.action] || log.action}
                       </span>
-                      <span className="font-semibold text-white break-words" title={log.entity_name || log.entity_type || ''}>
-                        {log.entity_name || log.entity_type}
+                      <span className="font-semibold text-white break-words" title={safeEntityName}>
+                        {safeEntityName}
                       </span>
                     </div>
-                    <p className="text-obsidian-muted text-[11px] leading-relaxed break-words">
-                      {log.details || 'Operación registrada en base de datos'}
+                    <p className="text-obsidian-muted text-xs leading-relaxed break-words">
+                      {safeDetails || 'Operación registrada en base de datos'}
                     </p>
                   </div>
 
-                  <div className="text-[10px] text-obsidian-muted font-mono whitespace-nowrap flex-shrink-0">
+                  <div className="text-[11px] text-obsidian-muted font-mono whitespace-nowrap flex-shrink-0">
                     {new Date(log.timestamp).toLocaleString(locale)}
                   </div>
                 </div>
-              ))}
+              );})}
             </div>
           )}
         </div>

@@ -1,7 +1,10 @@
 import React from 'react';
 import { AlertTriangle } from 'lucide-react';
+import { useDisplayCurrency } from '../../../hooks/useDisplayCurrency';
 
 type DashboardMetricsProps = {
+  currency: string;
+  rate?: number;
   monthlyMXN: number;
   monthlyUSD: number;
   weeklyMXN: number;
@@ -20,8 +23,9 @@ type DashboardMetricsProps = {
 const metricCardClass = 'min-w-0 border-b border-obsidian-border pb-3 last:border-b-0 last:pb-0 min-[420px]:border-b-0 min-[420px]:pb-0';
 
 export const DashboardMetrics: React.FC<DashboardMetricsProps> = ({
+  currency,
+  rate,
   monthlyMXN,
-  monthlyUSD,
   weeklyMXN,
   netMonthMXN,
   monthIncomeMXN,
@@ -33,17 +37,25 @@ export const DashboardMetrics: React.FC<DashboardMetricsProps> = ({
   emailCount,
   emailsWithout2FA,
   formatAmount,
-}) => (
+}) => {
+  const [displayCurrency, setDisplayCurrency] = useDisplayCurrency(currency);
+  const amount = (value: number, decimals = 2) => !rate || rate <= 0
+    ? 'Sin tipo de cambio'
+    : displayCurrency === 'USD' ? `$${formatAmount(value / rate, decimals)} USD` : `$${formatAmount(value, decimals)} MXN`;
+  return (
   <section aria-label="Indicadores principales" className="grid min-w-0 grid-cols-1 gap-x-4 gap-y-3 rounded-xl border border-obsidian-border bg-obsidian-panel p-4 min-[420px]:grid-cols-2 sm:p-6 min-[760px]:grid-cols-4">
+    <div role="group" aria-label="Moneda de los indicadores" className="col-span-full flex gap-1">
+      {(['MXN', 'USD'] as const).map((option) => <button key={option} type="button" className="ui-action-toggle" aria-pressed={displayCurrency === option} onClick={() => setDisplayCurrency(option)}>{option}</button>)}
+    </div>
     <div className={metricCardClass}>
       <div className="mb-2 flex items-center justify-between gap-2 text-obsidian-muted">
         <span className="text-xs font-medium">Gasto mensual</span>
       </div>
       <div className="break-words font-mono text-lg font-bold tracking-tight tabular-nums text-white sm:text-xl">
-        ${formatAmount(monthlyMXN)} <span className="text-xs font-sans text-obsidian-muted">MXN</span>
+        {amount(monthlyMXN)}
       </div>
       <div className="mt-1 break-words text-xs text-obsidian-muted">
-        Suscripciones · ${formatAmount(monthlyUSD)} USD · Semanal: ${formatAmount(weeklyMXN)} MXN
+        Semanal: {amount(weeklyMXN)}
       </div>
     </div>
 
@@ -52,11 +64,10 @@ export const DashboardMetrics: React.FC<DashboardMetricsProps> = ({
         <span className="text-xs font-medium">Ganancia del mes</span>
       </div>
       <div className={`break-words font-mono text-lg font-bold tracking-tight tabular-nums sm:text-xl ${netMonthMXN > 0 ? 'text-emerald-400' : netMonthMXN < 0 ? 'text-rose-400' : 'text-obsidian-muted'}`}>
-        {netMonthMXN > 0 ? '+' : netMonthMXN < 0 ? '-' : ''}${formatAmount(Math.abs(netMonthMXN))}{' '}
-        <span className="text-xs font-sans text-obsidian-muted">MXN</span>
+        {netMonthMXN > 0 ? '+' : netMonthMXN < 0 ? '−' : ''}{amount(Math.abs(netMonthMXN))}
       </div>
       <div className="mt-1 break-words text-xs text-obsidian-muted">
-        Cobrado: ${formatAmount(monthIncomeMXN)} MXN · Año: {netYearMXN > 0 ? '+' : netYearMXN < 0 ? '-' : ''}${formatAmount(Math.abs(netYearMXN), 0)} MXN
+        Cobrado: {amount(monthIncomeMXN)} · Año: {netYearMXN > 0 ? '+' : netYearMXN < 0 ? '−' : ''}{amount(Math.abs(netYearMXN), 0)}
       </div>
     </div>
 
@@ -94,4 +105,5 @@ export const DashboardMetrics: React.FC<DashboardMetricsProps> = ({
       </div>
     </div>
   </section>
-);
+  );
+};

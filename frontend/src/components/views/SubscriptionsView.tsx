@@ -19,6 +19,7 @@ import {
 import { computeCommercialPipelineSummary } from '../../lib/prospectUtils';
 import { INPUT_LIMITS, isValidCalendarDate } from '../../lib/validation';
 import { needsExchangeRateReview } from '../../lib/exchangeRateReview';
+import { useDisplayCurrency } from '../../hooks/useDisplayCurrency';
 import { FinancialExecutiveSummary } from './subscriptions/FinancialExecutiveSummary';
 import { SubscriptionsLists } from './subscriptions/SubscriptionsLists';
 import { SubscriptionsModals, EXPENSE_CATEGORIES } from './subscriptions/SubscriptionsModals';
@@ -64,19 +65,8 @@ export const SubscriptionsView: React.FC = () => {
     }
   };
 
-  const secondaryCurrency = useMemo(() => {
-    const other = supportedCurrencies.find((c) => c.code !== baseCurrency)?.code;
-    if (other) return other;
-    if (exchangeRate?.target_currency && exchangeRate.target_currency !== baseCurrency) {
-      return exchangeRate.target_currency;
-    }
-    return baseCurrency === 'USD' ? 'MXN' : 'USD';
-  }, [supportedCurrencies, baseCurrency, exchangeRate]);
-
-  const currencyOptions = useMemo(() => {
-    const codes = supportedCurrencies.map((c) => c.code);
-    return Array.from(new Set([baseCurrency, ...codes, secondaryCurrency].filter(Boolean)));
-  }, [supportedCurrencies, baseCurrency, secondaryCurrency]);
+  // La cotización disponible cubre únicamente el par USD/MXN.
+  const currencyOptions = useMemo(() => ['MXN', 'USD'], []);
 
   const exchangePairBase =
     exchangeRate?.base_currency ||
@@ -91,8 +81,11 @@ export const SubscriptionsView: React.FC = () => {
   const [isEditingCap, setIsEditingCap] = useState(false);
   const [capAmountInput, setCapAmountInput] = useState<string>('');
   const [capCurrencyInput, setCapCurrencyInput] = useState<string>(baseCurrency);
-  const [pipelineCurrencyView, setPipelineCurrencyView] = useState<string>(baseCurrency);
-  const [profitCurrencyView, setProfitCurrencyView] = useState<string>(baseCurrency);
+  const [overviewCurrency, setOverviewCurrency] = useDisplayCurrency(baseCurrency);
+  const pipelineCurrencyView = overviewCurrency;
+  const profitCurrencyView = overviewCurrency;
+  const setPipelineCurrencyView = setOverviewCurrency;
+  const setProfitCurrencyView = setOverviewCurrency;
 
   // Income Modal State
   const [isIncomeModalOpen, setIsIncomeModalOpen] = useState(false);
@@ -939,6 +932,9 @@ export const SubscriptionsView: React.FC = () => {
   }
 
   if (activeSection === 'overview_finances') {
+    const overviewAmount = (value: number) => fin.usdRate <= 0
+      ? 'Sin tipo de cambio'
+      : overviewCurrency === 'USD' ? `$${formatAmount(value / fin.usdRate)} USD` : `$${formatAmount(value)} MXN`;
     const dueSoon = filteredRenewals.filter((item) => item.days_remaining <= 30 && item.days_remaining >= 0).length;
     const financePanels = [
       { id: 'finance_income' as const, label: 'Ingresos y pagos', description: `${filteredIncomes.length} registros · pagos recibidos de clientes`, icon: Wallet },
@@ -947,9 +943,9 @@ export const SubscriptionsView: React.FC = () => {
       { id: 'finance_cards' as const, label: 'Tarjetas y métodos', description: `${filteredPaymentMethods.length} métodos de pago guardados`, icon: CreditCard },
     ];
     const financialMetrics = [
-      { label: 'Ingresos del mes', value: `$${formatAmount(realProfit.monthIncomeMXN)} MXN` },
-      { label: 'Gastos mensuales', value: `$${formatAmount(realProfit.totalMonthlyExpenseMXN)} MXN` },
-      { label: 'Resultado neto', value: `${realProfit.netMonthMXN < 0 ? '−' : ''}$${formatAmount(Math.abs(realProfit.netMonthMXN))} MXN` },
+      { label: 'Ingresos del mes', value: overviewAmount(realProfit.monthIncomeMXN) },
+      { label: 'Gastos mensuales', value: overviewAmount(realProfit.totalMonthlyExpenseMXN) },
+      { label: 'Resultado neto', value: `${realProfit.netMonthMXN < 0 ? '−' : ''}${overviewAmount(Math.abs(realProfit.netMonthMXN))}` },
       { label: 'Vencimientos próximos', value: String(dueSoon) },
     ];
     return (
@@ -958,6 +954,11 @@ export const SubscriptionsView: React.FC = () => {
         <section className="border-b border-obsidian-border pb-4" aria-labelledby="finance-overview-title">
           <h2 id="finance-overview-title" className="font-heading text-xl font-semibold text-obsidian-text">Finanzas</h2>
           <p className="mt-1 text-sm text-obsidian-muted">Ingresos, vencimientos y gastos en un solo vistazo.</p>
+          <div role="group" aria-label="Moneda del resumen financiero" className="mt-3 flex gap-1">
+            {(['MXN', 'USD'] as const).map((currency) => (
+              <button key={currency} type="button" className="ui-action-toggle" aria-pressed={overviewCurrency === currency} onClick={() => setOverviewCurrency(currency)}>{currency}</button>
+            ))}
+          </div>
         </section>
         <dl className="grid grid-cols-1 divide-y divide-obsidian-border sm:grid-cols-2 sm:divide-y-0">
           {financialMetrics.map((metric, index) => (
@@ -969,11 +970,11 @@ export const SubscriptionsView: React.FC = () => {
         </dl>
         <nav aria-label="Paneles de finanzas" className="divide-y divide-obsidian-border border-t border-obsidian-border">
           {financePanels.map(({ id, label, description, icon: Icon }) => (
-            <button key={id} type="button" onClick={() => setActiveSection(id)} className="ui-nav-action w-full min-w-0 items-center gap-3 py-3">{/* [Navegación] Mantiene disponible esta acción en su contexto. */}
+            <button key={id} type="button" onClick={() => setActiveSection(id)} className="ui-nav-action group min-h-[60px] w-full min-w-0 items-center gap-3 rounded-none border-0 px-3 py-3 focus-visible:ring-inset">{/* [Navegación] Mantiene disponible esta acción en su contexto. */}
               <Icon size={18} className="shrink-0 text-obsidian-muted" aria-hidden="true" />
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm font-medium text-obsidian-text">{label}</span>
-                <span className="mt-0.5 block text-xs text-obsidian-muted">{description}</span>
+                <span className="mt-0.5 block text-xs leading-relaxed text-obsidian-muted">{description}</span>
               </span>
               <span className="inline-flex shrink-0 items-center gap-1 text-xs text-obsidian-muted group-hover:text-obsidian-text">Abrir <ArrowRight size={15} aria-hidden="true" /></span>
             </button>
@@ -1005,7 +1006,7 @@ export const SubscriptionsView: React.FC = () => {
             position="bottom"
           />
           <button type="button" onClick={dismissRateNotice} aria-label="Ocultar aviso de tipo de cambio" className="ui-action-icon min-w-11 shrink-0 items-center">{/* [Icono] Mantiene disponible esta acción en su contexto. */}
-            <X size={14} aria-hidden="true" />
+            <X size={16} aria-hidden="true" />
           </button>
         </div>
       )}
@@ -1100,8 +1101,8 @@ export const SubscriptionsView: React.FC = () => {
         pipelineCurrencyView={pipelineCurrencyView}
         setPipelineCurrencyView={setPipelineCurrencyView}
         currencyOptions={currencyOptions}
-        baseCurrency={baseCurrency}
-        secondaryCurrency={secondaryCurrency}
+        baseCurrency="MXN"
+        secondaryCurrency="USD"
         supportedCurrencies={supportedCurrencies}
         formatAmount={formatAmount}
         isEditingCap={isEditingCap}
@@ -1128,6 +1129,7 @@ export const SubscriptionsView: React.FC = () => {
         billingHistory={billingHistory}
         realProfit={realProfit}
         profitCurrencyView={profitCurrencyView}
+        usdRate={fin.usdRate}
         baseCurrency={baseCurrency}
         formatAmount={formatAmount}
         isUnlocked={isUnlocked}

@@ -13,8 +13,21 @@ from app.security.crypto import decrypt_note, encrypt_note
 from app.schemas.validators import validate_calendar_date, validate_year_month
 from app.schemas import SupportedCurrency, validate_nonblank_input
 from app.config import settings as app_settings
+from app.services.currency import get_current_exchange_rate
+import math
 
 router = APIRouter(prefix="/personal-finances", tags=["personal-finances"])
+
+def _convert_amount(amount: float, source: str | None, target: str, rate: float) -> float:
+    source = (source or "MXN").upper()
+    target = (target or "MXN").upper()
+    if source not in ("MXN", "USD") or target not in ("MXN", "USD"):
+        raise HTTPException(status_code=422, detail=f"No hay tipo de cambio disponible para {source}/{target}.")
+    if source == target:
+        return float(amount or 0)
+    if not math.isfinite(rate) or rate <= 0:
+        raise HTTPException(status_code=503, detail="No hay un tipo de cambio USD/MXN válido.")
+    return float(amount or 0) * rate if source == "USD" else float(amount or 0) / rate
 
 # Schemas
 class BudgetCreate(BaseModel):
@@ -89,17 +102,20 @@ async def list_budgets(
     res = await db.execute(query)
     budgets = res.scalars().all()
 
-    # Calculate actual spending per category for this month
-    target_month = month or datetime.now(timezone.utc).strftime("%Y-%m")
+    # Keep the original currency of each expense until converting to each budget's currency.
     exp_stmt = select(
         OneTimeExpense.category,
+        OneTimeExpense.currency,
+        OneTimeExpense.expense_date,
         func.sum(OneTimeExpense.amount)
     ).where(
-        OneTimeExpense.is_deleted == False,
-        OneTimeExpense.expense_date.like(f"{target_month}%")
-    ).group_by(OneTimeExpense.category)
+        OneTimeExpense.is_deleted == False
+    ).group_by(OneTimeExpense.category, OneTimeExpense.currency, OneTimeExpense.expense_date)
+    if month:
+        exp_stmt = exp_stmt.where(OneTimeExpense.expense_date.like(f"{month}%"))
     exp_res = await db.execute(exp_stmt)
-    spending_map = dict(exp_res.all())
+    spending = exp_res.all()
+    rate = await get_current_exchange_rate(db) if budgets and spending else 1.0
 
     return [
         BudgetResponse(
@@ -108,7 +124,7 @@ async def list_budgets(
             category=b.category,
             cap_amount=b.cap_amount,
             currency=b.currency,
-            spent_amount=float(spending_map.get(b.category, 0.0) or 0.0)
+            spent_amount=sum(_convert_amount(amount, currency, b.currency, rate) for category, currency, date, amount in spending if category == b.category and date.startswith(b.month))
         )
         for b in budgets
     ]
@@ -292,6 +308,7 @@ async def record_debt_payment(
 @router.get("/summary")
 async def get_financial_summary(
     month: str | None = Query(None, pattern=r"^\d{4}-(0[1-9]|1[0-2])$"),
+    currency: SupportedCurrency = "MXN",
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role(["owner"]))
 ):
@@ -300,21 +317,21 @@ async def get_financial_summary(
 
     # Total expenses for month
     exp_res = await db.execute(
-        select(func.sum(OneTimeExpense.amount)).where(
+        select(OneTimeExpense.currency, func.sum(OneTimeExpense.amount)).where(
             OneTimeExpense.is_deleted == False,
             OneTimeExpense.expense_date.like(f"{target_month}%")
-        )
+        ).group_by(OneTimeExpense.currency)
     )
-    total_expenses = float(exp_res.scalar() or 0.0)
+    expense_totals = exp_res.all()
 
     # Total active debt balance
     debt_res = await db.execute(
-        select(func.sum(Debt.current_balance)).where(
+        select(Debt.currency, func.sum(Debt.current_balance)).where(
             Debt.is_deleted == False,
             Debt.status == "active"
-        )
+        ).group_by(Debt.currency)
     )
-    total_debt = float(debt_res.scalar() or 0.0)
+    debt_totals = debt_res.all()
 
     # Next upcoming payments
     upcoming_debts = (await db.execute(
@@ -324,15 +341,21 @@ async def get_financial_summary(
         ).order_by(Debt.payment_day_of_month.asc()).limit(5)
     )).scalars().all()
 
+    rate = await get_current_exchange_rate(db) if expense_totals or debt_totals else 1.0
+    total_expenses = sum(_convert_amount(amount, source, currency, rate) for source, amount in expense_totals)
+    total_debt = sum(_convert_amount(amount, source, currency, rate) for source, amount in debt_totals)
+
     return {
         "month": target_month,
+        "currency": currency,
         "total_expenses": total_expenses,
         "total_active_debt": total_debt,
         "upcoming_payments": [
             {
                 "creditor": d.creditor,
-                "current_balance": d.current_balance,
-                "minimum_payment": d.minimum_payment,
+                "current_balance": _convert_amount(d.current_balance, d.currency, currency, rate),
+                "minimum_payment": _convert_amount(d.minimum_payment, d.currency, currency, rate),
+                "currency": currency,
                 "payment_day": d.payment_day_of_month,
                 "due_date": d.due_date
             }

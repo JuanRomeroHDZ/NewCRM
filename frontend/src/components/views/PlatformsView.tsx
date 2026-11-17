@@ -475,13 +475,14 @@ export const PlatformsView: React.FC = () => {
                     <td className="px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-1 text-obsidian-muted">
                         {loginUrl && (
+                          /* [Navegación] Abre el acceso oficial en otra pestaña. */
                           <a
                             href={loginUrl}
                             target="_blank"
                             rel="noopener noreferrer"
                             title="Abrir sitio oficial"
                             aria-label={`Abrir sitio oficial de ${p.name}`}
-                            className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg hover:bg-obsidian-surface hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-accent"
+                            className="ui-action-icon"
                           >
                             <ExternalLink size={16} aria-hidden="true" />
                           </a>
@@ -565,13 +566,14 @@ export const PlatformsView: React.FC = () => {
 
                   <div className="flex flex-shrink-0 items-center gap-1">
                     {loginUrl && (
+                      /* [Navegación] Abre el acceso oficial en otra pestaña. */
                       <a
                         href={loginUrl}
                         target="_blank"
                         rel="noopener noreferrer"
                         title="Abrir enlace"
                         aria-label={`Abrir enlace de ${p.name}`}
-                        className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg text-obsidian-muted hover:bg-obsidian-surface hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                        className="ui-action-icon"
                       >
                         <ExternalLink size={16} aria-hidden="true" />
                       </a>

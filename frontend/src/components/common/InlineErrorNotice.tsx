@@ -32,7 +32,7 @@ export const InlineErrorNotice: React.FC<InlineErrorNoticeProps> = ({
         onClick={onAction}
         className="ui-action-secondary shrink-0"
       >
-        <RefreshCw size={13} aria-hidden="true" />
+        <RefreshCw size={16} aria-hidden="true" />
         {actionLabel}
       </button>
     )}

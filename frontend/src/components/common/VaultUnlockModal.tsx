@@ -102,14 +102,15 @@ export const VaultUnlockModal: React.FC = () => {
               </p>
             </div>
           </div>
+          {/* [Icono] Cierra el acceso sin alterar la bóveda. */}
           <button
             type="button"
             onClick={requestClose}
             disabled={isLoading}
             aria-label="Cerrar desbloqueo de bóveda"
-            className="inline-flex items-center justify-center min-w-[44px] min-h-[44px] p-2 text-obsidian-muted hover:text-white rounded-lg hover:bg-obsidian-surface transition-colors flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-accent"
+            className="ui-action-icon shrink-0"
           >
-            <X size={18} aria-hidden="true" />
+            <X size={16} aria-hidden="true" />
           </button>
         </div>
 
@@ -119,10 +120,11 @@ export const VaultUnlockModal: React.FC = () => {
               <ShieldAlert size={16} className="mt-0.5 flex-shrink-0 text-amber-400" aria-hidden="true" />
               <span className="break-words">Sin conexión con el servidor ({vaultStatusError}). Verifica que el backend esté encendido.</span>
             </div>
+            {/* [Acción secundaria] Reintenta consultar el estado de la bóveda. */}
             <button
               type="button"
               onClick={() => { refreshVaultStatus(); }}
-              className="min-h-[44px] flex-shrink-0 rounded-md border border-obsidian-border bg-obsidian-panel px-3 py-1.5 text-[11px] font-medium text-obsidian-text hover:border-amber-400/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+              className="ui-action-secondary shrink-0"
             >
               Reintentar
             </button>
@@ -159,13 +161,14 @@ export const VaultUnlockModal: React.FC = () => {
                 autoComplete={isSetup ? 'current-password' : 'new-password'}
                 disabled={isLoading}
               />
+              {/* [Estado seleccionable] Muestra u oculta la contraseña. */}
               <button
                 type="button"
                 onClick={() => setShowPassword((prev) => !prev)}
                 aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
                 aria-pressed={showPassword}
                 disabled={isLoading}
-                  className="absolute right-1 inline-flex items-center justify-center min-w-[44px] min-h-[44px] text-obsidian-muted hover:text-white rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-accent"
+                className="ui-action-icon ui-action-toggle absolute right-1"
               >
                 {showPassword ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}
               </button>
@@ -225,7 +228,7 @@ export const VaultUnlockModal: React.FC = () => {
               ) : (
                 <>
                   <span>{isSetup ? 'Desbloquear bóveda' : 'Configurar bóveda'}</span>
-                  <ArrowRight size={14} aria-hidden="true" />
+                  <ArrowRight size={16} aria-hidden="true" />
                 </>
               )}
             </button>

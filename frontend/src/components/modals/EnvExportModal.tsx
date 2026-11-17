@@ -119,23 +119,23 @@ export const EnvExportModal: React.FC = () => {
             type="button"
             aria-label="Cerrar exportador"
             onClick={closeEnvExport}
-            className="inline-flex min-w-[44px] min-h-[44px] items-center justify-center p-2 rounded-lg text-white/50 hover:text-white hover:bg-white/5 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
+            className="ui-action-icon"
           >
-            <X className="w-5 h-5" />
+            <X size={16} aria-hidden="true" />
           </button>
         </div>
 
         {loading && <p role="status" className="text-sm text-obsidian-muted">Cargando servicios…</p>}
-        {error && <div role="alert" className="rounded-lg border border-obsidian-border bg-obsidian-surface p-3 text-xs text-obsidian-muted"><p>{error}</p><button type="button" onClick={() => setAttempt((value) => value + 1)} className="mt-2 min-h-[44px] text-rose-200 underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400">Reintentar</button></div>}
+        {error && <div role="alert" className="rounded-lg border border-obsidian-border bg-obsidian-surface p-3 text-xs text-obsidian-muted"><p>{error}</p><button type="button" onClick={() => setAttempt((value) => value + 1)} className="ui-action-secondary mt-2">Reintentar</button></div>}
         {!loading && !error && techPlatforms.length === 0 && <p role="status" className="text-sm text-obsidian-muted">No hay servicios con llaves API o variables de entorno para exportar.</p>}
-        {/* Options */}
+        {/* [Estado seleccionable] Incluye o excluye comentarios del archivo exportado. */}
         <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-white/60">
           <label className="flex items-center gap-2 cursor-pointer">
             <input
               type="checkbox"
               checked={includeComments}
               onChange={(e) => setIncludeComments(e.target.checked)}
-              className="rounded bg-obsidian-surface border-obsidian-border text-cyan-600 focus:ring-0"
+              className="rounded border-obsidian-border bg-obsidian-surface accent-[var(--brand-accent)] focus:ring-0"
             />
             <span>Incluir comentarios de plataforma y encabezado</span>
           </label>
@@ -159,12 +159,12 @@ export const EnvExportModal: React.FC = () => {
           />
         </div>
 
-        {/* Actions */}
+        {/* [Acción secundaria] Copia el contenido o cierra la vista previa. */}
         <div className="flex flex-wrap items-center justify-end gap-3 pt-2">
           <button
             type="button"
             onClick={closeEnvExport}
-            className="min-h-[44px] rounded-xl px-4 py-2 text-xs text-obsidian-muted hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+            className="ui-action-secondary"
           >
             Cerrar
           </button>
@@ -172,18 +172,19 @@ export const EnvExportModal: React.FC = () => {
             type="button"
             disabled={loading || Boolean(error) || !techPlatforms.length}
             onClick={handleCopy}
-            className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-obsidian-border bg-obsidian-surface px-4 py-2.5 text-xs font-medium text-obsidian-text transition-colors hover:border-obsidian-borderLight focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+            className="ui-action-secondary"
           >
-            {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4 text-white/60" />}
+            {copied ? <Check size={16} className="text-emerald-400" aria-hidden="true" /> : <Copy size={16} aria-hidden="true" />}
             Copiar .env
           </button>
+          {/* [Acción principal] Descarga el archivo .env compilado. */}
           <button
             type="button"
             disabled={loading || Boolean(error) || !techPlatforms.length}
             onClick={handleDownload}
-            className="inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-xs font-medium text-white transition-colors hover:bg-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+            className="ui-action-primary"
           >
-            <Download className="w-3.5 h-3.5" /> Descargar .env
+            <Download size={16} aria-hidden="true" /> Descargar .env
           </button>
         </div>
       </div>

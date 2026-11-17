@@ -40,7 +40,7 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
           onClick={onAction}
           className={`mt-4 ${isError ? 'ui-action-secondary' : 'ui-action-primary'}`}
         >
-          {isError && <RefreshCw size={13} aria-hidden="true" />}
+          {isError && <RefreshCw size={16} aria-hidden="true" />}
           <span>{actionLabel}</span>
         </button>
       )}

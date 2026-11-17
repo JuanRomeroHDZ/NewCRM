@@ -492,8 +492,9 @@ export const OpsecPanel: React.FC = () => {
             </button>
           </div>
 
+          {/* [Estado seleccionable] Las opciones OPSEC avanzadas se abren bajo demanda. */}
           <details className="rounded-lg border border-obsidian-border bg-obsidian-surface">
-            <summary className="flex min-h-11 cursor-pointer items-center rounded-lg px-3 text-[13px] font-medium text-obsidian-muted hover:bg-obsidian-panel hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent">
+            <summary className="ui-action-toggle w-full cursor-pointer justify-start px-3 text-[13px] font-medium">
               {t('opsec.advancedChanges')}
             </summary>
             <div className="space-y-2 border-t border-obsidian-border px-3 py-3">

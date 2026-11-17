@@ -231,7 +231,7 @@ export const SecureResourceEditor: React.FC<SecureResourceEditorProps> = ({ reso
           <div className="flex flex-wrap justify-end gap-2 border-t border-obsidian-border pt-3">
             <button type="button" onClick={onClose} disabled={saving} className="ui-action-secondary">Cancelar</button>
             <button type="submit" disabled={saving || !isUnlocked} className="ui-action-primary">
-              <Check size={14} aria-hidden="true" />{saving ? 'Guardando…' : resource ? 'Guardar cambios' : 'Guardar recurso'}
+              <Check size={16} aria-hidden="true" />{saving ? 'Guardando…' : resource ? 'Guardar cambios' : 'Guardar recurso'}
             </button>
           </div>
         </form>

@@ -69,11 +69,10 @@ export const CopyButton: React.FC<CopyButtonProps> = ({
         type="button"
         onClick={handleCopy}
         aria-haspopup={requireVaultPassword && !onClickCustom ? 'dialog' : undefined}
-        title={`Copiar ${label}`}
-        aria-label={`Copiar ${label}`}
-        className={`ui-action-icon ${className} ${
-          copied ? 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10' : ''
-        }`}
+        title={copied ? `${label} copiado` : `Copiar ${label}`}
+        aria-label={copied ? `${label} copiado` : `Copiar ${label}`}
+        data-ui-state={copied ? 'success' : undefined}
+        className={`ui-action-icon ${className}`}
       >
         {copied ? <Check size={iconSize} className="text-emerald-400" /> : <Copy size={iconSize} />}
       </button>

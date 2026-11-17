@@ -251,6 +251,24 @@ export const DashboardView: React.FC = () => {
     () => filteredProspects.filter((prospect) => prospect.status !== 'archivado_frio' && isProspectNeedingRecontact(prospect, Date.now())),
     [filteredProspects]
   );
+  // [Calendario] Fechas reales de renovaciones y servicios del ámbito seleccionado.
+  const upcomingDates = useMemo(() => {
+    const today = new Date();
+    const start = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate());
+    const last = start + 30 * 86400000;
+    const linkedPlatforms = new Set(filteredRenewals.filter((item) => item.status !== 'cancelado' && item.platform_id).map((item) => item.platform_id));
+    const entries = [
+      ...filteredRenewals.filter((item) => item.status !== 'cancelado').map((item) => ({ id: `renewal-${item.id}`, label: item.domain_or_service, kind: 'Renovación', date: item.renewal_date })),
+      ...filteredPlatforms.filter((item) => !linkedPlatforms.has(item.id) && (item.subscription_status === 'active' || item.subscription_status === 'free_trial')).map((item) => ({ id: `platform-${item.id}`, label: item.name, kind: 'Servicio', date: item.next_billing_date })),
+    ];
+    return entries.flatMap((entry) => {
+      const datePart = entry.date?.slice(0, 10);
+      if (!datePart || !/^\d{4}-\d{2}-\d{2}$/.test(datePart)) return [];
+      const timestamp = Date.parse(`${datePart}T00:00:00Z`);
+      if (!Number.isFinite(timestamp) || timestamp < start || timestamp > last) return [];
+      return [{ ...entry, timestamp }];
+    }).sort((a, b) => a.timestamp - b.timestamp || a.label.localeCompare(b.label)).slice(0, 8);
+  }, [filteredRenewals, filteredPlatforms]);
 
   if (!isUnlocked) {
     return (
@@ -323,6 +341,8 @@ export const DashboardView: React.FC = () => {
       )}
 
       <DashboardMetrics
+        currency={baseCurrency}
+        rate={exchangeRate?.rate}
         monthlyMXN={fin.monthlyMXN}
         monthlyUSD={fin.monthlyUSD}
         weeklyMXN={fin.weeklyMXN}
@@ -337,6 +357,20 @@ export const DashboardView: React.FC = () => {
         emailsWithout2FA={emailsWithout2FA.length}
         formatAmount={formatAmount}
       />
+      <section aria-labelledby="dashboard-calendar-title" className="min-w-0 border-t border-obsidian-border pt-4">
+        <h2 id="dashboard-calendar-title" className="font-heading text-base font-semibold text-obsidian-text">Próximos vencimientos</h2>
+        <p className="mt-1 text-xs text-obsidian-muted">Renovaciones y servicios programados para los próximos 30 días</p>
+        {upcomingDates.length ? (
+          <ul className="mt-3 divide-y divide-obsidian-border border-t border-obsidian-border">
+            {upcomingDates.map((entry) => (
+              <li key={entry.id} className="flex min-w-0 items-center justify-between gap-4 py-3 text-sm">
+                <span className="min-w-0"><span className="block break-words text-obsidian-text">{entry.label}</span><span className="text-xs text-obsidian-muted">{entry.kind}</span></span>
+                <time dateTime={entry.date?.slice(0, 10)} className="shrink-0 text-xs tabular-nums text-obsidian-muted">{new Intl.DateTimeFormat(systemLocale || 'es-MX', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }).format(entry.timestamp)}</time>
+              </li>
+            ))}
+          </ul>
+        ) : <p className="mt-3 text-sm text-obsidian-muted">No hay vencimientos programados en este periodo.</p>}
+      </section>
       <GlobalModuleDirectory metrics={{
         overview_prospection: `${filteredProspects.length} prospectos · ${recontactProspects.length} por contactar`,
         overview_communications: `${filteredEmails.length} correos · ${filteredPlatforms.length} servicios · ${protectedEmailsCount} protegidos en dos pasos`,

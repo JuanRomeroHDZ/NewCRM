@@ -1,5 +1,5 @@
 import React, { useEffect, useId } from 'react';
-import { Wallet, Server, RefreshCw, Receipt, Check, X } from 'lucide-react';
+import { Wallet, Server, RefreshCw, Receipt, Check, X, ChevronDown } from 'lucide-react';
 import {
   ClientIncome, DomainRenewal, OneTimeExpense, Prospect, PaymentMethod,
   IncomeCategory, IncomeStatus, RenewalServiceType, RenewalPaidBy, EntityScope,
@@ -545,9 +545,11 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
               </div>
 
               <details className="group rounded-lg border border-obsidian-border px-3">
-                <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-2 text-xs text-obsidian-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent [&::-webkit-details-marker]:hidden">
+                {/* [Menú y selector] Despliega las notas del ingreso. */}
+                <summary data-caret="manual" className="ui-nav-action w-full cursor-pointer list-none justify-between text-xs [&::-webkit-details-marker]:hidden">
                   <span>Notas privadas</span>
                   <span className="text-[10px]">Opcional</span>
+                  <ChevronDown size={16} className="shrink-0 transition-transform group-open:rotate-180" aria-hidden="true" />
                 </summary>
                 <textarea
                   id={`${uid}-inc-notes`}
@@ -881,9 +883,11 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
               )}
 
               <details className="group rounded-lg border border-obsidian-border px-3">
-                <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-2 text-xs text-obsidian-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent [&::-webkit-details-marker]:hidden">
+                {/* [Menú y selector] Despliega los datos opcionales del servicio. */}
+                <summary data-caret="manual" className="ui-nav-action w-full cursor-pointer list-none justify-between text-xs [&::-webkit-details-marker]:hidden">
                   <span>Datos adicionales</span>
                   <span className="text-[10px]">Proveedor y notas</span>
+                  <ChevronDown size={16} className="shrink-0 transition-transform group-open:rotate-180" aria-hidden="true" />
                 </summary>
                 <div className="space-y-3 pb-3">
                   <div>
@@ -1239,9 +1243,11 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
               </div>
 
               <details className="group rounded-lg border border-obsidian-border px-3">
-                <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-2 text-xs text-obsidian-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent [&::-webkit-details-marker]:hidden">
+                {/* [Menú y selector] Despliega las notas privadas del gasto. */}
+                <summary data-caret="manual" className="ui-nav-action w-full cursor-pointer list-none justify-between text-xs [&::-webkit-details-marker]:hidden">
                   <span>Notas privadas</span>
                   <span className="text-[10px]">Opcional</span>
+                  <ChevronDown size={16} className="shrink-0 transition-transform group-open:rotate-180" aria-hidden="true" />
                 </summary>
                 <textarea
                   id={`${uid}-exp-notes`}

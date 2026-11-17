@@ -99,7 +99,7 @@ export const Topbar: React.FC<TopbarProps> = ({ onMenuClick, menuTriggerRef, isM
           className="ui-action-icon h-11 w-11 shrink-0 lg:hidden"
           aria-label={isMenuOpen ? 'Cerrar menú de navegación' : 'Abrir menú de navegación'}
         >
-          {isMenuOpen ? <X size={20} aria-hidden="true" /> : <Menu size={20} aria-hidden="true" />}
+          {isMenuOpen ? <X size={16} aria-hidden="true" /> : <Menu size={16} aria-hidden="true" />}
         </button>
         <h1 className="min-w-0 truncate text-sm font-semibold text-white sm:text-base" title={currentInfo.title}>
           <span className="topbar-title-full">{currentInfo.title}</span>

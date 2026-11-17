@@ -55,11 +55,13 @@ export const InfoTooltip: React.FC<InfoTooltipProps> = ({
     <span
       ref={containerRef}
       className={`relative inline-flex items-center shrink-0 align-middle ${className}`}
-      onMouseEnter={() => {
+      onPointerEnter={(event) => {
+        if (event.pointerType !== 'mouse') return;
         hoveredRef.current = true;
         setOpen(true);
       }}
-      onMouseLeave={() => {
+      onPointerLeave={(event) => {
+        if (event.pointerType !== 'mouse') return;
         hoveredRef.current = false;
         if (!containerRef.current?.contains(document.activeElement)) setOpen(false);
       }}
@@ -69,9 +71,15 @@ export const InfoTooltip: React.FC<InfoTooltipProps> = ({
         type="button"
         onClick={(e) => {
           e.stopPropagation();
-          setOpen(true);
+          if (e.detail === 0) {
+            setOpen(true);
+            return;
+          }
+          setOpen((wasOpen) => !wasOpen);
         }}
-        onFocus={() => setOpen(true)}
+        onFocus={(event) => {
+          if (event.currentTarget.matches(':focus-visible')) setOpen(true);
+        }}
         onBlur={() => {
           if (!hoveredRef.current) setOpen(false);
         }}

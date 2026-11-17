@@ -175,35 +175,31 @@ export const EncryptedBackupModal: React.FC = () => {
             disabled={busy}
             aria-label="Cerrar respaldo"
             onClick={closeWhenIdle}
-            className="inline-flex min-w-[44px] min-h-[44px] items-center justify-center p-2 rounded-lg text-white/50 hover:text-white hover:bg-white/5 transition-all flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 disabled:opacity-50"
+            className="ui-action-icon flex-shrink-0"
           >
-            <X className="w-5 h-5" />
+            <X size={16} aria-hidden="true" />
           </button>
         </div>
 
-        {/* Tab Switcher */}
+        {/* [Estado seleccionable] Cambia entre exportar y restaurar el respaldo. */}
         <div className="flex rounded-xl bg-obsidian-surface p-1 border border-obsidian-border">
           <button
             type="button"
             disabled={busy}
             aria-pressed={tab === 'export'}
             onClick={() => { setTab('export'); setError(''); }}
-            className={`flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-lg py-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
-              tab === 'export' ? 'bg-indigo-600 text-white' : 'text-obsidian-muted hover:text-white'
-            }`}
+            className="ui-action-toggle flex-1 rounded-lg text-xs"
           >
-            <Download className="w-3.5 h-3.5" /> Exportar Bóveda (.emailsaver)
+            <Download size={16} aria-hidden="true" /> Exportar Bóveda (.emailsaver)
           </button>
           <button
             type="button"
             disabled={busy}
             aria-pressed={tab === 'restore'}
             onClick={() => { setTab('restore'); setError(''); }}
-            className={`flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-lg py-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
-              tab === 'restore' ? 'bg-indigo-600 text-white' : 'text-obsidian-muted hover:text-white'
-            }`}
+            className="ui-action-toggle flex-1 rounded-lg text-xs"
           >
-            <Upload className="w-3.5 h-3.5" /> Restaurar Bóveda
+            <Upload size={16} aria-hidden="true" /> Restaurar Bóveda
           </button>
         </div>
 
@@ -255,21 +251,23 @@ export const EncryptedBackupModal: React.FC = () => {
               />
             </div>
 
+            {/* [Acción secundaria] Cancelar sale del flujo sin exportar. */}
             <div className="flex flex-wrap items-center justify-end gap-3 pt-3">
               <button
                 type="button"
                 disabled={busy}
                 onClick={closeWhenIdle}
-                className="min-h-[44px] rounded-xl px-4 py-2 text-xs text-obsidian-muted hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                className="ui-action-secondary"
               >
                 Cancelar
               </button>
+              {/* [Acción principal] Genera y descarga una copia cifrada de la bóveda. */}
               <button
                 type="submit"
                 disabled={busy}
-                className="inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-xs font-medium text-white transition-colors hover:bg-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                className="ui-action-primary"
               >
-                <Download className="w-3.5 h-3.5" />
+                <Download size={16} aria-hidden="true" />
                 {isExporting ? 'Cifrando Bóveda...' : 'Generar y Descargar Respaldo'}
               </button>
             </div>
@@ -322,22 +320,24 @@ export const EncryptedBackupModal: React.FC = () => {
 
             {verification && <p role="status" className="text-xs text-emerald-300">{verification}</p>}
 
+            {/* [Acción secundaria] Verifica la contraseña sin aplicar la restauración. */}
             <div className="flex flex-wrap items-center justify-end gap-3 pt-3">
-              <button type="button" disabled={busy || !backupFileContent} onClick={() => void handleVerify()} className="min-h-[44px] rounded-xl border border-obsidian-border bg-obsidian-surface px-4 py-2 text-xs text-obsidian-text hover:border-obsidian-borderLight focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 disabled:opacity-50">Verificar sin restaurar</button>
+              <button type="button" disabled={busy || !backupFileContent} onClick={() => void handleVerify()} className="ui-action-secondary">Verificar sin restaurar</button>
               <button
                 type="button"
                 disabled={busy}
                 onClick={closeWhenIdle}
-                className="min-h-[44px] rounded-xl px-4 py-2 text-xs text-obsidian-muted hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                className="ui-action-secondary"
               >
                 Cancelar
               </button>
+              {/* [Acción principal] Aplica el respaldo cifrado seleccionado a la bóveda. */}
               <button
                 type="submit"
                 disabled={busy || !backupFileContent}
-                className="inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-xs font-medium text-white transition-colors hover:bg-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 disabled:opacity-50"
+                className="ui-action-primary"
               >
-                <Upload className="w-3.5 h-3.5" />
+                <Upload size={16} aria-hidden="true" />
                 {isRestoring ? 'Descifrando y Restaurando...' : 'Restaurar Bóveda'}
               </button>
             </div>

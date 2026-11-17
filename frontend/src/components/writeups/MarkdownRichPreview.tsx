@@ -168,7 +168,7 @@ const MermaidDiagramCard: React.FC<{ code: string; renderId: string }> = ({ code
             onClick={() => setAnimated((v) => !v)}
             aria-pressed={animated}
             aria-label={animated ? 'Pausar animación del diagrama' : 'Reanudar animación del diagrama'}
-            className="ui-action-secondary"
+            className="ui-action-toggle"
             title="Alternar flujo animado en aristas"
           >
             {animated ? <Pause className="w-4 h-4" aria-hidden="true" /> : <Play className="w-4 h-4" aria-hidden="true" />}
@@ -354,13 +354,14 @@ export const MarkdownRichPreview: React.FC<MarkdownRichPreviewProps> = ({
       const meta = assetMap[assetId];
       const safeAlt = escapeHtmlAttr(alt || meta?.filename || 'Evidencia');
       const captionHtml = renderCaptionLines(caption);
+      // [Icono] Abrir una imagen amplía la evidencia en la vista previa.
       let mediaHtml: string;
       if (!url) {
         mediaHtml = `<div class="p-3 my-2 rounded border border-obsidian-borderLight bg-obsidian-panel text-xs text-obsidian-muted">Cargando evidencia ${escapeHtmlAttr(assetId)}...</div>`;
       } else if (meta?.mime_type?.startsWith('video/')) {
         mediaHtml = `<video controls loop muted playsinline src="${escapeHtmlAttr(url)}" class="w-full max-h-[380px] rounded-lg border border-obsidian-borderLight bg-black"></video>`;
       } else {
-        mediaHtml = `<button type="button" data-asset-id="${escapeHtmlAttr(assetId)}" aria-label="Abrir evidencia ${safeAlt}" class="block min-h-[44px] min-w-[44px] max-w-full rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-accent"><img src="${escapeHtmlAttr(url)}" alt="${safeAlt}" class="max-w-full rounded-lg border border-obsidian-borderLight cursor-zoom-in hover:border-obsidian-accent transition-colors" /></button>`;
+        mediaHtml = `<button type="button" data-asset-id="${escapeHtmlAttr(assetId)}" aria-label="Abrir evidencia ${safeAlt}" class="ui-action-icon max-w-full"><img src="${escapeHtmlAttr(url)}" alt="${safeAlt}" class="max-w-full rounded-lg border border-obsidian-borderLight cursor-zoom-in" /></button>`;
       }
       const legacyAlt = !captionHtml && alt ? `<span class="block">${safeAlt}</span>` : '';
       const figureHtml = `<figure class="my-3">${mediaHtml}${captionHtml || legacyAlt ? `<figcaption class="mt-1 text-xs text-obsidian-muted">${captionHtml || legacyAlt}</figcaption>` : ''}</figure>`;
@@ -381,7 +382,7 @@ export const MarkdownRichPreview: React.FC<MarkdownRichPreviewProps> = ({
       if (meta?.mime_type?.startsWith('video/')) {
         return `<figure class="my-3"><video controls loop muted playsinline src="${url}" class="w-full max-h-[380px] rounded-lg border border-obsidian-borderLight bg-black"></video>${safeAlt ? `<figcaption class="text-xs text-obsidian-muted mt-1">${safeAlt}</figcaption>` : ''}</figure>`;
       }
-      return `<figure class="my-3"><button type="button" data-asset-id="${escapeHtmlAttr(assetId)}" aria-label="Abrir evidencia ${safeAlt}" class="block min-h-[44px] min-w-[44px] max-w-full rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-accent"><img src="${url}" alt="${safeAlt}" class="max-w-full rounded-lg border border-obsidian-borderLight cursor-zoom-in hover:border-obsidian-accent transition-colors" /></button>${alt ? `<figcaption class="text-xs text-obsidian-muted mt-1">${safeAlt}</figcaption>` : ''}</figure>`;
+      return `<figure class="my-3"><button type="button" data-asset-id="${escapeHtmlAttr(assetId)}" aria-label="Abrir evidencia ${safeAlt}" class="ui-action-icon max-w-full"><img src="${url}" alt="${safeAlt}" class="max-w-full rounded-lg border border-obsidian-borderLight cursor-zoom-in" /></button>${alt ? `<figcaption class="text-xs text-obsidian-muted mt-1">${safeAlt}</figcaption>` : ''}</figure>`;
     });
 
     // 5. Extract whiteboard links as safe SVG island cards
@@ -399,6 +400,7 @@ export const MarkdownRichPreview: React.FC<MarkdownRichPreviewProps> = ({
       return `\n\n@@WRITEUP_EMBED_${idx}@@\n\n`;
     });
 
+    // [Acción secundaria] Copia el código del bloque visible en Markdown.
     const renderer = new marked.Renderer();
     renderer.code = ({ text: codeBody, lang }: { text: string; lang?: string }) => {
       const language = (lang || '').trim().toLowerCase();
@@ -411,7 +413,7 @@ export const MarkdownRichPreview: React.FC<MarkdownRichPreviewProps> = ({
         highlighted = codeBody.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
       }
       const label = language || 'code';
-      return `<div class="code-block-wrap relative my-3 border-y border-obsidian-border bg-obsidian-bg overflow-hidden"><div class="flex items-center justify-between px-3 py-1 bg-obsidian-panel/90 border-b border-obsidian-border text-[10px] font-mono uppercase text-obsidian-muted"><span>${escapeHtmlAttr(label)}</span><button type="button" data-copy-code="1" class="min-h-[44px] px-2 rounded bg-obsidian-surface hover:bg-obsidian-surface text-obsidian-text normal-case font-sans text-xs focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent">Copiar</button></div><pre class="!my-0 !border-0 !rounded-none"><code class="hljs language-${escapeHtmlAttr(label)}">${highlighted}</code></pre></div>`;
+      return `<div class="code-block-wrap relative my-3 border-y border-obsidian-border bg-obsidian-bg overflow-hidden"><div class="flex items-center justify-between px-3 py-1 bg-obsidian-panel/90 border-b border-obsidian-border text-[10px] font-mono uppercase text-obsidian-muted"><span>${escapeHtmlAttr(label)}</span><button type="button" data-copy-code="1" class="ui-action-secondary normal-case font-sans text-xs">Copiar</button></div><pre class="!my-0 !border-0 !rounded-none"><code class="hljs language-${escapeHtmlAttr(label)}">${highlighted}</code></pre></div>`;
     };
 
     const captionedTablePattern = /(^|\n)((?:[ \t]*(?:Tabla\s*:\s*|Descripci[oó]n\s*:\s*|Fuente\s*:\s*)[^\n]*(?:\n|$)(?:[ \t]*\n)*)+)[ \t]*\n*((?:\|[^\n]*(?:\n|$)){2,})/gim;

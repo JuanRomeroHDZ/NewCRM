@@ -320,9 +320,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onCloseMobile })
             {/* [Menú y selector] Gestionar la imagen de perfil. */}
             <details ref={profileMenu} className="relative shrink-0">
               <summary
+                data-caret="manual"
                 aria-label="Opciones de foto de perfil"
                 title={profileImage ? 'Opciones de foto de perfil' : 'Agregar foto de perfil'}
-                className="flex h-11 w-11 min-h-11 min-w-11 cursor-pointer list-none items-center justify-center overflow-hidden rounded-xl border border-obsidian-border bg-obsidian-surface text-obsidian-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-accent [&::-webkit-details-marker]:hidden"
+                className="ui-action-icon cursor-pointer list-none overflow-hidden [&::-webkit-details-marker]:hidden"
               >
                 {profileImage && !imageUnavailable ? (
                   <img
@@ -370,7 +371,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onCloseMobile })
 
         {/* [Icono] Cerrar o compactar la navegación. */}
         <button type="button" onClick={onCloseMobile} className="ui-action-icon lg:hidden" aria-label="Cerrar menú">
-          <X size={18} />
+          <X size={16} aria-hidden="true" />
         </button>
         <button type="button" onClick={() => setCollapsed((value) => !value)} aria-expanded={!collapsed} className={`ui-action-icon hidden lg:inline-flex ${compact ? 'mx-auto shrink-0' : ''}`} title={collapsed ? 'Expandir menú' : 'Colapsar menú'} aria-label={collapsed ? 'Expandir menú' : 'Colapsar menú'}>
           {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
@@ -381,8 +382,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onCloseMobile })
       {imageError && <p role="alert" className="px-4 pb-2 text-xs leading-relaxed text-rose-300">{imageError}</p>}
 
       <div className="shrink-0 pb-2">
+        {/* [Navegación] Abre la búsqueda global sin cambiar de sección. */}
         <button type="button" onClick={() => { openCommandPalette(); onCloseMobile(); }} className="ui-nav-action group w-full justify-between border-y border-obsidian-border bg-obsidian-bg px-4" aria-label="Buscador rápido">
-          <span className="flex min-w-0 items-center gap-2"><Search size={16} className="shrink-0 group-hover:text-indigo-300" aria-hidden="true" />{!compact && <span className="truncate">Buscar en LESSSO</span>}</span>
+          <span className="flex min-w-0 items-center gap-2"><Search size={16} className="shrink-0 group-hover:text-white" aria-hidden="true" />{!compact && <span className="truncate">Buscar en LESSSO</span>}</span>
           {!compact && <kbd className="shrink-0 rounded border border-obsidian-border bg-obsidian-panel px-1.5 py-0.5 font-mono text-[10px]">{searchHotkey.toUpperCase()}</kbd>}
         </button>
       </div>
@@ -479,7 +481,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onCloseMobile })
                 type="button"
                 onClick={() => void resetVaultTimer()}
                 disabled={resettingTimer}
-                className="ui-action-secondary mt-2 w-full disabled:cursor-wait"
+                className="ui-action-secondary mt-2 w-full whitespace-nowrap px-2 disabled:cursor-wait"
               >
                 <RotateCcw size={16} className={resettingTimer ? 'animate-spin' : ''} aria-hidden="true" />
                 {resettingTimer ? 'Reiniciando…' : 'Reiniciar temporizador'}

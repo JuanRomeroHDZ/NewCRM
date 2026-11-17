@@ -49,7 +49,8 @@ function toProgressPercent(value: number): number {
 
 const InspectorDisclosure: React.FC<InspectorDisclosureProps> = ({ title, detail, children }) => (
   <details className="group border-b border-obsidian-border last:border-0">
-    <summary data-caret="manual" className="flex min-h-11 cursor-pointer list-none items-center gap-2 py-2 text-left focus-visible:rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 [&::-webkit-details-marker]:hidden">
+    {/* [Estado seleccionable] Abre y cierra el detalle del prospecto. */}
+    <summary data-caret="manual" className="ui-action-toggle w-full cursor-pointer list-none justify-start gap-2 px-2 text-left [&::-webkit-details-marker]:hidden">
       <span className="min-w-0 flex-1 truncate text-xs font-semibold text-obsidian-text">{title}</span>
       {detail && (
         <span className="hidden min-w-0 max-w-[55%] truncate text-right text-[10px] text-obsidian-muted sm:block">
@@ -173,7 +174,7 @@ export const ProspectInspectorSection: React.FC<ProspectInspectorSectionProps> =
                 showToast(err.message || 'No se pudo actualizar el estado.', 'error');
               }
             }}
-            className="min-h-[44px] cursor-pointer rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 text-xs font-medium text-obsidian-text focus:outline-none focus:ring-2 focus:ring-indigo-400"
+            className="min-h-[44px] cursor-pointer rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 text-xs font-medium text-obsidian-text"
           >
             {PROSPECT_STATUS_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value} className="bg-obsidian-panel text-white">
@@ -317,11 +318,12 @@ export const ProspectInspectorSection: React.FC<ProspectInspectorSectionProps> =
             <div className="space-y-1 border-b border-obsidian-border/60 py-1.5">
               <span className="block text-[10px] text-obsidian-muted">URL de la Página Demo Creada</span>
               <div className="flex items-center justify-between gap-2">
+                {/* [Navegación] Abre el sitio de demostración guardado. */}
                 <a
                   href={prospectData.demo_url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="truncate font-mono text-obsidian-text underline decoration-obsidian-border underline-offset-2 hover:text-white"
+                  className="ui-nav-link max-w-full truncate font-mono"
                 >
                   {prospectData.demo_url}
                 </a>
@@ -331,11 +333,12 @@ export const ProspectInspectorSection: React.FC<ProspectInspectorSectionProps> =
                     label="URL Demo"
                     className="min-h-[44px] min-w-[44px]"
                   />
+                  {/* [Acción secundaria] Abre el sitio de demostración en otra pestaña. */}
                   <a
                     href={prospectData.demo_url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex min-h-[44px] items-center gap-2 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300"
+                    className="ui-action-secondary px-3"
                   >
                     <span>Abrir</span>
                     <ExternalLink size={16} aria-hidden="true" />
@@ -361,11 +364,12 @@ export const ProspectInspectorSection: React.FC<ProspectInspectorSectionProps> =
                   label="WhatsApp"
                   className="min-h-[44px] min-w-[44px]"
                 />
+                {/* [Acción secundaria] Abre una conversación externa de WhatsApp. */}
                 <a
                   href={prospectWaUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex min-h-[44px] items-center gap-2 rounded-lg border border-obsidian-border px-3 py-2 text-xs font-medium text-obsidian-text transition-colors hover:bg-obsidian-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                  className="ui-action-secondary px-3"
                 >
                   <span>Abrir Chat</span>
                   <ExternalLink size={16} aria-hidden="true" />
@@ -396,11 +400,12 @@ export const ProspectInspectorSection: React.FC<ProspectInspectorSectionProps> =
                   label="Enlace de mapa"
                   className="min-h-[44px] min-w-[44px]"
                 />
+                {/* [Acción secundaria] Abre la ubicación del prospecto en el mapa. */}
                 <a
                   href={prospectData.maps_url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex min-h-[44px] items-center gap-2 rounded-lg border border-obsidian-border px-3 py-2 text-xs font-medium text-obsidian-text transition-colors hover:bg-obsidian-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                  className="ui-action-secondary px-3"
                 >
                   <span>Abrir Mapa</span>
                   <ExternalLink size={16} aria-hidden="true" />
@@ -446,7 +451,7 @@ export const ProspectInspectorSection: React.FC<ProspectInspectorSectionProps> =
         </div>
 
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-          {/* [Acción secundaria] Prepara el canal de contacto elegido. */}
+          {/* [Estado seleccionable] Prepara el canal de contacto y marca cuál está activo. */}
           {prospectWaUrl && (
             <button
               type="button"
@@ -455,7 +460,8 @@ export const ProspectInspectorSection: React.FC<ProspectInspectorSectionProps> =
                 setContactChannel('whatsapp');
                 showToast('Mensaje preparado. Registra el contacto después de enviarlo.', 'info');
               }}
-              className={`ui-action-secondary ${contactChannel === 'whatsapp' ? 'border-obsidian-borderLight bg-obsidian-border' : ''}`}
+              aria-pressed={contactChannel === 'whatsapp'}
+              className="ui-action-toggle"
             >
               <MessageCircle size={16} aria-hidden="true" />
               <span>WhatsApp</span>
@@ -469,7 +475,8 @@ export const ProspectInspectorSection: React.FC<ProspectInspectorSectionProps> =
                 setContactChannel('phone');
                 showToast('Llamada preparada. Registra el contacto después de realizarla.', 'info');
               }}
-              className={`ui-action-secondary ${contactChannel === 'phone' ? 'border-obsidian-borderLight bg-obsidian-border' : ''}`}
+              data-selected={contactChannel === 'phone' ? 'true' : undefined}
+              className="ui-action-toggle"
             >
               <PhoneCall size={16} aria-hidden="true" />
               <span>Llamar</span>
@@ -485,7 +492,8 @@ export const ProspectInspectorSection: React.FC<ProspectInspectorSectionProps> =
                 setContactChannel('email');
                 showToast('Correo preparado. Registra el contacto después de enviarlo.', 'info');
               }}
-              className={`ui-action-secondary ${contactChannel === 'email' ? 'border-obsidian-borderLight bg-obsidian-border' : ''}`}
+              aria-pressed={contactChannel === 'email'}
+              className="ui-action-toggle"
             >
               <Mail size={16} aria-hidden="true" />
               <span>Enviar Correo</span>
@@ -499,7 +507,8 @@ export const ProspectInspectorSection: React.FC<ProspectInspectorSectionProps> =
               await copyToClipboard(msg, 'Plantilla de seguimiento');
               setContactChannel('template');
             }}
-            className={`ui-action-secondary ${contactChannel === 'template' ? 'border-obsidian-borderLight bg-obsidian-border' : ''}`}
+            aria-pressed={contactChannel === 'template'}
+            className="ui-action-toggle"
           >
             <Copy size={16} aria-hidden="true" />
             <span>Copiar Plantilla</span>
@@ -710,7 +719,8 @@ export const ProspectInspectorSection: React.FC<ProspectInspectorSectionProps> =
 
         {(prospectData.started_at || prospectData.last_contacted_at || prospectData.responded_at) && (
           <details className="group border-t border-obsidian-border/60 pt-2">
-            <summary data-caret="manual" className="flex min-h-[44px] cursor-pointer list-none items-center justify-between gap-2 text-[11px] text-obsidian-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 [&::-webkit-details-marker]:hidden">
+            {/* [Estado seleccionable] Despliega las fechas de seguimiento. */}
+            <summary data-caret="manual" className="ui-action-toggle w-full cursor-pointer list-none justify-between px-2 text-[11px] [&::-webkit-details-marker]:hidden">
               <span>Fechas de seguimiento</span>
               <ChevronDown size={16} className="transition-transform group-open:rotate-180" aria-hidden="true" />
             </summary>

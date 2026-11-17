@@ -2,7 +2,7 @@ import { useFormModalFocus } from '../../hooks/useFormModalFocus';
 import React, { useState, useEffect } from 'react';
 import { 
   X, Rocket, Globe, MessageCircle, Phone, MapPin, 
-  Clock, Mail, Share2, Tag, RotateCcw, AlertCircle, DollarSign 
+  Clock, Mail, Share2, Tag, RotateCcw, AlertCircle, DollarSign, ChevronDown
 } from 'lucide-react';
 import { useVault } from '../../context/VaultContext';
 import { api } from '../../lib/api';
@@ -652,10 +652,12 @@ export const ProspectModal: React.FC = () => {
           <details
             open={showFollowupConfig}
             onToggle={(event) => setShowFollowupConfig(event.currentTarget.open)}
-            className="rounded-xl border border-obsidian-border bg-obsidian-panel/60"
+            className="group rounded-xl border border-obsidian-border bg-obsidian-panel/60"
           >
-            <summary className="cursor-pointer rounded-xl px-4 py-3 text-xs font-semibold text-obsidian-text marker:text-indigo-300 hover:bg-obsidian-surface/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300">
-              Correo y seguimiento <span className="ml-1 font-normal text-obsidian-muted">· respuesta {slaHours || '—'} h · seguimiento +{followupSlaHours} h</span>
+            {/* [Menú y selector] Expande las opciones de correo y seguimiento. */}
+            <summary data-caret="manual" className="ui-nav-action w-full cursor-pointer justify-between text-xs font-semibold">
+              <span className="min-w-0">Correo y seguimiento <span className="ml-1 font-normal text-obsidian-muted">· respuesta {slaHours || '—'} h · seguimiento +{followupSlaHours} h</span></span>
+              <ChevronDown size={16} className="shrink-0 text-obsidian-muted transition-transform group-open:rotate-180" aria-hidden="true" />
             </summary>
             <div className="space-y-3 p-3 pt-0">
           {/* BLOQUE 2: Correlación de Emails */}

@@ -343,7 +343,7 @@ export const PaymentModal: React.FC = () => {
             >{/* [Acción principal] Inicia o confirma la tarea de este espacio. */}
               {loading ? (
                 <>
-                  <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   <span>Guardando...</span>
                 </>
               ) : (

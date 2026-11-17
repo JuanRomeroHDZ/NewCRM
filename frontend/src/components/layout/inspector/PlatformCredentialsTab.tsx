@@ -179,7 +179,7 @@ export const PlatformCredentialsTab: React.FC<PlatformCredentialsTabProps> = ({
                 placeholder="ej: JBSWY3DPEHPK3PXP..."
                 value={totpInput}
                 onChange={(e) => setTotpInput(e.target.value)}
-                className="min-h-[44px] w-full rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 font-mono text-xs uppercase text-white focus:border-indigo-400 focus:outline-none"
+                className="min-h-[44px] w-full rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 font-mono text-xs uppercase text-white "
               />
               <div className="flex items-center justify-end gap-2 pt-1">
                 <button

@@ -71,8 +71,10 @@ class SectionErrorBoundary extends React.Component<
         <h2 className="text-lg font-semibold text-white">No se pudo abrir este apartado</h2>
         <p className="mt-2 text-sm text-obsidian-muted">La vista no terminó de cargarse. Puedes volver al resumen o recargar la aplicación.</p>
         <div className="mt-4 flex flex-wrap gap-2">
-          <button type="button" onClick={this.props.onBack} className="min-h-[44px] rounded-lg border border-obsidian-border px-4 text-sm text-white hover:bg-obsidian-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300">Ir al resumen</button>
-          <button type="button" onClick={() => window.location.reload()} className="min-h-[44px] rounded-lg bg-indigo-600 px-4 text-sm font-semibold text-white hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300">Recargar</button>
+          {/* [Navegación] Regresa al resumen general de Inicio. */}
+          <button type="button" onClick={this.props.onBack} className="ui-action-secondary">Ir al resumen</button>
+          {/* [Acción secundaria] Vuelve a cargar el apartado después del error. */}
+          <button type="button" onClick={() => window.location.reload()} className="ui-action-secondary">Recargar</button>
         </div>
       </section>
     );

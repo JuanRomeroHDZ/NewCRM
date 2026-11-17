@@ -148,7 +148,7 @@ export const PromptDialog: React.FC<PromptDialogProps> = ({
               setValue(e.target.value);
               if (error) setError(null);
             }}
-            className="min-h-[44px] w-full rounded-xl border border-obsidian-borderLight bg-obsidian-surface px-3.5 py-2.5 text-sm text-white placeholder:text-obsidian-muted focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+            className="min-h-[44px] w-full rounded-xl border border-obsidian-borderLight bg-obsidian-surface px-3.5 py-2.5 text-sm text-white placeholder:text-obsidian-muted"
           />
           {error && (
             <p id={errorId} role="alert" className="mt-1.5 text-xs text-rose-300">

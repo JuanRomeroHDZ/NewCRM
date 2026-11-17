@@ -24,56 +24,6 @@
 @tailwind components;
 @tailwind utilities;
 
-/* [Acciones] Contrato compartido: cada clase representa intención, no contenido. */
-@layer components {
-  .ui-action-primary, .ui-action-secondary, .ui-action-danger,
-  .ui-action-icon, .ui-action-toggle, .ui-menu-item, .ui-nav-action {
-    display: inline-flex;
-    min-height: 44px;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    border: 1px solid transparent;
-    border-radius: 8px;
-    font-size: 0.8125rem;
-    font-weight: 500;
-    line-height: 1.25;
-    transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
-  }
-  /* [Acción principal] Crear, guardar y confirmar. */
-  .ui-action-primary { padding: 0 16px; background: var(--brand-accent, #0f766e); color: var(--brand-accent-contrast, #fff); }
-  /* [Acción secundaria] Abrir, editar, cancelar o reintentar. */
-  .ui-action-secondary { padding: 0 16px; border-color: #39413f; background: #171b1a; color: #fff; }
-  /* [Acción destructiva] Eliminar, enviar a papelera o detener. */
-  .ui-action-danger { padding: 0 16px; border-color: #7f1d1d; background: transparent; color: #fda4af; }
-  /* [Icono] Acciones con nombre accesible y área táctil estable. */
-  .ui-action-icon { min-width: 44px; padding: 0; color: #b3b9bc; }
-  .ui-action-icon.ui-action-danger { padding: 0; color: #fda4af; }
-  /* [Estado seleccionable] El estado activo se expresa mediante ARIA. */
-  .ui-action-toggle { min-width: 44px; padding: 0 12px; color: #b3b9bc; }
-  .ui-action-icon.ui-action-toggle { padding: 0; }
-  .ui-action-toggle[aria-pressed="true"], .ui-action-toggle[aria-selected="true"] { border-color: #39413f; background: #252b29; color: #fff; }
-  /* [Menú y selector] Filas de acción, alineadas con la etiqueta. */
-  .ui-menu-item { width: 100%; justify-content: flex-start; padding: 0 12px; text-align: left; color: #f3f4f6; }
-  .ui-menu-item.ui-action-danger { color: #fda4af; border-color: transparent; }
-  /* [Navegación] Filas y enlaces mantienen su contexto visible. */
-  .ui-nav-action { justify-content: flex-start; padding: 0 12px; text-align: left; color: #b3b9bc; }
-  .ui-nav-action[aria-current="page"] { background: #252b29; color: #fff; }
-  @media (hover: hover) {
-    .ui-action-primary:hover:not(:disabled) { background: color-mix(in srgb, var(--brand-accent, #0f766e) 82%, #000); }
-    .ui-action-secondary:hover:not(:disabled), .ui-action-icon:hover:not(:disabled),
-    .ui-action-toggle:hover:not(:disabled), .ui-menu-item:hover:not(:disabled),
-    .ui-nav-action:hover:not(:disabled) { background: #252b29; color: #fff; }
-    .ui-action-danger:hover:not(:disabled) { background: #4c0519; color: #fecdd3; }
-    .ui-action-icon.ui-action-danger:hover:not(:disabled) { background: #4c0519; color: #fecdd3; }
-    .ui-menu-item.ui-action-danger:hover:not(:disabled) { background: #4c0519; color: #fecdd3; }
-  }
-  :is(.ui-action-primary, .ui-action-secondary, .ui-action-danger, .ui-action-icon,
-      .ui-action-toggle, .ui-menu-item, .ui-nav-action):active:not(:disabled) { filter: brightness(.88); }
-  :is(.ui-action-primary, .ui-action-secondary, .ui-action-danger, .ui-action-icon,
-      .ui-action-toggle, .ui-menu-item, .ui-nav-action):disabled { opacity: .5; cursor: not-allowed; }
-}
-
 @layer base {
   ::selection {
     background-color: var(--brand-accent, #0f766e);
@@ -243,7 +193,7 @@
   line-height: 1.25;
   transition: background-color 140ms ease, color 140ms ease;
 }
-.writeup-header-menu-item:hover { background: #171b1a; }
+.writeup-header-menu-item:hover { background: #252b29; }
 .writeup-header-menu-item:focus-visible {
   outline: 2px solid var(--brand-accent, #0f766e);
   outline-offset: 2px;
@@ -314,12 +264,12 @@
 .writeups-view .writeup-markdown-editor [role="region"][aria-label^="Herramientas de edición"] button[aria-pressed="true"],
 .writeups-view .writeup-markdown-editor [role="region"][aria-label^="Todas las herramientas"] button[aria-pressed="true"],
 .writeups-view .board-toolbar-container button[aria-pressed="true"] {
-  border-color: color-mix(in srgb, var(--brand-accent, #0f766e) 65%, transparent);
-  background-color: color-mix(in srgb, var(--brand-accent, #0f766e) 18%, transparent);
-  color: #f1f5f9;
+  border-color: #39413f;
+  background-color: #252b29;
+  color: #ffffff;
 }
 
-/* Las herramientas conservan su área de clic sin dibujar una tarjeta por icono. */
+/* [Control especializado] Las herramientas conservan geometría; el rol común define color y estado. */
 .writeups-view .writeup-header-compact-button,
 .writeups-view .writeup-header-more-summary,
 .writeups-view .writeup-header-identity-row > button,
@@ -330,35 +280,33 @@
 .writeups-view .writeup-markdown-editor [role="region"][aria-label^="Todas las herramientas"] > div > button,
 .writeups-view .writeup-markdown-editor [role="region"] > div > details > summary,
 .writeups-view .writeup-markdown-editor .writeup-toolbar-compact-button {
-  background: transparent;
-  border-color: transparent;
-  color: #cbd5e1;
   box-shadow: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
 }
-.writeups-view .writeup-header-compact-button:hover,
-.writeups-view .writeup-header-more-summary:hover,
-.writeups-view .writeup-header-identity-row > button:hover,
-.writeups-view .board-tool-controls > button:hover,
-.writeups-view .board-tool-controls > details > summary:hover,
-.writeups-view .board-toolbar-actions > button:hover,
-.writeups-view .writeup-markdown-editor [role="region"] > div > button:hover,
-.writeups-view .writeup-markdown-editor [role="region"] > div > details > summary:hover,
-.writeups-view .writeup-markdown-editor .writeup-toolbar-compact-button:hover {
-  background: color-mix(in srgb, var(--brand-accent, #0f766e) 18%, transparent);
-  color: #f1f5f9;
+.writeups-view .writeup-header-compact-button:not(.ui-action-primary):not(.ui-action-danger):hover,
+.writeups-view .writeup-header-more-summary:not(.ui-action-primary):not(.ui-action-danger):hover,
+.writeups-view .writeup-header-identity-row > button:not(.ui-action-primary):not(.ui-action-danger):hover,
+.writeups-view .board-tool-controls > button:not(.ui-action-primary):not(.ui-action-danger):hover,
+.writeups-view .board-tool-controls > details > summary:not(.ui-action-primary):not(.ui-action-danger):hover,
+.writeups-view .board-toolbar-actions > button:not(.ui-action-primary):not(.ui-action-danger):hover,
+.writeups-view .writeup-markdown-editor [role="region"] > div > button:not(.ui-action-primary):not(.ui-action-danger):hover,
+.writeups-view .writeup-markdown-editor [role="region"] > div > details > summary:not(.ui-action-primary):not(.ui-action-danger):hover,
+.writeups-view .writeup-markdown-editor .writeup-toolbar-compact-button:not(.ui-action-primary):not(.ui-action-danger):hover {
+  border-color: #39413f;
+  background: #252b29;
+  color: #ffffff;
 }
 .writeups-view .writeup-markdown-editor [role="region"] > div > button > svg:not([class~="h-3"]):not([class~="w-3"]) {
   color: inherit;
 }
 .writeups-view .board-tool-controls > button[aria-pressed="true"],
 .writeups-view .writeup-markdown-editor [role="region"][aria-label^="Herramientas de edición"] button[aria-pressed="true"] {
-  background: transparent;
-  border-color: transparent;
-  color: #f1f5f9;
-  box-shadow: inset 0 -2px #5eead4;
+  background: #252b29;
+  border-color: #39413f;
+  color: #ffffff;
+  box-shadow: none;
 }
 
 @container writeupHeader (max-width: 760px) {
@@ -636,7 +584,8 @@ details > summary:not([data-caret="manual"]) {
 
 details > summary:not([data-caret="manual"])::-webkit-details-marker { display: none; }
 
-details > summary:not([data-caret="manual"])::after {
+/* [Menú y selector] Añade indicador solo cuando el resumen no aporta uno propio. */
+details > summary:not([data-caret="manual"]):not(.ui-action-icon):not(:has(.lucide-chevron-down, .lucide-chevron-right, .lucide-chevron-up))::after {
   content: "";
   width: 7px;
   height: 7px;
@@ -649,7 +598,7 @@ details > summary:not([data-caret="manual"])::after {
   opacity: 0.72;
 }
 
-details[open] > summary:not([data-caret="manual"])::after {
+details[open] > summary:not([data-caret="manual"]):not(.ui-action-icon):not(:has(.lucide-chevron-down, .lucide-chevron-right, .lucide-chevron-up))::after {
   transform: translateY(2px) rotate(225deg);
 }
 
@@ -901,7 +850,7 @@ details[open] > summary:not([data-caret="manual"])::after {
 
 /* Keep interaction feedback within the configured LESSSO accent. */
 @media (hover: hover) {
-  .brand-theme :is(button, a, select, summary):hover:not(:disabled) {
+  .brand-theme :is(button, a, select, summary):hover:not(:disabled):not(.ui-action-primary):not(.ui-action-secondary):not(.ui-action-danger):not(.ui-action-icon):not(.ui-action-toggle):not(.ui-menu-item):not(.ui-nav-action):not(.ui-nav-link) {
     border-color: color-mix(in srgb, var(--brand-accent, #0f766e) 38%, transparent);
   }
   .brand-theme button[class~="bg-indigo-600"]:hover:not(:disabled),
@@ -918,7 +867,7 @@ details[open] > summary:not([data-caret="manual"])::after {
   .brand-theme button[class~="bg-obsidian-accent"]:hover:not(:disabled) [class~="text-white"] {
     color: var(--brand-accent-contrast, #ffffff) !important;
   }
-  .brand-theme article.group:hover { border-color: color-mix(in srgb, var(--brand-accent, #0f766e) 38%, transparent); }
+  .brand-theme article.group:hover { border-color: #39413f; }
 }
 
 .brand-theme :is(input, textarea, select)::placeholder { color: #b3b9bc; opacity: 1; }
@@ -967,3 +916,198 @@ details[open] > summary:not([data-caret="manual"])::after {
 .writeup-label-pequena { font-size: 0.75em; }
 .writeup-label-normal { font-size: 0.9em; }
 .writeup-label-grande { font-size: 1.15em; }
+
+/* [Acciones] Las utilidades de cada contexto pueden ajustar distribución y espaciado. */
+@layer components {
+.ui-action-primary,
+.ui-action-secondary,
+.ui-action-danger,
+.ui-action-icon,
+.ui-action-toggle,
+.ui-menu-item,
+.ui-nav-action {
+  box-sizing: border-box;
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  line-height: 1.25;
+  text-decoration: none;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+/* [Acción principal] Crear, agregar, guardar, registrar y confirmar. */
+.ui-action-primary {
+  padding: 0 16px;
+  border-color: var(--brand-accent, #0f766e);
+  background: var(--brand-accent, #0f766e);
+  color: var(--brand-accent-contrast, #fff);
+}
+
+/* [Acción secundaria] Ver, abrir, editar, cancelar, reintentar y actualizar. */
+.ui-action-secondary {
+  padding: 0 16px;
+  border-color: #39413f;
+  background: #171b1a;
+  color: #f3f4f6;
+}
+
+/* [Acción destructiva] Papelera, eliminación y detención con consecuencias. */
+.ui-action-danger {
+  padding: 0 16px;
+  border-color: #7f1d1d;
+  background: transparent;
+  color: #fda4af;
+}
+
+/* [Icono] Copiar, cerrar, ampliar, editar o bloquear dentro de un objetivo de 44 px. */
+.ui-action-icon {
+  width: 44px;
+  min-width: 44px;
+  padding: 0;
+  background: transparent;
+  color: #b3b9bc;
+}
+
+/* [Estado seleccionable] Filtros, pestañas, formato editorial y herramientas activas. */
+.ui-action-toggle {
+  min-width: 44px;
+  padding: 0 12px;
+  background: transparent;
+  color: #b3b9bc;
+}
+
+.ui-action-icon.ui-action-toggle { padding: 0; }
+.ui-action-icon.ui-action-danger { padding: 0; color: #fda4af; }
+
+.ui-action-toggle[aria-pressed="true"],
+.ui-action-toggle[aria-selected="true"],
+.ui-action-toggle[aria-expanded="true"],
+.ui-action-toggle[data-selected="true"] {
+  border-color: #39413f;
+  background: #252b29;
+  color: #fff;
+}
+
+/* [Menú y selector] El disparador deja visible cuando su desplegable está abierto. */
+details[open] > summary:is(.ui-action-toggle, .ui-action-secondary, .ui-action-icon) {
+  border-color: #39413f;
+  background: #252b29;
+  color: #ffffff;
+}
+
+/* [Estado de éxito] La copia o el guardado confirmado usa el mismo tono semántico. */
+.ui-action-primary[data-ui-state="success"],
+.ui-action-icon[data-ui-state="success"] {
+  border-color: #13634d;
+  background: #063d30;
+  color: #6ee7b7;
+}
+
+/* [Menú y selector] Filas desplegables con una superficie neutral y hover compartido. */
+.ui-menu-item {
+  width: 100%;
+  justify-content: flex-start;
+  padding: 0 12px;
+  background: transparent;
+  text-align: left;
+}
+
+.ui-menu-item { color: #f3f4f6; }
+
+/* [Navegación] Filas de módulos y enlaces hacia otra sección. */
+.ui-nav-action {
+  width: 100%;
+  justify-content: flex-start;
+  padding: 0 12px;
+  background: transparent;
+  color: #b3b9bc;
+  text-align: left;
+}
+
+.ui-nav-action[aria-current="page"] { background: #252b29; color: #fff; }
+
+/* [Navegación] Enlaces dentro de texto conservan subrayado y hover neutral. */
+.ui-nav-link {
+  color: #d1d5d4;
+  text-decoration-line: underline;
+  text-decoration-color: #39413f;
+  text-underline-offset: 0.2em;
+  transition: color 120ms ease, text-decoration-color 120ms ease;
+}
+
+.ui-nav-link[aria-disabled="true"] { opacity: 0.5; cursor: not-allowed; }
+
+.ui-menu-item.ui-action-danger {
+  padding: 0 12px;
+  border-color: transparent;
+  background: transparent;
+  color: #fda4af;
+}
+
+.ui-action-primary > svg,
+.ui-action-secondary > svg,
+.ui-action-danger > svg,
+.ui-action-icon > svg,
+.ui-action-toggle > svg,
+.ui-menu-item > svg,
+.ui-nav-action > svg {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+}
+
+@media (hover: hover) {
+  .ui-action-primary:hover:not(:disabled):not([aria-disabled="true"]) {
+    border-color: color-mix(in srgb, var(--brand-accent, #0f766e) 82%, #000);
+    background: color-mix(in srgb, var(--brand-accent, #0f766e) 82%, #000);
+  }
+
+  .ui-action-secondary:hover:not(:disabled):not([aria-disabled="true"]),
+  .ui-action-icon:hover:not(:disabled):not([aria-disabled="true"]),
+  .ui-action-toggle:hover:not(:disabled):not([aria-disabled="true"]),
+  .ui-menu-item:hover:not(:disabled):not([aria-disabled="true"]),
+  .ui-nav-action:hover:not(:disabled):not([aria-disabled="true"]) {
+    border-color: #39413f;
+    background: #252b29;
+    color: #fff;
+  }
+
+  .ui-action-danger:hover:not(:disabled):not([aria-disabled="true"]),
+  .ui-action-icon.ui-action-danger:hover:not(:disabled):not([aria-disabled="true"]),
+  .ui-menu-item.ui-action-danger:hover:not(:disabled):not([aria-disabled="true"]) {
+    border-color: #7f1d1d;
+    background: #4c0519;
+    color: #fecdd3;
+  }
+
+  .ui-nav-link:hover:not([aria-disabled="true"]) {
+    color: #ffffff;
+    text-decoration-color: #b3b9bc;
+  }
+
+  .ui-action-primary[data-ui-state="success"]:hover:not(:disabled),
+  .ui-action-icon[data-ui-state="success"]:hover:not(:disabled) {
+    border-color: #18745c;
+    background: #0b503d;
+    color: #a7f3d0;
+  }
+}
+
+:is(.ui-action-primary, .ui-action-secondary, .ui-action-danger, .ui-action-icon,
+    .ui-action-toggle, .ui-menu-item, .ui-nav-action, .ui-nav-link):active:not(:disabled):not([aria-disabled="true"]) {
+  filter: brightness(0.88);
+}
+
+:is(.ui-action-primary, .ui-action-secondary, .ui-action-danger, .ui-action-icon,
+    .ui-action-toggle, .ui-menu-item, .ui-nav-action):is(:disabled, [aria-disabled="true"]) {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+}

@@ -424,7 +424,7 @@ export const MapCaptureView: React.FC = () => {
 
       <form
         onSubmit={handleSearch}
-        className="grid min-w-0 gap-2 rounded-xl border border-obsidian-border bg-obsidian-panel p-4 sm:grid-cols-2 xl:grid-cols-[minmax(10rem,1.15fr)_minmax(9rem,0.9fr)_minmax(9rem,1fr)_minmax(16rem,auto)] xl:items-end"
+        className="grid min-w-0 gap-2 rounded-xl border border-obsidian-border bg-obsidian-panel p-4 sm:grid-cols-2 xl:grid-cols-[minmax(10rem,1.15fr)_minmax(9rem,0.9fr)_minmax(9rem,1fr)_minmax(20rem,auto)] xl:items-end"
       >
         <label className="min-w-0 text-xs font-medium text-obsidian-text">
           Giro o negocio
@@ -484,12 +484,12 @@ export const MapCaptureView: React.FC = () => {
             className="mt-1 min-h-[44px] w-full rounded-lg border border-obsidian-border bg-obsidian-bg px-3 text-sm text-white placeholder:text-obsidian-muted focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
           />
         </label>
-        <div className="flex min-w-0 gap-2 sm:col-span-2 xl:col-span-1">
+        <div className="flex min-w-0 flex-wrap gap-2 sm:col-span-2 xl:col-span-1">
           <button
             type={loading ? 'button' : 'submit'}
             onClick={loading ? cancelSearch : undefined}
             disabled={!loading && !mapReady}
-            className={`${loading ? 'ui-action-secondary' : 'ui-action-primary'} min-w-0 flex-1`}
+            className={`${loading ? 'ui-action-secondary' : 'ui-action-primary'} min-w-[9rem] flex-1 whitespace-nowrap`}
           >
             {/* [Acción principal] Busca la zona; al cargar permite cancelar. */}
             {loading ? <X size={16} aria-hidden="true" /> : <Search size={16} aria-hidden="true" />}
@@ -500,7 +500,7 @@ export const MapCaptureView: React.FC = () => {
             onClick={searchMapArea}
             disabled={loading || !mapReady}
             aria-label="Buscar negocios en el área visible del mapa"
-            className="ui-action-secondary min-w-0 flex-1"
+            className="ui-action-secondary min-w-[9rem] flex-1 whitespace-nowrap"
           >
             {/* [Acción secundaria] Busca en los límites visibles del mapa. */}
             <MapPin size={16} aria-hidden="true" /> Área visible
@@ -555,7 +555,7 @@ export const MapCaptureView: React.FC = () => {
               href="https://www.openstreetmap.org/fixthemap"
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-indigo-300 underline-offset-4 hover:underline"
+              className="ui-nav-link inline-flex items-center gap-1"
             >
               Reportar un problema del mapa <ExternalLink size={16} aria-hidden="true" />
             </a>
@@ -608,7 +608,7 @@ export const MapCaptureView: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setMobileTab('map')}
-                    className="mt-3 min-h-[44px] rounded-lg border border-obsidian-border px-3 text-xs font-semibold text-white hover:bg-obsidian-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
+                    className="ui-nav-action mt-3 w-full justify-center"
                   >
                     Volver a la búsqueda
                   </button>
@@ -629,7 +629,7 @@ export const MapCaptureView: React.FC = () => {
               <button
                 type="button"
                 onClick={() => void runSearch()}
-                className="min-h-[44px] rounded-lg border border-obsidian-border px-3 text-xs font-semibold text-white hover:bg-obsidian-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
+                className="ui-action-secondary"
               >
                 Reintentar búsqueda
               </button>
@@ -652,9 +652,9 @@ export const MapCaptureView: React.FC = () => {
                         type="button"
                         onClick={() => focusLeadOnMap(lead)}
                         aria-label={`Centrar mapa en ${lead.name}`}
-                        className="min-w-0 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400"
+                        className="ui-nav-action min-w-0 flex-1 flex-col items-start justify-center gap-0 px-2 text-left"
                       >
-                        <span className="block break-words text-sm font-semibold text-white">{lead.name}</span>
+                        <span className="block max-w-full break-words text-sm font-semibold text-white [overflow-wrap:anywhere]">{lead.name}</span>
                         <span className="mt-1 block text-[11px] leading-relaxed text-obsidian-muted">
                           {lead.category} · {lead.zone}
                         </span>
@@ -663,7 +663,8 @@ export const MapCaptureView: React.FC = () => {
                         type="button"
                         onClick={() => saveLead(lead)}
                         disabled={isSaved || isSavingThis || resultsStale || loading || Boolean(searchError)}
-                        className={`inline-flex min-h-[44px] shrink-0 items-center justify-center gap-2 rounded-lg border px-3 text-[11px] font-semibold disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 ${isSaved ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300' : 'border-obsidian-border bg-obsidian-surface text-obsidian-text hover:bg-obsidian-card'}`}
+                        data-ui-state={isSaved ? 'success' : undefined}
+                        className="ui-action-primary shrink-0"
                         aria-label={isSaved ? `${lead.name} ya está guardado` : `Guardar ${lead.name} como prospecto`}
                       >
                         {isSaved ? (
@@ -684,11 +685,12 @@ export const MapCaptureView: React.FC = () => {
                         Horario publicado: {lead.opening_hours}
                       </p>
                     )}
+                    {/* [Navegación] Enlaces de contacto, sitio y fuente del resultado. */}
                     <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
                       {lead.phone && (
                         <a
                           href={`tel:${lead.phone.replace(/[^\d+]/g, '')}`}
-                          className="text-obsidian-text underline decoration-obsidian-border underline-offset-4 hover:text-white"
+                          className="ui-nav-link"
                         >
                           {lead.phone}
                         </a>
@@ -696,7 +698,7 @@ export const MapCaptureView: React.FC = () => {
                       {lead.email && (
                         <a
                           href={`mailto:${lead.email}`}
-                          className="max-w-full break-all text-obsidian-text underline decoration-obsidian-border underline-offset-4 hover:text-white"
+                          className="ui-nav-link max-w-full break-all"
                         >
                           {lead.email}
                         </a>
@@ -710,7 +712,7 @@ export const MapCaptureView: React.FC = () => {
                           target="_blank"
                           rel="noopener noreferrer"
                           aria-label={`Abrir sitio web de ${lead.name}`}
-                          className="max-w-full break-all text-obsidian-text underline decoration-obsidian-border underline-offset-4 hover:text-white"
+                          className="ui-nav-link max-w-full break-all"
                         >
                           Sitio web <ExternalLink size={16} className="inline" aria-hidden="true" />
                         </a>
@@ -720,7 +722,7 @@ export const MapCaptureView: React.FC = () => {
                         target="_blank"
                         rel="noopener noreferrer"
                         aria-label={`Ver ${lead.name} en OpenStreetMap`}
-                        className="text-obsidian-muted underline underline-offset-4 hover:text-white"
+                        className="ui-nav-link"
                       >
                         OpenStreetMap <ExternalLink size={16} className="inline" aria-hidden="true" />
                       </a>
@@ -732,12 +734,13 @@ export const MapCaptureView: React.FC = () => {
           )}
 
           <div className="border-t border-obsidian-border px-4 py-3 text-[10px] leading-relaxed text-obsidian-muted sm:px-5">
+            {/* [Navegación] Enlaces legales y de atribución del mapa. */}
             {parsedAttribution.href ? (
               <a
                 href={parsedAttribution.href}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="underline underline-offset-4 hover:text-white"
+                className="ui-nav-link"
               >
                 {parsedAttribution.text}
               </a>
@@ -749,7 +752,7 @@ export const MapCaptureView: React.FC = () => {
               href="https://www.openstreetmap.org/copyright"
               target="_blank"
               rel="noopener noreferrer"
-              className="underline underline-offset-4 hover:text-white"
+              className="ui-nav-link"
             >
               ODbL
             </a>

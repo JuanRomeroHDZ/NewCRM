@@ -315,7 +315,7 @@ export const SecurityAuditView: React.FC = () => {
                   className="ui-nav-action font-semibold"
                 >
                   {nextStep.label}
-                  <ArrowRight size={14} aria-hidden="true" />
+                  <ArrowRight size={16} aria-hidden="true" />
                 </button>
               </div>
             ) : (

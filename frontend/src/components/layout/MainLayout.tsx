@@ -58,6 +58,7 @@ export const MainLayout: React.FC = () => {
       >
         <Sidebar isMobileOpen={mobileNavOpen} onCloseMobile={() => setMobileNavOpen(false)} />
         {mobileNavOpen && (
+          /* [Acción secundaria] El fondo cierra la navegación móvil; ocupa la pantalla completa. */
           <button
             type="button"
             aria-label="Cerrar menú de navegación"

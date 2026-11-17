@@ -1,9 +1,33 @@
 import pytest
 from app.models.core import User
 from app.models.finances import Budget, Debt, DebtPayment
-from app.models import OneTimeExpense
+from app.models import OneTimeExpense, ExchangeRate
 from app.security.crypto import hash_master_password
 from app.services.core_auth import create_user_session
+
+@pytest.mark.asyncio
+async def test_summary_and_budget_convert_mixed_currencies(client, db_session):
+    owner = User(username="owner_fx_test", email="owner_fx@lessso.local", full_name="Owner FX", role="owner", hashed_password=hash_master_password("TestOwner123!"), is_active=True)
+    db_session.add(owner)
+    db_session.add(ExchangeRate(base_currency="USD", target_currency="MXN", rate=20, is_manual=True))
+    db_session.add_all([
+        OneTimeExpense(concept="MXN", category="Servidores", amount=200, currency="MXN", expense_date="2026-10-10"),
+        OneTimeExpense(concept="USD", category="Servidores", amount=10, currency="USD", expense_date="2026-10-11"),
+        OneTimeExpense(concept="Mes anterior", category="Servidores", amount=2000, currency="MXN", expense_date="2026-09-10"),
+        Budget(month="2026-10", category="Servidores", cap_amount=100, currency="USD"),
+        Debt(creditor="Préstamo", original_amount=100, current_balance=100, minimum_payment=10, currency="USD", status="active"),
+    ])
+    await db_session.commit()
+    token, _ = await create_user_session(db_session, owner)
+    headers = {"Authorization": f"Bearer {token}"}
+    mxn = (await client.get("/api/v1/personal-finances/summary?month=2026-10&currency=MXN", headers=headers)).json()
+    usd = (await client.get("/api/v1/personal-finances/summary?month=2026-10&currency=USD", headers=headers)).json()
+    assert (mxn["total_expenses"], mxn["total_active_debt"]) == (400, 2000)
+    assert (usd["total_expenses"], usd["total_active_debt"]) == (20, 100)
+    assert mxn["upcoming_payments"][0]["minimum_payment"] == 200
+    assert usd["upcoming_payments"][0]["currency"] == "USD"
+    budgets = (await client.get("/api/v1/personal-finances/budgets", headers=headers)).json()
+    assert next(b for b in budgets if b["category"] == "Servidores")["spent_amount"] == 20
 
 @pytest.mark.asyncio
 async def test_budget_creation_and_spending_comparison(client, db_session):

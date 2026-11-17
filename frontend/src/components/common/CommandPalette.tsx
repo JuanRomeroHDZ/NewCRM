@@ -410,7 +410,7 @@ export const CommandPalette: React.FC = () => {
               aria-label="Cerrar paleta de comandos"
               className="ui-action-secondary"
             >
-              <X size={14} aria-hidden="true" />
+              <X size={16} aria-hidden="true" />
               <span>Cerrar</span>
             </button>
           </div>
@@ -432,7 +432,7 @@ export const CommandPalette: React.FC = () => {
                   onClick={() => void loadSearchIndex()}
                   className="ui-action-secondary shrink-0"
                 >
-                  <RefreshCw size={11} aria-hidden="true" />
+                  <RefreshCw size={16} aria-hidden="true" />
                   Reintentar
                 </button>
               </>
@@ -479,7 +479,7 @@ export const CommandPalette: React.FC = () => {
                         <span className={`text-[10px] px-1.5 py-0.5 rounded border font-semibold ${slaMeta.badgeClass}`}>
                           {slaMeta.shortLabel}
                         </span>
-                        <ArrowRight size={13} className="text-obsidian-muted" aria-hidden="true" />
+                        <ArrowRight size={16} className="text-obsidian-muted" aria-hidden="true" />
                       </div>
                     </button>
                   );
@@ -527,7 +527,7 @@ export const CommandPalette: React.FC = () => {
                             ${p.subscription_cost} {p.currency}
                           </span>
                         )}
-                        <ArrowRight size={13} className="text-obsidian-muted" aria-hidden="true" />
+                        <ArrowRight size={16} className="text-obsidian-muted" aria-hidden="true" />
                       </div>
                     </button>
                   );
@@ -561,7 +561,7 @@ export const CommandPalette: React.FC = () => {
                       className="ui-action-toggle ui-menu-item justify-between py-2 text-xs"
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
-                        <Mail size={16} className="text-cyan-400 flex-shrink-0" aria-hidden="true" />
+                        <Mail size={16} className="text-obsidian-muted flex-shrink-0" aria-hidden="true" />
                         <div className="min-w-0">
                           <div className="font-medium text-white truncate">{e.address}</div>
                           <div className="text-[11px] text-obsidian-muted truncate">
@@ -569,7 +569,7 @@ export const CommandPalette: React.FC = () => {
                           </div>
                         </div>
                       </div>
-                      <ArrowRight size={13} className="text-obsidian-muted shrink-0" aria-hidden="true" />
+                      <ArrowRight size={16} className="text-obsidian-muted shrink-0" aria-hidden="true" />
                     </button>
                   );
                 })}
@@ -611,7 +611,7 @@ export const CommandPalette: React.FC = () => {
                           </div>
                         </div>
                       </div>
-                      <ArrowRight size={13} className="text-obsidian-muted shrink-0" aria-hidden="true" />
+                      <ArrowRight size={16} className="text-obsidian-muted shrink-0" aria-hidden="true" />
                     </button>
                   );
                 })}

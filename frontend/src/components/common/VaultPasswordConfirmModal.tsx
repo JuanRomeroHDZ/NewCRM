@@ -92,7 +92,7 @@ export const VaultPasswordConfirmModal: React.FC<VaultPasswordConfirmModalProps>
                 setError(null);
               }}
               disabled={loading}
-              className="min-h-11 w-full rounded-lg border border-obsidian-border bg-obsidian-bg px-3 font-mono text-sm text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
+              className="min-h-11 w-full rounded-lg border border-obsidian-border bg-obsidian-bg px-3 font-mono text-sm text-white"
             />
           </label>
           {error && <p role="alert" className="text-xs text-rose-300">{error}</p>}
