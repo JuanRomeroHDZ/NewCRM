@@ -245,19 +245,20 @@ export const InspectorFinanceForms: React.FC<InspectorFinanceFormsProps> = ({
   return (
     <>
       {/* HISTORIAL FINANCIERO / PAGOS DE ESTE CLIENTE */}
-      <div className="space-y-2 rounded-xl border border-obsidian-border bg-obsidian-surface p-3">
+      <section className="space-y-3 border-b border-obsidian-border pb-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-1.5">
-            <DollarSign size={14} className="text-emerald-400" aria-hidden="true" />
+            <DollarSign size={18} className="text-obsidian-muted" aria-hidden="true" />
             <span className="text-xs font-semibold text-white">Pagos del cliente</span>
           </div>
           <button
             type="button"
             onClick={() => setShowAddIncome(!showAddIncome)}
             aria-expanded={showAddIncome}
-            className="inline-flex min-h-[32px] items-center gap-1 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-300 hover:bg-emerald-500/20"
+            className="ui-action-secondary"
           >
-            <Plus size={12} aria-hidden="true" />
+            {/* [Acción secundaria] Muestra u oculta el formulario de pago. */}
+            <Plus size={16} aria-hidden="true" />
             <span>{showAddIncome ? 'Cerrar' : 'Registrar Pago'}</span>
           </button>
         </div>
@@ -280,7 +281,7 @@ export const InspectorFinanceForms: React.FC<InspectorFinanceFormsProps> = ({
 
         {/* Quick Add Income Form */}
         {showAddIncome && (
-          <form onSubmit={handleCreateIncome} className="space-y-2 rounded-lg border border-emerald-500/40 bg-obsidian-bg p-2.5">
+          <form onSubmit={handleCreateIncome} className="space-y-3 border-t border-obsidian-border pt-3">
             <span className="block text-[11px] font-semibold text-white">Nuevo Pago Recibido:</span>
             <input
               type="text"
@@ -290,7 +291,7 @@ export const InspectorFinanceForms: React.FC<InspectorFinanceFormsProps> = ({
               onChange={(e) => setIncConcept(e.target.value)}
               placeholder="Concepto (ej. Anticipo 50% Página Web)"
               aria-label="Concepto del pago"
-              className="w-full rounded border border-obsidian-border bg-obsidian-surface px-2.5 py-1.5 text-xs text-white focus:border-emerald-500 focus:outline-none"
+              className="min-h-[44px] w-full rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 text-xs text-white focus:border-indigo-400 focus:outline-none"
             />
             <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-3">
               <input
@@ -303,13 +304,13 @@ export const InspectorFinanceForms: React.FC<InspectorFinanceFormsProps> = ({
                 onChange={(e) => setIncAmount(e.target.value)}
                 placeholder="Monto"
                 aria-label="Monto del pago"
-                className="rounded border border-obsidian-border bg-obsidian-surface px-2.5 py-1.5 font-mono text-xs text-white focus:border-emerald-500 focus:outline-none"
+                className="min-h-[44px] rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 font-mono text-xs text-white focus:border-indigo-400 focus:outline-none"
               />
               <select
                 value={incCurrency}
                 onChange={(e) => setIncCurrency(e.target.value)}
                 aria-label="Moneda del pago"
-                className="rounded border border-obsidian-border bg-obsidian-surface px-2 py-1.5 text-xs text-white"
+                className="min-h-[44px] rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 text-xs text-white focus:border-indigo-400 focus:outline-none"
               >
                 {supportedCurrencies.map((curr) => (
                   <option key={curr.code} value={curr.code}>
@@ -321,7 +322,7 @@ export const InspectorFinanceForms: React.FC<InspectorFinanceFormsProps> = ({
                 value={incStatus}
                 onChange={(e) => setIncStatus(e.target.value as 'cobrado' | 'pendiente')}
                 aria-label="Estado del pago"
-                className="rounded border border-obsidian-border bg-obsidian-surface px-2 py-1.5 text-xs text-white"
+                className="min-h-[44px] rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 text-xs text-white focus:border-indigo-400 focus:outline-none"
               >
                 <option value="cobrado">Cobrado</option>
                 <option value="pendiente">Pendiente</option>
@@ -332,7 +333,7 @@ export const InspectorFinanceForms: React.FC<InspectorFinanceFormsProps> = ({
                 value={incCategory}
                 onChange={(e) => setIncCategory(e.target.value)}
                 aria-label="Categoría del pago"
-                className="rounded border border-obsidian-border bg-obsidian-surface px-2 py-1.5 text-xs text-white"
+                className="min-h-[44px] rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 text-xs text-white focus:border-indigo-400 focus:outline-none"
               >
                 {INCOME_CATEGORY_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>
@@ -346,7 +347,7 @@ export const InspectorFinanceForms: React.FC<InspectorFinanceFormsProps> = ({
                 value={incDate}
                 onChange={(e) => setIncDate(e.target.value)}
                 aria-label="Fecha del pago"
-                className="rounded border border-obsidian-border bg-obsidian-surface px-2 py-1.5 font-mono text-xs text-white"
+                className="min-h-[44px] rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 font-mono text-xs text-white focus:border-indigo-400 focus:outline-none"
               />
             </div>
             <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
@@ -361,8 +362,8 @@ export const InspectorFinanceForms: React.FC<InspectorFinanceFormsProps> = ({
               <button
                 type="submit"
                 disabled={incLoading}
-                className="min-h-[34px] rounded bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
-              >
+                className="ui-action-primary"
+              >{/* [Acción principal] Inicia o confirma la tarea de este espacio. */}
                 {incLoading ? 'Guardando...' : 'Guardar Pago'}
               </button>
             </div>
@@ -370,7 +371,7 @@ export const InspectorFinanceForms: React.FC<InspectorFinanceFormsProps> = ({
         )}
 
         {/* Incomes List */}
-        <div className="max-h-48 space-y-1.5 overflow-y-auto">
+        <div className="max-h-48 divide-y divide-obsidian-border overflow-y-auto">
           {clientIncomes.length === 0 ? (
             <div className="py-1 text-[11px] text-obsidian-muted">
               Sin pagos registrados para este cliente.
@@ -379,7 +380,7 @@ export const InspectorFinanceForms: React.FC<InspectorFinanceFormsProps> = ({
             clientIncomes.map((inc) => (
               <div
                 key={inc.id}
-                className="flex items-center justify-between gap-2 rounded-lg border border-obsidian-border bg-obsidian-bg p-2"
+                className="flex items-center justify-between gap-2 py-2.5"
               >
                 <div className="min-w-0">
                   <span className="block truncate text-xs font-semibold text-white">{inc.concept}</span>
@@ -409,29 +410,30 @@ export const InspectorFinanceForms: React.FC<InspectorFinanceFormsProps> = ({
             ))
           )}
         </div>
-      </div>
+      </section>
 
       {/* DOMINIOS Y HOSTING ASOCIADOS */}
-      <div className="space-y-2 rounded-xl border border-obsidian-border bg-obsidian-surface p-3">
+      <section className="space-y-3 border-b border-obsidian-border pb-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-1.5">
-            <Globe size={14} className="text-indigo-400" aria-hidden="true" />
+            <Globe size={18} className="text-obsidian-muted" aria-hidden="true" />
             <span className="text-xs font-semibold text-white">Dominios y Hosting Asociados</span>
           </div>
           <button
             type="button"
             onClick={() => setShowAddDomain(!showAddDomain)}
             aria-expanded={showAddDomain}
-            className="inline-flex min-h-[32px] items-center gap-1 rounded-lg border border-indigo-500/30 bg-indigo-500/10 px-2.5 py-1 text-[11px] font-semibold text-indigo-300 hover:bg-indigo-500/20"
+            className="ui-action-secondary"
           >
-            <Plus size={12} aria-hidden="true" />
+            {/* [Acción secundaria] Muestra u oculta el formulario de servicio. */}
+            <Plus size={16} aria-hidden="true" />
             <span>{showAddDomain ? 'Cerrar' : 'Asociar'}</span>
           </button>
         </div>
 
         {/* Quick Add Domain Form */}
         {showAddDomain && (
-          <form onSubmit={handleCreateRenewal} className="space-y-2 rounded-lg border border-indigo-500/40 bg-obsidian-bg p-2.5">
+          <form onSubmit={handleCreateRenewal} className="space-y-3 border-t border-obsidian-border pt-3">
             <span className="block text-[11px] font-semibold text-white">Asociar Dominio o Hosting:</span>
             <input
               type="text"
@@ -441,14 +443,14 @@ export const InspectorFinanceForms: React.FC<InspectorFinanceFormsProps> = ({
               onChange={(e) => setDomName(e.target.value)}
               placeholder="Dominio o Servicio (ej. www.cliente.com)"
               aria-label="Nombre del dominio o servicio"
-              className="w-full rounded border border-obsidian-border bg-obsidian-surface px-2.5 py-1.5 text-xs text-white focus:border-indigo-500 focus:outline-none"
+              className="min-h-[44px] w-full rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 text-xs text-white focus:border-indigo-400 focus:outline-none"
             />
             <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
               <select
                 value={domType}
                 onChange={(e) => setDomType(e.target.value)}
                 aria-label="Tipo de servicio"
-                className="rounded border border-obsidian-border bg-obsidian-surface px-2 py-1.5 text-xs text-white"
+                className="min-h-[44px] rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 text-xs text-white focus:border-indigo-400 focus:outline-none"
               >
                 {RENEWAL_SERVICE_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>
@@ -463,7 +465,7 @@ export const InspectorFinanceForms: React.FC<InspectorFinanceFormsProps> = ({
                 onChange={(e) => setDomProvider(e.target.value)}
                 placeholder="Proveedor (ej. Namecheap)"
                 aria-label="Proveedor del servicio"
-                className="rounded border border-obsidian-border bg-obsidian-surface px-2.5 py-1.5 text-xs text-white"
+                className="min-h-[44px] rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 text-xs text-white focus:border-indigo-400 focus:outline-none"
               />
             </div>
             <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-3">
@@ -476,7 +478,7 @@ export const InspectorFinanceForms: React.FC<InspectorFinanceFormsProps> = ({
                 onChange={(e) => setDomCost(e.target.value)}
                 placeholder="Costo base"
                 aria-label="Costo base de renovación"
-                className="rounded border border-obsidian-border bg-obsidian-surface px-2.5 py-1.5 font-mono text-xs text-white"
+                className="min-h-[44px] rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 font-mono text-xs text-white focus:border-indigo-400 focus:outline-none"
               />
               <input
                 type="number"
@@ -487,13 +489,13 @@ export const InspectorFinanceForms: React.FC<InspectorFinanceFormsProps> = ({
                 onChange={(e) => setDomCharge(e.target.value)}
                 placeholder="Cobro cliente"
                 aria-label="Cobro al cliente"
-                className="rounded border border-obsidian-border bg-obsidian-surface px-2.5 py-1.5 font-mono text-xs text-white"
+                className="min-h-[44px] rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 font-mono text-xs text-white focus:border-indigo-400 focus:outline-none"
               />
               <select
                 value={domCurrency}
                 onChange={(e) => setDomCurrency(e.target.value)}
                 aria-label="Moneda de renovación"
-                className="rounded border border-obsidian-border bg-obsidian-surface px-2 py-1.5 text-xs text-white"
+                className="min-h-[44px] rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 text-xs text-white focus:border-indigo-400 focus:outline-none"
               >
                 {supportedCurrencies.map((curr) => (
                   <option key={curr.code} value={curr.code}>
@@ -507,7 +509,7 @@ export const InspectorFinanceForms: React.FC<InspectorFinanceFormsProps> = ({
                 value={domPaidBy}
                 onChange={(e) => setDomPaidBy(e.target.value as 'me' | 'client')}
                 aria-label="Responsable del pago"
-                className="rounded border border-obsidian-border bg-obsidian-surface px-2 py-1.5 text-xs text-white"
+                className="min-h-[44px] rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 text-xs text-white focus:border-indigo-400 focus:outline-none"
               >
                 <option value="client">Por cuenta del cliente</option>
                 <option value="me">Por mi cuenta</option>
@@ -518,13 +520,13 @@ export const InspectorFinanceForms: React.FC<InspectorFinanceFormsProps> = ({
                 value={domDate}
                 onChange={(e) => setDomDate(e.target.value)}
                 aria-label="Fecha de renovación"
-                className="rounded border border-obsidian-border bg-obsidian-surface px-2 py-1.5 font-mono text-xs text-white"
+                className="min-h-[44px] rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 font-mono text-xs text-white focus:border-indigo-400 focus:outline-none"
               />
               <button
                 type="submit"
                 disabled={domLoading}
-                className="min-h-[34px] rounded bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500 disabled:opacity-50"
-              >
+                className="ui-action-primary"
+              >{/* [Acción principal] Inicia o confirma la tarea de este espacio. */}
                 {domLoading ? 'Guardando...' : 'Asociar'}
               </button>
             </div>
@@ -532,7 +534,7 @@ export const InspectorFinanceForms: React.FC<InspectorFinanceFormsProps> = ({
         )}
 
         {/* Domain Renewals List */}
-        <div className="max-h-48 space-y-1.5 overflow-y-auto">
+        <div className="max-h-48 divide-y divide-obsidian-border overflow-y-auto">
           {clientRenewals.length === 0 ? (
             <div className="py-1 text-[11px] text-obsidian-muted">
               Sin dominios ni hosting asociados a este cliente.
@@ -541,7 +543,7 @@ export const InspectorFinanceForms: React.FC<InspectorFinanceFormsProps> = ({
             clientRenewals.map((ren) => (
               <div
                 key={ren.id}
-                className="flex items-center justify-between gap-2 rounded-lg border border-obsidian-border bg-obsidian-bg p-2.5"
+                className="flex items-center justify-between gap-2 py-2.5"
               >
                 <div className="min-w-0">
                   <span className="block truncate text-xs font-semibold text-white">{ren.domain_or_service}</span>
@@ -570,9 +572,10 @@ export const InspectorFinanceForms: React.FC<InspectorFinanceFormsProps> = ({
                   <button
                     type="button"
                     onClick={() => handleAdvanceRenewal(ren.id)}
-                    className="min-h-[28px] rounded border border-indigo-500/30 bg-indigo-500/10 px-2 py-0.5 text-[10px] font-semibold text-indigo-300 hover:bg-indigo-500/20"
+                    className="ui-action-secondary"
                     title="Avanzar 1 ciclo de renovación"
                   >
+                    {/* [Acción secundaria] Avanza un ciclo de renovación. */}
                     +1 ciclo
                   </button>
                 </div>
@@ -580,7 +583,7 @@ export const InspectorFinanceForms: React.FC<InspectorFinanceFormsProps> = ({
             ))
           )}
         </div>
-      </div>
+      </section>
     </>
   );
 };

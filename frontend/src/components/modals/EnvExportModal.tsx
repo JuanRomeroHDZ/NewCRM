@@ -102,14 +102,12 @@ export const EnvExportModal: React.FC = () => {
         aria-modal="true"
         aria-labelledby="env-export-title"
         onClick={(e) => e.stopPropagation()}
-        className="relative max-h-[calc(100dvh-2rem)] w-full max-w-2xl overflow-y-auto rounded-2xl border border-obsidian-border bg-obsidian-panel p-4 shadow-2xl space-y-5 sm:p-6"
+        className="relative max-h-[calc(100dvh-2rem)] w-full max-w-2xl overflow-y-auto rounded-xl border border-obsidian-border bg-obsidian-panel p-4 shadow-xl space-y-5 sm:p-6"
       >
         {/* Header */}
         <div className="flex items-center justify-between pb-4 border-b border-obsidian-border">
           <div className="flex min-w-0 items-start gap-3">
-            <div className="w-10 h-10 shrink-0 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400">
-              <Code className="w-5 h-5" />
-            </div>
+            <Code size={18} className="mt-0.5 shrink-0 text-obsidian-muted" aria-hidden="true" />
             <div className="min-w-0">
               <h2 id="env-export-title" className="text-lg font-bold text-white">Exportador de Entorno (.env Vault)</h2>
               <p className="text-xs text-white/50">
@@ -121,14 +119,14 @@ export const EnvExportModal: React.FC = () => {
             type="button"
             aria-label="Cerrar exportador"
             onClick={closeEnvExport}
-            className="inline-flex min-w-[44px] min-h-[44px] lg:min-w-9 lg:min-h-9 items-center justify-center p-2 rounded-lg text-white/50 hover:text-white hover:bg-white/5 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
+            className="inline-flex min-w-[44px] min-h-[44px] items-center justify-center p-2 rounded-lg text-white/50 hover:text-white hover:bg-white/5 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {loading && <p role="status" className="text-sm text-obsidian-muted">Cargando servicios…</p>}
-        {error && <div role="alert" className="rounded-lg border border-rose-500/30 bg-obsidian-dangerBg p-3 text-xs text-rose-200"><p>{error}</p><button type="button" onClick={() => setAttempt((value) => value + 1)} className="mt-2 min-h-11 underline">Reintentar</button></div>}
+        {error && <div role="alert" className="rounded-lg border border-obsidian-border bg-obsidian-surface p-3 text-xs text-obsidian-muted"><p>{error}</p><button type="button" onClick={() => setAttempt((value) => value + 1)} className="mt-2 min-h-[44px] text-rose-200 underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400">Reintentar</button></div>}
         {!loading && !error && techPlatforms.length === 0 && <p role="status" className="text-sm text-obsidian-muted">No hay servicios con llaves API o variables de entorno para exportar.</p>}
         {/* Options */}
         <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-white/60">
@@ -141,7 +139,7 @@ export const EnvExportModal: React.FC = () => {
             />
             <span>Incluir comentarios de plataforma y encabezado</span>
           </label>
-          <span className="text-[11px] font-mono text-cyan-400/80">
+          <span className="text-[11px] font-mono text-obsidian-muted">
             {techPlatforms.length} servicios con secretos configurados
           </span>
         </div>
@@ -157,7 +155,7 @@ export const EnvExportModal: React.FC = () => {
             readOnly
             value={loading || error || !techPlatforms.length ? '' : envOutput}
             rows={12}
-            className="w-full p-4 bg-transparent text-emerald-400/90 font-mono text-xs resize-none focus:outline-none"
+            className="w-full p-4 bg-transparent text-obsidian-text font-mono text-xs resize-none focus:outline-none"
           />
         </div>
 
@@ -166,7 +164,7 @@ export const EnvExportModal: React.FC = () => {
           <button
             type="button"
             onClick={closeEnvExport}
-            className="px-4 py-2 rounded-xl text-xs text-white/60 hover:text-white"
+            className="min-h-[44px] rounded-xl px-4 py-2 text-xs text-obsidian-muted hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
           >
             Cerrar
           </button>
@@ -174,7 +172,7 @@ export const EnvExportModal: React.FC = () => {
             type="button"
             disabled={loading || Boolean(error) || !techPlatforms.length}
             onClick={handleCopy}
-            className="px-4 py-2.5 rounded-xl bg-obsidian-surface border border-obsidian-border hover:border-cyan-500/40 text-white text-xs font-medium flex items-center gap-2 transition-all hover:bg-white/5"
+            className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-obsidian-border bg-obsidian-surface px-4 py-2.5 text-xs font-medium text-obsidian-text transition-colors hover:border-obsidian-borderLight focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
           >
             {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4 text-white/60" />}
             Copiar .env
@@ -183,7 +181,7 @@ export const EnvExportModal: React.FC = () => {
             type="button"
             disabled={loading || Boolean(error) || !techPlatforms.length}
             onClick={handleDownload}
-            className="min-h-11 rounded-xl bg-indigo-600 px-5 py-2.5 text-white text-xs font-medium flex items-center gap-2 transition-colors hover:bg-indigo-500"
+            className="inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-xs font-medium text-white transition-colors hover:bg-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
           >
             <Download className="w-3.5 h-3.5" /> Descargar .env
           </button>

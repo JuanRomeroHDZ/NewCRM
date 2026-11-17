@@ -262,12 +262,12 @@ export const WifiPanel: React.FC = () => {
     });
 
   return (
-    <div className="space-y-4">
+    <div className="min-w-0">
       {/* Interface Mode & Scan Controls */}
-      <section className="rounded-xl border border-obsidian-border bg-obsidian-panel p-4 sm:p-5 shadow-obsidian">
+      <section className="border-t border-obsidian-border py-4 sm:py-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2.5">
-            <Wifi size={18} className="shrink-0 text-obsidian-gold" aria-hidden="true" />
+            <Wifi size={18} className="shrink-0 text-obsidian-muted" aria-hidden="true" />
             <h2 className="font-heading text-base font-bold text-white">{t('wifi.title')}</h2>
           </div>
           <span
@@ -277,31 +277,31 @@ export const WifiPanel: React.FC = () => {
                 : 'border-obsidian-border bg-obsidian-surface text-obsidian-muted'
             }`}
           >
-            <Radio size={12} aria-hidden="true" />
+            <Radio size={16} aria-hidden="true" />
             <span>{moduleStatus.wifi_scan ? t('module.wifi_scan') : t('modules.none')}</span>
           </span>
         </div>
 
         <p className="mt-2 text-xs leading-relaxed text-obsidian-muted">{t('wifi.hint')}</p>
 
-        {/* Interface mode card */}
-        <div className="mt-4 grid grid-cols-1 gap-3 rounded-xl border border-obsidian-border bg-obsidian-surface p-3.5 sm:grid-cols-2">
+        {/* Interface mode */}
+        <div className="mt-4 grid grid-cols-1 gap-3 border-t border-obsidian-border pt-4 sm:grid-cols-2">
           <div className="flex flex-col gap-0.5">
-            <span className="text-[11px] font-medium uppercase tracking-wider text-obsidian-muted">
+            <span className="text-xs font-medium text-obsidian-muted">
               {t('wifi.iface')}
             </span>
             <strong className="font-mono text-sm text-white">{selectedIface || '-'}</strong>
           </div>
           <div className="flex flex-col gap-0.5">
-            <span className="text-[11px] font-medium uppercase tracking-wider text-obsidian-muted">
+            <span className="text-xs font-medium text-obsidian-muted">
               {t('wifi.mode')}
             </span>
             <div>
               <span
                 className={`inline-flex items-center rounded-md border px-2 py-0.5 font-mono text-xs font-semibold ${
                   currentWifiMode.toLowerCase() === 'monitor'
-                    ? 'border-obsidian-gold/50 bg-obsidian-gold/15 text-obsidian-gold'
-                    : 'border-obsidian-border bg-obsidian-panel text-slate-200'
+                    ? 'border-emerald-500/40 bg-emerald-950/30 text-emerald-300'
+                    : 'border-obsidian-border bg-obsidian-surface text-obsidian-text'
                 }`}
               >
                 {currentWifiMode}
@@ -313,14 +313,14 @@ export const WifiPanel: React.FC = () => {
         <div className="mt-3.5 space-y-3">
           <label
             htmlFor={prepareId}
-            className="inline-flex min-h-[44px] cursor-pointer items-center gap-2.5 rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 text-xs text-white transition-colors hover:border-obsidian-borderLight"
+            className="inline-flex min-h-[44px] cursor-pointer items-center gap-2.5 border-b border-obsidian-border px-1 py-2 text-xs text-white transition-colors hover:text-white"
           >
             <input
               id={prepareId}
               type="checkbox"
               checked={prepare}
               onChange={(e) => setPrepare(e.target.checked)}
-              className="h-4 w-4 rounded border-obsidian-border bg-obsidian-bg accent-obsidian-gold"
+              className="h-4 w-4 rounded border-obsidian-border bg-obsidian-bg accent-obsidian-accent"
             />
             <span>{t('wifi.prepare')}</span>
           </label>
@@ -330,35 +330,39 @@ export const WifiPanel: React.FC = () => {
               type="button"
               onClick={handleMonitorStart}
               disabled={busyAction !== null}
-              className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-obsidian-gold/50 bg-obsidian-gold/20 px-3.5 py-2 text-xs font-semibold text-white transition-colors hover:bg-obsidian-gold/30 disabled:opacity-50"
+              className="ui-action-primary"
             >
-              <Radio size={14} aria-hidden="true" />
+              <Radio size={16} aria-hidden="true" />
               <span>{t('wifi.mon')}</span>
+              {/* [Acción principal] Inicia o confirma la operación. */}
             </button>
             <button
               type="button"
               onClick={handleMonitorStop}
               disabled={busyAction !== null}
-              className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-red-500/40 bg-obsidian-dangerBg px-3.5 py-2 text-xs font-semibold text-red-300 transition-colors hover:border-red-400 hover:bg-red-950/60 disabled:opacity-50"
+              className="ui-action-danger"
             >
-              <Square size={14} aria-hidden="true" />
+              <Square size={16} aria-hidden="true" />
               <span>{t('wifi.managed')}</span>
+              {/* [Acción destructiva] Detiene o revierte la operación. */}
             </button>
             <button
               type="button"
               onClick={handleKillServices}
               disabled={busyAction !== null}
-              className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 text-xs font-medium text-obsidian-muted transition-colors hover:border-obsidian-borderLight hover:text-white disabled:opacity-50"
+              className="ui-action-secondary"
             >
               <span>{t('wifi.kill')}</span>
+              {/* [Acción secundaria] Abre o ajusta la operación actual. */}
             </button>
             <button
               type="button"
               onClick={handleRestoreServices}
               disabled={busyAction !== null}
-              className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 text-xs font-medium text-obsidian-muted transition-colors hover:border-obsidian-borderLight hover:text-white disabled:opacity-50"
+              className="ui-action-secondary"
             >
               <span>{t('wifi.restore')}</span>
+              {/* [Acción secundaria] Abre o ajusta la operación actual. */}
             </button>
           </div>
 
@@ -367,26 +371,28 @@ export const WifiPanel: React.FC = () => {
               type="button"
               onClick={handleScanStart}
               disabled={busyAction !== null || Boolean(moduleStatus.wifi_scan)}
-              className="inline-flex min-h-[44px] items-center gap-2 rounded-lg border border-emerald-500/40 bg-emerald-950/40 px-4 py-2 text-xs font-semibold text-emerald-200 transition-colors hover:bg-emerald-950/60 disabled:cursor-not-allowed disabled:opacity-50"
+              className="ui-action-primary"
             >
-              <Play size={14} aria-hidden="true" />
+              <Play size={16} aria-hidden="true" />
               <span>{t('wifi.scan')}</span>
+              {/* [Acción principal] Inicia o confirma la operación. */}
             </button>
             <button
               type="button"
               onClick={handleScanStop}
               disabled={busyAction !== null || !moduleStatus.wifi_scan}
-              className="inline-flex min-h-[44px] items-center gap-2 rounded-lg border border-red-500/40 bg-obsidian-dangerBg px-4 py-2 text-xs font-semibold text-red-300 transition-colors hover:border-red-400 hover:bg-red-950/60 disabled:cursor-not-allowed disabled:opacity-50"
+              className="ui-action-danger"
             >
-              <Square size={14} aria-hidden="true" />
+              <Square size={16} aria-hidden="true" />
               <span>{t('wifi.scanStop')}</span>
+              {/* [Acción destructiva] Detiene o revierte la operación. */}
             </button>
           </div>
         </div>
       </section>
 
       {/* AP Scan Table */}
-      <section className="rounded-xl border border-obsidian-border bg-obsidian-panel p-4 sm:p-5 shadow-obsidian">
+      <section className="border-t border-obsidian-border py-4 sm:py-5">
         <div className="mb-3 flex items-center justify-between gap-2">
           <h3 className="font-heading text-sm font-bold text-white">APs</h3>
           <span className="rounded border border-obsidian-border bg-obsidian-surface px-2 py-0.5 font-mono text-[11px] text-obsidian-muted">
@@ -394,10 +400,10 @@ export const WifiPanel: React.FC = () => {
           </span>
         </div>
 
-        <div className="overflow-x-auto rounded-lg border border-obsidian-border">
+        <div className="overflow-x-auto border-y border-obsidian-border">
           <table className="w-full min-w-[600px] border-collapse text-left text-xs">
             <thead>
-              <tr className="border-b border-obsidian-border bg-obsidian-surface text-[11px] font-semibold uppercase tracking-wider text-obsidian-muted">
+              <tr className="border-b border-obsidian-border text-xs font-semibold text-obsidian-muted">
                 <th className="px-3 py-2.5">SSID</th>
                 <th className="px-3 py-2.5">BSSID</th>
                 <th className="px-3 py-2.5">{t('wifi.channel')}</th>
@@ -417,7 +423,7 @@ export const WifiPanel: React.FC = () => {
                 wifiAps.map((ap) => (
                   <tr key={ap.bssid} className="hover:bg-obsidian-surface/60">
                     <td className="px-3 py-2 font-medium text-white">{ap.ssid || '<hidden>'}</td>
-                    <td className="px-3 py-2 font-mono text-slate-200">{ap.bssid}</td>
+                    <td className="px-3 py-2 font-mono text-obsidian-muted">{ap.bssid}</td>
                     <td className="px-3 py-2 font-mono text-obsidian-muted">{ap.channel ?? '?'}</td>
                     <td className="px-3 py-2 font-mono text-obsidian-muted">{ap.signal ?? '?'}</td>
                     <td className="px-3 py-2 font-mono text-obsidian-muted">{ap.enc || '-'}</td>
@@ -426,16 +432,18 @@ export const WifiPanel: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => selectWifiApForDeauth(ap.bssid, ap.channel)}
-                          className="min-h-[44px] lg:min-h-10 rounded-lg border border-red-500/40 bg-obsidian-dangerBg px-2.5 py-1 text-[11px] font-semibold text-red-300 transition-colors hover:border-red-400 hover:bg-red-950/60"
+                          className="ui-action-danger"
                         >
                           Deauth
+                          {/* [Acción destructiva] Detiene o revierte la operación. */}
                         </button>
                         <button
                           type="button"
                           onClick={() => selectWifiApForPmkid(ap.bssid, ap.channel, ap.ssid)}
-                          className="min-h-[44px] lg:min-h-10 rounded-lg border border-obsidian-border bg-obsidian-surface px-2.5 py-1 text-[11px] font-semibold text-obsidian-gold transition-colors hover:border-obsidian-gold/60"
+                          className="ui-action-secondary"
                         >
                           PMKID
+                          {/* [Acción secundaria] Abre o ajusta la operación actual. */}
                         </button>
                       </div>
                     </td>
@@ -448,7 +456,7 @@ export const WifiPanel: React.FC = () => {
       </section>
 
       {/* Detected Clients Table */}
-      <section className="rounded-xl border border-obsidian-border bg-obsidian-panel p-4 sm:p-5 shadow-obsidian">
+      <section className="border-t border-obsidian-border py-4 sm:py-5">
         <div className="mb-3 flex items-center justify-between gap-2">
           <h3 className="font-heading text-sm font-bold text-white">{t('wifi.clientsTitle')}</h3>
           <span className="rounded border border-obsidian-border bg-obsidian-surface px-2 py-0.5 font-mono text-[11px] text-obsidian-muted">
@@ -456,10 +464,10 @@ export const WifiPanel: React.FC = () => {
           </span>
         </div>
 
-        <div className="overflow-x-auto rounded-lg border border-obsidian-border">
+        <div className="overflow-x-auto border-y border-obsidian-border">
           <table className="w-full min-w-[560px] border-collapse text-left text-xs">
             <thead>
-              <tr className="border-b border-obsidian-border bg-obsidian-surface text-[11px] font-semibold uppercase tracking-wider text-obsidian-muted">
+              <tr className="border-b border-obsidian-border text-xs font-semibold text-obsidian-muted">
                 <th className="px-3 py-2.5">{t('wifi.clientAp')}</th>
                 <th className="px-3 py-2.5">{t('wifi.client')}</th>
                 <th className="px-3 py-2.5">{t('wifi.signal')}</th>
@@ -483,7 +491,7 @@ export const WifiPanel: React.FC = () => {
                   return (
                     <tr key={`${client.bssid}-${client.client}`} className="hover:bg-obsidian-surface/60">
                       <td className="px-3 py-2 font-mono text-white">{apLabel}</td>
-                      <td className="px-3 py-2 font-mono text-slate-200">{client.client}</td>
+                      <td className="px-3 py-2 font-mono text-obsidian-muted">{client.client}</td>
                       <td className="px-3 py-2 font-mono text-obsidian-muted">
                         {client.signal == null ? '-' : `${client.signal} dBm`}
                       </td>
@@ -496,9 +504,10 @@ export const WifiPanel: React.FC = () => {
                             if (channelVal != null) setDeauthChannel(String(channelVal));
                             setDeauthClient(client.client.toLowerCase());
                           }}
-                          className="min-h-[44px] lg:min-h-10 rounded-lg border border-obsidian-border bg-obsidian-surface px-2.5 py-1 text-[11px] font-semibold text-white transition-colors hover:border-obsidian-gold/60 hover:text-obsidian-gold"
+                          className="ui-action-secondary"
                         >
                           {t('wifi.selectClientAction')}
+                          {/* [Acción secundaria] Abre o ajusta la operación actual. */}
                         </button>
                       </td>
                     </tr>
@@ -513,10 +522,10 @@ export const WifiPanel: React.FC = () => {
       {/* Deauth + PMKID forms */}
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         {/* Deauth Section */}
-        <section className="rounded-xl border border-obsidian-border bg-obsidian-panel p-4 sm:p-5 shadow-obsidian">
+        <section className="border-t border-obsidian-border py-4 sm:py-5">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
-              <Zap size={16} className="text-red-400" aria-hidden="true" />
+              <Zap size={16} className="text-rose-300" aria-hidden="true" />
               <h3 className="font-heading text-sm font-bold text-white">{t('wifi.deauthTitle')}</h3>
             </div>
             {moduleStatus.deauth && (
@@ -539,7 +548,7 @@ export const WifiPanel: React.FC = () => {
                   value={deauthBssid}
                   onChange={(e) => setDeauthBssid(e.target.value)}
                   placeholder="AA:BB:CC:DD:EE:FF"
-                  className="min-h-[44px] w-full rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 font-mono text-xs text-white placeholder:text-slate-500 focus:border-obsidian-gold focus:outline-none"
+                  className="min-h-[44px] w-full rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 font-mono text-xs text-white placeholder:text-obsidian-muted focus:border-obsidian-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-accent"
                 />
               </div>
 
@@ -554,7 +563,7 @@ export const WifiPanel: React.FC = () => {
                   value={deauthChannel}
                   onChange={(e) => setDeauthChannel(e.target.value)}
                   placeholder="6"
-                  className="min-h-[44px] w-full rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 font-mono text-xs text-white placeholder:text-slate-500 focus:border-obsidian-gold focus:outline-none"
+                  className="min-h-[44px] w-full rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 font-mono text-xs text-white placeholder:text-obsidian-muted focus:border-obsidian-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-accent"
                 />
               </div>
             </div>
@@ -568,13 +577,13 @@ export const WifiPanel: React.FC = () => {
                 value={deauthClient}
                 onChange={(e) => setDeauthClient(e.target.value)}
                 disabled={broadcast}
-                className="min-h-[44px] w-full rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 font-mono text-xs text-white focus:border-obsidian-gold focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                className="min-h-[44px] w-full rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 font-mono text-xs text-white focus:border-obsidian-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-accent disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <option value="" className="bg-obsidian-panel">
+                <option value="" className="bg-obsidian-surface">
                   {t('wifi.selectClient')}
                 </option>
                 {filteredClients.map((client) => (
-                  <option key={client.client} value={client.client.toLowerCase()} className="bg-obsidian-panel">
+                  <option key={client.client} value={client.client.toLowerCase()} className="bg-obsidian-surface">
                     {client.client}
                     {client.signal == null ? '' : ` (${client.signal} dBm)`}
                   </option>
@@ -584,7 +593,7 @@ export const WifiPanel: React.FC = () => {
 
             <label
               htmlFor={deauthLowNoiseId}
-              className="flex min-h-[44px] cursor-pointer items-center gap-2.5 rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 text-xs text-white"
+              className="flex min-h-[44px] cursor-pointer items-center gap-2.5 border-b border-obsidian-border px-1 py-2 text-xs text-white"
             >
               <input
                 id={deauthLowNoiseId}
@@ -592,12 +601,12 @@ export const WifiPanel: React.FC = () => {
                 checked={lowNoise}
                 onChange={(e) => setLowNoise(e.target.checked)}
                 disabled={broadcast}
-                className="h-4 w-4 rounded border-obsidian-border bg-obsidian-bg accent-obsidian-gold"
+                className="h-4 w-4 rounded border-obsidian-border bg-obsidian-bg accent-obsidian-accent"
               />
               <span>{t('wifi.low')}</span>
             </label>
 
-            <div className="rounded-lg border border-amber-500/35 bg-amber-950/20 p-3">
+            <div className="py-1">
               <label htmlFor={deauthBroadcastId} className="flex cursor-pointer items-start gap-2.5 text-xs text-amber-200">
                 <input
                   id={deauthBroadcastId}
@@ -613,7 +622,7 @@ export const WifiPanel: React.FC = () => {
                 <span>{t('wifi.broadcastOption')}</span>
               </label>
               <p className="mt-1.5 flex items-start gap-1.5 text-[11px] text-amber-300/80">
-                <ShieldAlert size={13} className="mt-0.5 shrink-0" aria-hidden="true" />
+                <ShieldAlert size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
                 <span>{t('wifi.broadcastWarning')}</span>
               </p>
             </div>
@@ -622,29 +631,31 @@ export const WifiPanel: React.FC = () => {
               <button
                 type="submit"
                 disabled={busyAction !== null || Boolean(moduleStatus.deauth)}
-                className="inline-flex min-h-[44px] items-center gap-2 rounded-lg border border-red-500/50 bg-red-950/50 px-4 py-2 text-xs font-semibold text-red-200 transition-colors hover:bg-red-900/60 disabled:cursor-not-allowed disabled:opacity-50"
+                className="ui-action-danger"
               >
-                <Zap size={14} aria-hidden="true" />
+                <Zap size={16} aria-hidden="true" />
                 <span>{t('wifi.deauthStart')}</span>
+                {/* [Acción destructiva] Detiene o revierte la operación. */}
               </button>
               <button
                 type="button"
                 onClick={handleDeauthStop}
                 disabled={busyAction !== null || !moduleStatus.deauth}
-                className="inline-flex min-h-[44px] items-center gap-2 rounded-lg border border-red-500/40 bg-obsidian-dangerBg px-4 py-2 text-xs font-semibold text-red-300 transition-colors hover:border-red-400 disabled:cursor-not-allowed disabled:opacity-50"
+                className="ui-action-danger"
               >
-                <Square size={14} aria-hidden="true" />
+                <Square size={16} aria-hidden="true" />
                 <span>{t('wifi.stop')}</span>
+                {/* [Acción destructiva] Detiene o revierte la operación. */}
               </button>
             </div>
           </form>
         </section>
 
         {/* PMKID Section */}
-        <section className="rounded-xl border border-obsidian-border bg-obsidian-panel p-4 sm:p-5 shadow-obsidian">
+        <section className="border-t border-obsidian-border py-4 sm:py-5">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
-              <KeyRound size={16} className="text-obsidian-gold" aria-hidden="true" />
+              <KeyRound size={18} className="text-obsidian-muted" aria-hidden="true" />
               <h3 className="font-heading text-sm font-bold text-white">{t('wifi.pmkidTitle')}</h3>
             </div>
             {moduleStatus.pmkid && (
@@ -667,7 +678,7 @@ export const WifiPanel: React.FC = () => {
                   value={pmkidBssid}
                   onChange={(e) => setPmkidBssid(e.target.value)}
                   placeholder="AA:BB:CC:DD:EE:FF"
-                  className="min-h-[44px] w-full rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 font-mono text-xs text-white placeholder:text-slate-500 focus:border-obsidian-gold focus:outline-none"
+                  className="min-h-[44px] w-full rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 font-mono text-xs text-white placeholder:text-obsidian-muted focus:border-obsidian-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-accent"
                 />
               </div>
 
@@ -682,21 +693,21 @@ export const WifiPanel: React.FC = () => {
                   value={pmkidChannel}
                   onChange={(e) => setPmkidChannel(e.target.value)}
                   placeholder="6"
-                  className="min-h-[44px] w-full rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 font-mono text-xs text-white placeholder:text-slate-500 focus:border-obsidian-gold focus:outline-none"
+                  className="min-h-[44px] w-full rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 font-mono text-xs text-white placeholder:text-obsidian-muted focus:border-obsidian-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-accent"
                 />
               </div>
             </div>
 
             <label
               htmlFor={pmkidAutoId}
-              className="flex min-h-[44px] cursor-pointer items-center gap-2.5 rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 text-xs text-white"
+              className="flex min-h-[44px] cursor-pointer items-center gap-2.5 border-b border-obsidian-border px-1 py-2 text-xs text-white"
             >
               <input
                 id={pmkidAutoId}
                 type="checkbox"
                 checked={pmkidAuto}
                 onChange={(e) => setPmkidAuto(e.target.checked)}
-                className="h-4 w-4 rounded border-obsidian-border bg-obsidian-bg accent-obsidian-gold"
+                className="h-4 w-4 rounded border-obsidian-border bg-obsidian-bg accent-obsidian-accent"
               />
               <span>{t('wifi.pmkidAuto')}</span>
             </label>
@@ -705,19 +716,21 @@ export const WifiPanel: React.FC = () => {
               <button
                 type="submit"
                 disabled={busyAction !== null || Boolean(moduleStatus.pmkid)}
-                className="inline-flex min-h-[44px] items-center gap-2 rounded-lg border border-obsidian-gold/50 bg-obsidian-gold/20 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-obsidian-gold/30 disabled:cursor-not-allowed disabled:opacity-50"
+                className="ui-action-primary"
               >
-                <Play size={14} aria-hidden="true" />
+                <Play size={16} aria-hidden="true" />
                 <span>{t('wifi.pmkidStart')}</span>
+                {/* [Acción principal] Inicia o confirma la operación. */}
               </button>
               <button
                 type="button"
                 onClick={handlePmkidStop}
                 disabled={busyAction !== null || !moduleStatus.pmkid}
-                className="inline-flex min-h-[44px] items-center gap-2 rounded-lg border border-red-500/40 bg-obsidian-dangerBg px-4 py-2 text-xs font-semibold text-red-300 transition-colors hover:border-red-400 disabled:cursor-not-allowed disabled:opacity-50"
+                className="ui-action-danger"
               >
-                <Square size={14} aria-hidden="true" />
+                <Square size={16} aria-hidden="true" />
                 <span>{t('wifi.stop')}</span>
+                {/* [Acción destructiva] Detiene o revierte la operación. */}
               </button>
             </div>
           </form>
@@ -725,7 +738,7 @@ export const WifiPanel: React.FC = () => {
       </div>
 
       {/* Handshake Capture & Handshakes Table */}
-      <section className="rounded-xl border border-obsidian-border bg-obsidian-panel p-4 sm:p-5 shadow-obsidian">
+      <section className="border-t border-obsidian-border py-4 sm:py-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h3 className="font-heading text-sm font-bold text-white">{t('wifi.hsTitle')}</h3>
           {moduleStatus.handshake && (
@@ -750,7 +763,7 @@ export const WifiPanel: React.FC = () => {
                 placeholder="02:00:00:00:00:01"
                 required
                 pattern="([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}"
-                className="min-h-[44px] w-full rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 font-mono text-xs text-white placeholder:text-slate-500 focus:border-obsidian-gold focus:outline-none"
+                className="min-h-[44px] w-full rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 font-mono text-xs text-white placeholder:text-obsidian-muted focus:border-obsidian-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-accent"
               />
             </div>
             <div>
@@ -764,20 +777,20 @@ export const WifiPanel: React.FC = () => {
                 value={hsChannel}
                 onChange={(e) => setHsChannel(e.target.value)}
                 placeholder="6"
-                className="min-h-[44px] w-full rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 font-mono text-xs text-white placeholder:text-slate-500 focus:border-obsidian-gold focus:outline-none"
+                className="min-h-[44px] w-full rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 font-mono text-xs text-white placeholder:text-obsidian-muted focus:border-obsidian-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-accent"
               />
             </div>
 
             <label
               htmlFor={hsAutoId}
-              className="flex min-h-[44px] cursor-pointer items-center gap-2.5 rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 text-xs text-white sm:col-span-2"
+              className="flex min-h-[44px] cursor-pointer items-center gap-2.5 border-b border-obsidian-border px-1 py-2 text-xs text-white sm:col-span-2"
             >
               <input
                 id={hsAutoId}
                 type="checkbox"
                 checked={hsAuto}
                 onChange={(e) => setHsAuto(e.target.checked)}
-                className="h-4 w-4 rounded border-obsidian-border bg-obsidian-bg accent-obsidian-gold"
+                className="h-4 w-4 rounded border-obsidian-border bg-obsidian-bg accent-obsidian-accent"
               />
               <span>{t('wifi.hsAuto')}</span>
             </label>
@@ -787,27 +800,29 @@ export const WifiPanel: React.FC = () => {
             <button
               type="submit"
               disabled={busyAction !== null || Boolean(moduleStatus.handshake)}
-              className="inline-flex min-h-[44px] items-center gap-2 rounded-lg border border-obsidian-gold/50 bg-obsidian-gold/20 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-obsidian-gold/30 disabled:cursor-not-allowed disabled:opacity-50"
+              className="ui-action-primary"
             >
-              <Play size={14} aria-hidden="true" />
+              <Play size={16} aria-hidden="true" />
               <span>{t('wifi.hsStart')}</span>
+              {/* [Acción principal] Inicia o confirma la operación. */}
             </button>
             <button
               type="button"
               onClick={handleHandshakeStop}
               disabled={busyAction !== null || !moduleStatus.handshake}
-              className="inline-flex min-h-[44px] items-center gap-2 rounded-lg border border-red-500/40 bg-obsidian-dangerBg px-4 py-2 text-xs font-semibold text-red-300 transition-colors hover:border-red-400 disabled:cursor-not-allowed disabled:opacity-50"
+              className="ui-action-danger"
             >
-              <Square size={14} aria-hidden="true" />
+              <Square size={16} aria-hidden="true" />
               <span>{t('wifi.stop')}</span>
+              {/* [Acción destructiva] Detiene o revierte la operación. */}
             </button>
           </div>
         </form>
 
-        <div className="mt-4 overflow-x-auto rounded-lg border border-obsidian-border">
+        <div className="mt-4 overflow-x-auto border-y border-obsidian-border">
           <table className="w-full min-w-[540px] border-collapse text-left text-xs">
             <thead>
-              <tr className="border-b border-obsidian-border bg-obsidian-surface text-[11px] font-semibold uppercase tracking-wider text-obsidian-muted">
+              <tr className="border-b border-obsidian-border text-xs font-semibold text-obsidian-muted">
                 <th className="px-3 py-2.5">{t('wifi.hsState')}</th>
                 <th className="px-3 py-2.5">SSID</th>
                 <th className="px-3 py-2.5">BSSID</th>
@@ -833,14 +848,14 @@ export const WifiPanel: React.FC = () => {
                             row.captured ? 'text-emerald-400' : 'text-obsidian-muted'
                           }`}
                         >
-                          {row.captured && <CheckCircle2 size={13} aria-hidden="true" />}
+                          {row.captured && <CheckCircle2 size={16} aria-hidden="true" />}
                           <span>{msgList || '-'}</span>
                         </span>
                       </td>
                       <td className="px-3 py-2 text-white">{row.ssid || '-'}</td>
-                      <td className="px-3 py-2 font-mono text-slate-200">{row.bssid}</td>
+                      <td className="px-3 py-2 font-mono text-obsidian-muted">{row.bssid}</td>
                       <td className="px-3 py-2 font-mono text-obsidian-muted">{row.client}</td>
-                      <td className="px-3 py-2 font-mono text-obsidian-gold break-all">{row.file || '-'}</td>
+                      <td className="px-3 py-2 font-mono text-obsidian-text break-all">{row.file || '-'}</td>
                     </tr>
                   );
                 })
@@ -851,7 +866,7 @@ export const WifiPanel: React.FC = () => {
       </section>
 
       {/* Saved Captures Table */}
-      <section className="rounded-xl border border-obsidian-border bg-obsidian-panel p-4 sm:p-5 shadow-obsidian">
+      <section className="border-t border-obsidian-border py-4 sm:py-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <h3 className="font-heading text-sm font-bold text-white">{t('wifi.saved')}</h3>
@@ -862,19 +877,20 @@ export const WifiPanel: React.FC = () => {
           <button
             type="button"
             onClick={() => void refreshWifiCaptures()}
-            className="inline-flex min-h-[44px] lg:min-h-10 items-center gap-1.5 rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-1.5 text-xs font-medium text-obsidian-muted transition-colors hover:border-obsidian-borderLight hover:text-white"
+            className="ui-action-secondary"
           >
-            <RefreshCw size={13} aria-hidden="true" />
+            <RefreshCw size={16} aria-hidden="true" />
             <span>{t('wifi.refresh')}</span>
+            {/* [Acción secundaria] Abre o ajusta la operación actual. */}
           </button>
         </div>
 
         <p className="mt-1.5 text-xs text-obsidian-muted">{t('wifi.savedHint')}</p>
 
-        <div className="mt-3 overflow-x-auto rounded-lg border border-obsidian-border">
+        <div className="mt-3 overflow-x-auto border-y border-obsidian-border">
           <table className="w-full min-w-[540px] border-collapse text-left text-xs">
             <thead>
-              <tr className="border-b border-obsidian-border bg-obsidian-surface text-[11px] font-semibold uppercase tracking-wider text-obsidian-muted">
+              <tr className="border-b border-obsidian-border text-xs font-semibold text-obsidian-muted">
                 <th className="px-3 py-2.5">{t('wifi.file')}</th>
                 <th className="px-3 py-2.5">{t('wifi.kind')}</th>
                 <th className="px-3 py-2.5">{t('wifi.size')}</th>
@@ -903,20 +919,22 @@ export const WifiPanel: React.FC = () => {
                             type="button"
                             onClick={() => handleConvertCapture(cap.name)}
                             disabled={busyAction === `convert:${cap.name}`}
-                            className="inline-flex min-h-[44px] lg:min-h-10 items-center gap-1 rounded-lg border border-obsidian-gold/40 bg-obsidian-gold/15 px-2.5 py-1 text-[11px] font-semibold text-obsidian-gold transition-colors hover:bg-obsidian-gold/25 disabled:opacity-50"
+                            className="ui-action-secondary"
                           >
-                            <FileCode2 size={12} aria-hidden="true" />
+                            <FileCode2 size={16} aria-hidden="true" />
                             <span>hashcat (.22000)</span>
+                            {/* [Acción secundaria] Abre o ajusta la operación actual. */}
                           </button>
                         )}
                         <button
                           type="button"
                           onClick={() => handleDownloadCapture(cap.name)}
                           disabled={busyAction === `download:${cap.name}`}
-                          className="inline-flex min-h-[44px] lg:min-h-10 items-center gap-1 rounded-lg border border-obsidian-border bg-obsidian-surface px-2.5 py-1 text-[11px] font-semibold text-white transition-colors hover:border-obsidian-borderLight disabled:opacity-50"
+                          className="ui-action-secondary"
                         >
-                          <Download size={12} aria-hidden="true" />
+                          <Download size={16} aria-hidden="true" />
                           <span>{t('wifi.download')}</span>
+                          {/* [Acción secundaria] Abre o ajusta la operación actual. */}
                         </button>
                       </div>
                     </td>

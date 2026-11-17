@@ -1,6 +1,8 @@
 import json
 import hashlib
 import hmac
+import math
+import re
 import secrets
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, Response, UploadFile, status
@@ -32,6 +34,7 @@ from app.schemas.writeups import (
     WriteupCreate,
     WriteupDetailOut,
     WriteupExportRequest,
+    WriteupOverviewOut,
     WriteupEditLeaseAcquire,
     WriteupPreviewOut,
     WriteupRevisionOut,
@@ -343,6 +346,82 @@ async def list_writeups(
             "created_at": row.created_at,
         })
     return results
+
+
+@router.get("/overview", response_model=WriteupOverviewOut)
+async def get_writeup_overview(
+    db: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(require_writeup_access),
+):
+    """Return aggregate document statistics without returning report content."""
+    rows = (await db.execute(
+        select(Writeup.id, Writeup.title, Writeup.encrypted_markdown)
+        .where(Writeup.is_deleted == False)  # noqa: E712
+        .order_by(desc(Writeup.updated_at), Writeup.id.desc())
+    )).all()
+
+    word_pattern = re.compile(r"\b[\w'-]+\b", re.UNICODE)
+    language_pattern = re.compile(r"```[ \t]*([A-Za-z0-9_+#.-]+)?")
+    language_counts: dict[str, int] = {}
+    document_words: list[tuple[str, int]] = []
+    unreadable_documents = 0
+    total_words = 0
+
+    for writeup_id, title, encrypted_markdown in rows:
+        try:
+            markdown_text = decrypt_note(encrypted_markdown or "") or ""
+        except Exception:
+            unreadable_documents += 1
+            continue
+        word_count = len(word_pattern.findall(markdown_text))
+        document_words.append((title, word_count))
+        total_words += word_count
+        for language in language_pattern.findall(markdown_text):
+            if language:
+                normalized = language.strip().lower()
+                language_counts[normalized] = language_counts.get(normalized, 0) + 1
+
+    writeup_ids = [row[0] for row in rows]
+    export_counts: dict[str, int] = {}
+    revision_count = 0
+    if writeup_ids:
+        export_rows = (await db.execute(
+            select(WriteupExportLog.export_format, func.count(WriteupExportLog.id))
+            .where(WriteupExportLog.writeup_id.in_(writeup_ids))
+            .group_by(WriteupExportLog.export_format)
+        )).all()
+        export_counts = {str(export_format): int(count) for export_format, count in export_rows}
+        revision_count = int((await db.execute(
+            select(func.count(WriteupRevision.id))
+            .where(WriteupRevision.writeup_id.in_(writeup_ids))
+        )).scalar_one())
+
+    export_count = sum(export_counts.values())
+    language_total = sum(language_counts.values())
+    largest = max(document_words, key=lambda item: item[1], default=(None, 0))
+
+    def buckets(counts: dict[str, int], total: int) -> list[dict]:
+        return [
+            {
+                "label": label,
+                "count": count,
+                "percentage": round((count / total) * 100, 1) if total else 0,
+            }
+            for label, count in sorted(counts.items(), key=lambda item: (-item[1], item[0]))
+        ]
+
+    return {
+        "report_count": len(rows),
+        "total_words": total_words,
+        "estimated_reading_minutes": math.ceil(total_words / 200) if total_words else 0,
+        "largest_document_title": largest[0],
+        "largest_document_words": largest[1],
+        "language_distribution": buckets(language_counts, language_total),
+        "export_count": export_count,
+        "export_distribution": buckets(export_counts, export_count),
+        "revision_count": revision_count,
+        "unreadable_documents": unreadable_documents,
+    }
 
 
 @router.get("/snippets", response_model=list[WriteupSnippetOut])

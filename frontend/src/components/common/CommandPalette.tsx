@@ -147,7 +147,7 @@ export const CommandPalette: React.FC = () => {
       title: 'Captación en mapa',
       subtitle: 'Buscar negocios publicados en OpenStreetMap',
       icon: MapPin,
-      color: 'text-indigo-300',
+      color: 'text-obsidian-muted',
       action: () => {
         closeCommandPalette();
         setActiveSection('capture');
@@ -158,7 +158,7 @@ export const CommandPalette: React.FC = () => {
       title: 'Nuevo Prospecto / Demo',
       subtitle: 'Registrar un prospecto y dar seguimiento a su respuesta',
       icon: Plus,
-      color: 'text-indigo-400',
+      color: 'text-obsidian-muted',
       action: () => {
         closeCommandPalette();
         if (isUnlocked) openProspectModal();
@@ -170,7 +170,7 @@ export const CommandPalette: React.FC = () => {
       title: 'Ir a Prospectos & Demos (CRM)',
       subtitle: 'Revisar prospectos, mensajes y páginas de muestra',
       icon: Briefcase,
-      color: 'text-amber-400',
+      color: 'text-obsidian-muted',
       action: () => {
         closeCommandPalette();
         setActiveSection('prospects');
@@ -181,7 +181,7 @@ export const CommandPalette: React.FC = () => {
       title: 'Ir a informes de seguridad',
       subtitle: 'Editor Markdown, pizarras de ataque y reportes cifrados',
       icon: BookOpen,
-      color: 'text-emerald-400',
+      color: 'text-obsidian-muted',
       action: () => {
         closeCommandPalette();
         setActiveSection('writeups');
@@ -193,7 +193,7 @@ export const CommandPalette: React.FC = () => {
       title: 'Generar Contraseña Segura',
       subtitle: 'Crea una contraseña segura',
       icon: Sparkles,
-      color: 'text-cyan-400',
+      color: 'text-obsidian-muted',
       action: () => {
         closeCommandPalette();
         openPasswordGen();
@@ -204,7 +204,7 @@ export const CommandPalette: React.FC = () => {
       title: 'Ir a Mapa de conexiones',
       subtitle: 'Ver relaciones entre correos, cuentas, prospectos y pagos',
       icon: Network,
-      color: 'text-indigo-400',
+      color: 'text-obsidian-muted',
       action: () => {
         closeCommandPalette();
         setActiveSection('graph');
@@ -247,7 +247,7 @@ export const CommandPalette: React.FC = () => {
       title,
       subtitle,
       icon: Icon,
-      color: 'text-amber-300',
+      color: 'text-obsidian-muted',
       action: () => {
         closeCommandPalette();
         setActiveSection(sectionId);
@@ -370,7 +370,7 @@ export const CommandPalette: React.FC = () => {
         role="dialog"
         aria-modal="true"
         aria-label="Paleta de comandos"
-        className="w-full max-w-2xl bg-obsidian-panel border border-obsidian-borderLight rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85dvh]"
+        className="w-full max-w-2xl bg-obsidian-panel border border-obsidian-border rounded-xl shadow-xl overflow-hidden flex flex-col max-h-[85dvh]"
         onClick={(e) => e.stopPropagation()}
         onKeyDown={handleDialogKeyDown}
       >
@@ -408,7 +408,7 @@ export const CommandPalette: React.FC = () => {
               type="button"
               onClick={closeCommandPalette}
               aria-label="Cerrar paleta de comandos"
-              className="inline-flex min-h-[44px] lg:min-h-9 items-center gap-1 rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-1 text-xs font-medium text-obsidian-muted hover:text-white hover:border-obsidian-borderLight focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
+              className="ui-action-secondary"
             >
               <X size={14} aria-hidden="true" />
               <span>Cerrar</span>
@@ -418,19 +418,19 @@ export const CommandPalette: React.FC = () => {
 
         {/* Loading / Error Banner */}
         {(loadingData || loadError) && (
-          <div className="px-4 py-2 border-b border-obsidian-border bg-obsidian-surface/60 flex items-center justify-between gap-2 text-[11px]">
+          <div className="flex items-center justify-between gap-2 border-b border-obsidian-border px-4 py-2 text-[11px]">
             {loadingData ? (
               <span className="text-obsidian-muted" role="status">Actualizando índice de búsqueda...</span>
             ) : (
               <>
-                <span className="flex items-center gap-1.5 text-amber-300" role="alert">
-                  <AlertCircle size={13} className="shrink-0" aria-hidden="true" />
+                <span className="flex items-center gap-1.5 text-obsidian-muted" role="alert">
+                  <AlertCircle size={16} className="shrink-0 text-rose-400" aria-hidden="true" />
                   <span>{loadError}</span>
                 </span>
                 <button
                   type="button"
                   onClick={() => void loadSearchIndex()}
-                  className="inline-flex items-center gap-1 rounded-md border border-obsidian-border bg-obsidian-panel px-2 py-1 text-white hover:bg-obsidian-surface shrink-0"
+                  className="ui-action-secondary shrink-0"
                 >
                   <RefreshCw size={11} aria-hidden="true" />
                   Reintentar
@@ -440,7 +440,7 @@ export const CommandPalette: React.FC = () => {
           </div>
         )}
 
-        {/* Results List */}
+        {/* [Navegación] Los resultados abren la sección o el detalle seleccionado. */}
         <div id="command-palette-results" role="listbox" aria-label="Resultados de búsqueda" className="max-h-96 overflow-y-auto p-2 space-y-4">
           {/* Prospects & Demos */}
           {filteredProspects.length > 0 && (
@@ -464,12 +464,10 @@ export const CommandPalette: React.FC = () => {
                         closeCommandPalette();
                         openInspector('prospect', pr.id);
                       }}
-                      className={`w-full text-left flex items-center justify-between px-3 py-2 rounded-xl text-xs transition-colors ${
-                        isCurrent ? 'bg-indigo-600/20 text-white border border-indigo-500/30' : 'text-obsidian-text hover:bg-obsidian-surface'
-                      }`}
+                      className="ui-action-toggle ui-menu-item justify-between py-2 text-xs"
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
-                        <Briefcase size={16} className="text-amber-400 flex-shrink-0" aria-hidden="true" />
+                        <Briefcase size={16} className="text-obsidian-muted flex-shrink-0" aria-hidden="true" />
                         <div className="min-w-0">
                           <div className="font-medium text-white truncate">{pr.company_name}</div>
                           <div className="text-[11px] text-obsidian-muted truncate">
@@ -512,12 +510,10 @@ export const CommandPalette: React.FC = () => {
                         closeCommandPalette();
                         openInspector('platform', p.id);
                       }}
-                      className={`w-full text-left flex items-center justify-between px-3 py-2 rounded-xl text-xs transition-colors ${
-                        isCurrent ? 'bg-indigo-600/20 text-white border border-indigo-500/30' : 'text-obsidian-text hover:bg-obsidian-surface'
-                      }`}
+                      className="ui-action-toggle ui-menu-item justify-between py-2 text-xs"
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
-                        <Globe size={16} className="text-indigo-400 flex-shrink-0" aria-hidden="true" />
+                        <Globe size={16} className="text-obsidian-muted flex-shrink-0" aria-hidden="true" />
                         <div className="min-w-0">
                           <div className="font-medium text-white truncate">{p.name}</div>
                           <div className="text-[11px] text-obsidian-muted truncate">
@@ -527,7 +523,7 @@ export const CommandPalette: React.FC = () => {
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
                         {p.subscription_status === 'active' && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-mono">
+                          <span className="rounded border border-obsidian-border bg-obsidian-surface px-1.5 py-0.5 font-mono text-[10px] text-obsidian-muted">
                             ${p.subscription_cost} {p.currency}
                           </span>
                         )}
@@ -562,9 +558,7 @@ export const CommandPalette: React.FC = () => {
                         closeCommandPalette();
                         openInspector('email', e.id);
                       }}
-                      className={`w-full text-left flex items-center justify-between px-3 py-2 rounded-xl text-xs transition-colors ${
-                        isCurrent ? 'bg-indigo-600/20 text-white border border-indigo-500/30' : 'text-obsidian-text hover:bg-obsidian-surface'
-                      }`}
+                      className="ui-action-toggle ui-menu-item justify-between py-2 text-xs"
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
                         <Mail size={16} className="text-cyan-400 flex-shrink-0" aria-hidden="true" />
@@ -606,9 +600,7 @@ export const CommandPalette: React.FC = () => {
                         setActiveSection('writeups');
                         if (!isUnlocked) openUnlockModal();
                       }}
-                      className={`w-full text-left flex items-center justify-between px-3 py-2 rounded-xl text-xs transition-colors ${
-                        isCurrent ? 'bg-indigo-600/20 text-white border border-indigo-500/30' : 'text-obsidian-text hover:bg-obsidian-surface'
-                      }`}
+                      className="ui-action-toggle ui-menu-item justify-between py-2 text-xs"
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
                         <BookOpen size={16} className="text-emerald-400 flex-shrink-0" aria-hidden="true" />
@@ -647,9 +639,7 @@ export const CommandPalette: React.FC = () => {
                       tabIndex={-1}
                       aria-selected={isCurrent}
                       onClick={cmd.action}
-                      className={`w-full text-left flex items-center justify-between px-3 py-2 rounded-xl text-xs transition-colors ${
-                        isCurrent ? 'bg-indigo-600/20 text-white border border-indigo-500/30' : 'text-obsidian-text hover:bg-obsidian-surface'
-                      }`}
+                      className="ui-action-toggle ui-menu-item justify-between py-2 text-xs"
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
                         <Icon size={16} className={`${cmd.color} shrink-0`} aria-hidden="true" />
@@ -674,7 +664,7 @@ export const CommandPalette: React.FC = () => {
         </div>
 
         {/* Footer */}
-        <div className="px-4 py-2 bg-obsidian-surface/60 border-t border-obsidian-border flex items-center justify-between text-[11px] text-obsidian-muted">
+        <div className="flex items-center justify-between border-t border-obsidian-border px-4 py-2 text-[11px] text-obsidian-muted">
           <div className="flex items-center gap-3">
             <span><kbd className="font-mono">↑↓</kbd> navegar</span>
             <span><kbd className="font-mono">↵</kbd> seleccionar</span>

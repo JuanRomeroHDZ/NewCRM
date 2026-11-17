@@ -54,13 +54,11 @@ export const VaultPasswordConfirmModal: React.FC<VaultPasswordConfirmModalProps>
         aria-labelledby="copy-confirm-title"
         aria-describedby="copy-confirm-description"
         onClick={(e) => e.stopPropagation()}
-        className="max-h-[calc(100dvh-2rem)] overflow-y-auto w-full max-w-sm rounded-2xl border border-obsidian-borderLight bg-obsidian-panel p-5 shadow-2xl"
+        className="max-h-[calc(100dvh-2rem)] overflow-y-auto w-full max-w-sm rounded-xl border border-obsidian-border bg-obsidian-panel p-5 shadow-xl"
       >
         <div className="mb-4 flex items-start justify-between gap-3">
           <div className="flex min-w-0 items-start gap-3">
-            <span className="rounded-lg border border-indigo-400/20 bg-indigo-400/10 p-2 text-indigo-300">
-              <KeyRound size={18} aria-hidden="true" />
-            </span>
+            <KeyRound size={18} className="mt-0.5 shrink-0 text-obsidian-muted" aria-hidden="true" />
             <div>
               <h2 id="copy-confirm-title" className="text-sm font-semibold text-white">Confirma tu contraseña</h2>
               <p id="copy-confirm-description" className="mt-1 text-xs leading-relaxed text-obsidian-muted">
@@ -68,12 +66,13 @@ export const VaultPasswordConfirmModal: React.FC<VaultPasswordConfirmModalProps>
               </p>
             </div>
           </div>
+          {/* [Icono] Cancelar y cerrar la confirmación. */}
           <button
             type="button"
             onClick={onCancel}
             disabled={loading}
             aria-label="Cancelar copia"
-            className="inline-flex min-h-[44px] min-w-[44px] lg:min-h-9 lg:min-w-9 items-center justify-center rounded-lg text-obsidian-muted hover:bg-obsidian-surface hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 disabled:opacity-50"
+            className="ui-action-icon"
           >
             <X size={16} aria-hidden="true" />
           </button>
@@ -97,19 +96,20 @@ export const VaultPasswordConfirmModal: React.FC<VaultPasswordConfirmModalProps>
             />
           </label>
           {error && <p role="alert" className="text-xs text-rose-300">{error}</p>}
+          {/* [Acción principal] Confirmar la contraseña y copiar el dato. */}
           <div className="flex justify-end gap-2 border-t border-obsidian-border pt-3">
             <button
               type="button"
               onClick={onCancel}
               disabled={loading}
-              className="min-h-10 rounded-lg border border-obsidian-border bg-obsidian-surface px-3 text-xs font-medium text-obsidian-text hover:bg-obsidian-border focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 disabled:opacity-50"
+              className="ui-action-secondary"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={loading || !password}
-              className="min-h-10 rounded-lg bg-indigo-600 px-3 text-xs font-semibold text-white hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 disabled:cursor-not-allowed disabled:opacity-50"
+              className="ui-action-primary"
             >
               {loading ? 'Verificando…' : 'Copiar'}
             </button>

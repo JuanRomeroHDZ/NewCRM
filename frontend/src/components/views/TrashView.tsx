@@ -213,7 +213,7 @@ export const TrashView: React.FC = () => {
   if (!isUnlocked) {
     return (
       <div className="mx-auto max-w-xl space-y-4 p-3 pt-6 text-center animate-fadeIn sm:p-8 sm:pt-24">
-        <div className="w-16 h-16 mx-auto rounded-3xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
+        <div className="w-16 h-16 mx-auto rounded-xl bg-obsidian-surface border border-obsidian-border flex items-center justify-center text-obsidian-muted">
           <Lock size={32} aria-hidden="true" />
         </div>
         <div className="flex items-center justify-center gap-2">
@@ -228,7 +228,7 @@ export const TrashView: React.FC = () => {
         <button
           type="button"
           onClick={openUnlockModal}
-          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-lg shadow-indigo-600/30"
+          className="ui-action-primary"
         >
           <span>Desbloquear con contraseña de acceso</span>
         </button>
@@ -239,7 +239,7 @@ export const TrashView: React.FC = () => {
   if (requiresUserLogin) {
     return (
       <div className="mx-auto max-w-xl space-y-4 p-3 pt-6 text-center animate-fadeIn sm:p-8 sm:pt-24">
-        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl border border-indigo-500/20 bg-indigo-500/10 text-indigo-300">
+        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-xl border border-obsidian-border bg-obsidian-surface text-obsidian-muted">
           <Lock size={28} aria-hidden="true" />
         </div>
         <div className="space-y-2">
@@ -251,7 +251,7 @@ export const TrashView: React.FC = () => {
         <button
           type="button"
           onClick={() => setActiveSection('settings')}
-          className="inline-flex min-h-10 items-center justify-center rounded-xl border border-indigo-500/30 bg-indigo-500/10 px-4 py-2 text-sm font-semibold text-indigo-200 hover:bg-indigo-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300"
+          className="ui-action-secondary"
         >
           Abrir Ajustes
         </button>
@@ -262,7 +262,7 @@ export const TrashView: React.FC = () => {
   if (currentUser?.must_change_password) {
     return (
       <div className="mx-auto max-w-xl space-y-4 p-3 pt-6 text-center animate-fadeIn sm:p-8 sm:pt-24">
-        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl border border-amber-500/20 bg-amber-500/10 text-amber-300">
+        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-xl border border-obsidian-border bg-obsidian-surface text-obsidian-muted">
           <Lock size={28} aria-hidden="true" />
         </div>
         <div className="space-y-2">
@@ -274,7 +274,7 @@ export const TrashView: React.FC = () => {
         <button
           type="button"
           onClick={() => setActiveSection('settings')}
-          className="inline-flex min-h-10 items-center justify-center rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-sm font-semibold text-amber-100 hover:bg-amber-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
+          className="ui-action-secondary"
         >
           Abrir Ajustes
         </button>
@@ -293,11 +293,11 @@ export const TrashView: React.FC = () => {
   );
 
   return (
-    <div className="mx-auto max-w-7xl min-w-0 space-y-4 p-3 sm:space-y-6 sm:p-8 animate-fadeIn">
+    <div className="mx-auto max-w-7xl min-w-0 space-y-4 p-3 sm:space-y-4 sm:p-4 animate-fadeIn">
       {/* Header, Retention Policy & Tab Switcher */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-2 min-w-0">
-          <Trash2 className="text-indigo-400 flex-shrink-0" size={18} aria-hidden="true" />
+          <Trash2 className="text-obsidian-muted flex-shrink-0" size={18} aria-hidden="true" />
           <h2 className="text-base font-bold text-white tracking-tight">
             Papelera
           </h2>
@@ -309,8 +309,8 @@ export const TrashView: React.FC = () => {
 
         <div className="flex max-w-full min-w-0 flex-wrap items-center gap-3">
           {canPurge && (
-            <div className="flex max-w-full min-w-0 flex-wrap items-center gap-2 rounded-lg border border-obsidian-border bg-obsidian-panel px-3 py-1.5 text-xs">
-              <Clock size={13} className="shrink-0 text-indigo-400" aria-hidden="true" />
+            <div className="flex max-w-full min-w-0 flex-wrap items-center gap-2 rounded-lg border border-obsidian-border bg-obsidian-panel px-3 py-2 text-xs">
+              <Clock size={16} className="shrink-0 text-obsidian-muted" aria-hidden="true" />
               <label htmlFor="trash-retention-select" className="font-medium text-obsidian-muted">
                 Mostrar durante:
               </label>
@@ -318,7 +318,7 @@ export const TrashView: React.FC = () => {
                 id="trash-retention-select"
                 value={retentionDays}
                 onChange={(event) => handleRetentionChange(Number(event.target.value))}
-                className="min-h-9 max-w-full rounded-lg border border-obsidian-border bg-obsidian-bg px-2 text-white focus:border-indigo-500 focus:outline-none"
+                className="min-h-11 max-w-full rounded-lg border border-obsidian-border bg-obsidian-bg px-2 text-white focus:border-obsidian-accent focus:outline-none"
               >
                 <option value={0}>Sin límite</option>
                 <option value={30}>30 días</option>
@@ -328,22 +328,21 @@ export const TrashView: React.FC = () => {
             </div>
           )}
 
-          <div className="flex max-w-full flex-wrap items-center rounded-lg border border-obsidian-border bg-obsidian-panel p-1 text-xs">
+          {/* [Navegación] Cambia entre la papelera y la actividad reciente. */}
+          <div className="flex max-w-full flex-wrap items-center gap-1 text-xs">
             <button
               type="button"
               onClick={() => setActiveTab('trash')}
-              className={`px-3 py-1.5 rounded-lg font-medium transition-colors ${
-                activeTab === 'trash' ? 'bg-indigo-600 text-white' : 'text-obsidian-muted hover:text-white'
-              }`}
+              aria-pressed={activeTab === 'trash'}
+              className="ui-action-toggle"
             >
               Papelera ({trashItems.length})
             </button>
             <button
               type="button"
               onClick={() => setActiveTab('audit')}
-              className={`px-3 py-1.5 rounded-lg font-medium transition-colors ${
-                activeTab === 'audit' ? 'bg-indigo-600 text-white' : 'text-obsidian-muted hover:text-white'
-              }`}
+              aria-pressed={activeTab === 'audit'}
+              className="ui-action-toggle"
             >
               Actividad Reciente
             </button>
@@ -352,16 +351,16 @@ export const TrashView: React.FC = () => {
       </div>
 
       {currentUser && !canRestore && !currentUser.must_change_password && (
-        <div className="rounded-xl border border-obsidian-border bg-obsidian-panel px-4 py-3 text-sm text-obsidian-muted" role="status">
+        <div className="py-2 text-sm text-obsidian-muted" role="status">
           Tu acceso permite consultar la papelera, pero no modificar sus elementos.
         </div>
       )}
 
       {loading && trashItems.length === 0 && auditLogs.length === 0 ? (
         <div className="space-y-3" role="status" aria-label="Cargando papelera y actividad reciente">
-          <div className="h-16 rounded-2xl bg-obsidian-panel border border-obsidian-border animate-pulse" />
-          <div className="h-24 rounded-2xl bg-obsidian-panel border border-obsidian-border animate-pulse" />
-          <div className="h-24 rounded-2xl bg-obsidian-panel border border-obsidian-border animate-pulse" />
+          <div className="h-16 rounded-xl bg-obsidian-panel border border-obsidian-border animate-pulse" />
+          <div className="h-24 rounded-xl bg-obsidian-panel border border-obsidian-border animate-pulse" />
+          <div className="h-24 rounded-xl bg-obsidian-panel border border-obsidian-border animate-pulse" />
         </div>
       ) : loadError && trashItems.length === 0 && auditLogs.length === 0 ? (
         <EmptyState
@@ -375,9 +374,9 @@ export const TrashView: React.FC = () => {
       ) : activeTab === 'trash' ? (
         <div className="space-y-4">
           {trashItems.length > 0 && (
-            <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-obsidian-border bg-obsidian-panel p-3 text-xs">
+            <div className="flex flex-wrap items-center gap-3 rounded-xl border border-obsidian-border bg-obsidian-panel p-3 text-xs">
               <div className="relative min-w-0 flex-1 sm:min-w-[220px]">
-                <Search size={14} className="absolute left-3 top-2.5 text-obsidian-muted" aria-hidden="true" />
+                <Search size={16} className="absolute left-3 top-3 text-obsidian-muted" aria-hidden="true" />
                 <input
                   type="text"
                   maxLength={INPUT_LIMITS.SEARCH}
@@ -385,16 +384,16 @@ export const TrashView: React.FC = () => {
                   onChange={(e) => setSearchQuery(e.target.value)}
                   aria-label="Buscar elementos en la papelera"
                   placeholder="Buscar elemento eliminado..."
-                  className="w-full pl-8 pr-8 py-1.5 rounded-xl bg-obsidian-bg border border-obsidian-border text-xs text-white placeholder-obsidian-muted/60 focus:outline-none focus:border-indigo-500"
+                  className="w-full min-h-11 pl-8 pr-12 rounded-lg bg-obsidian-bg border border-obsidian-border text-xs text-white placeholder-obsidian-muted/60 focus:outline-none focus:border-obsidian-accent"
                 />
                 {searchQuery && (
                   <button
                     type="button"
                     onClick={() => setSearchQuery('')}
                     aria-label="Limpiar búsqueda"
-                    className="absolute right-2.5 top-2 text-obsidian-muted hover:text-white"
+                    className="ui-action-icon absolute right-0 top-0"
                   >
-                    <X size={14} aria-hidden="true" />
+                    <X size={16} aria-hidden="true" />
                   </button>
                 )}
               </div>
@@ -407,7 +406,7 @@ export const TrashView: React.FC = () => {
                   id="trash-type-filter"
                   value={typeFilter}
                   onChange={(e) => setTypeFilter(e.target.value)}
-                  className="px-2.5 py-1.5 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs focus:outline-none focus:border-indigo-500"
+                  className="min-h-11 px-3 rounded-lg bg-obsidian-bg border border-obsidian-border text-white text-xs focus:outline-none focus:border-obsidian-accent"
                 >
                   <option value="all">Todos ({trashItems.length})</option>
                   {availableTypes.map((typeKey) => (
@@ -420,7 +419,7 @@ export const TrashView: React.FC = () => {
             </div>
           )}
 
-          <div className="rounded-2xl bg-obsidian-panel border border-obsidian-border overflow-hidden">
+          <div className="rounded-xl bg-obsidian-panel border border-obsidian-border overflow-hidden">
             {filteredTrashItems.length > 0 ? (
               <div className="divide-y divide-obsidian-border">
                 {filteredTrashItems.map((item) => {
@@ -456,13 +455,14 @@ export const TrashView: React.FC = () => {
 
                       {(canRestore || canPurge) && (
                         <div className="flex max-w-full flex-wrap items-center gap-2">
+                          {/* [Acción destructiva] La eliminación definitiva se diferencia de restaurar. */}
                           {canRestore && (
                             <button
                               type="button"
                               onClick={() => handleRestore(item.type, item.id)}
-                              className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-300 transition-colors hover:bg-emerald-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300"
+                              className="ui-action-secondary"
                             >
-                              <RotateCcw size={13} aria-hidden="true" />
+                              <RotateCcw size={16} aria-hidden="true" />
                               <span>Restaurar</span>
                             </button>
                           )}
@@ -470,9 +470,9 @@ export const TrashView: React.FC = () => {
                             <button
                               type="button"
                               onClick={() => handlePurge(item.type, item.id, item.title)}
-                              className="inline-flex items-center gap-1.5 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-1.5 text-xs font-medium text-rose-300 transition-colors hover:bg-rose-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300"
+                              className="ui-action-danger"
                             >
-                              <AlertOctagon size={13} aria-hidden="true" />
+                              <AlertOctagon size={16} aria-hidden="true" />
                               <span>Eliminar definitivamente</span>
                             </button>
                           )}
@@ -491,7 +491,7 @@ export const TrashView: React.FC = () => {
                     setSearchQuery('');
                     setTypeFilter('all');
                   }}
-                  className="inline-flex px-3 py-1.5 rounded-lg bg-obsidian-surface border border-obsidian-border text-white hover:bg-obsidian-border"
+                  className="ui-action-secondary"
                 >
                   Limpiar filtros
                 </button>
@@ -505,7 +505,7 @@ export const TrashView: React.FC = () => {
         </div>
       ) : (
         /* Audit log list */
-        <div className="rounded-2xl bg-obsidian-panel border border-obsidian-border overflow-hidden">
+        <div className="rounded-xl bg-obsidian-panel border border-obsidian-border overflow-hidden">
           <div className="p-4 border-b border-obsidian-border bg-obsidian-surface/40 flex items-center justify-between text-xs">
             <span className="font-semibold text-white">Actividad Reciente del Sistema</span>
             <span className="text-obsidian-muted font-mono">{auditLogs.length} registros</span>
@@ -521,16 +521,10 @@ export const TrashView: React.FC = () => {
                 <div key={log.id} className="p-3.5 hover:bg-obsidian-surface/40 transition-colors text-xs flex flex-col sm:flex-row sm:items-start justify-between gap-2 sm:gap-4 min-w-0">
                   <div className="space-y-1 min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2 min-w-0">
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-semibold uppercase flex-shrink-0 ${
-                        log.action === 'create'
-                          ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                          : log.action === 'update' || log.action === 'reactivate'
-                          ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20'
-                          : log.action === 'contact_followup' || log.action === 'billing_renewal' || log.action === 'restore'
-                          ? 'bg-amber-500/10 text-amber-300 border border-amber-500/20'
-                          : log.action === 'vault_unlock'
-                          ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20'
-                          : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+                      <span className={`px-2 py-0.5 rounded border text-[10px] font-semibold uppercase flex-shrink-0 ${
+                        ['delete', 'auto_purge', 'permanent_delete'].includes(log.action)
+                          ? 'border-rose-500/30 bg-rose-500/10 text-rose-300'
+                          : 'border-obsidian-border bg-obsidian-surface text-obsidian-muted'
                       }`}>
                         {AUDIT_ACTION_LABELS[log.action] || log.action}
                       </span>

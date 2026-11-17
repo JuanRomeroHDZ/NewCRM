@@ -32,10 +32,10 @@ export const PlatformIcon: React.FC<PlatformIconProps> = ({
 
   if (iconUrl && !imgError) {
     return (
-      <div className={`relative flex-shrink-0 bg-obsidian-surface border border-obsidian-border overflow-hidden flex items-center justify-center p-1 ${sizeClasses[size]} ${className}`}>
+      <div aria-hidden="true" className={`relative flex-shrink-0 bg-obsidian-surface border border-obsidian-border overflow-hidden flex items-center justify-center p-1 ${sizeClasses[size]} ${className}`}>
         <img
           src={iconUrl}
-          alt={name}
+          alt=""
           className="w-full h-full object-contain"
           onError={() => setImgError(true)}
         />
@@ -45,7 +45,8 @@ export const PlatformIcon: React.FC<PlatformIconProps> = ({
 
   return (
     <div
-      className={`relative flex-shrink-0 bg-obsidian-surface border border-obsidian-border flex items-center justify-center font-bold text-obsidian-text tracking-wider select-none ${sizeClasses[size]} ${className}`}
+      aria-hidden="true"
+      className={`relative flex-shrink-0 bg-obsidian-surface border border-obsidian-border flex items-center justify-center font-bold text-obsidian-text select-none ${sizeClasses[size]} ${className}`}
     >
       {getInitials(name || 'PL')}
     </div>

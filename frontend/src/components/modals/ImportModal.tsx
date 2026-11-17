@@ -179,14 +179,12 @@ export const ImportModal: React.FC = () => {
         role="dialog"
         aria-modal="true"
         aria-labelledby="import-modal-title"
-        className="relative w-full max-w-xl bg-obsidian-panel border border-obsidian-borderLight rounded-2xl shadow-2xl p-4 sm:p-6 max-h-[90dvh] overflow-y-auto flex flex-col"
+        className="relative w-full max-w-xl bg-obsidian-panel border border-obsidian-border rounded-xl shadow-xl p-4 sm:p-6 max-h-[90dvh] overflow-y-auto flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-3 pb-4 border-b border-obsidian-border shrink-0">
           <div className="flex min-w-0 flex-1 items-start gap-2.5">
-            <div className="p-2 rounded-xl bg-indigo-500/10 text-indigo-400 flex-shrink-0">
-              <Upload size={20} aria-hidden="true" />
-            </div>
+            <Upload size={18} className="shrink-0 text-obsidian-muted" aria-hidden="true" />
             <div className="min-w-0">
               <h2 id="import-modal-title" className="text-base font-bold text-white tracking-tight break-words">
                 Importador Universal de Bóvedas
@@ -201,7 +199,7 @@ export const ImportModal: React.FC = () => {
             disabled={loading}
             onClick={closeWhenIdle}
             aria-label="Cerrar importador"
-            className="inline-flex min-w-[44px] min-h-[44px] lg:min-w-9 lg:min-h-9 items-center justify-center p-2 text-obsidian-muted hover:text-white rounded-lg hover:bg-obsidian-surface flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 disabled:opacity-50"
+            className="inline-flex min-w-[44px] min-h-[44px] items-center justify-center p-2 text-obsidian-muted hover:text-white rounded-lg hover:bg-obsidian-surface flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 disabled:opacity-50"
           >
             <X size={18} aria-hidden="true" />
           </button>
@@ -209,7 +207,7 @@ export const ImportModal: React.FC = () => {
 
         <form onSubmit={handleProcessImport} className="flex-1 min-h-0 flex flex-col">
           <div className="py-4 space-y-4 text-xs">
-            {error && <p role="alert" className="rounded-lg border border-rose-500/30 bg-obsidian-dangerBg p-3 text-rose-200">{error}</p>}
+            {error && <p role="alert" className="rounded-lg border border-obsidian-border bg-obsidian-surface p-3 text-xs text-obsidian-muted">{error}</p>}
             {loading && <p role="status" className="text-obsidian-muted">Importando registros. Espera a que termine antes de cerrar.</p>}
             <div>
               <span className="text-obsidian-text font-medium block mb-1.5">Origen de los Datos</span>
@@ -228,7 +226,7 @@ export const ImportModal: React.FC = () => {
                     onClick={() => setSource(src.id as any)}
                     className={`p-2 rounded-xl text-center text-xs font-medium border transition-colors ${
                       source === src.id
-                        ? 'bg-indigo-600 border-indigo-500 text-white shadow-md'
+                      ? 'bg-indigo-600 border-indigo-500 text-white'
                         : 'bg-obsidian-bg border-obsidian-border text-obsidian-muted hover:text-white'
                     }`}
                   >
@@ -264,14 +262,14 @@ export const ImportModal: React.FC = () => {
               type="button"
               disabled={loading}
               onClick={closeWhenIdle}
-              className="px-4 py-2 text-xs font-medium text-obsidian-muted hover:text-white"
+              className="min-h-[44px] px-4 py-2 text-xs font-medium text-obsidian-muted hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={loading || !inputText.trim()}
-              className="inline-flex items-center gap-1.5 px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md shadow-indigo-600/20 disabled:opacity-50"
+              className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl bg-indigo-600 px-5 py-2 text-xs font-semibold text-white transition-colors hover:bg-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 disabled:opacity-50"
             >
               {loading ? 'Procesando e Importando...' : 'Iniciar Importación Atómica'}
             </button>

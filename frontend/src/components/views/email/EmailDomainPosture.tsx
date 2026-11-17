@@ -10,7 +10,7 @@ const statusStyles: Record<EmailDnsRecordCheck['status'], string> = {
   faltante: 'text-rose-300',
   débil: 'text-amber-200',
   múltiple: 'text-rose-300',
-  no_revisado: 'text-slate-400',
+  no_revisado: 'text-obsidian-muted',
   no_determinado: 'text-amber-200',
 };
 
@@ -71,32 +71,32 @@ export const EmailDomainPosture: React.FC<Props> = ({ domains }) => {
   if (domains.length === 0) return null;
 
   return (
-    <details className="rounded-lg border border-obsidian-border bg-obsidian-panel">
-      <summary data-caret="manual" className="flex min-h-10 cursor-pointer list-none items-center gap-2 px-3 text-xs font-semibold text-obsidian-text marker:hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-400">
-        <Globe2 size={14} className="shrink-0 text-emerald-300" aria-hidden="true" />
+    <details className="rounded-xl border border-obsidian-border bg-obsidian-panel">
+      <summary data-caret="manual" className="flex min-h-[44px] cursor-pointer list-none items-center gap-2 rounded-xl px-4 text-[13px] font-semibold text-obsidian-text hover:bg-obsidian-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent marker:hidden">
+        <Globe2 size={16} className="shrink-0 text-obsidian-muted" aria-hidden="true" />
         Comprobar configuración del dominio de correo
-        <ChevronDown size={14} className="ml-auto shrink-0 text-obsidian-muted" aria-hidden="true" />
+        <ChevronDown size={16} className="ml-auto shrink-0 text-obsidian-muted" aria-hidden="true" />
       </summary>
-      <div className="grid min-w-0 gap-3 border-t border-obsidian-border p-3 lg:grid-cols-[minmax(12rem,0.8fr)_minmax(0,1.2fr)]">
+      <div className="grid min-w-0 gap-3 border-t border-obsidian-border p-4 lg:grid-cols-[minmax(12rem,0.8fr)_minmax(0,1.2fr)]">
         <div className="min-w-0 space-y-2">
           <label htmlFor={domainId} className="block text-[11px] font-medium text-obsidian-muted">Dominio guardado</label>
-          <select id={domainId} value={domain} onChange={(event) => { setDomain(event.target.value); setResult(null); setError(''); }} className="min-h-9 w-full rounded-lg border border-obsidian-border bg-obsidian-bg px-2 text-xs text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400">
+          <select id={domainId} value={domain} onChange={(event) => { setDomain(event.target.value); setResult(null); setError(''); }} className="min-h-[44px] w-full rounded-lg border border-obsidian-border bg-obsidian-bg px-3 text-xs text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400">
             {domains.map((item) => <option key={item} value={item}>{item}</option>)}
           </select>
           <label htmlFor={selectorId} className="block text-[11px] font-medium text-obsidian-muted">Selector DKIM (opcional)</label>
-          <input id={selectorId} value={selector} maxLength={63} onChange={(event) => { setSelector(event.target.value.replace(/[^a-zA-Z0-9-]/g, '')); setResult(null); setError(''); }} placeholder="p. ej. google o selector1" className="min-h-9 w-full rounded-lg border border-obsidian-border bg-obsidian-bg px-2 text-xs text-white placeholder:text-obsidian-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400" />
-          <button type="button" onClick={() => void inspect()} disabled={loading || !domain} className="inline-flex min-h-10 items-center gap-1.5 rounded-lg bg-emerald-800 px-3 text-xs font-semibold text-white hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 disabled:cursor-wait disabled:opacity-60">
-            {loading ? <LoaderCircle size={13} className="animate-spin" aria-hidden="true" /> : <Search size={13} aria-hidden="true" />}
+          <input id={selectorId} value={selector} maxLength={63} onChange={(event) => { setSelector(event.target.value.replace(/[^a-zA-Z0-9-]/g, '')); setResult(null); setError(''); }} placeholder="p. ej. google o selector1" className="min-h-[44px] w-full rounded-lg border border-obsidian-border bg-obsidian-bg px-3 text-xs text-white placeholder:text-obsidian-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400" />
+          <button type="button" onClick={() => void inspect()} disabled={loading || !domain} className="inline-flex min-h-[44px] items-center gap-2 rounded-lg bg-indigo-600 px-4 text-xs font-semibold text-white hover:bg-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 disabled:cursor-wait disabled:opacity-60">
+            {loading ? <LoaderCircle size={16} className="animate-spin" aria-hidden="true" /> : <Search size={16} aria-hidden="true" />}
             {loading ? 'Consultando…' : 'Consultar DNS'}
           </button>
-          <p className="flex items-start gap-1.5 text-[10px] leading-relaxed text-obsidian-muted"><AlertTriangle size={11} className="mt-0.5 shrink-0" aria-hidden="true" />Consulta registros públicos mediante el DNS configurado en el servidor. DKIM requiere el selector definido por tu proveedor.</p>
+          <p className="flex items-start gap-2 text-[10px] leading-relaxed text-obsidian-muted"><AlertTriangle size={16} className="mt-0.5 shrink-0" aria-hidden="true" />Consulta registros públicos mediante el DNS configurado en el servidor. DKIM requiere el selector definido por tu proveedor.</p>
         </div>
         <div className="min-w-0" aria-live="polite" aria-busy={loading}>
-          {loading && <p role="status" className="mb-2 flex items-center gap-1.5 text-xs text-obsidian-muted"><LoaderCircle size={13} className="animate-spin" aria-hidden="true" /> Consultando registros públicos…</p>}
-          {error ? <p role="alert" className="rounded-md border border-rose-500/30 bg-rose-500/10 p-2 text-xs text-rose-200">{error}</p> : result ? (
+          {loading && <p role="status" className="mb-2 flex items-center gap-2 text-xs text-obsidian-muted"><LoaderCircle size={16} className="animate-spin" aria-hidden="true" /> Consultando registros públicos…</p>}
+          {error ? <p role="alert" className="text-xs text-rose-200">{error}</p> : result ? (
             <>
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="flex items-center gap-1.5 text-xs font-semibold text-white"><Globe2 size={13} className="text-emerald-300" aria-hidden="true" /> Resultado de {result.domain}</p>
+                <p className="flex items-center gap-2 text-xs font-semibold text-white"><Globe2 size={16} className="text-obsidian-muted" aria-hidden="true" /> Resultado de {result.domain}</p>
                 <time dateTime={result.checked_at} className="text-[10px] text-obsidian-muted">{new Date(result.checked_at).toLocaleString()}</time>
               </div>
               <ul className="mt-1">

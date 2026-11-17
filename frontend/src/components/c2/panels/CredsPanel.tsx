@@ -91,11 +91,11 @@ export const CredsPanel: React.FC = () => {
   };
 
   return (
-    <section className="rounded-xl border border-obsidian-border bg-obsidian-panel p-4 sm:p-5 shadow-obsidian">
+    <section className="border-t border-obsidian-border py-4 sm:py-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="max-w-3xl">
           <div className="flex items-center gap-2.5">
-            <KeyRound size={18} className="text-obsidian-gold" aria-hidden="true" />
+            <KeyRound size={18} className="text-obsidian-muted" aria-hidden="true" />
             <h2 className="font-heading text-base font-bold text-white">{t('creds.title')}</h2>
             <span
               className={`rounded border px-2 py-0.5 font-mono text-[11px] font-semibold ${
@@ -124,63 +124,67 @@ export const CredsPanel: React.FC = () => {
             type="button"
             onClick={() => void handleStart()}
             disabled={busy || running}
-            className="inline-flex min-h-[44px] items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-gold"
+            className="ui-action-primary"
           >
             {busy && !running ? (
-              <Loader2 size={15} className="animate-spin" aria-hidden="true" />
+              <Loader2 size={16} className="animate-spin" aria-hidden="true" />
             ) : (
-              <Play size={15} aria-hidden="true" />
+              <Play size={16} aria-hidden="true" />
             )}
             <span>{t('creds.start')}</span>
+            {/* [Acción principal] Inicia o confirma la operación. */}
           </button>
 
           <button
             type="button"
             onClick={() => void handleStop()}
             disabled={busy || !running}
-            className="inline-flex min-h-[44px] items-center gap-2 rounded-lg border border-red-500/40 bg-obsidian-dangerBg px-4 py-2 text-xs font-semibold text-red-200 transition-colors hover:border-red-400 hover:text-white disabled:cursor-not-allowed disabled:opacity-45 focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-gold"
+            className="ui-action-danger"
           >
             {busy && running ? (
-              <Loader2 size={15} className="animate-spin" aria-hidden="true" />
+              <Loader2 size={16} className="animate-spin" aria-hidden="true" />
             ) : (
-              <Square size={14} aria-hidden="true" />
+              <Square size={16} aria-hidden="true" />
             )}
             <span>{t('creds.stop')}</span>
+            {/* [Acción destructiva] Detiene o revierte la operación. */}
           </button>
 
           <button
             type="button"
             onClick={() => void handleExport()}
             disabled={exporting}
-            className="inline-flex min-h-[44px] items-center gap-2 rounded-lg border border-obsidian-border bg-obsidian-surface px-3.5 py-2 text-xs font-semibold text-obsidian-text transition-colors hover:border-obsidian-gold hover:text-white disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-gold"
+            className="ui-action-secondary"
           >
             {exporting ? (
-              <Loader2 size={14} className="animate-spin" aria-hidden="true" />
+              <Loader2 size={16} className="animate-spin" aria-hidden="true" />
             ) : (
-              <Download size={14} className="text-obsidian-gold" aria-hidden="true" />
+              <Download size={16} className="text-obsidian-muted" aria-hidden="true" />
             )}
             <span>{t('creds.export')}</span>
+            {/* [Acción secundaria] Abre o ajusta la operación actual. */}
           </button>
 
           <button
             type="button"
             onClick={() => void handleClear()}
             disabled={clearing}
-            className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-obsidian-border bg-obsidian-panel px-3.5 py-2 text-xs font-medium text-obsidian-muted transition-colors hover:border-obsidian-gold hover:text-white disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-gold"
+            className="ui-action-secondary"
           >
             {clearing ? (
-              <Loader2 size={14} className="animate-spin" aria-hidden="true" />
+              <Loader2 size={16} className="animate-spin" aria-hidden="true" />
             ) : (
-              <Trash2 size={14} aria-hidden="true" />
+              <Trash2 size={16} aria-hidden="true" />
             )}
             <span>{t('creds.clear')}</span>
+            {/* [Acción secundaria] Abre o ajusta la operación actual. */}
           </button>
         </div>
       </div>
 
-      <div className="mt-4 max-h-[420px] overflow-auto rounded-xl border border-obsidian-border bg-obsidian-surface/60">
+      <div className="mt-4 max-h-[420px] overflow-auto border-y border-obsidian-border">
         <table className="w-full min-w-[580px] border-collapse text-left text-xs">
-          <thead className="sticky top-0 z-10 bg-obsidian-surface">
+          <thead className="sticky top-0 z-10 bg-obsidian-bg">
             <tr className="border-b border-obsidian-border text-[11px] font-semibold uppercase tracking-wider text-obsidian-muted">
               <th scope="col" className="px-3 py-2.5">{t('creds.proto')}</th>
               <th scope="col" className="px-3 py-2.5">{t('creds.data')}</th>
@@ -202,12 +206,12 @@ export const CredsPanel: React.FC = () => {
                 return (
                   <tr
                     key={item.id || `${item.proto}-${idx}`}
-                    className="transition-colors hover:bg-obsidian-panel/70"
+                    className="transition-colors hover:bg-obsidian-surface/70"
                   >
-                    <td className="px-3 py-2.5 font-mono font-semibold text-obsidian-gold whitespace-nowrap">
+                    <td className="px-3 py-2.5 font-mono font-semibold text-obsidian-text whitespace-nowrap">
                       {item.proto || '-'}
                     </td>
-                    <td className="px-3 py-2.5 font-mono text-emerald-300 break-all">
+                    <td className="px-3 py-2.5 font-mono text-obsidian-text break-all">
                       {item.data || '-'}
                     </td>
                     <td className="px-3 py-2.5 font-mono text-obsidian-muted whitespace-nowrap">

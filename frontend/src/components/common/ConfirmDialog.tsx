@@ -76,19 +76,17 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
 
   if (!open) return null;
 
-  const toneBadgeClass =
+  const toneIconClass =
     tone === 'danger'
-      ? 'bg-rose-500/15 text-rose-400 border-rose-500/30'
+      ? 'text-rose-400'
       : tone === 'warning'
-      ? 'bg-amber-500/15 text-amber-400 border-amber-500/30'
-      : 'bg-sky-500/15 text-sky-400 border-sky-500/30';
+      ? 'text-amber-400'
+      : 'text-obsidian-muted';
 
   const confirmBtnClass =
     tone === 'danger'
-      ? 'bg-rose-600 hover:bg-rose-500 text-white focus-visible:ring-rose-400'
-      : tone === 'warning'
-      ? 'bg-amber-600 hover:bg-amber-500 text-white focus-visible:ring-amber-400'
-      : 'bg-indigo-600 hover:bg-indigo-500 text-white focus-visible:ring-indigo-400';
+      ? 'ui-action-danger'
+      : 'ui-action-primary';
 
   const Icon = tone === 'danger' ? ShieldAlert : tone === 'warning' ? AlertTriangle : Info;
 
@@ -104,12 +102,10 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
         aria-labelledby={headingId}
         aria-describedby={descriptionId}
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-md max-h-[calc(100dvh-1.5rem)] overflow-y-auto rounded-2xl border border-obsidian-borderLight bg-obsidian-panel p-4 sm:p-5 shadow-2xl"
+        className="w-full max-w-md max-h-[calc(100dvh-1.5rem)] overflow-y-auto rounded-xl border border-obsidian-border bg-obsidian-panel p-4 shadow-xl sm:p-5"
       >
         <div className="flex items-start gap-3.5">
-          <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border ${toneBadgeClass}`} aria-hidden="true">
-            <Icon size={18} />
-          </div>
+          <Icon size={18} className={`mt-0.5 shrink-0 ${toneIconClass}`} aria-hidden="true" />
           <div className="min-w-0 flex-1">
             <h2 id={headingId} className="text-base font-semibold text-white">
               {title}
@@ -121,19 +117,21 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
         </div>
 
         <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          {/* [Acción secundaria] Cancelar conserva el estado anterior. */}
           <button
             ref={cancelBtnRef}
             type="button"
             onClick={onCancel}
-            className="min-h-[44px] rounded-xl border border-obsidian-border bg-obsidian-surface px-4 py-2 text-xs font-medium text-obsidian-muted transition-colors hover:border-obsidian-borderLight hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 sm:min-h-[38px]"
+            className="ui-action-secondary"
           >
             {cancelLabel}
           </button>
+          {/* [Acción principal / destructiva] La intención depende de la confirmación. */}
           <button
             ref={confirmBtnRef}
             type="button"
             onClick={onConfirm}
-            className={`min-h-[44px] rounded-xl px-4 py-2 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 sm:min-h-[38px] ${confirmBtnClass}`}
+            className={confirmBtnClass}
           >
             {confirmLabel}
           </button>

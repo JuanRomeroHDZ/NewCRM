@@ -17,6 +17,7 @@ export const SecurityAuditView: React.FC = () => {
   const [audit, setAudit] = useState<SecurityAuditResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [statusMessage, setStatusMessage] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const loadGeneration = useRef(0);
 
@@ -26,18 +27,22 @@ export const SecurityAuditView: React.FC = () => {
       setAudit(null);
       setSearchQuery('');
       setLoadError(null);
+      setStatusMessage('');
       setLoading(false);
       return;
     }
     setLoading(true);
     setLoadError(null);
+    setStatusMessage('Actualizando diagnóstico de seguridad.');
     try {
       const data = await api.getSecurityHealth();
       if (generation !== loadGeneration.current) return;
       setAudit(data);
+      setStatusMessage('Diagnóstico de seguridad actualizado.');
     } catch (err: any) {
       if (generation !== loadGeneration.current) return;
       setLoadError(err?.message || 'No se pudo cargar el diagnóstico de seguridad.');
+      setStatusMessage('No se pudo actualizar el diagnóstico de seguridad.');
     } finally {
       if (generation === loadGeneration.current) setLoading(false);
     }
@@ -94,8 +99,8 @@ export const SecurityAuditView: React.FC = () => {
 
   if (!isUnlocked) {
     return (
-      <div className="mx-auto max-w-xl space-y-4 p-3 pt-6 text-center animate-fadeIn sm:p-8 sm:pt-24">
-        <div className="w-16 h-16 mx-auto rounded-3xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
+      <div className="mx-auto max-w-xl space-y-4 p-3 pt-6 text-center animate-fadeIn motion-reduce:animate-none sm:p-8 sm:pt-24">
+        <div className="w-16 h-16 mx-auto rounded-2xl bg-obsidian-surface border border-obsidian-border flex items-center justify-center text-obsidian-muted">
           <Lock size={32} aria-hidden="true" />
         </div>
         <div className="space-y-1">
@@ -104,10 +109,11 @@ export const SecurityAuditView: React.FC = () => {
             <InfoTooltip text="Para revisar qué contraseñas están repetidas o son fáciles de adivinar, primero desbloquea con tu contraseña de acceso." />
           </h2>
         </div>
+        {/* [Acción principal] Desbloquear antes de consultar el diagnóstico. */}
         <button
           type="button"
           onClick={openUnlockModal}
-          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-lg shadow-indigo-600/30"
+          className="ui-action-primary"
         >
           <span>Desbloquear con contraseña de acceso</span>
         </button>
@@ -117,12 +123,12 @@ export const SecurityAuditView: React.FC = () => {
 
   if (loading && !audit) {
     return (
-      <div className="mx-auto max-w-7xl min-w-0 space-y-4 p-3 sm:p-5 animate-fadeIn" role="status" aria-label="Cargando diagnóstico de seguridad">
-        <div className="h-8 w-52 rounded-xl bg-obsidian-panel border border-obsidian-border animate-pulse" />
-        <div className="h-32 rounded-xl bg-obsidian-panel border border-obsidian-border animate-pulse" />
+      <div className="mx-auto max-w-7xl min-w-0 space-y-4 p-3 sm:p-4 animate-fadeIn motion-reduce:animate-none" role="status" aria-label="Cargando diagnóstico de seguridad">
+        <div className="h-8 w-52 rounded-xl bg-obsidian-panel border border-obsidian-border animate-pulse motion-reduce:animate-none" />
+        <div className="h-32 rounded-xl bg-obsidian-panel border border-obsidian-border animate-pulse motion-reduce:animate-none" />
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="h-56 rounded-2xl bg-obsidian-panel border border-obsidian-border animate-pulse" />
-          <div className="h-56 rounded-2xl bg-obsidian-panel border border-obsidian-border animate-pulse" />
+          <div className="h-56 rounded-2xl bg-obsidian-panel border border-obsidian-border animate-pulse motion-reduce:animate-none" />
+          <div className="h-56 rounded-2xl bg-obsidian-panel border border-obsidian-border animate-pulse motion-reduce:animate-none" />
         </div>
       </div>
     );
@@ -130,7 +136,7 @@ export const SecurityAuditView: React.FC = () => {
 
   if (loadError && !audit) {
     return (
-      <div className="mx-auto max-w-4xl p-3 sm:p-6 lg:p-8 animate-fadeIn">
+      <div className="mx-auto max-w-4xl p-3 sm:p-4 animate-fadeIn motion-reduce:animate-none">
         <EmptyState
           icon={AlertTriangle}
           tone="error"
@@ -150,19 +156,56 @@ export const SecurityAuditView: React.FC = () => {
   const score = totalAuditedAccounts > 0 && Number.isFinite(rawScore)
     ? Math.max(0, Math.min(100, rawScore))
     : null;
-  const scoreColor = score === null ? '#64748b' : score >= 80 ? '#10b981' : score >= 60 ? '#f59e0b' : '#f43f5e';
-  const scoreLabel = score === null ? 'Sin datos' : score >= 80 ? 'Muy Seguro' : score >= 60 ? 'Por Mejorar' : 'Riesgo Alto';
-  const urgentApiCount =
-    (audit?.expired_api_keys_count || 0) +
-    (audit?.expiring_api_keys_count ?? audit?.expiring_soon_api_keys_count ?? 0);
+  const scoreLabel = score === null ? 'Sin datos' : score >= 80 ? 'Muy seguro' : score >= 60 ? 'Por mejorar' : 'Riesgo alto';
+  const scoreTone = score === null
+    ? 'text-obsidian-muted'
+    : score >= 80
+      ? 'text-emerald-400'
+      : score >= 60
+        ? 'text-amber-400'
+        : 'text-rose-400';
+  const scoreBadgeTone = score === null
+    ? 'bg-obsidian-surface text-obsidian-muted'
+    : score >= 80
+      ? 'bg-emerald-500/10 text-emerald-400'
+      : score >= 60
+        ? 'bg-amber-500/10 text-amber-300'
+        : 'bg-rose-500/10 text-rose-300';
+  const expiredApiCount = audit?.expired_api_keys_count || 0;
+  const expiringApiCount = audit?.expiring_api_keys_count ?? audit?.expiring_soon_api_keys_count ?? 0;
+  const urgentApiCount = expiredApiCount + expiringApiCount;
   const stalePassCount = audit?.stale_passwords_count || 0;
+  const reusedPasswordCount = audit?.reused_passwords_count || 0;
+  const weakPasswordCount = audit?.weak_passwords_count || 0;
+  const unprotectedEmailCount = audit?.no_2fa_emails_count || 0;
+  const nextStep = expiredApiCount > 0
+    ? { sectionId: 'security-api-findings', label: `Renueva las ${expiredApiCount} llaves vencidas` }
+    : reusedPasswordCount > 0
+      ? { sectionId: 'security-reuse-findings', label: `Cambia las contraseñas repetidas en ${reusedPasswordCount} cuentas` }
+      : unprotectedEmailCount > 0
+        ? { sectionId: 'security-2fa-findings', label: `Activa la verificación en 2 pasos en ${unprotectedEmailCount} correos` }
+        : weakPasswordCount > 0
+          ? { sectionId: 'security-weak-findings', label: `Refuerza ${weakPasswordCount} contraseñas fáciles de adivinar` }
+          : expiringApiCount > 0
+            ? { sectionId: 'security-api-findings', label: `Renueva las ${expiringApiCount} llaves próximas a vencer` }
+            : stalePassCount > 0
+              ? { sectionId: 'security-stale-findings', label: `Actualiza ${stalePassCount} contraseñas antiguas` }
+              : null;
+  const goToNextStep = () => {
+    if (!nextStep) return;
+    if (normalizedQuery) setSearchQuery('');
+    const target = document.getElementById(nextStep.sectionId);
+    if (!target) return;
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    target.scrollIntoView({ behavior: prefersReducedMotion ? 'auto' : 'smooth', block: 'start' });
+  };
 
   return (
-    <div className="mx-auto max-w-7xl min-w-0 space-y-4 p-3 sm:p-5 animate-fadeIn">
+    <div className="mx-auto max-w-7xl min-w-0 space-y-4 p-3 sm:p-4 animate-fadeIn motion-reduce:animate-none">
       {loadError && audit && (
-        <div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-200">
+        <div role="alert" className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm text-amber-200">
           <span>No se pudo actualizar el diagnóstico. Los datos visibles son de la última revisión correcta.</span>
-          <button type="button" onClick={() => void loadAudit()} className="shrink-0 font-semibold underline underline-offset-2 hover:text-white">
+          <button type="button" onClick={() => void loadAudit()} className="ui-action-secondary shrink-0">
             Reintentar
           </button>
         </div>
@@ -170,7 +213,7 @@ export const SecurityAuditView: React.FC = () => {
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2 min-w-0">
-          <ShieldCheck className="text-indigo-400 shrink-0" size={18} aria-hidden="true" />
+          <ShieldCheck className="text-obsidian-muted shrink-0" size={18} aria-hidden="true" />
           <h2 className="text-base font-bold text-white tracking-tight">
             Seguridad
           </h2>
@@ -181,12 +224,13 @@ export const SecurityAuditView: React.FC = () => {
           />
         </div>
 
+        {/* [Acción secundaria] Actualizar la auditoría y abrir herramientas relacionadas. */}
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={loadAudit}
             disabled={loading}
-            className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-obsidian-border bg-obsidian-panel px-3 text-xs font-medium text-obsidian-muted hover:bg-obsidian-surface hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 disabled:opacity-50"
+            className="ui-action-secondary"
           >
             <RefreshCw size={16} className={loading ? 'animate-spin' : ''} aria-hidden="true" />
             <span>Actualizar</span>
@@ -194,7 +238,7 @@ export const SecurityAuditView: React.FC = () => {
           <button
             type="button"
             onClick={() => setActiveSection('settings')}
-            className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-obsidian-border bg-obsidian-panel px-3 text-xs font-medium text-obsidian-muted hover:bg-obsidian-surface hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
+            className="ui-action-secondary"
           >
             <Clock size={16} aria-hidden="true" />
             <span>Frecuencia de cambio</span>
@@ -202,7 +246,7 @@ export const SecurityAuditView: React.FC = () => {
           <button
             type="button"
             onClick={openPasswordGen}
-            className="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-lg border border-obsidian-border bg-obsidian-surface px-3 text-xs font-semibold text-white hover:bg-obsidian-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
+            className="ui-action-secondary shrink-0"
           >
             <Sparkles size={16} className="shrink-0" aria-hidden="true" />
             <span>Generar contraseña</span>
@@ -229,13 +273,12 @@ export const SecurityAuditView: React.FC = () => {
                   cx="50"
                   cy="50"
                   r="40"
-                  stroke={scoreColor}
                   strokeWidth="8"
                   fill="transparent"
                   strokeDasharray="251.2"
                   strokeDashoffset={251.2 - (251.2 * score) / 100}
                   strokeLinecap="round"
-                  className="transition-all duration-1000 ease-out"
+                  className={`stroke-current transition-all duration-1000 ease-out motion-reduce:transition-none ${scoreTone}`}
                 />
               )}
             </svg>
@@ -249,14 +292,13 @@ export const SecurityAuditView: React.FC = () => {
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-sm font-bold text-white">Nivel de seguridad</span>
               <span
-                className="font-bold text-xs uppercase px-2.5 py-0.5 rounded-md shrink-0"
-                style={{ color: scoreColor, backgroundColor: `${scoreColor}20` }}
+                className={`rounded-md px-3 py-0.5 text-xs font-bold uppercase ${scoreBadgeTone}`}
               >
                 {scoreLabel}
               </span>
               <InfoTooltip
                 title="Cómo se calcula tu calificación"
-                text="Baja puntos cuando repites la misma contraseña en varias cuentas, usas contraseñas fáciles de adivinar, dejas correos principales sin verificación en 2 pasos o tienes llaves vencidas."
+                text="80–100: muy seguro. 60–79: por mejorar. 0–59: riesgo alto. El puntaje baja si repites contraseñas, usas claves fáciles de adivinar, dejas correos principales sin verificación en 2 pasos o tienes llaves API vencidas."
               />
             </div>
             <p className="text-xs text-obsidian-muted mt-1">
@@ -264,48 +306,69 @@ export const SecurityAuditView: React.FC = () => {
                 ? 'Agrega un correo o servicio para revisar la seguridad.'
                 : `${totalAuditedAccounts} cuentas revisadas · ${audit?.vulnerable_accounts_count || 0} por mejorar`}
             </p>
+            {nextStep ? (
+              <div className="mt-1 flex flex-wrap items-center gap-x-1 text-xs">
+                <span className="text-obsidian-muted">Siguiente paso:</span>
+                <button
+                  type="button"
+                  onClick={goToNextStep}
+                  className="ui-nav-action font-semibold"
+                >
+                  {nextStep.label}
+                  <ArrowRight size={14} aria-hidden="true" />
+                </button>
+              </div>
+            ) : (
+              score !== null && <p className="mt-1 text-xs text-obsidian-muted">
+                Sin acciones prioritarias. Mantén la revisión actualizada.
+              </p>
+            )}
           </div>
         </div>
 
         {/* Quick Audit Metrics - Responsive Non-Overlapping Grid */}
         <div className="grid w-full min-w-0 grid-cols-2 gap-2 border-t border-obsidian-border pt-3 sm:grid-cols-3 lg:grid-cols-5 xl:w-auto xl:border-l xl:border-t-0 xl:pl-4 xl:pt-0">
           <div className="flex min-w-0 flex-col px-1 py-1">
-            <span className="text-lg font-mono font-bold text-rose-400 block leading-tight">
+            <span className={`block font-mono text-lg font-bold leading-tight ${(audit?.reused_passwords_count || 0) > 0 ? 'text-rose-400' : 'text-obsidian-muted'}`}>
               {audit?.reused_passwords_count || 0}
             </span>
-            <span className="mt-0.5 break-words text-[10px] text-obsidian-muted">Repetidas</span>
+            <span className="mt-0.5 break-words text-[11px] sm:text-xs text-obsidian-muted">Repetidas</span>
           </div>
           <div className="flex min-w-0 flex-col px-1 py-1">
-            <span className="text-lg font-mono font-bold text-amber-400 block leading-tight">
+            <span className={`block font-mono text-lg font-bold leading-tight ${(audit?.weak_passwords_count || 0) > 0 ? 'text-amber-400' : 'text-obsidian-muted'}`}>
               {audit?.weak_passwords_count || 0}
             </span>
-            <span className="mt-0.5 break-words text-[10px] text-obsidian-muted">Fáciles de adivinar</span>
+            <span className="mt-0.5 break-words text-[11px] sm:text-xs text-obsidian-muted">Fáciles de adivinar</span>
           </div>
           <div className="flex min-w-0 flex-col px-1 py-1">
-            <span className="text-lg font-mono font-bold text-cyan-400 block leading-tight">
+            <span className={`block font-mono text-lg font-bold leading-tight ${(audit?.no_2fa_emails_count || 0) > 0 ? 'text-amber-300' : 'text-obsidian-muted'}`}>
               {audit?.no_2fa_emails_count || 0}
             </span>
-            <span className="mt-0.5 break-words text-[10px] text-obsidian-muted">Sin 2 pasos</span>
+            <span className="mt-0.5 break-words text-[11px] sm:text-xs text-obsidian-muted">Sin 2 pasos</span>
           </div>
           <div className="flex min-w-0 flex-col px-1 py-1">
-            <span className="text-lg font-mono font-bold text-rose-300 block leading-tight">
+            <span className={`block font-mono text-lg font-bold leading-tight ${expiredApiCount > 0 ? 'text-rose-300' : expiringApiCount > 0 ? 'text-amber-300' : 'text-obsidian-muted'}`}>
               {urgentApiCount}
             </span>
-            <span className="mt-0.5 break-words text-[10px] text-obsidian-muted">Llaves por vencer</span>
+            <span className="mt-0.5 break-words text-[11px] sm:text-xs text-obsidian-muted">Llaves por vencer</span>
           </div>
           <div className="flex min-w-0 flex-col px-1 py-1">
-            <span className="text-lg font-mono font-bold text-indigo-300 block leading-tight">
+            <span className={`block font-mono text-lg font-bold leading-tight ${stalePassCount > 0 ? 'text-amber-300' : 'text-obsidian-muted'}`}>
               {stalePassCount}
             </span>
-            <span className="mt-0.5 break-words text-[10px] text-obsidian-muted">Sin cambiar hace mucho</span>
+            <span className="mt-0.5 break-words text-[11px] sm:text-xs text-obsidian-muted">Sin cambiar hace mucho</span>
           </div>
         </div>
       </div>
 
+      <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+        {statusMessage}
+      </span>
+
       {/* Quick Filter across Findings */}
-      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-obsidian-border bg-obsidian-panel p-2.5 sm:p-3">
+      <div className="flex flex-wrap items-center gap-2">
         <div className="relative min-w-0 flex-1">
-          <Search size={14} className="absolute left-3 top-2.5 text-obsidian-muted" aria-hidden="true" />
+          <Search size={16} className="absolute left-3 top-3 text-obsidian-muted" aria-hidden="true" />
           <input
             type="text"
             value={searchQuery}
@@ -313,44 +376,45 @@ export const SecurityAuditView: React.FC = () => {
             onChange={(e) => setSearchQuery(e.target.value)}
             aria-label="Filtrar hallazgos de seguridad"
             placeholder="Filtrar hallazgos por cuenta, servicio, llave o correo..."
-            className="w-full pl-8 pr-8 py-1.5 rounded-lg bg-obsidian-bg border border-obsidian-border text-xs text-white placeholder-obsidian-muted/60 focus:outline-none focus:border-indigo-500"
+            className="w-full min-h-11 pl-8 pr-12 rounded-lg bg-obsidian-bg border border-obsidian-border text-xs text-white placeholder-obsidian-muted/60 focus:outline-none focus:border-obsidian-accent focus-visible:ring-2 focus-visible:ring-obsidian-accent"
           />
           {searchQuery && (
             <button
               type="button"
               onClick={() => setSearchQuery('')}
               aria-label="Limpiar búsqueda de hallazgos"
-              className="absolute right-2.5 top-2 text-obsidian-muted hover:text-white"
+              className="ui-action-icon absolute right-0 top-0"
             >
-              <X size={14} aria-hidden="true" />
+              <X size={16} aria-hidden="true" />
             </button>
           )}
         </div>
       </div>
 
       {/* LLAVES POR VENCER & CONTRASEÑAS ANTIGUAS */}
-      <div className="grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-2">
+      <div className="grid min-w-0 grid-cols-1 gap-x-8 gap-y-6 lg:grid-cols-2">
         {/* Llaves API por Vencer */}
-        <div className="min-w-0 space-y-2 rounded-xl border border-obsidian-border bg-obsidian-panel p-3">
+        <div id="security-api-findings" className="min-w-0 scroll-mt-4 space-y-2 border-t border-obsidian-border pt-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2 min-w-0">
-              <Code size={16} className="text-rose-400 shrink-0" aria-hidden="true" />
+              <Code size={18} className="text-obsidian-muted shrink-0" aria-hidden="true" />
               <h3 className="text-sm font-bold text-white break-words">
-                Llaves de Conexión (API) por Vencer ({urgentApiCount})
+                Llaves API por vencer ({urgentApiCount})
               </h3>
               <InfoTooltip
-                title="Vencimiento de Llaves API"
+                title="Vencimiento de llaves API"
                 text="Te avisa cuando una llave API ya venció o le quedan menos de 15 días de vigencia para que la renueves antes de que falle tu servicio."
               />
             </div>
             {audit && (audit.expired_api_keys_count || 0) > 0 && (
-              <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-rose-500/15 text-rose-300 border border-rose-500/35 shrink-0">
+              <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-500/15 text-rose-300 border border-rose-500/35 shrink-0">
                 {audit.expired_api_keys_count} Vencida(s)
               </span>
             )}
           </div>
 
-          <div className="space-y-2 pt-1">
+          {/* [Navegación] Cada hallazgo abre el detalle de su cuenta o servicio. */}
+          <div className="divide-y divide-obsidian-border">
             {filteredApiKeyAlerts.length > 0 ? (
               filteredApiKeyAlerts.map((ak) => {
                 const isExpired = ak.status === 'expired';
@@ -359,16 +423,12 @@ export const SecurityAuditView: React.FC = () => {
                     key={ak.id}
                     type="button"
                     onClick={() => openInspector('platform', ak.platform_id)}
-                    className={`w-full text-left p-3 rounded-xl border flex items-center justify-between gap-3 text-xs transition-colors min-w-0 ${
-                      isExpired
-                        ? 'bg-rose-500/10 border-rose-500/35 hover:border-rose-500/60'
-                        : 'bg-amber-500/10 border-amber-500/30 hover:border-amber-500/50'
-                    }`}
+                    className="ui-nav-action w-full min-w-0 justify-between py-3 text-xs"
                   >
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 min-w-0">
                         <span className="font-bold text-white truncate" title={`${ak.platform_name} — ${ak.label}`}>
-                          {ak.platform_name}: <span className="font-mono text-indigo-200">{ak.label}</span>
+                          {ak.platform_name}: <span className="font-mono text-obsidian-text">{ak.label}</span>
                         </span>
                       </div>
                       <div className="text-[10px] text-obsidian-muted font-mono truncate mt-0.5">
@@ -378,7 +438,7 @@ export const SecurityAuditView: React.FC = () => {
 
                     <div className="flex flex-col items-end gap-0.5 shrink-0">
                       <span
-                        className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${
+                        className={`px-2 py-0.5 rounded text-[11px] font-semibold border ${
                           isExpired
                             ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
                             : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
@@ -399,7 +459,7 @@ export const SecurityAuditView: React.FC = () => {
               </div>
             ) : (
               <div className="py-2 text-xs text-emerald-400 flex items-center gap-2">
-                <CheckCircle2 size={15} className="shrink-0" aria-hidden="true" />
+                <CheckCircle2 size={16} className="shrink-0" aria-hidden="true" />
                 <span>Ninguna llave API está vencida ni por vencer pronto.</span>
               </div>
             )}
@@ -407,15 +467,15 @@ export const SecurityAuditView: React.FC = () => {
         </div>
 
         {/* Contraseñas Antiguas */}
-        <div className="min-w-0 space-y-2 rounded-xl border border-obsidian-border bg-obsidian-panel p-3">
+        <div id="security-stale-findings" className="min-w-0 scroll-mt-4 space-y-2 border-t border-obsidian-border pt-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2 min-w-0">
-              <Clock size={16} className="text-indigo-400 shrink-0" aria-hidden="true" />
+              <Clock size={18} className="text-obsidian-muted shrink-0" aria-hidden="true" />
               <h3 className="text-sm font-bold text-white break-words">
-                Contraseñas que Llevan Mucho Tiempo sin Cambiarse ({stalePassCount})
+                Contraseñas antiguas ({stalePassCount})
               </h3>
               <InfoTooltip
-                title="Recomendación de Cambio de Contraseña"
+              title="Recomendación de cambio de contraseña"
                 text={`Te sugiere cambiar la contraseña cada ${audit?.password_rotation_days_root || 90} días en Correos Principales y cada ${audit?.password_rotation_days_secondary || 180} días en tus demás cuentas.`}
               />
             </div>
@@ -424,14 +484,14 @@ export const SecurityAuditView: React.FC = () => {
             </span>
           </div>
 
-          <div className="space-y-2 pt-1">
+          <div className="divide-y divide-obsidian-border">
             {filteredStaleAccounts.length > 0 ? (
               filteredStaleAccounts.map((st) => (
                 <button
                   key={`${st.type}-${st.id}`}
                   type="button"
                   onClick={() => openInspector(st.type, st.id)}
-                  className="w-full text-left p-3 rounded-xl bg-obsidian-surface border border-obsidian-border hover:border-indigo-500/40 flex items-center justify-between gap-3 text-xs transition-colors min-w-0"
+                  className="ui-nav-action w-full min-w-0 justify-between py-3 text-xs"
                 >
                   <div className="min-w-0 flex-1">
                     <div className="font-semibold text-white truncate" title={st.name}>
@@ -442,7 +502,7 @@ export const SecurityAuditView: React.FC = () => {
                     </div>
                   </div>
                   <div className="flex flex-col items-end gap-0.5 shrink-0">
-                    <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                    <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/30">
                       Conviene cambiarla
                     </span>
                     <span className="text-[10px] font-mono text-obsidian-muted">
@@ -457,7 +517,7 @@ export const SecurityAuditView: React.FC = () => {
               </div>
             ) : (
               <div className="py-2 text-xs text-emerald-400 flex items-center gap-2">
-                <CheckCircle2 size={15} className="shrink-0" aria-hidden="true" />
+                <CheckCircle2 size={16} className="shrink-0" aria-hidden="true" />
                 <span>{checkedPasswords === 0 ? 'No hay contraseñas para revisar.' : 'No se encontraron contraseñas pendientes de cambio.'}</span>
               </div>
             )}
@@ -468,12 +528,12 @@ export const SecurityAuditView: React.FC = () => {
       {/* DETAILED AUDIT SECTIONS */}
 
       {/* 1. Cuentas con la misma contraseña */}
-      <div className="min-w-0 space-y-2 rounded-xl border border-obsidian-border bg-obsidian-panel p-3">
+      <div id="security-reuse-findings" className="min-w-0 scroll-mt-4 space-y-2 border-t border-obsidian-border pt-4">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
-            <AlertTriangle size={16} className="text-rose-400 shrink-0" aria-hidden="true" />
+            <AlertTriangle size={18} className="text-obsidian-muted shrink-0" aria-hidden="true" />
             <h3 className="text-sm font-bold text-white break-words">
-              Cuentas con la Misma Contraseña
+              Cuentas con la misma contraseña
             </h3>
             <InfoTooltip
               title="Por qué es peligroso repetir contraseñas"
@@ -485,7 +545,7 @@ export const SecurityAuditView: React.FC = () => {
         {filteredReuseGroups.length > 0 ? (
           <div className="space-y-3">
             {filteredReuseGroups.map((group, idx) => (
-              <div key={idx} className="p-4 rounded-xl bg-rose-500/5 border border-rose-500/25 space-y-3 min-w-0">
+              <div key={idx} className="space-y-3 border-t border-obsidian-border py-3 min-w-0">
                 <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="font-mono text-rose-400 font-bold bg-rose-500/20 px-2 py-0.5 rounded shrink-0">
@@ -495,21 +555,21 @@ export const SecurityAuditView: React.FC = () => {
                       {group.count} cuentas usan exactamente la misma contraseña
                     </span>
                   </div>
-                  <span className="text-[10px] text-rose-400 font-semibold uppercase px-2 py-0.5 rounded bg-rose-500/10 border border-rose-500/20 shrink-0">
+                  <span className="text-[11px] text-rose-400 font-semibold uppercase px-2 py-0.5 rounded bg-rose-500/10 border border-rose-500/20 shrink-0">
                     Cambiar Contraseña
                   </span>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                   {group.entities.map((item) => (
                     <button
                       key={`${item.type}-${item.id}`}
                       type="button"
                       onClick={() => openInspector(item.type as any, item.id)}
                       title={`${item.name} (${item.type === 'email' ? 'Correo Principal' : 'Cuenta'})`}
-                      className="w-full text-left p-2.5 rounded-lg bg-obsidian-panel border border-obsidian-border hover:border-indigo-500/40 flex items-center justify-between gap-2 transition-colors min-w-0"
+                      className="ui-nav-action w-full min-w-0 justify-between py-2 text-xs"
                     >
-                      <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
                         <PlatformIcon name={item.name} size="sm" />
                         <div className="min-w-0 flex-1">
                           <div className="font-semibold text-white text-xs truncate" title={item.name}>
@@ -520,7 +580,7 @@ export const SecurityAuditView: React.FC = () => {
                           </div>
                         </div>
                       </div>
-                      <ArrowRight size={13} className="text-obsidian-muted shrink-0" aria-hidden="true" />
+                      <ArrowRight size={16} className="text-obsidian-muted shrink-0" aria-hidden="true" />
                     </button>
                   ))}
                 </div>
@@ -540,13 +600,13 @@ export const SecurityAuditView: React.FC = () => {
       </div>
 
       {/* 2. Contraseñas fáciles de adivinar & Correos principales sin 2 pasos */}
-      <div className="grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-2">
+      <div className="grid min-w-0 grid-cols-1 gap-x-8 gap-y-6 lg:grid-cols-2">
         {/* Weak Passwords */}
-        <div className="min-w-0 space-y-2 rounded-xl border border-obsidian-border bg-obsidian-panel p-3">
+        <div id="security-weak-findings" className="min-w-0 scroll-mt-4 space-y-2 border-t border-obsidian-border pt-4">
           <div className="flex items-center gap-2 min-w-0">
-            <Key size={16} className="text-amber-400 shrink-0" aria-hidden="true" />
+            <Key size={18} className="text-obsidian-muted shrink-0" aria-hidden="true" />
             <h3 className="text-sm font-bold text-white break-words">
-              Contraseñas Fáciles de Adivinar
+              Contraseñas fáciles de adivinar
             </h3>
             <InfoTooltip
               title="Fortaleza de la Contraseña"
@@ -554,7 +614,7 @@ export const SecurityAuditView: React.FC = () => {
             />
           </div>
 
-          <div className="space-y-2 pt-1">
+          <div className="divide-y divide-obsidian-border">
             {filteredWeakAccounts.length > 0 ? (
               filteredWeakAccounts.map((w) => (
                 <button
@@ -562,7 +622,7 @@ export const SecurityAuditView: React.FC = () => {
                   type="button"
                   onClick={() => openInspector(w.type as any, w.id)}
                   title={w.name}
-                  className="w-full text-left p-3 rounded-xl bg-obsidian-surface border border-obsidian-border hover:border-indigo-500/40 flex items-center justify-between gap-3 text-xs transition-colors min-w-0"
+                  className="ui-nav-action w-full min-w-0 justify-between py-3 text-xs"
                 >
                   <div className="font-semibold text-white truncate min-w-0 flex-1" title={w.name}>
                     {w.name}
@@ -578,7 +638,7 @@ export const SecurityAuditView: React.FC = () => {
               </div>
             ) : (
               <div className="py-2 text-xs text-emerald-400 flex items-center gap-2">
-                <CheckCircle2 size={15} className="shrink-0" aria-hidden="true" />
+                <CheckCircle2 size={16} className="shrink-0" aria-hidden="true" />
                 <span>{checkedPasswords === 0 ? 'No hay contraseñas para revisar.' : 'No se encontraron contraseñas fáciles de adivinar.'}</span>
               </div>
             )}
@@ -586,11 +646,11 @@ export const SecurityAuditView: React.FC = () => {
         </div>
 
         {/* Emails without 2FA */}
-        <div className="min-w-0 space-y-2 rounded-xl border border-obsidian-border bg-obsidian-panel p-3">
+        <div id="security-2fa-findings" className="min-w-0 scroll-mt-4 space-y-2 border-t border-obsidian-border pt-4">
           <div className="flex items-center gap-2 min-w-0">
-            <ShieldAlert size={16} className="text-cyan-400 shrink-0" aria-hidden="true" />
+            <ShieldAlert size={18} className="text-obsidian-muted shrink-0" aria-hidden="true" />
             <h3 className="text-sm font-bold text-white break-words">
-              Correos Principales sin Verificación en 2 Pasos
+              Correos principales sin verificación en 2 pasos
             </h3>
             <InfoTooltip
               title="Por qué proteger tus Correos Principales"
@@ -598,7 +658,7 @@ export const SecurityAuditView: React.FC = () => {
             />
           </div>
 
-          <div className="space-y-2 pt-1">
+          <div className="divide-y divide-obsidian-border">
             {filteredUnprotectedEmails.length > 0 ? (
               filteredUnprotectedEmails.map((u) => (
                 <button
@@ -606,7 +666,7 @@ export const SecurityAuditView: React.FC = () => {
                   type="button"
                   onClick={() => openInspector('email', u.id)}
                   title={u.address}
-                  className="w-full text-left p-3 rounded-xl bg-obsidian-surface border border-obsidian-border hover:border-indigo-500/40 flex items-center justify-between gap-3 text-xs transition-colors min-w-0"
+                  className="ui-nav-action w-full min-w-0 justify-between py-3 text-xs"
                 >
                   <div className="min-w-0 flex-1">
                     <div className="font-semibold text-white truncate" title={u.address}>
@@ -616,7 +676,7 @@ export const SecurityAuditView: React.FC = () => {
                       {u.platform_count} cuentas dependen de este correo
                     </div>
                   </div>
-                  <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/20 shrink-0">
+                  <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/20 shrink-0">
                     Sin 2 pasos
                   </span>
                 </button>
@@ -627,7 +687,7 @@ export const SecurityAuditView: React.FC = () => {
               </div>
             ) : (
               <div className="py-2 text-xs text-emerald-400 flex items-center gap-2">
-                <CheckCircle2 size={15} className="shrink-0" aria-hidden="true" />
+                <CheckCircle2 size={16} className="shrink-0" aria-hidden="true" />
                 <span>{checkedEmails === 0 ? 'No hay correos principales para revisar.' : 'Todos tus correos principales tienen verificación en 2 pasos.'}</span>
               </div>
             )}

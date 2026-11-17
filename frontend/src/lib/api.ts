@@ -4,7 +4,7 @@ import {
   ClientIncome, DomainRenewal, AdvanceRenewalPayload,
   OneTimeExpense, InternalProject, SecureResource,
   CoreUser, CoreLoginResponse, CoreUserCreateResponse, TotpSetupResponse, CoreUserRole,
-  WriteupSummary, WriteupDetail, WriteupBoard, WriteupCitation, WriteupAsset,
+  WriteupSummary, WriteupOverview, WriteupDetail, WriteupBoard, WriteupCitation, WriteupAsset,
   WriteupRevision, WriteupRevisionAuthor, WriteupExportFormat, WriteupStructuredFinding, WriteupStatus, WriteupSeverity,
   WriteupSnippet, WriteupWorkbench, RuntimeConfig, SecurityAuditResponse
 } from '../types';
@@ -719,6 +719,7 @@ export const api = {
     const qs = params.toString() ? `?${params.toString()}` : '';
     return request<WriteupSummary[]>(`/writeups${qs}`);
   },
+  getWriteupsOverview: () => request<WriteupOverview>('/writeups/overview'),
   listWriteupsPage: (filters: {
     status?: string;
     severity?: string;

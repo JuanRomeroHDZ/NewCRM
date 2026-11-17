@@ -141,7 +141,7 @@ export const SecureResourceEditor: React.FC<SecureResourceEditorProps> = ({ reso
         {saveError && <p role="alert" className="m-3 rounded-lg border border-rose-500/30 bg-rose-500/10 p-3 text-xs text-rose-200">{saveError}</p>}
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-obsidian-border p-3 sm:p-4">
           <div className="flex min-w-0 items-center gap-2.5">
-            <span className="shrink-0 rounded-lg border border-indigo-500/20 bg-indigo-500/10 p-2 text-indigo-300">
+            <span className="shrink-0 text-obsidian-muted">
               <FolderLock size={18} aria-hidden="true" />
             </span>
             <div className="min-w-0">
@@ -151,7 +151,7 @@ export const SecureResourceEditor: React.FC<SecureResourceEditorProps> = ({ reso
               <p className="text-[11px] text-obsidian-muted">Los datos se protegen en esta bóveda</p>
             </div>
           </div>
-          <button type="button" aria-label="Cerrar editor" disabled={saving} onClick={onClose} className="inline-flex min-h-[44px] min-w-[44px] lg:min-h-9 lg:min-w-9 shrink-0 items-center justify-center rounded-lg p-2 text-obsidian-muted hover:bg-obsidian-surface hover:text-white disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300">
+          <button type="button" aria-label="Cerrar editor" disabled={saving} onClick={onClose} className="ui-action-icon shrink-0">
             <X size={16} aria-hidden="true" />
           </button>
         </div>
@@ -168,14 +168,14 @@ export const SecureResourceEditor: React.FC<SecureResourceEditorProps> = ({ reso
               value={title}
               onChange={(event) => setTitle(event.target.value)}
               placeholder="Ej. Variables .env de producción"
-              className="min-h-10 w-full rounded-lg border border-obsidian-border bg-obsidian-bg px-3 py-2 text-white placeholder-obsidian-muted/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
+              className="min-h-11 w-full rounded-lg border border-obsidian-border bg-obsidian-bg px-3 py-2 text-white placeholder-obsidian-muted/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent"
             />
           </div>
 
           <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-3">
             <div className="min-w-0">
               <label htmlFor="res-type-select" className="mb-1.5 block text-obsidian-muted font-medium">Tipo</label>
-              <select id="res-type-select" value={type} onChange={(event) => setType(event.target.value as SecureResourceType)} className="min-h-10 w-full min-w-0 rounded-lg border border-obsidian-border bg-obsidian-bg px-2 text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300">
+              <select id="res-type-select" value={type} onChange={(event) => setType(event.target.value as SecureResourceType)} className="min-h-11 w-full min-w-0 rounded-lg border border-obsidian-border bg-obsidian-bg px-2 text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent">
                 <option value="env_file">Archivo .env</option>
                 <option value="ssh_key">Llave SSH / certificado</option>
                 <option value="backup_codes">Códigos de recuperación</option>
@@ -185,7 +185,7 @@ export const SecureResourceEditor: React.FC<SecureResourceEditorProps> = ({ reso
             </div>
             <div className="min-w-0">
               <label htmlFor="res-scope-select" className="mb-1.5 block text-obsidian-muted font-medium">Ámbito</label>
-              <select id="res-scope-select" value={scope} onChange={(event) => setScope(event.target.value as EntityScope)} className="min-h-10 w-full min-w-0 rounded-lg border border-obsidian-border bg-obsidian-bg px-2 text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300">
+              <select id="res-scope-select" value={scope} onChange={(event) => setScope(event.target.value as EntityScope)} className="min-h-11 w-full min-w-0 rounded-lg border border-obsidian-border bg-obsidian-bg px-2 text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent">
                 <option value="business">Empresa</option>
                 <option value="personal">Personal</option>
                 <option value="shared">Compartido</option>
@@ -193,7 +193,7 @@ export const SecureResourceEditor: React.FC<SecureResourceEditorProps> = ({ reso
             </div>
             <div className="min-w-0">
               <label htmlFor="res-ownership-select" className="mb-1.5 block text-obsidian-muted font-medium">Destino</label>
-              <select id="res-ownership-select" value={ownership} onChange={(event) => setOwnership(event.target.value as OwnershipType)} className="min-h-10 w-full min-w-0 rounded-lg border border-obsidian-border bg-obsidian-bg px-2 text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300">
+              <select id="res-ownership-select" value={ownership} onChange={(event) => setOwnership(event.target.value as OwnershipType)} className="min-h-11 w-full min-w-0 rounded-lg border border-obsidian-border bg-obsidian-bg px-2 text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent">
                 <option value="own">Uso propio</option>
                 <option value="client">Vinculado a cliente</option>
                 <option value="independent">Independiente</option>
@@ -213,23 +213,24 @@ export const SecureResourceEditor: React.FC<SecureResourceEditorProps> = ({ reso
               value={content}
               onChange={(event) => setContent(event.target.value)}
               placeholder="Agrega códigos, claves o notas privadas."
-              className="min-h-28 w-full rounded-lg border border-obsidian-border bg-obsidian-bg px-3 py-2 font-mono text-[11px] text-indigo-100 placeholder-obsidian-muted/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
+              className="min-h-28 w-full rounded-lg border border-obsidian-border bg-obsidian-bg px-3 py-2 font-mono text-[11px] text-obsidian-text placeholder-obsidian-muted/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent"
             />
           </div>
 
           <div>
             <label htmlFor="res-tags-input" className="mb-1.5 block text-obsidian-muted font-medium">Etiquetas separadas por coma</label>
-            <input id="res-tags-input" type="text" maxLength={INPUT_LIMITS.RESOURCE_TAGS} value={tags} onChange={(event) => setTags(event.target.value)} className="min-h-10 w-full rounded-lg border border-obsidian-border bg-obsidian-bg px-3 py-2 text-white placeholder-obsidian-muted/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300" />
+            <input id="res-tags-input" type="text" maxLength={INPUT_LIMITS.RESOURCE_TAGS} value={tags} onChange={(event) => setTags(event.target.value)} className="min-h-11 w-full rounded-lg border border-obsidian-border bg-obsidian-bg px-3 py-2 text-white placeholder-obsidian-muted/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent" />
           </div>
 
           <div>
             <label htmlFor="res-notes-textarea" className="mb-1.5 block text-obsidian-muted font-medium">Notas adicionales</label>
-            <textarea id="res-notes-textarea" rows={2} maxLength={INPUT_LIMITS.NOTES} value={notes} onChange={(event) => setNotes(event.target.value)} className="min-h-20 w-full rounded-lg border border-obsidian-border bg-obsidian-bg px-3 py-2 text-white placeholder-obsidian-muted/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300" />
+            <textarea id="res-notes-textarea" rows={2} maxLength={INPUT_LIMITS.NOTES} value={notes} onChange={(event) => setNotes(event.target.value)} className="min-h-20 w-full rounded-lg border border-obsidian-border bg-obsidian-bg px-3 py-2 text-white placeholder-obsidian-muted/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent" />
           </div>
 
+          {/* [Acción principal] Guardar se sitúa al final, después de cancelar. */}
           <div className="flex flex-wrap justify-end gap-2 border-t border-obsidian-border pt-3">
-            <button type="button" onClick={onClose} disabled={saving} className="min-h-10 rounded-lg border border-obsidian-border bg-obsidian-surface px-3 text-xs font-medium text-white hover:bg-obsidian-border disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300">Cancelar</button>
-            <button type="submit" disabled={saving || !isUnlocked} className="inline-flex min-h-10 items-center gap-1.5 rounded-lg bg-indigo-600 px-4 text-xs font-semibold text-white hover:bg-indigo-500 disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300">
+            <button type="button" onClick={onClose} disabled={saving} className="ui-action-secondary">Cancelar</button>
+            <button type="submit" disabled={saving || !isUnlocked} className="ui-action-primary">
               <Check size={14} aria-hidden="true" />{saving ? 'Guardando…' : resource ? 'Guardar cambios' : 'Guardar recurso'}
             </button>
           </div>

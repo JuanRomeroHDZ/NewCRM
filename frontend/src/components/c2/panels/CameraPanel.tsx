@@ -25,9 +25,9 @@ function severityBadgeClass(severity?: string): string {
     case 'high':
       return 'border-amber-500/45 bg-amber-950/40 text-amber-300';
     case 'medium':
-      return 'border-sky-500/40 bg-sky-950/35 text-sky-300';
+      return 'border-amber-500/30 bg-amber-950/20 text-amber-200';
     case 'low':
-      return 'border-emerald-500/40 bg-emerald-950/35 text-emerald-300';
+      return 'border-obsidian-border bg-obsidian-surface text-obsidian-muted';
     default:
       return 'border-obsidian-border bg-obsidian-surface text-obsidian-muted';
   }
@@ -141,11 +141,11 @@ export const CameraPanel: React.FC = () => {
   };
 
   return (
-    <div className="space-y-4">
-      <section className="rounded-xl border border-obsidian-border bg-obsidian-panel p-4 sm:p-5 shadow-obsidian">
+    <div className="min-w-0">
+      <section className="border-t border-obsidian-border py-4 sm:py-5">
         <div className="flex flex-wrap items-center justify-between gap-2.5">
           <div className="flex items-center gap-2.5">
-            <Camera size={18} className="shrink-0 text-obsidian-gold" aria-hidden="true" />
+            <Camera size={18} className="shrink-0 text-obsidian-muted" aria-hidden="true" />
             <h2 className="font-heading text-base font-bold text-white">{t('cam.title')}</h2>
           </div>
 
@@ -154,19 +154,21 @@ export const CameraPanel: React.FC = () => {
               type="button"
               onClick={() => void handleDiscover()}
               disabled={discovering || auditing}
-              className="inline-flex min-h-[44px] items-center gap-2 rounded-lg border border-obsidian-gold/50 bg-obsidian-gold/20 px-3.5 py-2 text-xs font-semibold text-white transition-colors hover:bg-obsidian-gold/30 disabled:cursor-not-allowed disabled:opacity-50"
+              className="ui-action-primary"
             >
-              <Radar size={14} aria-hidden="true" />
+              <Radar size={16} aria-hidden="true" />
               <span>{discovering ? t('cam.discovering') : t('cam.discover')}</span>
+              {/* [Acción principal] Inicia o confirma la operación. */}
             </button>
             <button
               type="button"
               onClick={clearCameraState}
               disabled={discovering || auditing}
-              className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 text-xs font-medium text-obsidian-muted transition-colors hover:border-obsidian-borderLight hover:text-white disabled:opacity-50"
+              className="ui-action-secondary"
             >
-              <Trash2 size={13} aria-hidden="true" />
+              <Trash2 size={16} aria-hidden="true" />
               <span>{t('cam.clear')}</span>
+              {/* [Acción secundaria] Abre o ajusta la operación actual. */}
             </button>
           </div>
         </div>
@@ -190,7 +192,7 @@ export const CameraPanel: React.FC = () => {
               value={camTarget}
               onChange={(e) => setCamTarget(e.target.value)}
               placeholder="192.168.1.50 / 192.168.1.0/24"
-              className="min-h-[44px] w-full rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 font-mono text-xs text-white placeholder:text-slate-500 focus:border-obsidian-gold focus:outline-none"
+              className="min-h-[44px] w-full rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 font-mono text-xs text-white placeholder:text-obsidian-muted focus:border-obsidian-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-accent"
             />
           </div>
 
@@ -201,14 +203,14 @@ export const CameraPanel: React.FC = () => {
                 <label
                   key={mod.id}
                   htmlFor={checkboxId}
-                  className="flex min-h-[44px] cursor-pointer items-center gap-2 rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 text-xs text-white transition-colors hover:border-obsidian-borderLight"
+                  className="flex min-h-[44px] cursor-pointer items-center gap-2 border-b border-obsidian-border px-1 py-2 text-xs text-white transition-colors hover:text-white"
                 >
                   <input
                     id={checkboxId}
                     type="checkbox"
                     checked={selectedModules[mod.id]}
                     onChange={() => toggleModule(mod.id)}
-                    className="h-4 w-4 rounded border-obsidian-border bg-obsidian-bg accent-obsidian-gold"
+                    className="h-4 w-4 rounded border-obsidian-border bg-obsidian-bg accent-obsidian-accent"
                   />
                   <span>{t(mod.labelKey)}</span>
                 </label>
@@ -220,17 +222,18 @@ export const CameraPanel: React.FC = () => {
             <button
               type="submit"
               disabled={auditing || discovering}
-              className="inline-flex min-h-[44px] items-center gap-2 rounded-lg border border-obsidian-gold/50 bg-obsidian-gold/20 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-obsidian-gold/30 disabled:cursor-not-allowed disabled:opacity-50"
+              className="ui-action-primary"
             >
-              <ShieldCheck size={14} aria-hidden="true" />
+              <ShieldCheck size={16} aria-hidden="true" />
               <span>{auditing ? t('cam.auditing') : t('cam.audit')}</span>
+              {/* [Acción principal] Inicia o confirma la operación. */}
             </button>
           </div>
         </form>
       </section>
 
       {/* Findings Table */}
-      <section className="rounded-xl border border-obsidian-border bg-obsidian-panel p-4 sm:p-5 shadow-obsidian">
+      <section className="border-t border-obsidian-border py-4 sm:py-5">
         <div className="mb-3 flex items-center justify-between gap-2">
           <h3 className="font-heading text-sm font-bold text-white">{t('cam.finding')}</h3>
           <span className="rounded border border-obsidian-border bg-obsidian-surface px-2 py-0.5 font-mono text-[11px] text-obsidian-muted">
@@ -238,10 +241,10 @@ export const CameraPanel: React.FC = () => {
           </span>
         </div>
 
-        <div className="overflow-x-auto rounded-lg border border-obsidian-border">
+        <div className="overflow-x-auto border-y border-obsidian-border">
           <table className="w-full min-w-[600px] border-collapse text-left text-xs">
             <thead>
-              <tr className="border-b border-obsidian-border bg-obsidian-surface text-[11px] font-semibold uppercase tracking-wider text-obsidian-muted">
+              <tr className="border-b border-obsidian-border text-xs font-semibold text-obsidian-muted">
                 <th className="px-3 py-2.5">{t('cam.severity')}</th>
                 <th className="px-3 py-2.5">{t('cam.module')}</th>
                 <th className="px-3 py-2.5">{t('cam.finding')}</th>
@@ -272,7 +275,7 @@ export const CameraPanel: React.FC = () => {
                           {sev}
                         </span>
                       </td>
-                      <td className="px-3 py-2 font-mono text-slate-200">
+                      <td className="px-3 py-2 font-mono text-obsidian-text">
                         {finding.module || finding.category || '-'}
                       </td>
                       <td className="px-3 py-2 text-white">
@@ -291,7 +294,7 @@ export const CameraPanel: React.FC = () => {
       </section>
 
       {/* Discovered Devices Table */}
-      <section className="rounded-xl border border-obsidian-border bg-obsidian-panel p-4 sm:p-5 shadow-obsidian">
+      <section className="border-t border-obsidian-border py-4 sm:py-5">
         <div className="mb-3 flex items-center justify-between gap-2">
           <h3 className="font-heading text-sm font-bold text-white">{t('nav.camera')}</h3>
           <span className="rounded border border-obsidian-border bg-obsidian-surface px-2 py-0.5 font-mono text-[11px] text-obsidian-muted">
@@ -299,10 +302,10 @@ export const CameraPanel: React.FC = () => {
           </span>
         </div>
 
-        <div className="overflow-x-auto rounded-lg border border-obsidian-border">
+        <div className="overflow-x-auto border-y border-obsidian-border">
           <table className="w-full min-w-[480px] border-collapse text-left text-xs">
             <thead>
-              <tr className="border-b border-obsidian-border bg-obsidian-surface text-[11px] font-semibold uppercase tracking-wider text-obsidian-muted">
+              <tr className="border-b border-obsidian-border text-xs font-semibold text-obsidian-muted">
                 <th className="px-3 py-2.5">IP</th>
                 <th className="px-3 py-2.5">Port</th>
                 <th className="px-3 py-2.5">Device</th>
@@ -321,7 +324,7 @@ export const CameraPanel: React.FC = () => {
                   <tr key={`${cam.ip}:${cam.port}`} className="hover:bg-obsidian-surface/60">
                     <td className="px-3 py-2 font-mono text-white">{cam.ip}</td>
                     <td className="px-3 py-2 font-mono text-obsidian-muted">{cam.port}</td>
-                    <td className="px-3 py-2 text-slate-200">{cam.vendor || cam.service || '-'}</td>
+                    <td className="px-3 py-2 text-obsidian-text">{cam.vendor || cam.service || '-'}</td>
                     <td className="px-3 py-2 text-right">
                       <button
                         type="button"
@@ -330,9 +333,10 @@ export const CameraPanel: React.FC = () => {
                           void runAudit(cam.ip);
                         }}
                         disabled={auditing || discovering}
-                        className="min-h-[44px] lg:min-h-10 rounded-lg border border-obsidian-gold/45 bg-obsidian-gold/15 px-3 py-1 text-[11px] font-semibold text-white transition-colors hover:bg-obsidian-gold/25 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-gold"
+                        className="ui-action-secondary"
                       >
                         {t('cam.auditAction')}
+                        {/* [Acción secundaria] Abre o ajusta la operación actual. */}
                       </button>
                     </td>
                   </tr>

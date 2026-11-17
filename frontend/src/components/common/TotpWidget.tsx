@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Copy, Check, ShieldCheck, RefreshCw } from 'lucide-react';
+import { Copy, Check, ShieldCheck } from 'lucide-react';
 
 interface TotpWidgetProps {
   initialCode?: string;
@@ -59,12 +59,15 @@ export const TotpWidget: React.FC<TotpWidgetProps> = ({
     }
   };
 
-  const handleCopy = (e: React.MouseEvent) => {
-    e.stopPropagation();
+  const copyCode = () => {
     if (!code || code === '------') return;
-    navigator.clipboard.writeText(code);
+    void navigator.clipboard.writeText(code);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+  const handleCopy = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    copyCode();
   };
 
   const formattedCode = code.length === 6 ? `${code.slice(0, 3)} ${code.slice(3)}` : code;
@@ -78,14 +81,18 @@ export const TotpWidget: React.FC<TotpWidgetProps> = ({
       ? 'text-rose-500 stroke-rose-500'
       : seconds <= 10
       ? 'text-amber-400 stroke-amber-400'
-      : 'text-indigo-400 stroke-indigo-400';
+      : 'text-obsidian-muted stroke-obsidian-muted';
 
   if (compact) {
     return (
-      <div 
+      /* [Acción secundaria] Copiar el código mientras esté disponible. */
+      <button
+        type="button"
         onClick={handleCopy}
         title="Copiar código de verificación"
-        className="inline-flex items-center gap-2 px-2.5 py-1 rounded-md bg-obsidian-surface border border-obsidian-border hover:border-indigo-500/50 cursor-pointer transition-all group font-mono text-xs"
+        aria-label="Copiar código de verificación"
+        disabled={!code || code === '------'}
+        className="ui-action-secondary group font-mono"
       >
         <span className="text-white font-bold tracking-wider">{formattedCode}</span>
         
@@ -116,25 +123,26 @@ export const TotpWidget: React.FC<TotpWidgetProps> = ({
         </div>
 
         {copied ? (
-          <Check className="w-3 h-3 text-emerald-400" />
+          <Check size={16} className="text-emerald-400" aria-hidden="true" />
         ) : (
-          <Copy className="w-3 h-3 text-white/30 group-hover:text-white" />
+          <Copy size={16} className="text-obsidian-muted group-hover:text-white" aria-hidden="true" />
         )}
-      </div>
+      </button>
     );
   }
 
   return (
-    <div 
+    <button
+      type="button"
       onClick={handleCopy}
-      className="p-3 rounded-xl bg-obsidian-surface/80 border border-obsidian-border hover:border-indigo-500/40 transition-all cursor-pointer group flex items-center justify-between"
+      disabled={!code || code === '------'}
+      aria-label="Copiar código de verificación"
+      className="ui-nav-action w-full justify-between"
     >
       <div className="flex items-center gap-3">
-        <div className="w-8 h-8 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
-          <ShieldCheck className="w-4 h-4" />
-        </div>
+        <ShieldCheck size={18} className="shrink-0 text-obsidian-muted" aria-hidden="true" />
         <div>
-          <div className="text-[10px] uppercase font-bold tracking-wider text-white/40">
+          <div className="text-xs font-medium text-obsidian-muted">
             Código de verificación
           </div>
           <div className="font-mono text-lg font-bold text-white tracking-widest flex items-center gap-2">
@@ -168,19 +176,15 @@ export const TotpWidget: React.FC<TotpWidgetProps> = ({
               style={{ transition: 'stroke-dashoffset 1s linear' }}
             />
           </svg>
-          <span className={`absolute text-[9px] font-mono font-bold ${colorClass.split(' ')[0]}`}>
+          <span className={`absolute text-[10px] font-mono font-bold ${colorClass.split(' ')[0]}`}>
             {seconds}
           </span>
         </div>
 
-        <button 
-          type="button"
-          onClick={handleCopy}
-          className="p-2 rounded-lg bg-white/5 group-hover:bg-indigo-500/20 text-white/50 group-hover:text-indigo-300 transition-all"
-        >
-          {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-        </button>
+        <span className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg text-obsidian-muted" aria-hidden="true">
+          {copied ? <Check size={16} className="text-emerald-400" /> : <Copy size={16} />}
+        </span>
       </div>
-    </div>
+    </button>
   );
 };

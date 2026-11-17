@@ -129,14 +129,14 @@ export const PortsPanel: React.FC = () => {
   const showExploits = exploitsVisible || exploitResults.length > 0;
 
   return (
-    <section className="rounded-xl border border-obsidian-border bg-obsidian-panel p-4 sm:p-5 shadow-obsidian">
+    <section className="border-t border-obsidian-border py-4 sm:py-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-2.5">
-            <ScanSearch size={18} className="text-obsidian-gold" aria-hidden="true" />
+            <ScanSearch size={18} className="text-obsidian-muted" aria-hidden="true" />
             <h2 className="font-heading text-base font-bold text-white">{t('ports.title')}</h2>
             {portResults.length > 0 && (
-              <span className="rounded border border-obsidian-border bg-obsidian-surface px-2 py-0.5 font-mono text-[11px] text-emerald-300">
+              <span className="rounded border border-obsidian-border bg-obsidian-surface px-2 py-0.5 font-mono text-[11px] text-obsidian-muted">
                 {portResults.length}
               </span>
             )}
@@ -147,7 +147,7 @@ export const PortsPanel: React.FC = () => {
 
       <form
         onSubmit={(e) => void handleRunPortscan(e)}
-        className="mt-4 grid grid-cols-1 gap-3 rounded-xl border border-obsidian-border bg-obsidian-surface/60 p-3.5 sm:grid-cols-2 lg:grid-cols-12 lg:items-end"
+        className="mt-4 grid grid-cols-1 gap-3 border-t border-obsidian-border pt-4 sm:grid-cols-2 lg:grid-cols-12 lg:items-end"
       >
         <div className="lg:col-span-3">
           <label htmlFor="c2-port-ip" className="block text-[11px] font-medium text-obsidian-muted">
@@ -159,7 +159,7 @@ export const PortsPanel: React.FC = () => {
             value={portIp}
             onChange={(e) => setPortIp(e.target.value)}
             placeholder="10.10.20.10"
-            className="mt-1 min-h-[44px] w-full rounded-lg border border-obsidian-border bg-obsidian-panel px-3 py-2 font-mono text-xs text-white placeholder:text-obsidian-muted focus:border-obsidian-gold focus:outline-none"
+            className="mt-1 min-h-[44px] w-full rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 font-mono text-xs text-white placeholder:text-obsidian-muted focus:border-obsidian-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-accent"
           />
         </div>
 
@@ -176,7 +176,7 @@ export const PortsPanel: React.FC = () => {
             value={portRange}
             onChange={(e) => setPortRange(e.target.value)}
             placeholder={t('ports.rangePh')}
-            className="mt-1 min-h-[44px] w-full rounded-lg border border-obsidian-border bg-obsidian-panel px-3 py-2 font-mono text-xs text-white placeholder:text-obsidian-muted focus:border-obsidian-gold focus:outline-none"
+            className="mt-1 min-h-[44px] w-full rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 font-mono text-xs text-white placeholder:text-obsidian-muted focus:border-obsidian-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-accent"
           />
         </div>
 
@@ -188,7 +188,7 @@ export const PortsPanel: React.FC = () => {
             id="c2-port-mode"
             value={mode}
             onChange={(e) => setMode(e.target.value as 'connect' | 'syn')}
-            className="mt-1 min-h-[44px] w-full rounded-lg border border-obsidian-border bg-obsidian-panel px-3 py-2 font-mono text-xs text-white focus:border-obsidian-gold focus:outline-none"
+            className="mt-1 min-h-[44px] w-full rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 font-mono text-xs text-white focus:border-obsidian-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-accent"
           >
             <option value="connect">connect</option>
             <option value="syn">syn</option>
@@ -198,14 +198,14 @@ export const PortsPanel: React.FC = () => {
         <div className="flex items-center lg:col-span-3 lg:pb-1">
           <label
             htmlFor="c2-port-lownoise"
-            className="inline-flex min-h-[44px] cursor-pointer items-center gap-2 rounded-lg border border-obsidian-border bg-obsidian-panel px-3 py-2 text-xs text-obsidian-text"
+            className="inline-flex min-h-[44px] cursor-pointer items-center gap-2 rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 text-xs text-obsidian-text"
           >
             <input
               id="c2-port-lownoise"
               type="checkbox"
               checked={lowNoise}
               onChange={(e) => setLowNoise(e.target.checked)}
-              className="h-4 w-4 accent-amber-500"
+              className="h-4 w-4 accent-obsidian-accent"
             />
             <span>{t('ports.low')}</span>
           </label>
@@ -215,28 +215,30 @@ export const PortsPanel: React.FC = () => {
           <button
             type="submit"
             disabled={scanning}
-            className="inline-flex min-h-[44px] items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-gold"
+            className="ui-action-primary"
           >
             {scanning ? (
-              <Loader2 size={15} className="animate-spin" aria-hidden="true" />
+              <Loader2 size={16} className="animate-spin" aria-hidden="true" />
             ) : (
-              <Radar size={15} aria-hidden="true" />
+              <Radar size={16} aria-hidden="true" />
             )}
             <span>{scanning ? t('topo.scanning') : t('ports.go')}</span>
+            {/* [Acción principal] Inicia o confirma la operación. */}
           </button>
 
           <button
             type="button"
             onClick={() => void handleCheckExploits()}
             disabled={checkingExploits}
-            className="inline-flex min-h-[44px] items-center gap-2 rounded-lg border border-obsidian-border bg-obsidian-panel px-4 py-2 text-xs font-semibold text-obsidian-text transition-colors hover:border-obsidian-gold hover:text-white disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-gold"
+            className="ui-action-secondary"
           >
             {checkingExploits ? (
-              <Loader2 size={15} className="animate-spin" aria-hidden="true" />
+              <Loader2 size={16} className="animate-spin" aria-hidden="true" />
             ) : (
-              <Bug size={15} className="text-obsidian-gold" aria-hidden="true" />
+              <Bug size={16} className="text-obsidian-muted" aria-hidden="true" />
             )}
             <span>{lang === 'es' ? 'Buscar exploits' : 'Search exploits'}</span>
+            {/* [Acción secundaria] Abre o ajusta la operación actual. */}
           </button>
 
           {exploitsStatus && (
@@ -247,10 +249,10 @@ export const PortsPanel: React.FC = () => {
         </div>
       </form>
 
-      <div className="mt-4 overflow-x-auto rounded-xl border border-obsidian-border bg-obsidian-surface/60">
+      <div className="mt-4 overflow-x-auto border-y border-obsidian-border">
         <table className="w-full min-w-[520px] border-collapse text-left text-xs">
           <thead>
-            <tr className="border-b border-obsidian-border bg-obsidian-surface text-[11px] font-semibold uppercase tracking-wider text-obsidian-muted">
+            <tr className="border-b border-obsidian-border text-xs font-semibold text-obsidian-muted">
               <th scope="col" className="px-3 py-2.5">{t('ports.port')}</th>
               <th scope="col" className="px-3 py-2.5">{t('ports.service')}</th>
               <th scope="col" className="px-3 py-2.5">{t('ports.banner')}</th>
@@ -273,9 +275,9 @@ export const PortsPanel: React.FC = () => {
                 return (
                   <tr
                     key={`${p.port}-${p.proto || 'tcp'}-${idx}`}
-                    className="transition-colors hover:bg-obsidian-panel/70"
+                    className="transition-colors hover:bg-obsidian-surface/70"
                   >
-                    <td className="px-3 py-2.5 font-mono font-semibold text-obsidian-gold whitespace-nowrap">
+                    <td className="px-3 py-2.5 font-mono font-semibold text-obsidian-text whitespace-nowrap">
                       {portDisplay}
                     </td>
                     <td className="px-3 py-2.5 font-mono text-white whitespace-nowrap">

@@ -64,6 +64,7 @@ export const InfoTooltip: React.FC<InfoTooltipProps> = ({
         if (!containerRef.current?.contains(document.activeElement)) setOpen(false);
       }}
     >
+      {/* [Icono] Abre la ayuda contextual. */}
       <button
         type="button"
         onClick={(e) => {
@@ -78,9 +79,9 @@ export const InfoTooltip: React.FC<InfoTooltipProps> = ({
         aria-expanded={open}
         aria-controls={tooltipId}
         aria-describedby={open ? tooltipId : undefined}
-        className="inline-flex items-center justify-center min-w-6 min-h-6 rounded-full text-slate-400 hover:text-indigo-300 hover:bg-indigo-500/10 border border-transparent hover:border-indigo-500/30 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+        className="ui-action-icon"
       >
-        <Info className="w-3.5 h-3.5" aria-hidden="true" />
+        <Info size={16} aria-hidden="true" />
       </button>
 
       {open && (
@@ -88,14 +89,14 @@ export const InfoTooltip: React.FC<InfoTooltipProps> = ({
           id={tooltipId}
           role="tooltip"
           onClick={(e) => e.stopPropagation()}
-          className={`responsive-tooltip pointer-events-auto absolute z-50 w-64 max-w-[calc(100vw-1rem)] sm:w-72 p-2.5 rounded-lg bg-[#0d0f14]/95 border border-slate-700/80 shadow-xl text-left font-normal normal-case tracking-normal animate-fade-in ${positionClasses}`}
+          className={`responsive-tooltip pointer-events-auto absolute z-50 w-64 max-w-[calc(100vw-1rem)] rounded-lg border border-obsidian-border bg-obsidian-panel p-3 text-left font-normal normal-case tracking-normal shadow-lg animate-fade-in sm:w-72 ${positionClasses}`}
         >
           {title && (
-            <span className="block text-[11px] font-semibold text-indigo-300 mb-1 leading-tight">
+            <span className="mb-2 block text-[11px] font-semibold leading-tight text-obsidian-text">
               {title}
             </span>
           )}
-          <span className="block text-[11px] text-slate-300 leading-relaxed">
+          <span className="block text-[11px] leading-relaxed text-obsidian-muted">
             {displayContent}
           </span>
         </span>

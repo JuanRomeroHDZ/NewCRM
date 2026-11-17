@@ -282,12 +282,12 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
             ref={incomeDialogRef}
             tabIndex={-1}
             aria-busy={savingIncome}
-            className="relative w-full max-w-lg bg-obsidian-panel border border-obsidian-borderLight rounded-2xl shadow-2xl p-4 sm:p-6 overflow-y-auto max-h-[calc(100dvh-1rem)]"
+            className="relative w-full max-w-lg bg-obsidian-panel border border-obsidian-border rounded-xl shadow-2xl p-4 sm:p-6 overflow-y-auto max-h-[calc(100dvh-1rem)]"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between pb-4 border-b border-obsidian-border gap-2">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 shrink-0">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="p-2 rounded-xl bg-obsidian-surface text-obsidian-muted shrink-0">
                   <Wallet size={18} aria-hidden="true" />
                 </div>
                 <div className="min-w-0">
@@ -301,8 +301,8 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                 type="button"
                 onClick={incomeClose}
                 aria-label="Cerrar modal de pago"
-                className="inline-flex min-w-[44px] min-h-[44px] lg:min-w-9 lg:min-h-9 items-center justify-center p-2 text-obsidian-muted hover:text-white rounded-lg hover:bg-obsidian-surface shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
-              >
+                className="ui-action-icon shrink-0"
+              >{/* [Icono] Acción identificada por su nombre accesible. */}
                 <X size={16} aria-hidden="true" />
               </button>
             </div>
@@ -329,10 +329,10 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                           setIncClientName(found.company_name);
                         }
                       }}
-                      className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white focus:outline-none focus:border-indigo-500"
+                      className="w-full min-h-11 px-3 py-2 rounded-lg bg-obsidian-bg border border-obsidian-border text-white focus:outline-none focus:border-obsidian-accent"
                     >
                       <option value="">-- Escribir nombre manualmente --</option>
-                      <option value="__create__" className="text-emerald-400 font-semibold">+ Crear nuevo cliente aquí...</option>
+                      <option value="__create__" className="text-obsidian-text font-semibold">+ Crear nuevo cliente aquí...</option>
                       {prospects.map((pr) => (
                         <option key={pr.id} value={pr.id}>
                           {pr.company_name}
@@ -340,7 +340,7 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                       ))}
                     </select>
                   ) : (
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-2">
                       <input
                         id={`${uid}-inc-prospect`}
                         type="text"
@@ -350,14 +350,14 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                         onChange={(e) => setQuickClientNameInInc(e.target.value)}
                         placeholder="Nombre del nuevo cliente"
                         aria-label="Nombre del nuevo cliente"
-                        className="flex-1 min-w-0 px-3 py-2 rounded-xl bg-obsidian-bg border border-emerald-500 text-white focus:outline-none"
+                        className="flex-1 min-w-0 min-h-11 px-3 py-2 rounded-lg bg-obsidian-bg border border-obsidian-accent text-white focus:outline-none"
                       />
                       <button
                         type="button"
                         disabled={creatingQuickClientInInc || !quickClientNameInInc.trim()}
                         onClick={handleQuickCreateClientInInc}
-                        className="px-2.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold disabled:opacity-50"
-                      >
+                        className="ui-action-primary"
+                      >{/* [Acción principal] Inicia o confirma la tarea de este espacio. */}
                         {creatingQuickClientInInc ? '...' : 'Crear'}
                       </button>
                       <button
@@ -367,9 +367,9 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                           setShowQuickClientInInc(false);
                           setQuickClientNameInInc('');
                         }}
-                        className="p-2 text-obsidian-muted hover:text-white rounded-xl bg-obsidian-surface"
-                      >
-                        <X size={14} aria-hidden="true" />
+                        className="ui-action-icon min-w-11 items-center"
+                      >{/* [Icono] Mantiene disponible esta acción en su contexto. */}
+                        <X size={16} aria-hidden="true" />
                       </button>
                     </div>
                   )}
@@ -387,7 +387,7 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                     value={incClientName}
                     onChange={(e) => setIncClientName(e.target.value)}
                     placeholder={incScope === 'personal' ? 'Ej. Reembolso' : 'Ej. Mueblería Central'}
-                    className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white focus:outline-none focus:border-indigo-500"
+                    className="w-full min-h-11 px-3 py-2 rounded-lg bg-obsidian-bg border border-obsidian-border text-white focus:outline-none focus:border-obsidian-accent"
                   />
                 </div>
               </div>
@@ -409,7 +409,7 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                         setShowQuickClientInInc(false);
                       }
                     }}
-                    className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white focus:outline-none focus:border-indigo-500"
+                    className="w-full min-h-11 px-3 py-2 rounded-lg bg-obsidian-bg border border-obsidian-border text-white focus:outline-none focus:border-obsidian-accent"
                   >
                     <option value="business">Empresa / Negocio</option>
                     <option value="personal">Personal</option>
@@ -429,7 +429,7 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                       setIncCategory(cat);
                       if (cat === 'iguala_mensual') setIncRecurring(true);
                     }}
-                    className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white focus:outline-none focus:border-indigo-500"
+                    className="w-full min-h-11 px-3 py-2 rounded-lg bg-obsidian-bg border border-obsidian-border text-white focus:outline-none focus:border-obsidian-accent"
                   >
                     {INCOME_CATEGORIES.map((c) => (
                       <option key={c.value} value={c.value}>
@@ -452,7 +452,7 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                   value={incConcept}
                   onChange={(e) => setIncConcept(e.target.value)}
                   placeholder="Ej. Anticipo 50% página web"
-                  className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white focus:outline-none focus:border-indigo-500"
+                  className="w-full min-h-11 px-3 py-2 rounded-lg bg-obsidian-bg border border-obsidian-border text-white focus:outline-none focus:border-obsidian-accent"
                 />
               </div>
 
@@ -469,7 +469,7 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                     value={incAmount}
                     onChange={(e) => setIncAmount(e.target.value)}
                     placeholder="3500"
-                    className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white font-mono focus:outline-none focus:border-indigo-500"
+                    className="w-full min-h-11 px-3 py-2 rounded-lg bg-obsidian-bg border border-obsidian-border text-white font-mono focus:outline-none focus:border-obsidian-accent"
                   />
                 </div>
 
@@ -479,7 +479,7 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                     id={`${uid}-inc-currency`}
                     value={incCurrency}
                     onChange={(e) => setIncCurrency(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white font-mono focus:outline-none focus:border-indigo-500"
+                    className="w-full min-h-11 px-3 py-2 rounded-lg bg-obsidian-bg border border-obsidian-border text-white font-mono focus:outline-none focus:border-obsidian-accent"
                   >
                     {buildCurrencyOptions(incCurrency).map((c) => (
                       <option key={c.code} value={c.code}>
@@ -495,7 +495,7 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                     id={`${uid}-inc-status`}
                     value={incStatus}
                     onChange={(e) => setIncStatus(e.target.value as IncomeStatus)}
-                    className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white focus:outline-none focus:border-indigo-500"
+                    className="w-full min-h-11 px-3 py-2 rounded-lg bg-obsidian-bg border border-obsidian-border text-white focus:outline-none focus:border-obsidian-accent"
                   >
                     <option value="cobrado">Ya cobrado</option>
                     <option value="pendiente">Pendiente por cobrar</option>
@@ -512,7 +512,7 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                     required
                     value={incDate}
                     onChange={(e) => setIncDate(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white font-mono focus:outline-none focus:border-indigo-500"
+                    className="w-full min-h-11 px-3 py-2 rounded-lg bg-obsidian-bg border border-obsidian-border text-white font-mono focus:outline-none focus:border-obsidian-accent"
                   />
                 </div>
 
@@ -525,19 +525,19 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                     value={incMethod}
                     onChange={(e) => setIncMethod(e.target.value)}
                     placeholder="Transferencia SPEI, Efectivo, Tarjeta..."
-                    className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white focus:outline-none focus:border-indigo-500"
+                    className="w-full min-h-11 px-3 py-2 rounded-lg bg-obsidian-bg border border-obsidian-border text-white focus:outline-none focus:border-obsidian-accent"
                   />
                 </div>
               </div>
 
               <div className="flex items-center gap-2 text-obsidian-text">
-                <label htmlFor={`${uid}-inc-recurring`} className="inline-flex min-h-9 cursor-pointer items-center gap-2">
+                <label htmlFor={`${uid}-inc-recurring`} className="inline-flex min-h-11 cursor-pointer items-center gap-2">
                 <input
                   id={`${uid}-inc-recurring`}
                   type="checkbox"
                   checked={incRecurring}
                   onChange={(e) => setIncRecurring(e.target.checked)}
-                  className="rounded bg-obsidian-bg border-obsidian-border text-emerald-500 focus:ring-0"
+                  className="rounded bg-obsidian-bg border-obsidian-border text-obsidian-accent focus:ring-0"
                 />
                   <span>Iguala mensual</span>
                 </label>
@@ -545,7 +545,7 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
               </div>
 
               <details className="group rounded-lg border border-obsidian-border px-3">
-                <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-2 text-xs text-obsidian-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400 [&::-webkit-details-marker]:hidden">
+                <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-2 text-xs text-obsidian-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent [&::-webkit-details-marker]:hidden">
                   <span>Notas privadas</span>
                   <span className="text-[10px]">Opcional</span>
                 </summary>
@@ -556,23 +556,23 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                   value={incNotes}
                   onChange={(e) => setIncNotes(e.target.value)}
                   placeholder="Acuerdo o comprobante"
-                  className="mb-3 w-full resize-none rounded-xl border border-obsidian-border bg-obsidian-bg p-2.5 text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400"
+                  className="mb-3 w-full resize-none rounded-xl border border-obsidian-border bg-obsidian-bg p-3 text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent"
                 />
               </details>
 
-              <div className="pt-3 border-t border-obsidian-border flex items-center justify-end gap-2.5">
+              <div className="pt-3 border-t border-obsidian-border flex items-center justify-end gap-3">
                 <button
                   type="button"
                   onClick={incomeClose}
-                  className="inline-flex min-h-10 items-center justify-center rounded-lg px-4 py-2 text-sm font-medium text-obsidian-muted transition-colors hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400"
-                >
+                  className="ui-action-secondary"
+                >{/* [Acción secundaria] Permite volver o reintentar sin modificar otros datos. */}
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={savingIncome}
-                  className="inline-flex min-h-10 items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-300"
-                >
+                  className="ui-action-primary"
+                >{/* [Acción principal] Inicia o confirma la tarea de este espacio. */}
                   {savingIncome ? 'Guardando...' : editingIncome ? 'Guardar Cambios' : 'Registrar Pago'}
                 </button>
               </div>
@@ -595,12 +595,12 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
             ref={renewalDialogRef}
             tabIndex={-1}
             aria-busy={savingRenewal}
-            className="relative w-full max-w-lg bg-obsidian-panel border border-obsidian-borderLight rounded-2xl shadow-2xl p-4 sm:p-6 overflow-y-auto max-h-[calc(100dvh-1rem)]"
+            className="relative w-full max-w-lg bg-obsidian-panel border border-obsidian-border rounded-xl shadow-2xl p-4 sm:p-6 overflow-y-auto max-h-[calc(100dvh-1rem)]"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between pb-4 border-b border-obsidian-border gap-2">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <div className="p-2 rounded-xl bg-cyan-500/10 text-cyan-400 shrink-0">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="p-2 rounded-xl bg-obsidian-surface text-obsidian-muted shrink-0">
                   <Server size={18} aria-hidden="true" />
                 </div>
                 <div className="min-w-0">
@@ -614,8 +614,8 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                 type="button"
                 onClick={renewalClose}
                 aria-label="Cerrar modal de dominio o hosting"
-                className="inline-flex min-w-[44px] min-h-[44px] lg:min-w-9 lg:min-h-9 items-center justify-center p-2 text-obsidian-muted hover:text-white rounded-lg hover:bg-obsidian-surface shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
-              >
+                className="ui-action-icon shrink-0"
+              >{/* [Icono] Acción identificada por su nombre accesible. */}
                 <X size={16} aria-hidden="true" />
               </button>
             </div>
@@ -645,10 +645,10 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                           setRenDomainOrService(found.demo_url.replace(/^https?:\/\//, ''));
                         }
                       }}
-                      className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white focus:outline-none focus:border-indigo-500"
+                      className="w-full min-h-11 px-3 py-2 rounded-lg bg-obsidian-bg border border-obsidian-border text-white focus:outline-none focus:border-obsidian-accent"
                     >
                       <option value="">-- Escribir cliente manualmente --</option>
-                      <option value="__create__" className="text-cyan-400 font-semibold">+ Crear nuevo cliente aquí...</option>
+                      <option value="__create__" className="text-obsidian-text font-semibold">+ Crear nuevo cliente aquí...</option>
                       {prospects.map((pr) => (
                         <option key={pr.id} value={pr.id}>
                           {pr.company_name}
@@ -656,7 +656,7 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                       ))}
                     </select>
                   ) : (
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-2">
                       <input
                         id={`${uid}-ren-prospect`}
                         type="text"
@@ -666,14 +666,14 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                         onChange={(e) => setQuickClientNameInRen(e.target.value)}
                         placeholder="Nombre del nuevo cliente"
                         aria-label="Nombre del nuevo cliente"
-                        className="flex-1 min-w-0 px-3 py-2 rounded-xl bg-obsidian-bg border border-cyan-500 text-white focus:outline-none"
+                        className="flex-1 min-w-0 min-h-11 px-3 py-2 rounded-lg bg-obsidian-bg border border-obsidian-accent text-white focus:outline-none"
                       />
                       <button
                         type="button"
                         disabled={creatingQuickClientInRen || !quickClientNameInRen.trim()}
                         onClick={handleQuickCreateClientInRen}
-                        className="px-2.5 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-semibold disabled:opacity-50"
-                      >
+                        className="ui-action-primary"
+                      >{/* [Acción principal] Inicia o confirma la tarea de este espacio. */}
                         {creatingQuickClientInRen ? '...' : 'Crear'}
                       </button>
                       <button
@@ -683,9 +683,9 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                           setShowQuickClientInRen(false);
                           setQuickClientNameInRen('');
                         }}
-                        className="p-2 text-obsidian-muted hover:text-white rounded-xl bg-obsidian-surface"
-                      >
-                        <X size={14} aria-hidden="true" />
+                        className="ui-action-icon min-w-11 items-center"
+                      >{/* [Icono] Mantiene disponible esta acción en su contexto. */}
+                        <X size={16} aria-hidden="true" />
                       </button>
                     </div>
                   )}
@@ -703,7 +703,7 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                     value={renClientName}
                     onChange={(e) => setRenClientName(e.target.value)}
                     placeholder={renScope === 'personal' ? 'Ej. Dominio personal' : 'Ej. Clínica Dental Sonrisa'}
-                    className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white focus:outline-none focus:border-indigo-500"
+                    className="w-full min-h-11 px-3 py-2 rounded-lg bg-obsidian-bg border border-obsidian-border text-white focus:outline-none focus:border-obsidian-accent"
                   />
                 </div>
               </div>
@@ -721,7 +721,7 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                     value={renDomainOrService}
                     onChange={(e) => setRenDomainOrService(e.target.value)}
                     placeholder="Ej. clinicasonrisa.com.mx"
-                    className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white font-mono focus:outline-none focus:border-indigo-500"
+                    className="w-full min-h-11 px-3 py-2 rounded-lg bg-obsidian-bg border border-obsidian-border text-white font-mono focus:outline-none focus:border-obsidian-accent"
                   />
                 </div>
 
@@ -743,7 +743,7 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                         setRenClientCharge('');
                       }
                     }}
-                    className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white focus:outline-none focus:border-indigo-500"
+                    className="w-full min-h-11 px-3 py-2 rounded-lg bg-obsidian-bg border border-obsidian-border text-white focus:outline-none focus:border-obsidian-accent"
                   >
                     <option value="business">Empresa / Negocio</option>
                     <option value="personal">Personal</option>
@@ -761,7 +761,7 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                     id={`${uid}-ren-type`}
                     value={renServiceType}
                     onChange={(e) => setRenServiceType(e.target.value as RenewalServiceType)}
-                    className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white focus:outline-none focus:border-indigo-500"
+                    className="w-full min-h-11 px-3 py-2 rounded-lg bg-obsidian-bg border border-obsidian-border text-white focus:outline-none focus:border-obsidian-accent"
                   >
                     {RENEWAL_SERVICE_TYPES.map((s) => (
                       <option key={s.value} value={s.value}>
@@ -784,7 +784,7 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                     required
                     value={renDate}
                     onChange={(e) => setRenDate(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white font-mono focus:outline-none focus:border-indigo-500"
+                    className="w-full min-h-11 px-3 py-2 rounded-lg bg-obsidian-bg border border-obsidian-border text-white font-mono focus:outline-none focus:border-obsidian-accent"
                   />
                 </div>
 
@@ -800,7 +800,7 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                     value={renCost}
                     onChange={(e) => setRenCost(e.target.value)}
                     placeholder="350"
-                    className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white font-mono focus:outline-none focus:border-indigo-500"
+                    className="w-full min-h-11 px-3 py-2 rounded-lg bg-obsidian-bg border border-obsidian-border text-white font-mono focus:outline-none focus:border-obsidian-accent"
                   />
                 </div>
 
@@ -810,7 +810,7 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                     id={`${uid}-ren-currency`}
                     value={renCurrency}
                     onChange={(e) => setRenCurrency(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white font-mono focus:outline-none focus:border-indigo-500"
+                    className="w-full min-h-11 px-3 py-2 rounded-lg bg-obsidian-bg border border-obsidian-border text-white font-mono focus:outline-none focus:border-obsidian-accent"
                   >
                     {buildCurrencyOptions(renCurrency).map((c) => (
                       <option key={c.code} value={c.code}>
@@ -825,19 +825,15 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                 <span className="block text-obsidian-text font-medium mb-1.5">
                   ¿Quién cubre el pago de la renovación? *
                 </span>
-                <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <button
                     type="button"
                     onClick={() => setRenPaidBy('client')}
                     aria-pressed={renPaidBy === 'client'}
-                    className={`p-2.5 rounded-xl border text-left transition-all ${
-                      renPaidBy === 'client'
-                        ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-200 font-semibold'
-                        : 'bg-obsidian-bg border-obsidian-border text-obsidian-muted hover:text-white'
-                    }`}
-                  >
-                    <div className="flex items-center gap-1.5">
-                      <Check size={13} className={renPaidBy === 'client' ? 'text-emerald-400' : 'opacity-0'} aria-hidden="true" />
+                    className="ui-action-toggle"
+                  >{/* [Estado seleccionable] La opción activa se identifica con aria-pressed. */}
+                    <div className="flex items-center gap-2">
+                      <Check size={16} className={renPaidBy === 'client' ? 'text-obsidian-accent' : 'opacity-0'} aria-hidden="true" />
                       <span>Por cuenta del cliente</span>
                     </div>
                   </button>
@@ -846,14 +842,10 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                     type="button"
                     onClick={() => setRenPaidBy('me')}
                     aria-pressed={renPaidBy === 'me'}
-                    className={`p-2.5 rounded-xl border text-left transition-all ${
-                      renPaidBy === 'me'
-                        ? 'bg-rose-500/15 border-rose-500/40 text-rose-200 font-semibold'
-                        : 'bg-obsidian-bg border-obsidian-border text-obsidian-muted hover:text-white'
-                    }`}
-                  >
-                    <div className="flex items-center gap-1.5">
-                      <Check size={13} className={renPaidBy === 'me' ? 'text-rose-400' : 'opacity-0'} aria-hidden="true" />
+                    className="ui-action-toggle"
+                  >{/* [Estado seleccionable] La opción activa se identifica con aria-pressed. */}
+                    <div className="flex items-center gap-2">
+                      <Check size={16} className={renPaidBy === 'me' ? 'text-obsidian-accent' : 'opacity-0'} aria-hidden="true" />
                       <span>Por mi cuenta</span>
                     </div>
                   </button>
@@ -861,8 +853,8 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
               </div>}
 
               {renScope !== 'personal' && renPaidBy === 'client' && (
-                <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 space-y-1.5">
-                  <label htmlFor={`${uid}-ren-client-charge`} className="block text-emerald-300 font-semibold text-[11px]">
+                <div className="border-t border-obsidian-border pt-3 space-y-2">
+                  <label htmlFor={`${uid}-ren-client-charge`} className="block text-obsidian-muted font-semibold text-[11px]">
                     Cobro al cliente
                   </label>
                   <div className="flex flex-wrap items-center gap-2">
@@ -876,9 +868,9 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                       value={renClientCharge}
                       onChange={(e) => setRenClientCharge(e.target.value)}
                       placeholder={renCost || '500'}
-                      className="w-36 px-2.5 py-1.5 rounded-lg bg-obsidian-bg border border-emerald-500/40 text-white font-mono focus:outline-none focus:border-emerald-400"
+                      className="w-36 min-h-11 px-3 rounded-lg bg-obsidian-bg border border-obsidian-border text-white font-mono focus:outline-none focus:border-obsidian-accent"
                     />
-                    <span className="text-emerald-300 font-mono font-semibold">{renCurrency}</span>
+                    <span className="text-obsidian-muted font-mono font-semibold">{renCurrency}</span>
                     {renCost && renClientCharge && parseFloat(renClientCharge) > parseFloat(renCost) && (
                       <span className="text-[10px] font-mono text-emerald-400 ml-auto">
                         Margen: +${formatAmount(parseFloat(renClientCharge) - parseFloat(renCost))} {renCurrency}
@@ -889,7 +881,7 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
               )}
 
               <details className="group rounded-lg border border-obsidian-border px-3">
-                <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-2 text-xs text-obsidian-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400 [&::-webkit-details-marker]:hidden">
+                <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-2 text-xs text-obsidian-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent [&::-webkit-details-marker]:hidden">
                   <span>Datos adicionales</span>
                   <span className="text-[10px]">Proveedor y notas</span>
                 </summary>
@@ -905,7 +897,7 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                       value={renProvider}
                       onChange={(e) => setRenProvider(e.target.value)}
                       placeholder="Ej. Hostinger"
-                      className="w-full rounded-xl border border-obsidian-border bg-obsidian-bg px-3 py-2 text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400"
+                      className="w-full rounded-xl border border-obsidian-border bg-obsidian-bg px-3 py-2 text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent"
                     />
                   </div>
                   <div>
@@ -919,25 +911,25 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                       value={renNotes}
                       onChange={(e) => setRenNotes(e.target.value)}
                       placeholder="Cuenta, DNS o recordatorio"
-                      className="w-full resize-none rounded-xl border border-obsidian-border bg-obsidian-bg p-2.5 text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400"
+                      className="w-full resize-none rounded-xl border border-obsidian-border bg-obsidian-bg p-3 text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent"
                     />
                   </div>
                 </div>
               </details>
 
-              <div className="pt-3 border-t border-obsidian-border flex items-center justify-end gap-2.5">
+              <div className="pt-3 border-t border-obsidian-border flex items-center justify-end gap-3">
                 <button
                   type="button"
                   onClick={renewalClose}
-                  className="inline-flex min-h-10 items-center justify-center rounded-lg px-4 py-2 text-sm font-medium text-obsidian-muted transition-colors hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400"
-                >
+                  className="ui-action-secondary"
+                >{/* [Acción secundaria] Permite volver o reintentar sin modificar otros datos. */}
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={savingRenewal}
-                  className="inline-flex min-h-10 items-center justify-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
-                >
+                  className="ui-action-primary"
+                >{/* [Acción principal] Inicia o confirma la tarea de este espacio. */}
                   {savingRenewal ? 'Guardando...' : editingRenewal ? 'Guardar Cambios' : 'Registrar Vencimiento'}
                 </button>
               </div>
@@ -960,12 +952,12 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
             ref={advanceDialogRef}
             tabIndex={-1}
             aria-busy={advancingRenewal}
-            className="relative w-full max-w-md bg-obsidian-panel border border-emerald-500/40 rounded-2xl shadow-2xl p-4 sm:p-6 space-y-4"
+            className="relative w-full max-w-md bg-obsidian-panel border border-obsidian-border rounded-xl shadow-2xl p-4 sm:p-6 space-y-4"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between pb-3 border-b border-obsidian-border gap-2">
               <div className="flex items-center gap-2 min-w-0">
-                <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 shrink-0">
+                <div className="p-2 rounded-xl bg-obsidian-surface text-obsidian-muted shrink-0">
                   <RefreshCw size={18} aria-hidden="true" />
                 </div>
                 <div className="min-w-0">
@@ -977,14 +969,14 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                 type="button"
                 onClick={advanceClose}
                 aria-label="Cerrar modal de renovación"
-                className="inline-flex min-w-[44px] min-h-[44px] lg:min-w-9 lg:min-h-9 items-center justify-center p-2 text-obsidian-muted hover:text-white rounded-lg hover:bg-obsidian-surface shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
-              >
+                className="ui-action-icon shrink-0"
+              >{/* [Icono] Acción identificada por su nombre accesible. */}
                 <X size={16} aria-hidden="true" />
               </button>
             </div>
 
             <div className="space-y-3 text-xs">
-              <div className="p-3 rounded-xl bg-obsidian-bg/80 border border-obsidian-border space-y-1">
+              <div className="border-y border-obsidian-border py-3 space-y-1">
                 <div className="flex justify-between gap-2">
                   <span className="text-obsidian-muted">{advanceRenewalTarget.scope === 'personal' ? 'Cuenta:' : 'Cliente:'}</span>
                   <strong className="text-white truncate">{advanceRenewalTarget.client_name}</strong>
@@ -999,16 +991,16 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                 </div>
               </div>
 
-              {advanceRenewalTarget.scope !== 'personal' && <label htmlFor={`${uid}-adv-create-inc`} className="flex items-start gap-2.5 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/25 cursor-pointer">
+              {advanceRenewalTarget.scope !== 'personal' && <label htmlFor={`${uid}-adv-create-inc`} className="flex items-start gap-3 border-t border-obsidian-border pt-3 cursor-pointer">
                 <input
                   id={`${uid}-adv-create-inc`}
                   type="checkbox"
                   checked={advanceCreateIncome}
                   onChange={(e) => setAdvanceCreateIncome(e.target.checked)}
-                  className="mt-0.5 rounded bg-obsidian-bg border-obsidian-border text-emerald-500 focus:ring-0"
+                  className="mt-0.5 rounded bg-obsidian-bg border-obsidian-border text-obsidian-accent focus:ring-0"
                 />
                 <div className="min-w-0">
-                  <span className="text-emerald-200 font-semibold block">Generar registro automático en Ingresos</span>
+                  <span className="text-obsidian-text font-semibold block">Generar registro automático en Ingresos</span>
                   <span className="text-[10px] text-obsidian-muted block mt-0.5">
                     Registra el cobro en Ingresos y suma la ganancia del servicio.
                   </span>
@@ -1033,13 +1025,13 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                       value={advanceChargedAmount}
                       onChange={(e) => setAdvanceChargedAmount(e.target.value)}
                       placeholder="0.00"
-                      className="flex-1 min-w-0 px-3 py-2 rounded-xl bg-obsidian-bg border border-emerald-500/40 text-white font-mono focus:outline-none focus:border-emerald-400"
+                      className="flex-1 min-w-0 min-h-11 px-3 py-2 rounded-lg bg-obsidian-bg border border-obsidian-border text-white font-mono focus:outline-none focus:border-obsidian-accent"
                     />
-                    <span className="font-mono text-emerald-300 font-semibold shrink-0">{advanceRenewalTarget.currency}</span>
+                    <span className="font-mono text-obsidian-muted font-semibold shrink-0">{advanceRenewalTarget.currency}</span>
                   </div>
 
                   {parseFloat(advanceChargedAmount || '0') > 0 && (
-                    <div className="p-2.5 rounded-lg bg-obsidian-surface border border-obsidian-border flex items-center justify-between font-mono text-[11px]">
+                    <div className="flex items-center justify-between border-t border-obsidian-border pt-2 font-mono text-[11px]">
                       <span className="text-obsidian-muted">Margen de ganancia:</span>
                       <strong className={`font-bold ${parseFloat(advanceChargedAmount || '0') >= advanceRenewalTarget.renewal_cost ? 'text-emerald-400' : 'text-rose-400'}`}>
                         ${formatAmount(parseFloat(advanceChargedAmount || '0') - advanceRenewalTarget.renewal_cost)} {advanceRenewalTarget.currency}
@@ -1054,16 +1046,16 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
               <button
                 type="button"
                 onClick={advanceClose}
-                className="inline-flex min-h-10 items-center justify-center rounded-lg px-4 py-2 text-sm font-medium text-obsidian-muted transition-colors hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400"
-              >
+                className="ui-action-secondary"
+              >{/* [Acción secundaria] Permite volver o reintentar sin modificar otros datos. */}
                 Cancelar
               </button>
               <button
                 type="button"
                 disabled={advancingRenewal}
                 onClick={handleConfirmAdvanceRenewal}
-                className="inline-flex min-h-10 items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-300"
-              >
+                className="ui-action-primary"
+              >{/* [Acción principal] Inicia o confirma la tarea de este espacio. */}
                 {advancingRenewal ? 'Renovando...' : 'Confirmar y Renovar'}
               </button>
             </div>
@@ -1085,12 +1077,12 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
             ref={expenseDialogRef}
             tabIndex={-1}
             aria-busy={savingExpense}
-            className="relative w-full max-w-lg bg-obsidian-panel border border-obsidian-borderLight rounded-2xl shadow-2xl p-4 sm:p-6 overflow-y-auto max-h-[calc(100dvh-1rem)]"
+            className="relative w-full max-w-lg bg-obsidian-panel border border-obsidian-border rounded-xl shadow-2xl p-4 sm:p-6 overflow-y-auto max-h-[calc(100dvh-1rem)]"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between pb-4 border-b border-obsidian-border gap-2">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <div className="p-2 rounded-xl bg-purple-500/10 text-purple-400 shrink-0">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="p-2 rounded-xl bg-obsidian-surface text-obsidian-muted shrink-0">
                   <Receipt size={18} aria-hidden="true" />
                 </div>
                 <div className="min-w-0">
@@ -1104,8 +1096,8 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                 type="button"
                 onClick={expenseClose}
                 aria-label="Cerrar modal de gasto único"
-                className="inline-flex min-w-[44px] min-h-[44px] lg:min-w-9 lg:min-h-9 items-center justify-center p-2 text-obsidian-muted hover:text-white rounded-lg hover:bg-obsidian-surface shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
-              >
+                className="ui-action-icon shrink-0"
+              >{/* [Icono] Acción identificada por su nombre accesible. */}
                 <X size={16} aria-hidden="true" />
               </button>
             </div>
@@ -1124,7 +1116,7 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                   value={expTitle}
                   onChange={(e) => setExpTitle(e.target.value)}
                   placeholder="Ej. MacBook Pro M3, Licencia vitalicia JetBrains, Impresora..."
-                  className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white focus:outline-none focus:border-indigo-500"
+                  className="w-full min-h-11 px-3 py-2 rounded-lg bg-obsidian-bg border border-obsidian-border text-white focus:outline-none focus:border-obsidian-accent"
                 />
               </div>
 
@@ -1135,7 +1127,7 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                     id={`${uid}-exp-cat`}
                     value={expCategory}
                     onChange={(e) => setExpCategory(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white focus:outline-none focus:border-indigo-500"
+                    className="w-full min-h-11 px-3 py-2 rounded-lg bg-obsidian-bg border border-obsidian-border text-white focus:outline-none focus:border-obsidian-accent"
                   >
                     {EXPENSE_CATEGORIES.map((c) => (
                       <option key={c} value={c}>
@@ -1153,7 +1145,7 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                     id={`${uid}-exp-scope`}
                     value={expScope}
                     onChange={(e) => setExpScope(e.target.value as EntityScope)}
-                    className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white focus:outline-none focus:border-indigo-500"
+                    className="w-full min-h-11 px-3 py-2 rounded-lg bg-obsidian-bg border border-obsidian-border text-white focus:outline-none focus:border-obsidian-accent"
                   >
                     <option value="business">Empresa / Negocio</option>
                     <option value="personal">Personal</option>
@@ -1175,7 +1167,7 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                     value={expAmount}
                     onChange={(e) => setExpAmount(e.target.value)}
                     placeholder="1200"
-                    className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white font-mono focus:outline-none focus:border-indigo-500"
+                    className="w-full min-h-11 px-3 py-2 rounded-lg bg-obsidian-bg border border-obsidian-border text-white font-mono focus:outline-none focus:border-obsidian-accent"
                   />
                 </div>
 
@@ -1185,7 +1177,7 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                     id={`${uid}-exp-currency`}
                     value={expCurrency}
                     onChange={(e) => setExpCurrency(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white font-mono focus:outline-none focus:border-indigo-500"
+                    className="w-full min-h-11 px-3 py-2 rounded-lg bg-obsidian-bg border border-obsidian-border text-white font-mono focus:outline-none focus:border-obsidian-accent"
                   >
                     {buildCurrencyOptions(expCurrency).map((c) => (
                       <option key={c.code} value={c.code}>
@@ -1203,7 +1195,7 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                     required
                     value={expDate}
                     onChange={(e) => setExpDate(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white font-mono focus:outline-none focus:border-indigo-500"
+                    className="w-full min-h-11 px-3 py-2 rounded-lg bg-obsidian-bg border border-obsidian-border text-white font-mono focus:outline-none focus:border-obsidian-accent"
                   />
                 </div>
               </div>
@@ -1224,7 +1216,7 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                         setExpPaymentMethodLabel(`${found.alias} (*${found.last_four})`);
                       }
                     }}
-                    className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white focus:outline-none focus:border-indigo-500"
+                    className="w-full min-h-11 px-3 py-2 rounded-lg bg-obsidian-bg border border-obsidian-border text-white focus:outline-none focus:border-obsidian-accent"
                   >
                     <option value="">-- Seleccionar tarjeta registrada --</option>
                     {paymentMethods.map((pm) => (
@@ -1241,13 +1233,13 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                     onChange={(e) => setExpPaymentMethodLabel(e.target.value)}
                     aria-label="Etiqueta manual del medio de pago"
                     placeholder="O escribir: SPEI, Efectivo, BBVA..."
-                    className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white focus:outline-none focus:border-indigo-500"
+                    className="w-full min-h-11 px-3 py-2 rounded-lg bg-obsidian-bg border border-obsidian-border text-white focus:outline-none focus:border-obsidian-accent"
                   />
                 </div>
               </div>
 
               <details className="group rounded-lg border border-obsidian-border px-3">
-                <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-2 text-xs text-obsidian-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400 [&::-webkit-details-marker]:hidden">
+                <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-2 text-xs text-obsidian-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent [&::-webkit-details-marker]:hidden">
                   <span>Notas privadas</span>
                   <span className="text-[10px]">Opcional</span>
                 </summary>
@@ -1258,23 +1250,23 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                   value={expNotes}
                   onChange={(e) => setExpNotes(e.target.value)}
                   placeholder="Factura, proveedor o garantía"
-                  className="mb-3 w-full resize-none rounded-xl border border-obsidian-border bg-obsidian-bg p-2.5 text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400"
+                  className="mb-3 w-full resize-none rounded-xl border border-obsidian-border bg-obsidian-bg p-3 text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent"
                 />
               </details>
 
-              <div className="pt-3 border-t border-obsidian-border flex items-center justify-end gap-2.5">
+              <div className="pt-3 border-t border-obsidian-border flex items-center justify-end gap-3">
                 <button
                   type="button"
                   onClick={expenseClose}
-                  className="inline-flex min-h-10 items-center justify-center rounded-lg px-4 py-2 text-sm font-medium text-obsidian-muted transition-colors hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400"
-                >
+                  className="ui-action-secondary"
+                >{/* [Acción secundaria] Permite volver o reintentar sin modificar otros datos. */}
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={savingExpense}
-                  className="inline-flex min-h-10 items-center justify-center rounded-lg bg-purple-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-purple-500 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-purple-300"
-                >
+                  className="ui-action-primary"
+                >{/* [Acción principal] Inicia o confirma la tarea de este espacio. */}
                   {savingExpense ? 'Guardando...' : editingExpense ? 'Guardar Cambios' : 'Registrar Gasto'}
                 </button>
               </div>

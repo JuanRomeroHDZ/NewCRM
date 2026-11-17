@@ -143,14 +143,12 @@ export const PaymentModal: React.FC = () => {
         role="dialog"
         aria-modal="true"
         aria-labelledby="payment-modal-title"
-        className="relative w-full max-w-lg bg-obsidian-panel border border-obsidian-borderLight rounded-2xl shadow-2xl p-4 sm:p-6 overflow-hidden max-h-[calc(100dvh-1rem)] flex flex-col"
+        className="relative w-full max-w-lg bg-obsidian-panel border border-obsidian-border rounded-xl shadow-xl p-4 sm:p-6 overflow-hidden max-h-[calc(100dvh-1rem)] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-3 pb-4 border-b border-obsidian-border">
           <div className="flex min-w-0 flex-1 items-start gap-2.5">
-            <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 flex-shrink-0">
-              <CreditCard size={20} aria-hidden="true" />
-            </div>
+            <CreditCard size={18} className="shrink-0 text-obsidian-muted" aria-hidden="true" />
             <div className="min-w-0">
               <h2 id="payment-modal-title" className="text-base font-bold text-white tracking-tight break-words">
                 {editingPayment ? 'Editar Método de Pago o Billetera' : 'Registrar Método de Pago o Billetera'}
@@ -160,17 +158,17 @@ export const PaymentModal: React.FC = () => {
           <button
             type="button"
             onClick={requestClose}
-            className="inline-flex min-w-[44px] min-h-[44px] lg:min-w-9 lg:min-h-9 items-center justify-center p-2 text-obsidian-muted hover:text-white rounded-lg hover:bg-obsidian-surface flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
+            className="ui-action-icon flex-shrink-0"
             aria-label="Cerrar modal"
-          >
+          >{/* [Icono] Acción identificada por su nombre accesible. */}
             <X size={18} aria-hidden="true" />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="min-h-0 flex-1 overflow-y-auto py-4 space-y-4 text-xs pr-1">
           {formError && (
-            <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 flex items-start gap-2 text-rose-300 text-xs" role="alert">
-              <AlertCircle size={15} className="text-rose-400 flex-shrink-0 mt-0.5" />
+            <div className="flex items-start gap-2 rounded-lg border border-obsidian-border bg-obsidian-surface p-3 text-xs text-obsidian-muted" role="alert">
+              <AlertCircle size={16} className="mt-0.5 flex-shrink-0 text-rose-400" aria-hidden="true" />
               <span className="break-words">{formError}</span>
             </div>
           )}
@@ -260,7 +258,7 @@ export const PaymentModal: React.FC = () => {
             </div>
           </div>
 
-          <div className="p-3.5 rounded-xl bg-obsidian-surface/60 border border-obsidian-border space-y-2">
+          <div className="space-y-2 border-t border-obsidian-border pt-4">
             <div className="flex items-center gap-1.5 text-obsidian-muted">
               <ShieldCheck size={14} className="text-emerald-400" />
               <span className="font-semibold text-white uppercase text-[10px] tracking-wider">
@@ -299,8 +297,9 @@ export const PaymentModal: React.FC = () => {
                   aria-label={showCardNumber ? 'Ocultar número de tarjeta' : 'Mostrar número de tarjeta'}
                   aria-pressed={showCardNumber}
                   onClick={() => setShowCardNumber((visible) => !visible)}
-                  className="absolute inset-y-0 right-0 inline-flex min-w-10 items-center justify-center rounded-lg text-obsidian-muted hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400"
+                  className="ui-action-icon absolute inset-y-0 right-0"
                 >
+                  {/* [Icono] Muestra u oculta el número sin cambiarlo. */}
                   {showCardNumber ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}
                 </button>
               </div>
@@ -333,15 +332,15 @@ export const PaymentModal: React.FC = () => {
               type="button"
               onClick={requestClose}
               disabled={loading}
-              className="inline-flex min-h-10 items-center justify-center rounded-lg px-4 py-2 text-sm font-medium text-obsidian-muted transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400"
-            >
+              className="ui-action-secondary"
+            >{/* [Acción secundaria] Permite volver o reintentar sin modificar otros datos. */}
               Cancelar
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
-            >
+              className="ui-action-primary"
+            >{/* [Acción principal] Inicia o confirma la tarea de este espacio. */}
               {loading ? (
                 <>
                   <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />

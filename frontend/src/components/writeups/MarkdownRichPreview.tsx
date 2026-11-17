@@ -156,9 +156,9 @@ const MermaidDiagramCard: React.FC<{ code: string; renderId: string }> = ({ code
   };
 
   return (
-    <div ref={cardRef} className="my-3 min-w-0 rounded-xl border border-slate-800 bg-[#070b14] overflow-hidden">
-      <div className="flex items-center justify-between px-3 py-1.5 bg-slate-900/90 border-b border-slate-800 text-[11px] text-slate-300">
-        <span className="flex items-center gap-1.5 font-medium text-indigo-300">
+    <div ref={cardRef} className="my-3 min-w-0 border-y border-obsidian-border bg-obsidian-bg overflow-hidden">
+      <div className="flex items-center justify-between px-3 py-1.5 bg-obsidian-panel/90 border-b border-obsidian-border text-[11px] text-obsidian-muted">
+        <span className="flex items-center gap-1.5 font-medium text-obsidian-muted">
           <Sparkles className="w-3.5 h-3.5" aria-hidden="true" />
           Diagrama Mermaid
         </span>
@@ -168,10 +168,10 @@ const MermaidDiagramCard: React.FC<{ code: string; renderId: string }> = ({ code
             onClick={() => setAnimated((v) => !v)}
             aria-pressed={animated}
             aria-label={animated ? 'Pausar animación del diagrama' : 'Reanudar animación del diagrama'}
-            className="inline-flex min-h-9 items-center gap-1 rounded bg-slate-800 px-2 py-0.5 text-slate-200 hover:bg-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300"
+            className="ui-action-secondary"
             title="Alternar flujo animado en aristas"
           >
-            {animated ? <Pause className="w-3 h-3" aria-hidden="true" /> : <Play className="w-3 h-3" aria-hidden="true" />}
+            {animated ? <Pause className="w-4 h-4" aria-hidden="true" /> : <Play className="w-4 h-4" aria-hidden="true" />}
             {animated ? 'Animado' : 'Estático'}
           </button>
           {svgHtml && (
@@ -179,10 +179,10 @@ const MermaidDiagramCard: React.FC<{ code: string; renderId: string }> = ({ code
               type="button"
               onClick={handleDownloadSvg}
               aria-label="Descargar diagrama SVG"
-              className="inline-flex min-h-9 items-center gap-1 rounded bg-slate-800 px-2 py-0.5 text-slate-200 hover:bg-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300"
+              className="ui-action-secondary"
               title="Descargar SVG"
             >
-              <Download className="w-3 h-3" aria-hidden="true" />
+              <Download className="w-4 h-4" aria-hidden="true" />
               SVG
             </button>
           )}
@@ -191,7 +191,7 @@ const MermaidDiagramCard: React.FC<{ code: string; renderId: string }> = ({ code
       {error ? (
         <div role="alert" className="flex min-w-0 flex-wrap items-center gap-2 bg-rose-950/30 p-3 text-xs text-rose-300">
           <span className="min-w-0 flex-1">{error}</span>
-          <button type="button" onClick={() => setRenderAttempt((attempt) => attempt + 1)} className="min-h-9 rounded-lg bg-slate-800 px-2.5 font-medium text-white hover:bg-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300">
+          <button type="button" onClick={() => setRenderAttempt((attempt) => attempt + 1)} className="ui-action-secondary">
             Reintentar
           </button>
         </div>
@@ -201,7 +201,7 @@ const MermaidDiagramCard: React.FC<{ code: string; renderId: string }> = ({ code
           dangerouslySetInnerHTML={{ __html: svgHtml }}
         />
       ) : (
-        <div role="status" aria-live="polite" className="p-4 text-xs text-slate-400">
+        <div role="status" aria-live="polite" className="p-4 text-xs text-obsidian-muted">
           {nearViewport ? 'Cargando diagrama…' : 'El diagrama se cargará al acercarte.'}
         </div>
       )}
@@ -217,19 +217,19 @@ const AnimatedHtmlSandboxCard: React.FC<{ code: string }> = ({ code }) => {
       FORBID_TAGS: ['script', 'iframe', 'object', 'embed', 'form', 'link', 'meta', 'base'],
       FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover', 'onfocus'],
     });
-    return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>html,body{margin:0;padding:0;background:#090d16;color:#f8fafc;font-family:system-ui,sans-serif;}</style></head><body>${clean}</body></html>`;
+    return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>html,body{margin:0;padding:0;background:#080A0A;color:#ffffff;font-family:system-ui,sans-serif;}</style></head><body>${clean}</body></html>`;
   }, [code]);
 
   return (
-    <div className="my-3 rounded-xl border border-slate-800 bg-[#070b14] overflow-hidden">
-      <div className="flex items-center justify-between px-3 py-1.5 bg-slate-900/90 border-b border-slate-800 text-[11px] text-slate-300">
-        <span className="font-medium text-emerald-200">Animación HTML/CSS protegida</span>
+    <div className="my-3 border-y border-obsidian-border bg-obsidian-bg overflow-hidden">
+      <div className="flex items-center justify-between px-3 py-1.5 bg-obsidian-panel/90 border-b border-obsidian-border text-[11px] text-obsidian-muted">
+        <span className="font-medium text-obsidian-muted">Animación HTML/CSS protegida</span>
       </div>
       <iframe
         title="Widget HTML animado"
         sandbox=""
         srcDoc={srcDoc}
-        className="w-full min-h-[120px] border-0 bg-[#090d16]"
+        className="w-full min-h-[120px] border-0 bg-[#080A0A]"
       />
     </div>
   );
@@ -338,7 +338,7 @@ export const MarkdownRichPreview: React.FC<MarkdownRichPreviewProps> = ({
 
     // 3. Anchors
     text = text.replace(/\{#([a-zA-Z0-9_-]{2,120})\}/g, (_, anchor: string) => {
-      return `<span id="${anchor}" class="ml-1 px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 font-mono text-[10px]">#${anchor}</span>`;
+      return `<span id="${anchor}" class="ml-1 inline-flex min-h-5 items-center align-middle rounded border border-obsidian-borderLight bg-obsidian-surface px-1.5 py-0.5 font-mono text-[10px] leading-none text-obsidian-muted">#${anchor}</span>`;
     });
 
     // Pair academic captions with the image immediately below. Captions remain
@@ -356,14 +356,14 @@ export const MarkdownRichPreview: React.FC<MarkdownRichPreviewProps> = ({
       const captionHtml = renderCaptionLines(caption);
       let mediaHtml: string;
       if (!url) {
-        mediaHtml = `<div class="p-3 my-2 rounded border border-slate-700 bg-slate-900 text-xs text-slate-400">Cargando evidencia ${escapeHtmlAttr(assetId)}...</div>`;
+        mediaHtml = `<div class="p-3 my-2 rounded border border-obsidian-borderLight bg-obsidian-panel text-xs text-obsidian-muted">Cargando evidencia ${escapeHtmlAttr(assetId)}...</div>`;
       } else if (meta?.mime_type?.startsWith('video/')) {
-        mediaHtml = `<video controls loop muted playsinline src="${escapeHtmlAttr(url)}" class="w-full max-h-[380px] rounded-lg border border-slate-700 bg-black"></video>`;
+        mediaHtml = `<video controls loop muted playsinline src="${escapeHtmlAttr(url)}" class="w-full max-h-[380px] rounded-lg border border-obsidian-borderLight bg-black"></video>`;
       } else {
-        mediaHtml = `<button type="button" data-asset-id="${escapeHtmlAttr(assetId)}" aria-label="Abrir evidencia ${safeAlt}" class="block max-w-full rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"><img src="${escapeHtmlAttr(url)}" alt="${safeAlt}" class="max-w-full rounded-lg border border-slate-700 cursor-zoom-in hover:border-indigo-500/70 transition-colors" /></button>`;
+        mediaHtml = `<button type="button" data-asset-id="${escapeHtmlAttr(assetId)}" aria-label="Abrir evidencia ${safeAlt}" class="block min-h-[44px] min-w-[44px] max-w-full rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-accent"><img src="${escapeHtmlAttr(url)}" alt="${safeAlt}" class="max-w-full rounded-lg border border-obsidian-borderLight cursor-zoom-in hover:border-obsidian-accent transition-colors" /></button>`;
       }
       const legacyAlt = !captionHtml && alt ? `<span class="block">${safeAlt}</span>` : '';
-      const figureHtml = `<figure class="my-3">${mediaHtml}${captionHtml || legacyAlt ? `<figcaption class="mt-1 text-xs text-slate-400">${captionHtml || legacyAlt}</figcaption>` : ''}</figure>`;
+      const figureHtml = `<figure class="my-3">${mediaHtml}${captionHtml || legacyAlt ? `<figcaption class="mt-1 text-xs text-obsidian-muted">${captionHtml || legacyAlt}</figcaption>` : ''}</figure>`;
       const idx = counter++;
       const placeholder = `@@WRITEUP_EMBED_${idx}@@`;
       tokens.push({ placeholder, seg: { kind: 'html', html: figureHtml } });
@@ -375,20 +375,20 @@ export const MarkdownRichPreview: React.FC<MarkdownRichPreviewProps> = ({
       const url = assetObjectUrls[assetId];
       const meta = assetMap[assetId];
       if (!url) {
-        return `<div class="p-3 my-2 rounded border border-slate-700 bg-slate-900 text-xs text-slate-400">Cargando evidencia ${assetId}...</div>`;
+        return `<div class="p-3 my-2 rounded border border-obsidian-borderLight bg-obsidian-panel text-xs text-obsidian-muted">Cargando evidencia ${assetId}...</div>`;
       }
       const safeAlt = escapeHtmlAttr(alt || meta?.filename || 'Evidencia');
       if (meta?.mime_type?.startsWith('video/')) {
-        return `<figure class="my-3"><video controls loop muted playsinline src="${url}" class="w-full max-h-[380px] rounded-lg border border-slate-700 bg-black"></video>${safeAlt ? `<figcaption class="text-xs text-slate-400 mt-1">${safeAlt}</figcaption>` : ''}</figure>`;
+        return `<figure class="my-3"><video controls loop muted playsinline src="${url}" class="w-full max-h-[380px] rounded-lg border border-obsidian-borderLight bg-black"></video>${safeAlt ? `<figcaption class="text-xs text-obsidian-muted mt-1">${safeAlt}</figcaption>` : ''}</figure>`;
       }
-      return `<figure class="my-3"><button type="button" data-asset-id="${escapeHtmlAttr(assetId)}" aria-label="Abrir evidencia ${safeAlt}" class="block max-w-full rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"><img src="${url}" alt="${safeAlt}" class="max-w-full rounded-lg border border-slate-700 cursor-zoom-in hover:border-indigo-500/70 transition-colors" /></button>${alt ? `<figcaption class="text-xs text-slate-400 mt-1">${safeAlt}</figcaption>` : ''}</figure>`;
+      return `<figure class="my-3"><button type="button" data-asset-id="${escapeHtmlAttr(assetId)}" aria-label="Abrir evidencia ${safeAlt}" class="block min-h-[44px] min-w-[44px] max-w-full rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-accent"><img src="${url}" alt="${safeAlt}" class="max-w-full rounded-lg border border-obsidian-borderLight cursor-zoom-in hover:border-obsidian-accent transition-colors" /></button>${alt ? `<figcaption class="text-xs text-obsidian-muted mt-1">${safeAlt}</figcaption>` : ''}</figure>`;
     });
 
     // 5. Extract whiteboard links as safe SVG island cards
     text = text.replace(/!\[([^\]]*)\]\(board:\/\/([a-zA-Z0-9_-]+)\)/g, (_, alt: string, boardId: string) => {
       const board = boards.find((b) => b.id === boardId);
       if (!board?.svg_snapshot) {
-        return `<div class="p-3 my-2 rounded border border-indigo-500/30 bg-indigo-950/30 text-xs text-indigo-300">Pizarra (${escapeHtmlAttr(alt || boardId)}): guarda la pizarra para generar vista previa vectorial.</div>`;
+        return `<div class="p-3 my-2 rounded border border-obsidian-border bg-obsidian-surface text-xs text-obsidian-muted">Pizarra (${escapeHtmlAttr(alt || boardId)}): guarda la pizarra para generar vista previa vectorial.</div>`;
       }
       const idx = counter++;
       const cleanSvg = sanitizeMermaidSvg(board.svg_snapshot);
@@ -411,7 +411,7 @@ export const MarkdownRichPreview: React.FC<MarkdownRichPreviewProps> = ({
         highlighted = codeBody.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
       }
       const label = language || 'code';
-      return `<div class="code-block-wrap relative my-3 rounded-xl border border-slate-800 bg-[#050912] overflow-hidden"><div class="flex items-center justify-between px-3 py-1 bg-slate-900/90 border-b border-slate-800 text-[10px] font-mono uppercase text-slate-400"><span>${escapeHtmlAttr(label)}</span><button type="button" data-copy-code="1" class="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 normal-case font-sans text-[10px]">Copiar</button></div><pre class="!my-0 !border-0 !rounded-none"><code class="hljs language-${escapeHtmlAttr(label)}">${highlighted}</code></pre></div>`;
+      return `<div class="code-block-wrap relative my-3 border-y border-obsidian-border bg-obsidian-bg overflow-hidden"><div class="flex items-center justify-between px-3 py-1 bg-obsidian-panel/90 border-b border-obsidian-border text-[10px] font-mono uppercase text-obsidian-muted"><span>${escapeHtmlAttr(label)}</span><button type="button" data-copy-code="1" class="min-h-[44px] px-2 rounded bg-obsidian-surface hover:bg-obsidian-surface text-obsidian-text normal-case font-sans text-xs focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent">Copiar</button></div><pre class="!my-0 !border-0 !rounded-none"><code class="hljs language-${escapeHtmlAttr(label)}">${highlighted}</code></pre></div>`;
     };
 
     const captionedTablePattern = /(^|\n)((?:[ \t]*(?:Tabla\s*:\s*|Descripci[oó]n\s*:\s*|Fuente\s*:\s*)[^\n]*(?:\n|$)(?:[ \t]*\n)*)+)[ \t]*\n*((?:\|[^\n]*(?:\n|$)){2,})/gim;
@@ -425,9 +425,9 @@ export const MarkdownRichPreview: React.FC<MarkdownRichPreviewProps> = ({
         FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover'],
       });
       const captionTitle = (caption.title || '').replace(/^Tabla\s*:\s*/i, '');
-      const tableWithCaption = safeTable.replace(/<table([^>]*)>/i, `<table$1>${captionTitle ? `<caption class="mb-1 text-left text-xs font-semibold text-slate-200">${escapeHtmlAttr(captionTitle)}</caption>` : ''}`);
+      const tableWithCaption = safeTable.replace(/<table([^>]*)>/i, `<table$1>${captionTitle ? `<caption class="mb-1 text-left text-xs font-semibold text-obsidian-text">${escapeHtmlAttr(captionTitle)}</caption>` : ''}`);
       const detailsHtml = renderCaptionLines({ description: caption.description, source: caption.source });
-      const tableFigure = `<figure class="my-3 min-w-0 overflow-x-auto">${tableWithCaption}${detailsHtml ? `<figcaption class="mt-1 text-xs text-slate-400">${detailsHtml}</figcaption>` : ''}</figure>`;
+      const tableFigure = `<figure class="my-3 min-w-0 overflow-x-auto">${tableWithCaption}${detailsHtml ? `<figcaption class="mt-1 text-xs text-obsidian-muted">${detailsHtml}</figcaption>` : ''}</figure>`;
       const idx = counter++;
       const placeholder = `@@WRITEUP_EMBED_${idx}@@`;
       tokens.push({ placeholder, seg: { kind: 'html', html: tableFigure } });
@@ -485,12 +485,12 @@ export const MarkdownRichPreview: React.FC<MarkdownRichPreviewProps> = ({
   };
 
   if (!previewMarkdown.trim()) {
-    return <p className="text-slate-500 italic text-sm">La vista previa Markdown aparecerá aquí al escribir.</p>;
+    return <p className="text-obsidian-muted/70 italic text-sm">La vista previa Markdown aparecerá aquí al escribir.</p>;
   }
 
   return (
     <div ref={containerRef} onClick={handleContainerClick} className="writeup-prose">
-      {previewMarkdown !== markdown && <p className="mb-2 text-xs text-slate-400" aria-hidden="true">Actualizando vista previa…</p>}
+      {previewMarkdown !== markdown && <p className="mb-2 text-xs text-obsidian-muted" aria-hidden="true">Actualizando vista previa…</p>}
       {segments.map((seg, idx) => {
         if (seg.kind === 'html') {
           return <div key={`h-${idx}`} dangerouslySetInnerHTML={{ __html: seg.html }} />;
@@ -502,9 +502,9 @@ export const MarkdownRichPreview: React.FC<MarkdownRichPreviewProps> = ({
           return <AnimatedHtmlSandboxCard key={seg.id} code={seg.code} />;
         }
         return (
-          <figure key={`b-${seg.boardId}-${idx}`} className="my-3 border border-slate-700 rounded-xl overflow-hidden bg-slate-900 p-2">
+          <figure key={`b-${seg.boardId}-${idx}`} className="my-3 border-y border-obsidian-borderLight overflow-hidden bg-obsidian-bg py-2">
             <div dangerouslySetInnerHTML={{ __html: seg.svg }} />
-            <figcaption className="text-xs text-slate-400 mt-1 px-1 flex items-center justify-between">
+            <figcaption className="text-xs text-obsidian-muted mt-1 px-1 flex items-center justify-between">
               <span>{seg.alt}</span>
               <button
                 type="button"
@@ -513,9 +513,9 @@ export const MarkdownRichPreview: React.FC<MarkdownRichPreviewProps> = ({
                   setCopiedKey(seg.boardId);
                   setTimeout(() => setCopiedKey(null), 1500);
                 }}
-                className="text-[11px] text-indigo-300 hover:text-indigo-200 flex items-center gap-1"
+                className="ui-action-secondary"
               >
-                {copiedKey === seg.boardId ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                {copiedKey === seg.boardId ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                 {copiedKey === seg.boardId ? 'Copiado' : 'Enlace'}
               </button>
             </figcaption>

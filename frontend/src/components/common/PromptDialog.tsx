@@ -117,12 +117,10 @@ export const PromptDialog: React.FC<PromptDialogProps> = ({
         aria-labelledby={headingId}
         aria-describedby={message ? messageId : undefined}
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-md max-h-[calc(100dvh-1.5rem)] overflow-y-auto rounded-2xl border border-obsidian-borderLight bg-obsidian-panel p-4 sm:p-5 shadow-2xl"
+        className="w-full max-w-md max-h-[calc(100dvh-1.5rem)] overflow-y-auto rounded-xl border border-obsidian-border bg-obsidian-panel p-4 shadow-xl sm:p-5"
       >
         <div className="flex items-start gap-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-brand-500/30 bg-brand-500/10 text-brand-400" aria-hidden="true">
-            <Edit3 size={16} />
-          </div>
+          <Edit3 size={18} className="mt-0.5 shrink-0 text-obsidian-muted" aria-hidden="true" />
           <div className="min-w-0 flex-1">
             <h2 id={headingId} className="text-base font-semibold text-white">
               {title}
@@ -160,18 +158,20 @@ export const PromptDialog: React.FC<PromptDialogProps> = ({
         </div>
 
         <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          {/* [Acción secundaria] Cancelar vuelve sin aplicar cambios. */}
           <button
             ref={cancelBtnRef}
             type="button"
             onClick={onCancel}
-            className="min-h-[44px] rounded-xl border border-obsidian-border bg-obsidian-surface px-4 py-2 text-xs font-medium text-obsidian-muted transition-colors hover:border-obsidian-borderLight hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 sm:min-h-[38px]"
+            className="ui-action-secondary"
           >
             {cancelLabel}
           </button>
+          {/* [Acción principal] Confirmar el valor validado. */}
           <button
             ref={submitBtnRef}
             type="submit"
-            className="min-h-[44px] rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 sm:min-h-[38px]"
+            className="ui-action-primary"
           >
             {confirmLabel}
           </button>

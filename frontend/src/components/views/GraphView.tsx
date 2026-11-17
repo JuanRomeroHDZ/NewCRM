@@ -339,19 +339,19 @@ export const GraphView: React.FC = () => {
       if (link.type === 'recovery') {
         ctx.setLineDash([6, 6]);
         ctx.lineWidth = link.is_cycle ? 2.5 : 1.8;
-        ctx.strokeStyle = link.is_cycle ? 'rgba(244, 63, 94, 0.85)' : 'rgba(6, 182, 212, 0.6)';
+        ctx.strokeStyle = link.is_cycle ? 'rgba(244, 63, 94, 0.85)' : 'rgba(179, 185, 182, 0.5)';
       } else if (link.type === 'payment') {
         ctx.setLineDash([3, 3]);
         ctx.lineWidth = 1.2;
-        ctx.strokeStyle = 'rgba(16, 185, 129, 0.5)';
+        ctx.strokeStyle = 'rgba(179, 185, 182, 0.36)';
       } else if (link.type === 'prospect') {
         ctx.setLineDash([4, 4]);
         ctx.lineWidth = 1.5;
-        ctx.strokeStyle = 'rgba(245, 158, 11, 0.55)';
+        ctx.strokeStyle = 'rgba(179, 185, 182, 0.42)';
       } else {
         ctx.setLineDash([]);
         ctx.lineWidth = 1.5;
-        ctx.strokeStyle = 'rgba(99, 102, 241, 0.35)';
+        ctx.strokeStyle = 'rgba(179, 185, 182, 0.3)';
       }
       ctx.stroke();
       ctx.setLineDash([]);
@@ -361,7 +361,7 @@ export const GraphView: React.FC = () => {
         const midY = (src.y + tgt.y) / 2;
         ctx.beginPath();
         ctx.arc(midX, midY, 3, 0, Math.PI * 2);
-        ctx.fillStyle = link.is_cycle ? '#f43f5e' : '#06b6d4';
+        ctx.fillStyle = link.is_cycle ? '#f43f5e' : '#b3b9b6';
         ctx.fill();
       }
     });
@@ -386,10 +386,10 @@ export const GraphView: React.FC = () => {
 
         ctx.beginPath();
         ctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
-        ctx.fillStyle = isHovered ? '#262a33' : '#17191f';
+        ctx.fillStyle = isHovered ? '#252b29' : '#171b1a';
         ctx.fill();
         ctx.lineWidth = isCritical ? 2.5 : 2;
-        ctx.strokeStyle = isCritical ? '#f43f5e' : '#A98242';
+        ctx.strokeStyle = isCritical ? '#f43f5e' : '#39413f';
         ctx.stroke();
 
         if (!hideEmailAddresses && (showLabels || isHovered)) {
@@ -399,7 +399,7 @@ export const GraphView: React.FC = () => {
           ctx.fillText(truncateCanvasText(ctx, node.label, maxLabelWidth), node.x, node.y + radius + 16);
 
           ctx.font = '500 10px JetBrains Mono, monospace';
-          ctx.fillStyle = '#94a3b8';
+          ctx.fillStyle = '#b3b9b6';
           const platformCount = Number(node.metrics.platforms_count);
           const formattedPlatformCount = formatGraphCount(Number.isFinite(platformCount) ? platformCount : 0);
           const detail = `${formattedPlatformCount} hijos • ${node.sub_type || 'Sin proveedor'}`;
@@ -407,33 +407,33 @@ export const GraphView: React.FC = () => {
         }
 
         ctx.font = 'bold 13px Inter, system-ui, sans-serif';
-        ctx.fillStyle = isCritical ? '#f43f5e' : '#d5bc8f';
+        ctx.fillStyle = isCritical ? '#f43f5e' : '#b3b9b6';
         ctx.fillText(getNodeMonogram(node.label), node.x, node.y + 5);
       } else if (node.type === 'platform') {
         const radius = 16;
         ctx.beginPath();
         ctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
-        ctx.fillStyle = isHovered ? '#262a33' : '#14161c';
+        ctx.fillStyle = isHovered ? '#252b29' : '#171b1a';
         ctx.fill();
         ctx.lineWidth = 1.5;
-        ctx.strokeStyle = node.status === 'free_trial' ? '#f59e0b' : '#38bdf8';
+        ctx.strokeStyle = node.status === 'free_trial' ? '#f59e0b' : '#39413f';
         ctx.stroke();
 
         if (showLabels || isHovered) {
           ctx.font = '500 11px Inter, system-ui, sans-serif';
-          ctx.fillStyle = '#e2e8f0';
+          ctx.fillStyle = '#dadddc';
           ctx.textAlign = 'center';
           ctx.fillText(truncateCanvasText(ctx, node.label, maxLabelWidth), node.x, node.y + radius + 14);
         }
 
         ctx.font = 'bold 10px Inter, system-ui, sans-serif';
-        ctx.fillStyle = '#38bdf8';
+        ctx.fillStyle = '#b3b9b6';
         ctx.fillText(getNodeMonogram(node.label), node.x, node.y + 4);
       } else if (node.type === 'prospect') {
         const radius = 15;
         ctx.beginPath();
         ctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
-        ctx.fillStyle = isHovered ? '#262a33' : '#1b1815';
+        ctx.fillStyle = isHovered ? '#252b29' : '#171b1a';
         ctx.fill();
         ctx.lineWidth = 1.8;
         ctx.strokeStyle =
@@ -446,34 +446,34 @@ export const GraphView: React.FC = () => {
 
         if (showLabels || isHovered) {
           ctx.font = '500 10.5px Inter, system-ui, sans-serif';
-          ctx.fillStyle = '#fde68a';
+          ctx.fillStyle = '#dadddc';
           ctx.textAlign = 'center';
           ctx.fillText(truncateCanvasText(ctx, node.label, maxLabelWidth), node.x, node.y + radius + 13);
         }
 
         ctx.font = 'bold 9.5px Inter, system-ui, sans-serif';
-        ctx.fillStyle = node.status === 'respondido' ? '#10b981' : '#f59e0b';
+        ctx.fillStyle = node.status === 'respondido' ? '#10b981' : node.status === 'tiempo_agotado' ? '#f43f5e' : '#f59e0b';
         ctx.fillText(getNodeMonogram(node.label), node.x, node.y + 3.5);
       } else {
         // Payment Node
         const radius = 14;
         ctx.beginPath();
         ctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
-        ctx.fillStyle = isHovered ? '#1a2e28' : '#10b98115';
+        ctx.fillStyle = isHovered ? '#252b29' : '#171b1a';
         ctx.fill();
         ctx.lineWidth = 1.5;
-        ctx.strokeStyle = '#10b981';
+        ctx.strokeStyle = '#39413f';
         ctx.stroke();
 
         if (showLabels || isHovered) {
           ctx.font = '500 10px Inter, system-ui, sans-serif';
-          ctx.fillStyle = '#10b981';
+          ctx.fillStyle = '#dadddc';
           ctx.textAlign = 'center';
           ctx.fillText(truncateCanvasText(ctx, node.label, maxLabelWidth), node.x, node.y + radius + 12);
         }
 
         ctx.font = 'bold 9px Inter, system-ui, sans-serif';
-        ctx.fillStyle = '#34d399';
+        ctx.fillStyle = '#b3b9b6';
         ctx.fillText(getNodeMonogram(node.label), node.x, node.y + 3.5);
       }
     });
@@ -743,8 +743,8 @@ export const GraphView: React.FC = () => {
           <button
             type="button"
             onClick={openUnlockModal}
-            className="mt-5 min-h-11 touch-manipulation rounded-xl bg-indigo-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-indigo-500 active:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
-          >
+            className="ui-action-primary mt-5"
+          >{/* [Acción principal] Inicia o confirma la tarea de este espacio. */}
             Desbloquear bóveda
           </button>
         </section>
@@ -762,7 +762,7 @@ export const GraphView: React.FC = () => {
         <div className="absolute left-3 right-3 top-3 z-10 flex justify-start">
           <div
             role="status"
-            className="flex max-w-full items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300 shadow-lg backdrop-blur-md"
+            className="flex max-w-full items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300 shadow-lg"
           >
             <AlertTriangle size={14} className="mt-0.5 shrink-0 text-amber-400" aria-hidden="true" />
             <span className="break-words">
@@ -796,10 +796,10 @@ export const GraphView: React.FC = () => {
       <div
         role="group"
         aria-label="Controles de zoom del mapa"
-        className={`absolute ${mapOverlayBottomClass} right-3 z-10 flex flex-col gap-1 rounded-xl border border-obsidian-border bg-obsidian-panel/90 p-1.5 text-obsidian-muted shadow-xl backdrop-blur-md sm:right-6`}
+        className={`absolute ${mapOverlayBottomClass} right-3 z-10 flex flex-col gap-1 rounded-xl border border-obsidian-border bg-obsidian-panel/90 p-1.5 text-obsidian-muted shadow-xl sm:right-6`}
       >
         <details className="relative text-xs">
-          <summary aria-label="Filtros y nodos del mapa" className="flex min-h-11 min-w-11 touch-manipulation cursor-pointer list-none items-center justify-center rounded-lg active:bg-obsidian-surface hover:bg-obsidian-surface hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400 sm:min-h-9 sm:min-w-9 [&::-webkit-details-marker]:hidden">
+          <summary aria-label="Filtros y nodos del mapa" className="flex min-h-11 min-w-11 touch-manipulation cursor-pointer list-none items-center justify-center rounded-lg active:bg-obsidian-surface hover:bg-obsidian-surface hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent [&::-webkit-details-marker]:hidden">
             <ListFilter size={16} aria-hidden="true" /><span className="sr-only">Filtros y nodos del mapa</span>
           </summary>
           <div className="absolute bottom-0 right-full mr-2 flex w-[min(13rem,calc(100vw-5.5rem))] max-h-[min(70dvh,32rem)] flex-col gap-1 overflow-y-auto rounded-xl border border-obsidian-border bg-obsidian-panel p-1.5 shadow-xl">
@@ -813,10 +813,9 @@ export const GraphView: React.FC = () => {
                     aria-label={`Filtrar nodos: ${opt.label}`}
                     aria-pressed={active}
                     onClick={() => setFilterType(opt.value)}
-                    className={`min-h-11 touch-manipulation rounded-lg px-2.5 text-left text-xs font-medium active:bg-obsidian-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 sm:min-h-9 ${
-                      active ? 'bg-indigo-600 text-white' : 'text-obsidian-muted hover:bg-obsidian-surface hover:text-white'
-                    }`}
+                    className="ui-action-toggle w-full justify-start touch-manipulation"
                   >
+                    {/* [Estado seleccionable] Filtra por tipo sin modificar los nodos. */}
                     {opt.label}
                   </button>
                 );
@@ -826,23 +825,25 @@ export const GraphView: React.FC = () => {
               type="button"
               aria-pressed={highlightSPOF}
               onClick={() => setHighlightSPOF(!highlightSPOF)}
-              className="flex min-h-11 touch-manipulation items-center gap-2 rounded-lg border-t border-obsidian-border px-2.5 pt-1 text-left text-xs text-obsidian-text active:bg-obsidian-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 sm:min-h-9"
+              className="ui-action-toggle w-full justify-start touch-manipulation"
             >
-              <ShieldAlert size={14} aria-hidden="true" />
+              {/* [Estado seleccionable] Resalta los correos relevantes del mapa. */}
+              <ShieldAlert size={16} aria-hidden="true" />
               <span>Resaltar correos clave</span>
             </button>
             <button
               type="button"
               aria-pressed={hideEmailAddresses}
               onClick={() => setHideEmailAddresses((hidden) => !hidden)}
-              className="flex min-h-11 touch-manipulation items-center gap-2 rounded-lg border-t border-obsidian-border px-2.5 pt-1 text-left text-xs text-obsidian-text active:bg-obsidian-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 sm:min-h-9"
+              className="ui-action-toggle w-full justify-start touch-manipulation"
             >
-              {hideEmailAddresses ? <EyeOff size={14} aria-hidden="true" /> : <Eye size={14} aria-hidden="true" />}
+              {/* [Estado seleccionable] Oculta o muestra las direcciones completas. */}
+              {hideEmailAddresses ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}
               <span>Ocultar correos completos</span>
             </button>
 
             <div className="border-t border-obsidian-border pt-2">
-              <label className="block text-xs font-medium text-obsidian-text">
+              <label className="block text-[13px] font-medium text-obsidian-text">
                 Buscar elemento
                 <input
                   type="search"
@@ -850,7 +851,7 @@ export const GraphView: React.FC = () => {
                   onChange={(event) => setNodeSearch(event.target.value)}
                   maxLength={255}
                   autoComplete="off"
-                  className="mt-1 min-h-11 w-full rounded-lg border border-obsidian-border bg-obsidian-bg px-2 text-base text-white placeholder:text-obsidian-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 sm:min-h-9 sm:text-sm"
+                  className="mt-1 min-h-11 w-full rounded-lg border border-obsidian-border bg-obsidian-bg px-2 text-base text-white placeholder:text-obsidian-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent sm:text-sm"
                   placeholder="Nombre del nodo"
                 />
               </label>
@@ -869,8 +870,9 @@ export const GraphView: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => selectGraphNode(node)}
-                          className="min-h-11 w-full touch-manipulation break-words rounded-md px-2 py-1 text-left text-xs text-obsidian-text active:bg-obsidian-surface hover:bg-obsidian-surface hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300"
+                          className="ui-nav-action w-full flex-col items-start break-words touch-manipulation"
                         >
+                          {/* [Navegación] Selecciona el nodo y abre su detalle cuando existe. */}
                           <span className="block text-[10px] text-obsidian-muted">{getNodeTypeLabel(node.type)}</span>
                           <span>{node.label}</span>
                         </button>
@@ -895,8 +897,9 @@ export const GraphView: React.FC = () => {
           onClick={() => zoomAtPoint(1.2)}
           aria-label="Acercar mapa"
           title="Acercar"
-          className="inline-flex min-h-11 min-w-11 touch-manipulation items-center justify-center rounded-lg transition-colors active:bg-obsidian-surface hover:bg-obsidian-surface hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 sm:min-h-9 sm:min-w-9"
+          className="ui-action-icon touch-manipulation"
         >
+          {/* [Control especializado] Acerca el mapa. */}
           <ZoomIn size={16} aria-hidden="true" />
         </button>
         <button
@@ -904,8 +907,9 @@ export const GraphView: React.FC = () => {
           onClick={() => zoomAtPoint(0.8)}
           aria-label="Alejar mapa"
           title="Alejar"
-          className="inline-flex min-h-11 min-w-11 touch-manipulation items-center justify-center rounded-lg transition-colors active:bg-obsidian-surface hover:bg-obsidian-surface hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 sm:min-h-9 sm:min-w-9"
+          className="ui-action-icon touch-manipulation"
         >
+          {/* [Control especializado] Aleja el mapa. */}
           <ZoomOut size={16} aria-hidden="true" />
         </button>
         <button
@@ -913,8 +917,9 @@ export const GraphView: React.FC = () => {
           onClick={handleResetZoom}
           aria-label="Restablecer vista del mapa"
           title="Restablecer vista"
-          className="inline-flex min-h-11 min-w-11 touch-manipulation items-center justify-center rounded-lg transition-colors active:bg-obsidian-surface hover:bg-obsidian-surface hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 sm:min-h-9 sm:min-w-9"
+          className="ui-action-icon touch-manipulation"
         >
+          {/* [Control especializado] Restablece el encuadre del mapa. */}
           <RotateCcw size={16} aria-hidden="true" />
         </button>
       </div>
@@ -922,7 +927,7 @@ export const GraphView: React.FC = () => {
       <aside aria-label="Guía del mapa" className={`absolute ${mapOverlayBottomClass} left-3 z-10 max-h-[min(40vh,15rem)] max-w-[min(18rem,calc(100%-7rem))] overflow-y-auto rounded-xl border border-obsidian-border bg-obsidian-panel/95 p-3 text-[11px] text-obsidian-muted shadow-xl sm:left-6`}>
           <div className="space-y-1.5">
             <div className="flex items-center gap-2">
-              <span className="h-3 w-3 shrink-0 rounded-full border-2 bg-obsidian-card" style={{ borderColor: '#A98242' }} aria-hidden="true" />
+              <span className="h-3 w-3 shrink-0 rounded-full border-2 border-obsidian-borderLight bg-obsidian-card" aria-hidden="true" />
               <span>Correo Principal</span>
             </div>
             <div className="flex items-center gap-2">
@@ -934,7 +939,7 @@ export const GraphView: React.FC = () => {
               <span>Prospecto / Demo</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="h-3 w-3 shrink-0 rounded-full border-2 border-emerald-500 bg-emerald-500/20" aria-hidden="true" />
+              <span className="h-3 w-3 shrink-0 rounded-full border-2 border-obsidian-borderLight bg-obsidian-card" aria-hidden="true" />
               <span>Método de Pago</span>
             </div>
             <div className="flex items-center gap-2">
@@ -952,7 +957,7 @@ export const GraphView: React.FC = () => {
       {loading && !graphData && (
         <div
           role="status"
-          className="absolute inset-0 z-20 flex items-center justify-center bg-obsidian-bg/80 p-4 backdrop-blur-sm"
+          className="absolute inset-0 z-20 flex items-center justify-center bg-obsidian-bg/80 p-4"
         >
           <div className="flex flex-col items-center gap-3 rounded-2xl border border-obsidian-border bg-obsidian-panel px-6 py-5 text-xs text-obsidian-muted shadow-2xl">
             <LoaderCircle size={22} className="animate-spin text-indigo-400" aria-hidden="true" />
@@ -963,7 +968,7 @@ export const GraphView: React.FC = () => {
 
       {/* Error State Overlay */}
       {error && !loading && (
-        <div className="absolute inset-0 z-20 flex items-center justify-center bg-obsidian-bg/85 p-4 backdrop-blur-sm">
+        <div className="absolute inset-0 z-20 flex items-center justify-center bg-obsidian-bg/85 p-4">
           <div className="w-full max-w-md">
             <EmptyState
               icon={AlertTriangle}
@@ -980,12 +985,12 @@ export const GraphView: React.FC = () => {
       {/* Empty State Overlay when there are no nodes */}
       {!loading && !error && graphData && graphData.nodes.length === 0 && (
         <div className="absolute inset-0 z-20 flex items-start justify-center overflow-y-auto p-2 sm:items-center sm:p-6">
-          <div className="pointer-events-auto my-auto w-full max-w-md space-y-4 rounded-2xl border border-obsidian-border bg-obsidian-panel/95 p-4 text-center shadow-2xl backdrop-blur-md sm:p-8">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl border border-indigo-500/20 bg-indigo-500/10 text-indigo-400">
-              <Network size={22} aria-hidden="true" />
+          <div className="pointer-events-auto my-auto w-full max-w-md space-y-4 rounded-2xl border border-obsidian-border bg-obsidian-panel p-4 text-center sm:p-8">
+            <div className="mx-auto text-obsidian-muted">
+              <Network size={22} className="mx-auto text-obsidian-muted" aria-hidden="true" />
             </div>
             <div>
-              <h3 className="text-sm font-bold text-white">Mapa de Conexiones Vacío</h3>
+              <h3 className="text-sm font-bold text-white">Mapa de conexiones vacío</h3>
               <p className="mt-1 text-xs leading-relaxed text-obsidian-muted">
                 Agrega un correo principal o un prospecto. Al vincular cuentas y pagos, aparecerán aquí.
               </p>
@@ -994,17 +999,18 @@ export const GraphView: React.FC = () => {
               <button
                 type="button"
                 onClick={() => openEmailModal()}
-                className="inline-flex min-h-11 touch-manipulation items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white transition-all active:bg-indigo-500 hover:bg-indigo-500"
-              >
-                <Plus size={14} aria-hidden="true" />
+                className="ui-action-primary"
+              >{/* [Acción principal] Inicia o confirma la tarea de este espacio. */}
+                <Plus size={16} aria-hidden="true" />
                 <span>Agregar correo</span>
               </button>
               <button
                 type="button"
                 onClick={() => openProspectModal()}
-                className="inline-flex min-h-11 touch-manipulation items-center gap-1.5 rounded-xl border border-obsidian-border bg-obsidian-surface px-4 py-2 text-xs font-semibold text-white transition-all active:bg-obsidian-border hover:bg-obsidian-border"
+                className="ui-action-secondary touch-manipulation"
               >
-                <Plus size={14} className="text-amber-400" aria-hidden="true" />
+                {/* [Acción secundaria] Abre el formulario de prospecto. */}
+                <Plus size={16} className="text-obsidian-muted" aria-hidden="true" />
                 <span>Agregar prospecto</span>
               </button>
             </div>
@@ -1014,7 +1020,7 @@ export const GraphView: React.FC = () => {
 
       {!loading && !error && graphData && graphData.nodes.length > 0 && visibleGraphNodes.length === 0 && (
         <div className="absolute inset-0 z-[5] flex items-center justify-center p-4">
-          <div role="status" className="w-full max-w-sm rounded-2xl border border-obsidian-border bg-obsidian-panel/95 p-5 text-center shadow-2xl backdrop-blur-md">
+          <div role="status" className="w-full max-w-sm rounded-2xl border border-obsidian-border bg-obsidian-panel p-5 text-center">
             <h3 className="text-sm font-bold text-white">No hay elementos en este filtro</h3>
             <p className="mt-1 text-xs leading-relaxed text-obsidian-muted">
               Prueba otro tipo o vuelve a mostrar todos los nodos del mapa.
@@ -1022,8 +1028,8 @@ export const GraphView: React.FC = () => {
             <button
               type="button"
               onClick={() => { setFilterType('all'); setNodeSearch(''); }}
-              className="mt-4 min-h-11 touch-manipulation rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white active:bg-indigo-500 hover:bg-indigo-500"
-            >
+              className="ui-action-primary mt-4"
+            >{/* [Acción principal] Inicia o confirma la tarea de este espacio. */}
               Mostrar todos
             </button>
           </div>

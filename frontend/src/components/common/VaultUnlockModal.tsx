@@ -87,17 +87,12 @@ export const VaultUnlockModal: React.FC = () => {
         aria-modal="true"
         aria-labelledby="vault-modal-title"
         aria-busy={isLoading}
-        className="relative w-full max-w-md bg-obsidian-panel border border-obsidian-borderLight rounded-2xl shadow-2xl p-4 sm:p-6 max-h-[calc(100dvh-2rem)] overflow-y-auto"
+        className="relative w-full max-w-md bg-obsidian-panel border border-obsidian-border rounded-xl shadow-xl p-4 sm:p-6 max-h-[calc(100dvh-2rem)] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Subtle brand accent bar */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-48 h-1 bg-gradient-to-r from-transparent via-obsidian-gold to-transparent" />
-
         <div className="flex items-center justify-between mb-5 gap-3">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="p-2.5 rounded-xl bg-obsidian-gold/10 border border-obsidian-gold/25 text-obsidian-gold flex-shrink-0">
-              <Lock size={22} aria-hidden="true" />
-            </div>
+            <Lock size={18} className="shrink-0 text-obsidian-muted" aria-hidden="true" />
             <div className="min-w-0">
               <h2 id="vault-modal-title" className="text-lg font-heading font-semibold text-white tracking-tight break-words">
                 {isSetup ? 'Desbloquear bóveda' : 'Inicializar bóveda'}
@@ -112,22 +107,22 @@ export const VaultUnlockModal: React.FC = () => {
             onClick={requestClose}
             disabled={isLoading}
             aria-label="Cerrar desbloqueo de bóveda"
-            className="inline-flex items-center justify-center min-w-[44px] min-h-[44px] lg:min-w-9 lg:min-h-9 p-2 text-obsidian-muted hover:text-white rounded-lg hover:bg-obsidian-surface transition-colors flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-gold"
+            className="inline-flex items-center justify-center min-w-[44px] min-h-[44px] p-2 text-obsidian-muted hover:text-white rounded-lg hover:bg-obsidian-surface transition-colors flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-accent"
           >
             <X size={18} aria-hidden="true" />
           </button>
         </div>
 
         {vaultStatusError && (
-          <div role="status" className="mb-4 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-start justify-between gap-2.5 text-amber-300 text-xs">
+          <div role="status" className="mb-4 flex items-start justify-between gap-2.5 rounded-lg border border-obsidian-border bg-obsidian-surface p-3 text-xs text-obsidian-muted">
             <div className="flex items-start gap-2 min-w-0">
-              <ShieldAlert size={16} className="flex-shrink-0 mt-0.5" aria-hidden="true" />
+              <ShieldAlert size={16} className="mt-0.5 flex-shrink-0 text-amber-400" aria-hidden="true" />
               <span className="break-words">Sin conexión con el servidor ({vaultStatusError}). Verifica que el backend esté encendido.</span>
             </div>
             <button
               type="button"
               onClick={() => { refreshVaultStatus(); }}
-              className="flex-shrink-0 px-3 py-1.5 rounded-md border border-amber-500/40 text-amber-200 hover:bg-amber-500/20 text-[11px] font-medium min-h-[44px] lg:min-h-9 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+              className="min-h-[44px] flex-shrink-0 rounded-md border border-obsidian-border bg-obsidian-panel px-3 py-1.5 text-[11px] font-medium text-obsidian-text hover:border-amber-400/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
             >
               Reintentar
             </button>
@@ -135,8 +130,8 @@ export const VaultUnlockModal: React.FC = () => {
         )}
 
         {error && (
-          <div role="alert" className="mb-4 p-3 rounded-lg bg-rose-500/10 border border-rose-500/30 flex items-center gap-2.5 text-rose-400 text-xs animate-shake">
-            <ShieldAlert size={16} className="flex-shrink-0" aria-hidden="true" />
+          <div role="alert" className="mb-4 flex items-center gap-2.5 rounded-lg border border-obsidian-border bg-obsidian-surface p-3 text-xs text-obsidian-muted">
+            <ShieldAlert size={16} className="flex-shrink-0 text-rose-400" aria-hidden="true" />
             <span className="break-words">{error}</span>
           </div>
         )}
@@ -160,7 +155,7 @@ export const VaultUnlockModal: React.FC = () => {
                   if (error) setError(null);
                 }}
                 placeholder={isSetup ? 'Ingresa tu contraseña de bóveda...' : 'Crea una contraseña de al menos 8 caracteres...'}
-                className="w-full min-h-[44px] pl-10 pr-12 py-2.5 rounded-xl bg-obsidian-bg border border-obsidian-border text-white placeholder-obsidian-muted/50 focus:outline-none focus:border-obsidian-gold focus:ring-1 focus:ring-obsidian-gold text-sm font-mono tracking-wider transition-all"
+                className="w-full min-h-[44px] pl-10 pr-12 py-2.5 rounded-xl bg-obsidian-bg border border-obsidian-border text-white placeholder-obsidian-muted/50 focus:outline-none focus:border-obsidian-accent focus:ring-1 focus:ring-obsidian-accent text-sm font-mono tracking-wider transition-all"
                 autoComplete={isSetup ? 'current-password' : 'new-password'}
                 disabled={isLoading}
               />
@@ -170,7 +165,7 @@ export const VaultUnlockModal: React.FC = () => {
                 aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
                 aria-pressed={showPassword}
                 disabled={isLoading}
-                className="absolute right-1 inline-flex items-center justify-center min-w-[44px] min-h-[44px] text-obsidian-muted hover:text-white rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-gold"
+                  className="absolute right-1 inline-flex items-center justify-center min-w-[44px] min-h-[44px] text-obsidian-muted hover:text-white rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-accent"
               >
                 {showPassword ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}
               </button>
@@ -195,7 +190,7 @@ export const VaultUnlockModal: React.FC = () => {
                     if (error) setError(null);
                   }}
                   placeholder="Repite tu contraseña maestra..."
-                  className="w-full min-h-[44px] pl-10 pr-3.5 py-2.5 rounded-xl bg-obsidian-bg border border-obsidian-border text-white placeholder-obsidian-muted/50 focus:outline-none focus:border-obsidian-gold focus:ring-1 focus:ring-obsidian-gold text-sm font-mono tracking-wider transition-all"
+                  className="w-full min-h-[44px] pl-10 pr-3.5 py-2.5 rounded-xl bg-obsidian-bg border border-obsidian-border text-white placeholder-obsidian-muted/50 focus:outline-none focus:border-obsidian-accent focus:ring-1 focus:ring-obsidian-accent text-sm font-mono tracking-wider transition-all"
                   autoComplete="new-password"
                   disabled={isLoading}
                 />
@@ -210,18 +205,20 @@ export const VaultUnlockModal: React.FC = () => {
           </p>
 
           <div className="pt-2 flex flex-wrap items-center justify-end gap-2.5">
+            {/* [Acción secundaria] Cierra el diálogo sin modificar la bóveda. */}
             <button
               type="button"
               onClick={requestClose}
               disabled={isLoading}
-              className="min-h-[44px] lg:min-h-9 px-4 py-2 text-xs font-medium text-obsidian-muted hover:text-white rounded-xl hover:bg-obsidian-surface transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-gold"
+              className="ui-action-secondary"
             >
               Cancelar
             </button>
+            {/* [Acción principal] Desbloquea o configura la bóveda. */}
             <button
               type="submit"
               disabled={isLoading || !password || (!isSetup && !confirmPassword)}
-              className="min-h-[44px] lg:min-h-9 inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-700 px-5 py-2 text-xs font-semibold text-white transition-colors hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300"
+              className="ui-action-primary"
             >
               {isLoading ? (
                 <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />

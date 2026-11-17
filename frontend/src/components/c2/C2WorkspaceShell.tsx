@@ -54,19 +54,19 @@ const PANEL_COMPONENTS: Record<C2SectionId, React.LazyExoticComponent<React.Comp
 };
 
 const LOG_TYPE_COLORS: Record<C2LogType, string> = {
-  info: 'text-slate-300',
-  error: 'text-red-400',
-  cred: 'text-emerald-400',
-  arp: 'text-amber-300',
-  dns: 'text-sky-300',
-  sniff: 'text-cyan-300',
-  inject: 'text-orange-300',
-  wifi: 'text-teal-300',
-  poison: 'text-yellow-300',
-  wpad: 'text-lime-300',
-  dns6: 'text-violet-300',
-  opsec: 'text-obsidian-gold',
-  camera: 'text-rose-300',
+  info: 'text-obsidian-muted',
+  error: 'text-rose-300',
+  cred: 'text-obsidian-muted',
+  arp: 'text-obsidian-muted',
+  dns: 'text-obsidian-muted',
+  sniff: 'text-obsidian-muted',
+  inject: 'text-obsidian-muted',
+  wifi: 'text-obsidian-muted',
+  poison: 'text-obsidian-muted',
+  wpad: 'text-obsidian-muted',
+  dns6: 'text-obsidian-muted',
+  opsec: 'text-obsidian-muted',
+  camera: 'text-obsidian-muted',
 };
 
 const LOG_FILTER_TYPES: C2LogType[] = [
@@ -222,7 +222,7 @@ export const C2WorkspaceShell: React.FC = () => {
     return (
       <div className="mx-auto max-w-2xl p-6">
         <div className="rounded-xl border border-obsidian-border bg-obsidian-panel p-8 text-center shadow-obsidian">
-          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl border border-obsidian-gold/30 bg-obsidian-surface text-obsidian-gold">
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl border border-obsidian-borderLight/30 bg-obsidian-surface text-obsidian-muted">
             <Lock size={22} aria-hidden="true" />
           </div>
           <h2 className="font-heading text-lg font-bold text-white">
@@ -235,10 +235,11 @@ export const C2WorkspaceShell: React.FC = () => {
           <button
             type="button"
             onClick={openUnlockModal}
-            className="mt-5 inline-flex items-center gap-2 rounded-lg border border-obsidian-gold/40 bg-obsidian-surface px-4 py-2 text-xs font-semibold text-white transition-colors hover:border-obsidian-gold hover:bg-obsidian-gold/15"
+            className="ui-action-primary mt-5"
           >
             <Unlock size={14} aria-hidden="true" />
             <span>Desbloquear bóveda</span>
+            {/* [Acción principal] Abre el desbloqueo de la bóveda. */}
           </button>
         </div>
       </div>
@@ -252,7 +253,7 @@ export const C2WorkspaceShell: React.FC = () => {
       <div className="mx-auto max-w-2xl p-6">
         <section aria-labelledby="c2-service-title" className="rounded-xl border border-obsidian-border bg-obsidian-panel p-6 shadow-obsidian sm:p-8">
           <div className="flex items-start gap-4">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-obsidian-border bg-obsidian-surface text-obsidian-gold">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-obsidian-border bg-obsidian-surface text-obsidian-muted">
               <Network size={21} aria-hidden="true" />
             </div>
             <div className="min-w-0">
@@ -270,7 +271,7 @@ export const C2WorkspaceShell: React.FC = () => {
                 <div className="mt-4 space-y-4 text-sm leading-relaxed text-obsidian-muted">
                   <div>
                     <h3 className="font-semibold text-white">Si C2 está apagado</h3>
-                    <p className="mt-1">Abre una terminal en la carpeta del proyecto, ejecuta <code className="break-all text-obsidian-gold">./lessso</code> y elige «Abrir CRM y activar C2 real». Escribe tu contraseña del sistema si se solicita y deja la terminal abierta.</p>
+                    <p className="mt-1">Abre una terminal en la carpeta del proyecto, ejecuta <code className="break-all text-obsidian-muted">./lessso</code> y elige «Abrir CRM y activar C2 real». Escribe tu contraseña del sistema si se solicita y deja la terminal abierta.</p>
                   </div>
                   <div>
                     <h3 className="font-semibold text-white">Si es la primera vez</h3>
@@ -283,13 +284,15 @@ export const C2WorkspaceShell: React.FC = () => {
                 </div>
               )}
               {(forbidden || accountStatus === 'signed_out' || accountStatus === 'password_change' || accountStatus === 'other') && !checking && (
-                <button type="button" onClick={() => setActiveSection('settings_team')} className="mt-5 inline-flex min-h-[44px] items-center rounded-lg bg-obsidian-gold px-4 text-sm font-semibold text-black hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-gold">
+                <button type="button" onClick={() => setActiveSection('settings_team')} className="ui-nav-action mt-5">
                   Ir a Cuentas del equipo
+                  {/* [Navegación] Abre las cuentas del equipo. */}
                 </button>
               )}
               {!checking && !forbidden && (
-                <button type="button" onClick={() => void retryService()} className="mt-5 mr-2 inline-flex min-h-[44px] items-center gap-2 rounded-lg border border-obsidian-gold/40 bg-obsidian-surface px-4 text-sm font-semibold text-white transition-colors hover:border-obsidian-gold hover:bg-obsidian-gold/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-gold">
+                <button type="button" onClick={() => void retryService()} className="ui-action-secondary mt-5 mr-2">
                   <RefreshCw size={15} aria-hidden="true" /> Volver a comprobar
+                  {/* [Acción secundaria] Abre o ajusta la operación actual. */}
                 </button>
               )}
             </div>
@@ -307,14 +310,14 @@ export const C2WorkspaceShell: React.FC = () => {
           {/* Primary operational row (always visible on mobile and desktop) */}
           <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
             {/* Interface selector (interactive) */}
-            <label className="flex min-h-[44px] lg:min-h-9 min-w-0 max-w-full flex-1 sm:flex-initial items-center gap-1.5 rounded-lg border border-obsidian-border bg-obsidian-surface px-2.5 py-1.5 text-xs focus-within:border-obsidian-gold">
-              <Network size={13} className="shrink-0 text-obsidian-gold" aria-hidden="true" />
+            <label className="flex min-h-[44px] min-w-0 max-w-full flex-1 sm:flex-initial items-center gap-1.5 rounded-lg border border-obsidian-border bg-obsidian-surface px-2.5 py-1.5 text-xs focus-within:border-obsidian-borderLight">
+              <Network size={13} className="shrink-0 text-obsidian-muted" aria-hidden="true" />
               <span className="hidden sm:inline text-[11px] font-medium text-obsidian-muted">{t('iface.label')}:</span>
               <select
                 value={selectedIface}
                 onChange={(e) => setSelectedIface(e.target.value)}
                 aria-label={t('iface.label')}
-                className="min-w-0 flex-1 bg-transparent font-mono text-xs text-white focus:outline-none"
+                className="min-w-0 flex-1 bg-transparent font-mono text-xs text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-accent"
               >
                 {interfaces.length === 0 ? (
                   <option value="" className="bg-obsidian-panel text-obsidian-muted">
@@ -346,17 +349,14 @@ export const C2WorkspaceShell: React.FC = () => {
               type="button"
               onClick={() => setActiveSection('c2_opsec')}
               title={t('opsec.pill')}
-              className={`hidden md:inline-flex lg:min-h-9 min-h-[44px] items-center gap-1.5 rounded-lg border px-2.5 py-1.5 font-mono text-[11px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-gold ${
-                isSpoofed
-                  ? 'border-obsidian-gold/50 bg-obsidian-gold/15 text-amber-200 hover:bg-obsidian-gold/25'
-                  : 'border-obsidian-borderLight bg-obsidian-surface text-obsidian-text hover:border-obsidian-gold/60 hover:text-white'
-              }`}
+              className="ui-nav-action hidden md:inline-flex"
             >
-              <Shield size={12} className={isSpoofed ? 'text-obsidian-gold' : 'text-obsidian-muted'} aria-hidden="true" />
+              <Shield size={12} className="text-obsidian-muted" aria-hidden="true" />
               <span className="max-w-[190px] truncate">
                 {opsecHost} | {opsecMac}
               </span>
               <ChevronRight size={11} className="text-obsidian-muted shrink-0" aria-hidden="true" />
+              {/* [Navegación] Abre la sección relacionada. */}
             </button>
 
             {/* Interactive active modules popover on desktop */}
@@ -370,17 +370,14 @@ export const C2WorkspaceShell: React.FC = () => {
                 aria-expanded={modulesOpen}
                 aria-haspopup="true"
                 title={activeModuleNames.length ? activeModuleNames.join(', ') : t('modules.none')}
-                className={`inline-flex min-h-[44px] lg:min-h-9 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-gold ${
-                  activeModuleCount > 0
-                    ? 'border-emerald-500/40 bg-emerald-950/30 text-emerald-300 hover:bg-emerald-950/50'
-                    : 'border-obsidian-borderLight bg-obsidian-surface text-obsidian-text hover:border-obsidian-gold/60 hover:text-white'
-                }`}
+                className="ui-action-secondary"
               >
                 <Cpu size={12} aria-hidden="true" />
                 <span>
                   {activeModuleCount > 0 ? t('modules.active', { n: activeModuleCount }) : t('modules.none')}
                 </span>
                 <ChevronDown size={12} className="text-obsidian-muted" aria-hidden="true" />
+                {/* [Acción secundaria] Abre información o ajustes. */}
               </button>
               {modulesOpen && (
                 <div
@@ -438,7 +435,7 @@ export const C2WorkspaceShell: React.FC = () => {
               onClick={() => setMobileOpsOpen((prev) => !prev)}
               aria-expanded={mobileOpsOpen}
               aria-label="Estado y opciones C2"
-              className="md:hidden inline-flex min-h-[44px] min-w-[44px] items-center justify-center gap-1 rounded-lg border border-obsidian-border bg-obsidian-surface px-2.5 text-xs font-medium text-obsidian-text hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-gold"
+              className="ui-action-icon md:hidden"
             >
               <SlidersHorizontal size={14} aria-hidden="true" />
               {activeModuleCount > 0 && (
@@ -446,6 +443,7 @@ export const C2WorkspaceShell: React.FC = () => {
                   {activeModuleCount}
                 </span>
               )}
+              {/* [Icono] Ejecuta la acción identificada por su etiqueta accesible. */}
             </button>
 
             {/* Desktop language toggle */}
@@ -458,21 +456,19 @@ export const C2WorkspaceShell: React.FC = () => {
                 type="button"
                 onClick={() => setLang('es')}
                 aria-pressed={lang === 'es'}
-                className={`min-h-9 px-2.5 py-1.5 font-mono text-[11px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-gold ${
-                  lang === 'es' ? 'bg-obsidian-gold text-obsidian-bg' : 'text-obsidian-muted hover:text-white'
-                }`}
+                className="ui-action-toggle"
               >
                 ES
+                {/* [Estado seleccionable] Cambia la selección indicada. */}
               </button>
               <button
                 type="button"
                 onClick={() => setLang('en')}
                 aria-pressed={lang === 'en'}
-                className={`min-h-9 px-2.5 py-1.5 font-mono text-[11px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-gold ${
-                  lang === 'en' ? 'bg-obsidian-gold text-obsidian-bg' : 'text-obsidian-muted hover:text-white'
-                }`}
+                className="ui-action-toggle"
               >
                 EN
+                {/* [Estado seleccionable] Cambia la selección indicada. */}
               </button>
             </div>
 
@@ -484,10 +480,11 @@ export const C2WorkspaceShell: React.FC = () => {
               type="button"
               onClick={() => void triggerPanic()}
               title={t('panic.title')}
-              className="inline-flex min-h-[44px] lg:min-h-9 items-center gap-1.5 rounded-lg border border-red-500/45 bg-obsidian-dangerBg px-3 py-1.5 text-xs font-semibold tracking-wide text-red-200 transition-colors hover:border-red-400 hover:bg-red-950/70 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400"
+              className="ui-action-danger"
             >
               <AlertOctagon size={14} aria-hidden="true" />
               <span>{t('panic.btn')}</span>
+              {/* [Acción destructiva] Detiene o revierte la operación. */}
             </button>
           </div>
         </div>
@@ -512,35 +509,30 @@ export const C2WorkspaceShell: React.FC = () => {
                 setMobileOpsOpen(false);
                 setActiveSection('c2_opsec');
               }}
-              className={`inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border px-2.5 py-1.5 font-mono text-[11px] ${
-                isSpoofed
-                  ? 'border-obsidian-gold/50 bg-obsidian-gold/15 text-amber-200'
-                  : 'border-obsidian-border bg-obsidian-surface text-obsidian-text'
-              }`}
+              className="ui-nav-action"
             >
               <Shield size={12} aria-hidden="true" />
               <span className="max-w-[180px] truncate">{opsecHost} | {opsecMac}</span>
+              {/* [Navegación] Abre la sección relacionada. */}
             </button>
             <div className="inline-flex overflow-hidden rounded-lg border border-obsidian-border bg-obsidian-surface">
               <button
                 type="button"
                 onClick={() => setLang('es')}
                 aria-pressed={lang === 'es'}
-                className={`min-h-[44px] min-w-[44px] px-2.5 font-mono text-[11px] font-semibold ${
-                  lang === 'es' ? 'bg-obsidian-gold text-obsidian-bg' : 'text-obsidian-muted'
-                }`}
+                className="ui-action-toggle"
               >
                 ES
+                {/* [Estado seleccionable] Cambia la selección indicada. */}
               </button>
               <button
                 type="button"
                 onClick={() => setLang('en')}
                 aria-pressed={lang === 'en'}
-                className={`min-h-[44px] min-w-[44px] px-2.5 font-mono text-[11px] font-semibold ${
-                  lang === 'en' ? 'bg-obsidian-gold text-obsidian-bg' : 'text-obsidian-muted'
-                }`}
+                className="ui-action-toggle"
               >
                 EN
+                {/* [Estado seleccionable] Cambia la selección indicada. */}
               </button>
             </div>
             <div className="w-full rounded-lg bg-obsidian-bg/60 px-2.5 py-2 text-[11px] text-obsidian-muted">
@@ -553,13 +545,13 @@ export const C2WorkspaceShell: React.FC = () => {
 
         <section aria-label={t('scope.label')} className="mt-2.5 border-t border-obsidian-border/80 pt-2.5">
           <div className="flex flex-wrap items-start gap-2">
-            <label className="flex min-h-[44px] min-w-0 flex-1 items-center gap-2 rounded-lg border border-obsidian-border bg-obsidian-surface px-2.5 py-1.5 text-xs focus-within:border-obsidian-gold sm:max-w-2xl">
+            <label className="flex min-h-[44px] min-w-0 flex-1 items-center gap-2 rounded-lg border border-obsidian-border bg-obsidian-surface px-2.5 py-1.5 text-xs focus-within:border-obsidian-borderLight sm:max-w-2xl">
               <span className="shrink-0 font-medium text-obsidian-muted">{t('scope.label')}</span>
               <select
                 value={activeEngagementId || ''}
                 onChange={(event) => setActiveEngagementId(event.target.value || null)}
                 aria-label={t('scope.label')}
-                className="min-w-0 flex-1 bg-transparent font-mono text-xs text-white focus:outline-none"
+                className="min-w-0 flex-1 bg-transparent font-mono text-xs text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-accent"
               >
                 <option value="" className="bg-obsidian-panel">{t('scope.choose')}</option>
                 {engagements.map((item) => (
@@ -576,18 +568,20 @@ export const C2WorkspaceShell: React.FC = () => {
                 setCreateScopeOpen((current) => !current);
                 void refreshEngagements();
               }}
-              className="inline-flex min-h-[44px] items-center rounded-lg border border-obsidian-borderLight bg-obsidian-surface px-3 text-xs font-medium text-white hover:border-obsidian-gold/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-gold"
+              className="ui-action-secondary"
             >
               {createScopeOpen ? t('scope.cancel') : t('scope.create')}
+              {/* [Acción secundaria] Abre o ajusta la operación actual. */}
             </button>
             <button
               type="button"
               onClick={() => void refreshEngagements()}
               aria-label={t('scope.refresh')}
               title={t('scope.refresh')}
-              className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg border border-obsidian-border bg-obsidian-surface text-obsidian-muted hover:border-obsidian-gold/60 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-gold"
+              className="ui-action-icon"
             >
               <RefreshCw size={14} aria-hidden="true" />
+              {/* [Icono] Ejecuta la acción identificada por su etiqueta accesible. */}
             </button>
             {demoMode ? (
               <p role="status" className="basis-full text-[11px] text-amber-200">{t('scope.demoOptional')}</p>
@@ -606,7 +600,7 @@ export const C2WorkspaceShell: React.FC = () => {
               {engagementClients.length > 0 ? (
                 <label className="grid gap-1 text-xs text-obsidian-muted">
                   <span>{t('scope.client')}</span>
-                  <select required value={scopeDraft.client_id} onChange={(event) => setScopeDraft((current) => ({ ...current, client_id: event.target.value }))} className="min-h-[40px] rounded-md border border-obsidian-border bg-obsidian-surface px-2 text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-gold">
+                  <select required value={scopeDraft.client_id} onChange={(event) => setScopeDraft((current) => ({ ...current, client_id: event.target.value }))} className="min-h-[44px] rounded-md border border-obsidian-border bg-obsidian-surface px-2 text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-accent">
                     <option value="" className="bg-obsidian-panel">—</option>
                     {engagementClients.map((client) => <option key={client.id} value={client.id} className="bg-obsidian-panel">{client.company_name}</option>)}
                   </select>
@@ -616,33 +610,34 @@ export const C2WorkspaceShell: React.FC = () => {
               )}
               <label className="grid gap-1 text-xs text-obsidian-muted">
                 <span>{t('scope.name')}</span>
-                <input required minLength={2} maxLength={180} value={scopeDraft.title} onChange={(event) => setScopeDraft((current) => ({ ...current, title: event.target.value }))} className="min-h-[40px] rounded-md border border-obsidian-border bg-obsidian-surface px-2 text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-gold" />
+                <input required minLength={2} maxLength={180} value={scopeDraft.title} onChange={(event) => setScopeDraft((current) => ({ ...current, title: event.target.value }))} className="min-h-[44px] rounded-md border border-obsidian-border bg-obsidian-surface px-2 text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-accent" />
               </label>
               <label className="grid gap-1 text-xs text-obsidian-muted">
                 <span>{t('scope.targets')} ({t('scope.targetsHint')})</span>
-                <input required minLength={3} maxLength={5000} value={scopeDraft.authorized_targets} onChange={(event) => setScopeDraft((current) => ({ ...current, authorized_targets: event.target.value }))} className="min-h-[40px] rounded-md border border-obsidian-border bg-obsidian-surface px-2 font-mono text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-gold" placeholder="192.168.100.0/24" />
+                <input required minLength={3} maxLength={5000} value={scopeDraft.authorized_targets} onChange={(event) => setScopeDraft((current) => ({ ...current, authorized_targets: event.target.value }))} className="min-h-[44px] rounded-md border border-obsidian-border bg-obsidian-surface px-2 font-mono text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-accent" placeholder="192.168.100.0/24" />
               </label>
               <label className="grid gap-1 text-xs text-obsidian-muted">
                 <span>{t('scope.ipv6Targets')}</span>
-                <input maxLength={5000} value={scopeDraft.authorized_ipv6_targets} onChange={(event) => setScopeDraft((current) => ({ ...current, authorized_ipv6_targets: event.target.value }))} className="min-h-[40px] rounded-md border border-obsidian-border bg-obsidian-surface px-2 font-mono text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-gold" placeholder="fd00:100::/64" aria-describedby="c2-scope-ipv6-help" />
+                <input maxLength={5000} value={scopeDraft.authorized_ipv6_targets} onChange={(event) => setScopeDraft((current) => ({ ...current, authorized_ipv6_targets: event.target.value }))} className="min-h-[44px] rounded-md border border-obsidian-border bg-obsidian-surface px-2 font-mono text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-accent" placeholder="fd00:100::/64" aria-describedby="c2-scope-ipv6-help" />
                 <span id="c2-scope-ipv6-help" className="text-[11px] leading-relaxed">{t('scope.ipv6TargetsHint')}</span>
               </label>
               <label className="grid gap-1 text-xs text-obsidian-muted sm:col-span-2">
                 <span>{t('scope.summary')}</span>
-                <textarea required minLength={10} maxLength={10000} rows={2} value={scopeDraft.scope_written_summary} onChange={(event) => setScopeDraft((current) => ({ ...current, scope_written_summary: event.target.value }))} className="rounded-md border border-obsidian-border bg-obsidian-surface px-2 py-1.5 text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-gold" />
+                <textarea required minLength={10} maxLength={10000} rows={2} value={scopeDraft.scope_written_summary} onChange={(event) => setScopeDraft((current) => ({ ...current, scope_written_summary: event.target.value }))} className="rounded-md border border-obsidian-border bg-obsidian-surface px-2 py-1.5 text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-accent" />
               </label>
               <label className="grid gap-1 text-xs text-obsidian-muted">
                 <span>{t('scope.start')}</span>
-                <input required type="datetime-local" value={scopeDraft.window_start} onChange={(event) => setScopeDraft((current) => ({ ...current, window_start: event.target.value }))} className="min-h-[40px] rounded-md border border-obsidian-border bg-obsidian-surface px-2 text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-gold" />
+                <input required type="datetime-local" value={scopeDraft.window_start} onChange={(event) => setScopeDraft((current) => ({ ...current, window_start: event.target.value }))} className="min-h-[44px] rounded-md border border-obsidian-border bg-obsidian-surface px-2 text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-accent" />
               </label>
               <label className="grid gap-1 text-xs text-obsidian-muted">
                 <span>{t('scope.end')}</span>
-                <input required type="datetime-local" value={scopeDraft.window_end} onChange={(event) => setScopeDraft((current) => ({ ...current, window_end: event.target.value }))} className="min-h-[40px] rounded-md border border-obsidian-border bg-obsidian-surface px-2 text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-gold" />
+                <input required type="datetime-local" value={scopeDraft.window_end} onChange={(event) => setScopeDraft((current) => ({ ...current, window_end: event.target.value }))} className="min-h-[44px] rounded-md border border-obsidian-border bg-obsidian-surface px-2 text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-accent" />
               </label>
               {createScopeError && <p role="alert" className="sm:col-span-2 text-xs text-red-300">{createScopeError}</p>}
               <div className="sm:col-span-2 flex justify-end">
-                <button type="submit" disabled={createScopePending || engagementClients.length === 0} className="min-h-[44px] rounded-lg bg-obsidian-gold px-4 text-xs font-semibold text-obsidian-bg hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white">
+                <button type="submit" disabled={createScopePending || engagementClients.length === 0} className="ui-action-primary">
                   {createScopePending ? '…' : t('scope.submit')}
+                  {/* [Acción principal] Inicia o confirma la operación. */}
                 </button>
               </div>
             </form>
@@ -664,7 +659,7 @@ export const C2WorkspaceShell: React.FC = () => {
       )}
 
       <details className="rounded-lg border border-obsidian-border bg-obsidian-panel px-4 py-3 text-sm">
-        <summary className="cursor-pointer font-medium text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-gold">
+        <summary className="flex min-h-[44px] cursor-pointer items-center rounded-lg px-2 font-medium text-white hover:bg-obsidian-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-accent">
           {lang === 'es' ? 'Comprobación previa del módulo' : 'Module preflight check'}
         </summary>
         <div className="mt-3 space-y-2 text-xs text-slate-300">
@@ -685,7 +680,9 @@ export const C2WorkspaceShell: React.FC = () => {
             {activeSection === 'c2_ports' && <p>{lang === 'es' ? 'Búsqueda local de exploits (opcional)' : 'Local exploit lookup (optional)'}: {preflight.tools.searchsploit ? (lang === 'es' ? 'disponible' : 'available') : (lang === 'es' ? 'requiere searchsploit' : 'requires searchsploit')}</p>}
             <p className="text-slate-400">{lang === 'es' ? 'La presencia de herramientas no garantiza compatibilidad del hardware ni permisos para cada operación.' : 'Tool availability does not guarantee hardware compatibility or permissions for each operation.'}</p>
           </>}
-          <button type="button" onClick={() => void refreshEnvCheck()} disabled={preflightState === 'loading'} className="min-h-[44px] rounded-md border border-obsidian-border px-3 text-white hover:bg-obsidian-surface disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-gold">{lang === 'es' ? 'Volver a comprobar' : 'Check again'}</button>
+          <button type="button" onClick={() => void refreshEnvCheck()} disabled={preflightState === 'loading'} className="ui-action-secondary">{lang === 'es' ? 'Volver a comprobar' : 'Check again'}
+            {/* [Acción secundaria] Abre o ajusta la operación actual. */}
+          </button>
         </div>
       </details>
 
@@ -709,14 +706,15 @@ export const C2WorkspaceShell: React.FC = () => {
             type="button"
             onClick={() => setConsoleOpen((prev) => !prev)}
             aria-expanded={consoleOpen}
-            className="flex min-h-[44px] lg:min-h-9 items-center gap-2 text-xs font-semibold text-white hover:text-obsidian-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-gold rounded-lg px-1"
+            className="ui-action-secondary"
           >
-            <Terminal size={14} className="text-obsidian-gold" aria-hidden="true" />
+            <Terminal size={14} className="text-obsidian-muted" aria-hidden="true" />
             <span>{t('console.title')}</span>
             <span className="rounded border border-obsidian-border bg-obsidian-surface px-1.5 py-0.5 font-mono text-[10px] text-obsidian-muted">
               {filteredLogs.length}
             </span>
             {consoleOpen ? <ChevronDown size={14} aria-hidden="true" /> : <ChevronUp size={14} aria-hidden="true" />}
+            {/* [Acción secundaria] Abre o ajusta la operación actual. */}
           </button>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -726,7 +724,7 @@ export const C2WorkspaceShell: React.FC = () => {
                 aria-label={t('console.filter')}
                 value={logFilter}
                 onChange={(e) => setLogFilter(e.target.value as 'all' | C2LogType)}
-                className="min-h-[44px] lg:min-h-9 rounded border border-obsidian-border bg-obsidian-surface px-2 py-1 font-mono text-[11px] text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-gold"
+                className="min-h-[44px] rounded border border-obsidian-border bg-obsidian-surface px-2 py-1 font-mono text-[11px] text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-accent"
               >
                 <option value="all" className="bg-obsidian-panel">
                   {t('console.all')}
@@ -742,10 +740,11 @@ export const C2WorkspaceShell: React.FC = () => {
             <button
               type="button"
               onClick={clearLogs}
-              className="inline-flex min-h-[44px] lg:min-h-9 items-center gap-1 rounded border border-obsidian-border bg-obsidian-surface px-2.5 py-1 text-[11px] text-obsidian-muted transition-colors hover:border-obsidian-borderLight hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-gold"
+              className="ui-action-secondary"
             >
               <Trash2 size={12} aria-hidden="true" />
               <span>{t('console.clear')}</span>
+              {/* [Acción secundaria] Abre o ajusta la operación actual. */}
             </button>
           </div>
         </div>

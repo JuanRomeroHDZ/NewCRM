@@ -1,3 +1,17 @@
+const neutralPalette = {
+  50: '#ffffff',
+  100: '#f1f2f1',
+  200: '#dadddc',
+  300: '#c7cdca',
+  400: '#b3b9b6',
+  500: '#88918e',
+  600: '#65706c',
+  700: '#46504d',
+  800: '#28312f',
+  900: '#101313',
+  950: '#080A0A',
+};
+
 /** @type {import('tailwindcss').Config} */
 export default {
   content: [
@@ -10,31 +24,29 @@ export default {
       colors: {
         obsidian: {
           bg: '#080A0A',
-          panel: '#0C1024',
-          card: '#0C1024',
-          surface: '#081416',
-          border: '#182226',
-          borderLight: '#26363C',
+          panel: '#101313',
+          card: '#101313',
+          surface: '#171B1A',
+          border: '#252B29',
+          borderLight: '#39413F',
           muted: '#B3B9BC',
           text: '#FFFFFF',
           accent: 'var(--brand-accent, #0F766E)',
-          accentGlow: 'rgba(169, 130, 66, 0.25)',
           dangerBg: '#240B0B',
           errorText: '#F87171',
           emerald: '#10B981',
           amber: '#F59E0B',
-          gold: '#A98242'
         },
-        indigo: {
-          50: '#ecfdf5', 100: '#d1fae5', 200: '#a7f3d0', 300: '#6ee7b7',
-          400: '#34d399', 500: '#10b981', 600: '#0f766e', 700: '#115e59',
-          800: '#134e4a', 900: '#064e3b', 950: '#022c22'
-        },
-        slate: {
-          50: '#ffffff', 100: '#f1f1f0', 200: '#dadddd', 300: '#c7cdce',
-          400: '#b3b9bc', 500: '#889394', 600: '#617071', 700: '#344749',
-          800: '#182a2c', 900: '#0C1024', 950: '#080A0A'
-        },
+        // Legacy color utilities now resolve to the shared neutral scale.
+        // The brand accent is applied only to primary and selected controls in index.css.
+        indigo: neutralPalette,
+        slate: neutralPalette,
+        blue: neutralPalette,
+        cyan: neutralPalette,
+        sky: neutralPalette,
+        teal: neutralPalette,
+        purple: neutralPalette,
+        violet: neutralPalette,
         brand: { 400: '#6ee7b7', 500: '#0f766e', 600: '#064e3b' }
       },
       borderRadius: { lg: '0.375rem', xl: '0.5rem', '2xl': '0.625rem', '3xl': '0.75rem' },
@@ -44,8 +56,7 @@ export default {
         mono: ['"JetBrains Mono"', 'Menlo', 'Consolas', 'monospace']
       },
       boxShadow: {
-        'obsidian': '0 4px 20px -2px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.05)',
-        'obsidian-glow': '0 0 25px -5px rgba(169, 130, 66, 0.3), 0 0 0 1px rgba(169, 130, 66, 0.4)',
+        'obsidian': '0 4px 16px -2px rgba(0, 0, 0, 0.56), 0 0 0 1px rgba(255, 255, 255, 0.04)',
       }
     },
   },

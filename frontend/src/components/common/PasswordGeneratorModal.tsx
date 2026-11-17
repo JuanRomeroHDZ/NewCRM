@@ -102,17 +102,12 @@ export const PasswordGeneratorModal: React.FC = () => {
         role="dialog"
         aria-modal="true"
         aria-labelledby="password-gen-title"
-        className="relative max-h-[calc(100dvh-1rem)] w-full max-w-lg overflow-y-auto rounded-xl border border-obsidian-borderLight bg-obsidian-panel p-4 shadow-2xl sm:rounded-2xl sm:p-6"
+        className="relative max-h-[calc(100dvh-1rem)] w-full max-w-lg overflow-y-auto rounded-xl border border-obsidian-border bg-obsidian-panel p-4 shadow-xl sm:p-6"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Glow */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-48 h-1 bg-gradient-to-r from-transparent via-cyan-500 to-transparent" />
-
         <div className="flex items-center justify-between mb-5">
           <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
-              <Sparkles size={20} />
-            </div>
+            <Sparkles size={18} className="shrink-0 text-obsidian-muted" aria-hidden="true" />
             <div>
               <h2 id="password-gen-title" className="text-base font-semibold text-white tracking-tight">
                 Generador de Contraseñas & Passphrases
@@ -122,11 +117,12 @@ export const PasswordGeneratorModal: React.FC = () => {
               </p>
             </div>
           </div>
+          {/* [Icono] Cerrar el generador. */}
           <button
             type="button"
             onClick={closePasswordGen}
             aria-label="Cerrar generador"
-            className="inline-flex min-w-[44px] min-h-[44px] lg:min-w-9 lg:min-h-9 items-center justify-center p-2 text-obsidian-muted hover:text-white rounded-lg hover:bg-obsidian-surface transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
+            className="ui-action-icon"
           >
             <X size={18} />
           </button>
@@ -138,11 +134,13 @@ export const PasswordGeneratorModal: React.FC = () => {
             {generatedPassword || (generationError ? 'Sin contraseña generada' : 'Generando...')}
           </span>
           <div className="flex items-center gap-1.5 flex-shrink-0">
+            {/* [Icono] Generar otra contraseña. */}
             <button
               type="button"
               onClick={generate}
               title="Regenerar"
-              className="p-2 text-obsidian-muted hover:text-white rounded-lg hover:bg-obsidian-surface border border-transparent hover:border-obsidian-border transition-all"
+              aria-label="Regenerar contraseña"
+              className="ui-action-icon"
             >
               <RefreshCw size={15} className={isGenerating ? 'animate-spin' : ''} />
             </button>
@@ -150,11 +148,7 @@ export const PasswordGeneratorModal: React.FC = () => {
               type="button"
               onClick={handleCopy}
               disabled={isGenerating || !generatedPassword}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                copied
-                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                  : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/20'
-              }`}
+              className="ui-action-secondary"
             >
               {copied ? (
                 <>
@@ -192,23 +186,21 @@ export const PasswordGeneratorModal: React.FC = () => {
           </div>
         </div>
 
-        {/* Mode Selector */}
+        {/* [Estado seleccionable] Elegir el método de generación. */}
         <div className="flex p-1 mb-4 rounded-xl bg-obsidian-bg border border-obsidian-border">
           <button
             type="button"
             onClick={() => setMode('random')}
-            className={`flex-1 py-1.5 text-xs font-medium rounded-lg transition-all ${
-              mode === 'random' ? 'bg-obsidian-surface text-white shadow-sm' : 'text-obsidian-muted hover:text-white'
-            }`}
+            aria-pressed={mode === 'random'}
+            className="ui-action-toggle min-w-0 flex-1"
           >
             Caracteres Aleatorios
           </button>
           <button
             type="button"
             onClick={() => setMode('passphrase')}
-            className={`flex-1 py-1.5 text-xs font-medium rounded-lg transition-all ${
-              mode === 'passphrase' ? 'bg-obsidian-surface text-white shadow-sm' : 'text-obsidian-muted hover:text-white'
-            }`}
+            aria-pressed={mode === 'passphrase'}
+            className="ui-action-toggle min-w-0 flex-1"
           >
             Passphrase (Memorable)
           </button>
@@ -289,7 +281,7 @@ export const PasswordGeneratorModal: React.FC = () => {
           <button
             type="button"
             onClick={closePasswordGen}
-            className="px-4 py-2 text-xs font-semibold text-obsidian-text bg-obsidian-surface hover:bg-obsidian-border border border-obsidian-border rounded-xl transition-colors"
+            className="ui-action-secondary"
           >
             Cerrar
           </button>

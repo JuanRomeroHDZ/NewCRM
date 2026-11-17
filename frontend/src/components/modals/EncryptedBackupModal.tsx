@@ -159,14 +159,12 @@ export const EncryptedBackupModal: React.FC = () => {
         aria-modal="true"
         aria-labelledby="backup-modal-title"
         onClick={(e) => e.stopPropagation()}
-        className="relative max-h-[calc(100dvh-2rem)] w-full max-w-xl overflow-y-auto rounded-2xl border border-obsidian-border bg-obsidian-panel p-4 sm:p-6 shadow-2xl space-y-6"
+        className="relative max-h-[calc(100dvh-2rem)] w-full max-w-xl overflow-y-auto rounded-xl border border-obsidian-border bg-obsidian-panel p-4 sm:p-6 shadow-xl space-y-6"
       >
         {/* Header */}
         <div className="flex items-start justify-between gap-3 pb-4 border-b border-obsidian-border">
           <div className="flex min-w-0 flex-1 items-start gap-3">
-            <div className="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 flex-shrink-0">
-              <Shield className="w-5 h-5" />
-            </div>
+            <Shield size={18} className="mt-0.5 shrink-0 text-obsidian-muted" aria-hidden="true" />
             <div className="min-w-0">
               <h2 id="backup-modal-title" className="text-lg font-bold text-white break-words">Respaldo Cifrado de Bóveda</h2>
               <p className="text-xs text-obsidian-muted">Guarda o recupera una copia protegida de tus datos</p>
@@ -177,7 +175,7 @@ export const EncryptedBackupModal: React.FC = () => {
             disabled={busy}
             aria-label="Cerrar respaldo"
             onClick={closeWhenIdle}
-            className="inline-flex min-w-[44px] min-h-[44px] lg:min-w-9 lg:min-h-9 items-center justify-center p-2 rounded-lg text-white/50 hover:text-white hover:bg-white/5 transition-all flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 disabled:opacity-50"
+            className="inline-flex min-w-[44px] min-h-[44px] items-center justify-center p-2 rounded-lg text-white/50 hover:text-white hover:bg-white/5 transition-all flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 disabled:opacity-50"
           >
             <X className="w-5 h-5" />
           </button>
@@ -190,8 +188,8 @@ export const EncryptedBackupModal: React.FC = () => {
             disabled={busy}
             aria-pressed={tab === 'export'}
             onClick={() => { setTab('export'); setError(''); }}
-            className={`flex-1 py-2 text-xs font-medium rounded-lg transition-all flex items-center justify-center gap-2 ${
-              tab === 'export' ? 'bg-indigo-600 text-white shadow-md' : 'text-white/60 hover:text-white'
+            className={`flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-lg py-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
+              tab === 'export' ? 'bg-indigo-600 text-white' : 'text-obsidian-muted hover:text-white'
             }`}
           >
             <Download className="w-3.5 h-3.5" /> Exportar Bóveda (.emailsaver)
@@ -201,22 +199,22 @@ export const EncryptedBackupModal: React.FC = () => {
             disabled={busy}
             aria-pressed={tab === 'restore'}
             onClick={() => { setTab('restore'); setError(''); }}
-            className={`flex-1 py-2 text-xs font-medium rounded-lg transition-all flex items-center justify-center gap-2 ${
-              tab === 'restore' ? 'bg-indigo-600 text-white shadow-md' : 'text-white/60 hover:text-white'
+            className={`flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-lg py-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
+              tab === 'restore' ? 'bg-indigo-600 text-white' : 'text-obsidian-muted hover:text-white'
             }`}
           >
             <Upload className="w-3.5 h-3.5" /> Restaurar Bóveda
           </button>
         </div>
 
-        {error && <p role="alert" className="rounded-lg border border-rose-500/30 bg-obsidian-dangerBg p-3 text-xs text-rose-200">{error}</p>}
+        {error && <p role="alert" className="rounded-lg border border-obsidian-border bg-obsidian-surface p-3 text-xs text-obsidian-muted">{error}</p>}
         {busy && <p role="status" className="text-xs text-obsidian-muted">{fileLoading ? 'Leyendo archivo…' : isExporting ? 'Cifrando respaldo…' : isVerifying ? 'Verificando respaldo…' : 'Restaurando respaldo…'} Espera a que termine antes de cerrar.</p>}
         {/* Export Form */}
         {tab === 'export' ? (
           <form onSubmit={handleExport} className="space-y-4">
-            <div className="p-3.5 rounded-xl bg-indigo-500/5 border border-indigo-500/20 text-xs text-indigo-300/80 space-y-1">
-              <div className="font-semibold text-indigo-200 flex items-center gap-1.5">
-                <Lock className="w-3.5 h-3.5" /> Cifrado de Transporte Autónomo
+            <div className="space-y-1 border-t border-obsidian-border pt-3 text-xs text-obsidian-muted">
+              <div className="flex items-center gap-1.5 font-semibold text-obsidian-text">
+                <Lock size={16} className="text-obsidian-muted" aria-hidden="true" /> Cifrado de Transporte Autónomo
               </div>
               <p className="text-[11px] leading-relaxed">
                 Exporta correos, cuentas, pagos, ingresos, renovaciones, gastos, proyectos, recursos y algunas preferencias. Omite prospectos, informes HTB (incluidas revisiones, hallazgos, pizarras y evidencias), actividad y configuración del servidor. No sustituye un respaldo completo.
@@ -262,14 +260,14 @@ export const EncryptedBackupModal: React.FC = () => {
                 type="button"
                 disabled={busy}
                 onClick={closeWhenIdle}
-                className="px-4 py-2 rounded-xl text-xs text-white/60 hover:text-white"
+                className="min-h-[44px] rounded-xl px-4 py-2 text-xs text-obsidian-muted hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
                 disabled={busy}
-                className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium flex items-center gap-2 shadow-lg shadow-indigo-600/30 transition-all"
+                className="inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-xs font-medium text-white transition-colors hover:bg-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
               >
                 <Download className="w-3.5 h-3.5" />
                 {isExporting ? 'Cifrando Bóveda...' : 'Generar y Descargar Respaldo'}
@@ -279,9 +277,9 @@ export const EncryptedBackupModal: React.FC = () => {
         ) : (
           /* Restore Form */
           <form onSubmit={handleRestore} className="space-y-4">
-            <div className="p-3.5 rounded-xl bg-amber-500/5 border border-amber-500/20 text-xs text-amber-300/80 space-y-1">
-              <div className="font-semibold text-amber-200 flex items-center gap-1.5">
-                <AlertTriangle className="w-3.5 h-3.5" /> Restauración Transaccional Aditiva
+            <div className="space-y-1 border-t border-obsidian-border pt-3 text-xs text-obsidian-muted">
+              <div className="flex items-center gap-1.5 font-semibold text-obsidian-text">
+                <AlertTriangle size={16} className="text-amber-400" aria-hidden="true" /> Restauración Transaccional Aditiva
               </div>
               <p className="text-[11px] leading-relaxed">
                 Esta restauración parcial puede modificar correos, cuentas de plataforma y métodos de pago existentes; agrega ingresos y renovaciones que no existan. Aunque aparecen en el archivo, no restaura gastos, proyectos, recursos, preferencias ni tipo de cambio. Conserva un respaldo completo independiente antes de continuar.
@@ -289,7 +287,7 @@ export const EncryptedBackupModal: React.FC = () => {
             </div>
 
             {/* File Upload Zone */}
-            <div className="relative border-2 border-dashed border-obsidian-border hover:border-indigo-500/40 rounded-xl p-5 text-center cursor-pointer transition-colors bg-obsidian-surface/50">
+            <div className="relative cursor-pointer rounded-lg border border-dashed border-obsidian-border p-5 text-center transition-colors hover:border-indigo-400">
               <input
                 type="file"
                 aria-label="Archivo de respaldo cifrado"
@@ -298,7 +296,7 @@ export const EncryptedBackupModal: React.FC = () => {
                 onChange={handleFileChange}
                 className="absolute inset-0 opacity-0 cursor-pointer"
               />
-              <FileCode className="w-8 h-8 mx-auto mb-2 text-indigo-400/80" />
+              <FileCode size={20} className="mx-auto mb-2 text-obsidian-muted" aria-hidden="true" />
               <div className="text-xs font-medium text-white truncate">
                 {fileName ? fileName : 'Selecciona tu archivo .emailsaver'}
               </div>
@@ -325,19 +323,19 @@ export const EncryptedBackupModal: React.FC = () => {
             {verification && <p role="status" className="text-xs text-emerald-300">{verification}</p>}
 
             <div className="flex flex-wrap items-center justify-end gap-3 pt-3">
-              <button type="button" disabled={busy || !backupFileContent} onClick={() => void handleVerify()} className="px-4 py-2 rounded-xl border border-obsidian-border text-xs text-white hover:bg-obsidian-surface disabled:opacity-50">Verificar sin restaurar</button>
+              <button type="button" disabled={busy || !backupFileContent} onClick={() => void handleVerify()} className="min-h-[44px] rounded-xl border border-obsidian-border bg-obsidian-surface px-4 py-2 text-xs text-obsidian-text hover:border-obsidian-borderLight focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 disabled:opacity-50">Verificar sin restaurar</button>
               <button
                 type="button"
                 disabled={busy}
                 onClick={closeWhenIdle}
-                className="px-4 py-2 rounded-xl text-xs text-white/60 hover:text-white"
+                className="min-h-[44px] rounded-xl px-4 py-2 text-xs text-obsidian-muted hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
                 disabled={busy || !backupFileContent}
-                className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium flex items-center gap-2 shadow-lg shadow-indigo-600/30 transition-all disabled:opacity-50"
+                className="inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-xs font-medium text-white transition-colors hover:bg-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 disabled:opacity-50"
               >
                 <Upload className="w-3.5 h-3.5" />
                 {isRestoring ? 'Descifrando y Restaurando...' : 'Restaurar Bóveda'}

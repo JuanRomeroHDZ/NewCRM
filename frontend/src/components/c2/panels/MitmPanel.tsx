@@ -82,11 +82,11 @@ export const MitmPanel: React.FC = () => {
   };
 
   return (
-    <section className="rounded-xl border border-obsidian-border bg-obsidian-panel p-4 sm:p-5 shadow-obsidian">
+    <section className="border-t border-obsidian-border py-4 sm:py-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-2.5">
-            <ArrowLeftRight size={18} className="text-obsidian-gold" aria-hidden="true" />
+            <ArrowLeftRight size={18} className="text-obsidian-muted" aria-hidden="true" />
             <h2 className="font-heading text-base font-bold text-white">{t('mitm.title')}</h2>
             <span
               className={`rounded border px-2 py-0.5 font-mono text-[11px] font-semibold ${
@@ -110,7 +110,7 @@ export const MitmPanel: React.FC = () => {
 
       <form
         onSubmit={(e) => void handleStart(e)}
-        className="mt-4 grid grid-cols-1 gap-3 rounded-xl border border-obsidian-border bg-obsidian-surface/60 p-4 sm:grid-cols-2"
+        className="mt-4 grid grid-cols-1 gap-3 border-t border-obsidian-border pt-4 sm:grid-cols-2"
       >
         <div>
           <label
@@ -125,7 +125,7 @@ export const MitmPanel: React.FC = () => {
             value={arpTarget}
             onChange={(e) => setArpTarget(e.target.value)}
             placeholder="10.10.20.10"
-            className="mt-1 min-h-[44px] w-full rounded-lg border border-obsidian-border bg-obsidian-panel px-3 py-2 font-mono text-xs text-white placeholder:text-obsidian-muted focus:border-obsidian-gold focus:outline-none"
+            className="mt-1 min-h-[44px] w-full rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 font-mono text-xs text-white placeholder:text-obsidian-muted focus:border-obsidian-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-accent"
           />
         </div>
 
@@ -142,7 +142,7 @@ export const MitmPanel: React.FC = () => {
             value={arpGateway}
             onChange={(e) => setArpGateway(e.target.value)}
             placeholder="10.10.20.1"
-            className="mt-1 min-h-[44px] w-full rounded-lg border border-obsidian-border bg-obsidian-panel px-3 py-2 font-mono text-xs text-white placeholder:text-obsidian-muted focus:border-obsidian-gold focus:outline-none"
+            className="mt-1 min-h-[44px] w-full rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 font-mono text-xs text-white placeholder:text-obsidian-muted focus:border-obsidian-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-accent"
           />
         </div>
 
@@ -150,60 +150,65 @@ export const MitmPanel: React.FC = () => {
           <button
             type="submit"
             disabled={busy || running}
-            className="inline-flex min-h-[44px] items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-gold"
+            className="ui-action-primary"
           >
             {busy && !running ? (
-              <Loader2 size={15} className="animate-spin" aria-hidden="true" />
+              <Loader2 size={16} className="animate-spin" aria-hidden="true" />
             ) : (
-              <Play size={15} aria-hidden="true" />
+              <Play size={16} aria-hidden="true" />
             )}
             <span>{t('mitm.start')}</span>
+            {/* [Acción principal] Inicia o confirma la operación. */}
           </button>
 
           <button
             type="button"
             onClick={() => void handleStop()}
             disabled={busy}
-            className="inline-flex min-h-[44px] items-center gap-2 rounded-lg border border-red-500/40 bg-obsidian-dangerBg px-4 py-2 text-xs font-semibold text-red-200 transition-colors hover:border-red-400 hover:text-white disabled:cursor-not-allowed disabled:opacity-45 focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-gold"
+            className="ui-action-danger"
           >
             {busy && running ? (
-              <Loader2 size={15} className="animate-spin" aria-hidden="true" />
+              <Loader2 size={16} className="animate-spin" aria-hidden="true" />
             ) : (
-              <Square size={14} aria-hidden="true" />
+              <Square size={16} aria-hidden="true" />
             )}
             <span>{t('mitm.stop')}</span>
+            {/* [Acción destructiva] Detiene o revierte la operación. */}
           </button>
         </div>
       </form>
 
       {/* Companion module shortcuts */}
-      <div className="mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-obsidian-border bg-obsidian-surface/40 px-3.5 py-3">
-        <span className="text-[11px] font-medium text-obsidian-muted">
+      <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-obsidian-border pt-4">
+        <span className="text-xs font-medium text-obsidian-muted">
           {lang === 'es' ? 'Combinar con:' : 'Combine with:'}
         </span>
         <button
           type="button"
           onClick={() => setActiveSection('c2_sniff')}
-          className="inline-flex min-h-[44px] lg:min-h-9 items-center gap-1.5 rounded-lg border border-obsidian-border bg-obsidian-panel px-3 py-1.5 text-xs text-obsidian-text transition-colors hover:border-obsidian-gold hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-gold"
+          className="ui-nav-action"
         >
-          <Activity size={13} className="text-obsidian-gold" aria-hidden="true" />
+          <Activity size={16} className="text-obsidian-muted" aria-hidden="true" />
           <span>{t('nav.sniff')}</span>
+          {/* [Navegación] Abre la sección relacionada. */}
         </button>
         <button
           type="button"
           onClick={() => setActiveSection('c2_dns')}
-          className="inline-flex min-h-[44px] lg:min-h-9 items-center gap-1.5 rounded-lg border border-obsidian-border bg-obsidian-panel px-3 py-1.5 text-xs text-obsidian-text transition-colors hover:border-obsidian-gold hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-gold"
+          className="ui-nav-action"
         >
-          <Route size={13} className="text-obsidian-gold" aria-hidden="true" />
+          <Route size={16} className="text-obsidian-muted" aria-hidden="true" />
           <span>{t('nav.dns')}</span>
+          {/* [Navegación] Abre la sección relacionada. */}
         </button>
         <button
           type="button"
           onClick={() => setActiveSection('c2_creds')}
-          className="inline-flex min-h-[44px] lg:min-h-9 items-center gap-1.5 rounded-lg border border-obsidian-border bg-obsidian-panel px-3 py-1.5 text-xs text-obsidian-text transition-colors hover:border-obsidian-gold hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-gold"
+          className="ui-nav-action"
         >
-          <KeyRound size={13} className="text-obsidian-gold" aria-hidden="true" />
+          <KeyRound size={16} className="text-obsidian-muted" aria-hidden="true" />
           <span>{t('nav.creds')}</span>
+          {/* [Navegación] Abre la sección relacionada. */}
         </button>
       </div>
     </section>

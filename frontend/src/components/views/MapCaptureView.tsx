@@ -210,13 +210,14 @@ export const MapCaptureView: React.FC = () => {
     if (!results) return;
 
     const leaflet = (window as LeafletGlobal).L;
+    const brandAccent = getComputedStyle(mapElementRef.current || document.documentElement).getPropertyValue('--brand-accent').trim() || '#0f766e';
 
     results.forEach((lead) => {
       const marker = leaflet.circleMarker([lead.lat, lead.lon], {
         radius: 7,
-        color: '#0b1020',
+        color: '#182226',
         weight: 2,
-        fillColor: '#818cf8',
+        fillColor: brandAccent,
         fillOpacity: 0.95,
       });
       marker.bindPopup(popupContent(lead));
@@ -375,9 +376,9 @@ export const MapCaptureView: React.FC = () => {
 
   if (!isUnlocked) {
     return (
-      <div className="mx-auto flex max-w-3xl flex-col items-start gap-4 p-5 sm:p-8">
-        <div className="rounded-2xl border border-obsidian-border bg-obsidian-panel p-5 sm:p-7">
-          <ShieldCheck size={24} className="mb-3 text-indigo-300" aria-hidden="true" />
+      <div className="mx-auto flex w-full max-w-3xl flex-col items-start gap-4 px-4 py-4 sm:px-6 sm:py-6">
+        <div className="w-full rounded-xl border border-obsidian-border bg-obsidian-panel p-4 sm:p-6">
+          <ShieldCheck size={24} className="mb-3 text-obsidian-muted" aria-hidden="true" />
           <h1 className="text-xl font-bold text-white">Captación en mapa</h1>
           <p className="mt-2 max-w-prose text-sm leading-relaxed text-obsidian-muted">
             Desbloquea la bóveda para buscar negocios y guardarlos como prospectos.
@@ -385,8 +386,8 @@ export const MapCaptureView: React.FC = () => {
           <button
             type="button"
             onClick={openUnlockModal}
-            className="mt-5 min-h-11 rounded-xl bg-indigo-600 px-4 text-sm font-semibold text-white hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
-          >
+            className="ui-action-primary mt-5"
+          >{/* [Acción principal] Inicia o confirma la tarea de este espacio. */}
             Desbloquear bóveda
           </button>
         </div>
@@ -395,20 +396,19 @@ export const MapCaptureView: React.FC = () => {
   }
 
   return (
-    <div className="mx-auto w-full max-w-7xl min-w-0 space-y-4 p-3 sm:space-y-6 sm:p-8">
+    <div className="mx-auto w-full max-w-7xl min-w-0 space-y-4 px-4 py-4 sm:space-y-6 sm:px-6 sm:py-6">
       {/* Mobile/Tablet (<lg) tab switch to avoid double-scroll traps */}
       <div
         className="flex items-center gap-1 rounded-xl border border-obsidian-border bg-obsidian-panel p-1 lg:hidden"
         role="group"
         aria-label="Mostrar"
       >
+        {/* [Estado seleccionable] Alterna mapa y resultados en pantallas estrechas. */}
         <button
           type="button"
           aria-pressed={mobileTab === 'map'}
           onClick={() => setMobileTab('map')}
-          className={`min-h-10 flex-1 rounded-lg px-3 text-xs font-semibold transition-colors ${
-            mobileTab === 'map' ? 'bg-indigo-600 text-white' : 'text-obsidian-muted hover:text-white'
-          }`}
+          className="ui-action-toggle flex-1"
         >
           Mapa
         </button>
@@ -416,9 +416,7 @@ export const MapCaptureView: React.FC = () => {
           type="button"
           aria-pressed={mobileTab === 'results'}
           onClick={() => setMobileTab('results')}
-          className={`min-h-10 flex-1 rounded-lg px-3 text-xs font-semibold transition-colors ${
-            mobileTab === 'results' ? 'bg-indigo-600 text-white' : 'text-obsidian-muted hover:text-white'
-          }`}
+          className="ui-action-toggle flex-1"
         >
           Resultados ({results ? results.length : 0})
         </button>
@@ -426,7 +424,7 @@ export const MapCaptureView: React.FC = () => {
 
       <form
         onSubmit={handleSearch}
-        className="grid min-w-0 gap-2.5 rounded-xl border border-obsidian-border bg-obsidian-panel p-3 sm:grid-cols-2 sm:p-4 xl:grid-cols-[minmax(10rem,1.15fr)_minmax(9rem,0.9fr)_minmax(9rem,1fr)_minmax(16rem,auto)] xl:items-end"
+        className="grid min-w-0 gap-2 rounded-xl border border-obsidian-border bg-obsidian-panel p-4 sm:grid-cols-2 xl:grid-cols-[minmax(10rem,1.15fr)_minmax(9rem,0.9fr)_minmax(9rem,1fr)_minmax(16rem,auto)] xl:items-end"
       >
         <label className="min-w-0 text-xs font-medium text-obsidian-text">
           Giro o negocio
@@ -442,7 +440,7 @@ export const MapCaptureView: React.FC = () => {
             maxLength={64}
             required
             placeholder={sectors[0]?.label ? `Ej. ${sectors[0].label}` : 'Giro comercial'}
-            className="mt-1 min-h-10 w-full rounded-lg border border-obsidian-border bg-obsidian-bg px-3 text-sm text-white placeholder:text-obsidian-muted focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+            className="mt-1 min-h-[44px] w-full rounded-lg border border-obsidian-border bg-obsidian-bg px-3 text-sm text-white placeholder:text-obsidian-muted focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
           />
           {sectors.length > 0 && (
             <datalist id={sectorDatalistId}>
@@ -462,7 +460,7 @@ export const MapCaptureView: React.FC = () => {
               setSearchError('');
             }}
             disabled={!zones.length || loading}
-            className="mt-1 min-h-10 w-full rounded-lg border border-obsidian-border bg-obsidian-bg px-3 text-sm text-white focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+            className="mt-1 min-h-[44px] w-full rounded-lg border border-obsidian-border bg-obsidian-bg px-3 text-sm text-white focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
           >
             {zones.map((zone) => (
               <option key={zone.slug} value={zone.slug}>
@@ -483,7 +481,7 @@ export const MapCaptureView: React.FC = () => {
             disabled={loading}
             maxLength={64}
             placeholder="Especialidad o palabra clave"
-            className="mt-1 min-h-10 w-full rounded-lg border border-obsidian-border bg-obsidian-bg px-3 text-sm text-white placeholder:text-obsidian-muted focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+            className="mt-1 min-h-[44px] w-full rounded-lg border border-obsidian-border bg-obsidian-bg px-3 text-sm text-white placeholder:text-obsidian-muted focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
           />
         </label>
         <div className="flex min-w-0 gap-2 sm:col-span-2 xl:col-span-1">
@@ -491,9 +489,10 @@ export const MapCaptureView: React.FC = () => {
             type={loading ? 'button' : 'submit'}
             onClick={loading ? cancelSearch : undefined}
             disabled={!loading && !mapReady}
-            className="inline-flex min-h-10 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-lg bg-indigo-600 px-2.5 text-xs font-semibold text-white transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-55 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
+            className={`${loading ? 'ui-action-secondary' : 'ui-action-primary'} min-w-0 flex-1`}
           >
-            {loading ? <X size={15} aria-hidden="true" /> : <Search size={15} aria-hidden="true" />}
+            {/* [Acción principal] Busca la zona; al cargar permite cancelar. */}
+            {loading ? <X size={16} aria-hidden="true" /> : <Search size={16} aria-hidden="true" />}
             <span>{loading ? 'Cancelar' : 'Buscar zona'}</span>
           </button>
           <button
@@ -501,14 +500,15 @@ export const MapCaptureView: React.FC = () => {
             onClick={searchMapArea}
             disabled={loading || !mapReady}
             aria-label="Buscar negocios en el área visible del mapa"
-            className="inline-flex min-h-10 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-lg border border-obsidian-border bg-obsidian-surface px-2 text-xs font-medium text-obsidian-text hover:border-indigo-500/40 hover:text-white disabled:cursor-not-allowed disabled:opacity-55 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
+            className="ui-action-secondary min-w-0 flex-1"
           >
-            <MapPin size={14} aria-hidden="true" /> Área visible
+            {/* [Acción secundaria] Busca en los límites visibles del mapa. */}
+            <MapPin size={16} aria-hidden="true" /> Área visible
           </button>
         </div>
       </form>
 
-      <div className="grid min-w-0 gap-0 overflow-hidden rounded-2xl border border-obsidian-border bg-obsidian-panel lg:grid-cols-[minmax(0,1.4fr)_minmax(19rem,0.8fr)] lg:items-stretch">
+      <div className="grid min-w-0 gap-0 overflow-hidden rounded-xl border border-obsidian-border bg-obsidian-panel lg:grid-cols-[minmax(0,1.4fr)_minmax(19rem,0.8fr)] lg:items-stretch">
         <section
           aria-label="Mapa de búsqueda"
           className={`min-w-0 ${
@@ -549,7 +549,7 @@ export const MapCaptureView: React.FC = () => {
             aria-label={defaultCity ? `Mapa interactivo de ${defaultCity}` : 'Mapa interactivo'}
             className="relative z-0 min-h-[190px] h-[clamp(190px,44dvh,340px)] w-full bg-obsidian-bg sm:min-h-[260px] sm:h-[clamp(260px,48dvh,400px)] lg:min-h-[320px] lg:h-[clamp(320px,52dvh,480px)]"
           />
-          <div className="flex flex-col gap-1.5 border-t border-obsidian-border bg-obsidian-panel px-4 py-3 text-[11px] leading-relaxed text-obsidian-muted sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-2 border-t border-obsidian-border bg-obsidian-panel px-4 py-3 text-[11px] leading-relaxed text-obsidian-muted sm:flex-row sm:items-center sm:justify-between">
             <span>Los datos de negocios dependen de lo publicado en OpenStreetMap.</span>
             <a
               href="https://www.openstreetmap.org/fixthemap"
@@ -557,7 +557,7 @@ export const MapCaptureView: React.FC = () => {
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1 text-indigo-300 underline-offset-4 hover:underline"
             >
-              Reportar un problema del mapa <ExternalLink size={11} aria-hidden="true" />
+              Reportar un problema del mapa <ExternalLink size={16} aria-hidden="true" />
             </a>
           </div>
         </section>
@@ -596,21 +596,19 @@ export const MapCaptureView: React.FC = () => {
               role="status"
               className="flex min-h-48 flex-1 flex-col items-center justify-center gap-3 p-6 text-sm text-obsidian-muted"
             >
-              <LoaderCircle size={22} className="animate-spin text-indigo-300" aria-hidden="true" /> Consultando
+              <LoaderCircle size={18} className="animate-spin text-obsidian-muted" aria-hidden="true" /> Consultando
               OpenStreetMap…
             </div>
           ) : !results ? (
             <div className="flex min-h-48 flex-1 flex-col items-center justify-center gap-2 p-4 text-center text-sm text-obsidian-muted">
-              <span className="rounded-lg border border-obsidian-border bg-obsidian-surface p-2">
-                <Building2 size={20} aria-hidden="true" />
-              </span>
+              <Building2 size={18} className="text-obsidian-muted" aria-hidden="true" />
               {searchError && mobileTab === 'results' ? (
                 <div className="lg:hidden" role="alert">
                   <p>{searchError}</p>
                   <button
                     type="button"
                     onClick={() => setMobileTab('map')}
-                    className="mt-3 min-h-10 rounded-lg border border-obsidian-border px-3 text-xs font-semibold text-white hover:bg-obsidian-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
+                    className="mt-3 min-h-[44px] rounded-lg border border-obsidian-border px-3 text-xs font-semibold text-white hover:bg-obsidian-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
                   >
                     Volver a la búsqueda
                   </button>
@@ -631,7 +629,7 @@ export const MapCaptureView: React.FC = () => {
               <button
                 type="button"
                 onClick={() => void runSearch()}
-                className="min-h-10 rounded-lg border border-obsidian-border px-3 text-xs font-semibold text-white hover:bg-obsidian-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
+                className="min-h-[44px] rounded-lg border border-obsidian-border px-3 text-xs font-semibold text-white hover:bg-obsidian-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
               >
                 Reintentar búsqueda
               </button>
@@ -665,15 +663,15 @@ export const MapCaptureView: React.FC = () => {
                         type="button"
                         onClick={() => saveLead(lead)}
                         disabled={isSaved || isSavingThis || resultsStale || loading || Boolean(searchError)}
-                        className="inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-indigo-500/25 bg-indigo-500/10 px-2.5 text-[11px] font-semibold text-indigo-200 hover:bg-indigo-500/20 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
+                        className={`inline-flex min-h-[44px] shrink-0 items-center justify-center gap-2 rounded-lg border px-3 text-[11px] font-semibold disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 ${isSaved ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300' : 'border-obsidian-border bg-obsidian-surface text-obsidian-text hover:bg-obsidian-card'}`}
                         aria-label={isSaved ? `${lead.name} ya está guardado` : `Guardar ${lead.name} como prospecto`}
                       >
                         {isSaved ? (
-                          <Check size={14} aria-hidden="true" />
+                          <Check size={16} aria-hidden="true" />
                         ) : isSavingThis ? (
-                          <LoaderCircle size={14} className="animate-spin" aria-hidden="true" />
+                          <LoaderCircle size={16} className="animate-spin" aria-hidden="true" />
                         ) : (
-                          <ArrowUpRight size={14} aria-hidden="true" />
+                          <ArrowUpRight size={16} aria-hidden="true" />
                         )}
                         <span>{isSaved ? 'Guardado' : isSavingThis ? 'Guardando…' : 'Guardar'}</span>
                       </button>
@@ -704,7 +702,7 @@ export const MapCaptureView: React.FC = () => {
                         </a>
                       )}
                       {lead.whatsapp && (
-                        <span className="break-all text-emerald-300">WhatsApp publicado: {lead.whatsapp}</span>
+                        <span className="break-all text-obsidian-muted">WhatsApp publicado: {lead.whatsapp}</span>
                       )}
                       {website && (
                         <a
@@ -712,9 +710,9 @@ export const MapCaptureView: React.FC = () => {
                           target="_blank"
                           rel="noopener noreferrer"
                           aria-label={`Abrir sitio web de ${lead.name}`}
-                          className="max-w-full break-all text-indigo-300 underline underline-offset-4 hover:text-indigo-200"
+                          className="max-w-full break-all text-obsidian-text underline decoration-obsidian-border underline-offset-4 hover:text-white"
                         >
-                          Sitio web <ExternalLink size={11} className="inline" aria-hidden="true" />
+                          Sitio web <ExternalLink size={16} className="inline" aria-hidden="true" />
                         </a>
                       )}
                       <a
@@ -724,7 +722,7 @@ export const MapCaptureView: React.FC = () => {
                         aria-label={`Ver ${lead.name} en OpenStreetMap`}
                         className="text-obsidian-muted underline underline-offset-4 hover:text-white"
                       >
-                        OpenStreetMap <ExternalLink size={11} className="inline" aria-hidden="true" />
+                        OpenStreetMap <ExternalLink size={16} className="inline" aria-hidden="true" />
                       </a>
                     </div>
                   </li>

@@ -10,7 +10,7 @@ const SYSTEM_CURRENCIES = [
   { code: 'USD', name: 'Dólar estadounidense', symbol: 'US$', is_base: false },
 ] as const;
 
-const INPUT_CLASS = 'w-full min-w-0 rounded-lg border border-obsidian-border bg-obsidian-bg px-3 py-2 text-xs text-white focus:border-cyan-500 focus:outline-none';
+const INPUT_CLASS = 'w-full min-w-0 min-h-11 rounded-lg border border-obsidian-border bg-obsidian-bg px-3 py-2 text-xs text-white focus:border-obsidian-accent focus:outline-none';
 const LABEL_CLASS = 'mb-1 block text-xs text-obsidian-muted';
 
 function parseColonias(value: string): { values: string[]; error: string | null } {
@@ -225,36 +225,37 @@ export const RuntimeConfigSection: React.FC = () => {
 
   return (
     <div className="space-y-4">
-    <form id="runtime-config-form" onSubmit={handleSave} className="min-w-0 space-y-4 rounded-xl border border-obsidian-border bg-obsidian-panel p-3 sm:space-y-5 sm:p-5">
+    <form id="runtime-config-form" onSubmit={handleSave} className="min-w-0 space-y-4 rounded-xl border border-obsidian-border bg-obsidian-panel p-3 sm:space-y-4 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-obsidian-border pb-3">
         <div className="flex min-w-0 items-center gap-2">
-          <Globe size={16} className="shrink-0 text-cyan-400" aria-hidden="true" />
+          <Globe size={18} className="shrink-0 text-obsidian-muted" aria-hidden="true" />
           <h3 className="text-sm font-bold text-white">Monedas y mapa</h3>
           <InfoTooltip content="Configura el formato de moneda y la ubicación de búsqueda." />
         </div>
+        {/* [Acción principal] Guarda la configuración completa del formulario. */}
         <button
           type="submit"
           disabled={saving || configUnavailable}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-cyan-600 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-cyan-500 disabled:opacity-50"
+          className="ui-action-primary"
         >
-          <Save size={13} aria-hidden="true" />
+          <Save size={16} aria-hidden="true" />
           <span>{saving ? 'Guardando…' : 'Guardar'}</span>
         </button>
       </div>
 
       {runtimeConfigLoading && (
-        <p role="status" className="rounded-lg border border-obsidian-border bg-obsidian-bg px-3 py-2 text-xs text-obsidian-muted">
+        <p role="status" className="border-t border-obsidian-border pt-2 text-xs text-obsidian-muted">
           Cargando configuración…
         </p>
       )}
       {runtimeConfigError && (
-        <div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-200">
+        <div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-obsidian-border p-3 text-xs text-obsidian-text">
           <span>No se pudo cargar la configuración actual. Vuelve a intentarlo antes de guardar.</span>
           <button
             type="button"
             onClick={() => void refreshRuntimeConfig()}
             disabled={runtimeConfigLoading}
-            className="font-semibold underline underline-offset-2 disabled:opacity-50"
+            className="ui-action-secondary"
           >
             Reintentar
           </button>
@@ -268,11 +269,11 @@ export const RuntimeConfigSection: React.FC = () => {
         <section className="space-y-3 text-xs">
           <h4 className="font-semibold text-white">Monedas y formato</h4>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <div className="rounded-lg border border-obsidian-border bg-obsidian-bg px-3 py-2">
+            <div className="border-b border-obsidian-border py-2">
               <p className="mb-1 text-obsidian-muted">Moneda principal</p>
               <p className="font-semibold text-white">MXN · Peso mexicano</p>
             </div>
-            <div className="rounded-lg border border-obsidian-border bg-obsidian-bg px-3 py-2">
+            <div className="border-b border-obsidian-border py-2">
               <p className="mb-1 text-obsidian-muted">Conversión disponible</p>
               <p className="font-semibold text-white">USD a MXN</p>
             </div>
@@ -285,8 +286,8 @@ export const RuntimeConfigSection: React.FC = () => {
         </section>
 
         <section className="space-y-3 border-t border-obsidian-border pt-4 text-xs">
-          <h4 className="flex items-center gap-1.5 font-semibold text-white">
-            <MapPin size={14} className="text-emerald-400" aria-hidden="true" /> Mapa y zonas
+          <h4 className="flex items-center gap-2 font-semibold text-white">
+            <MapPin size={16} className="text-obsidian-muted" aria-hidden="true" /> Mapa y zonas
           </h4>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div>
@@ -344,13 +345,14 @@ export const RuntimeConfigSection: React.FC = () => {
                 placeholder="Colonias separadas por coma"
                 className={INPUT_CLASS}
               />
+              {/* [Acción destructiva] Retira esta zona del borrador de configuración. */}
               <button
                 type="button"
                 aria-label={`Eliminar zona ${zone.zone}`}
                 onClick={() => handleRemoveZone(zone.slug)}
-                className="inline-flex min-h-9 items-center justify-center gap-1 rounded-lg border border-obsidian-border px-3 text-obsidian-muted hover:border-rose-500/50 hover:text-rose-300"
+                className="ui-action-icon ui-action-danger"
               >
-                <Trash2 size={13} aria-hidden="true" />
+                <Trash2 size={16} aria-hidden="true" />
                 <span className="sm:hidden">Eliminar zona</span>
               </button>
             </div>
@@ -359,20 +361,22 @@ export const RuntimeConfigSection: React.FC = () => {
           <div className="grid grid-cols-1 gap-2 border-t border-obsidian-border pt-3 sm:grid-cols-[minmax(0,0.8fr)_minmax(0,1.5fr)_auto]">
             <input type="text" maxLength={80} value={newZoneName} onChange={(event) => setNewZoneName(event.target.value)} aria-label="Nombre de nueva zona geográfica" placeholder="Nueva zona" className={INPUT_CLASS} />
             <input type="text" maxLength={400} value={newZoneColonias} onChange={(event) => setNewZoneColonias(event.target.value)} aria-label="Colonias de la nueva zona" placeholder="Colonias separadas por coma" className={INPUT_CLASS} />
-            <button type="button" onClick={handleAddZone} className="inline-flex min-h-9 items-center justify-center gap-1 rounded-lg border border-obsidian-border px-3 text-xs font-semibold text-white hover:bg-obsidian-surface">
-              <Plus size={13} aria-hidden="true" /> Agregar zona
+            {/* [Acción secundaria] Agrega una zona al borrador; Guardar aplica los cambios. */}
+            <button type="button" onClick={handleAddZone} className="ui-action-secondary">
+              <Plus size={16} aria-hidden="true" /> Agregar zona
             </button>
           </div>
         </section>
 
       </fieldset>
     </form>
-        <section id="settings-writeups" tabIndex={-1} aria-labelledby="settings-writeups-heading" className="scroll-mt-4 space-y-3 rounded-xl border border-obsidian-border bg-obsidian-panel p-4 text-xs focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-300 sm:p-5">
+        <section id="settings-writeups" tabIndex={-1} aria-labelledby="settings-writeups-heading" className="scroll-mt-4 space-y-3 rounded-xl border border-obsidian-border bg-obsidian-panel p-4 text-xs focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent sm:p-5">
           <div className="flex flex-wrap items-center justify-between gap-2">
           <h3 id="settings-writeups-heading" className="flex items-center gap-2 text-sm font-semibold text-white">
-            <FileText size={16} className="text-emerald-400" aria-hidden="true" /> Informes de seguridad
+            <FileText size={18} className="text-obsidian-muted" aria-hidden="true" /> Informes de seguridad
           </h3>
-          <button type="submit" form="runtime-config-form" disabled={saving || configUnavailable} className="inline-flex min-h-9 items-center gap-2 rounded-lg bg-emerald-700 px-3 text-xs font-semibold text-white hover:bg-emerald-600 disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-300"><Save size={16} aria-hidden="true" />{saving ? 'Guardando…' : 'Guardar'}</button>
+          {/* [Acción principal] Guarda también las preferencias de informes. */}
+          <button type="submit" form="runtime-config-form" disabled={saving || configUnavailable} className="ui-action-primary"><Save size={16} aria-hidden="true" />{saving ? 'Guardando…' : 'Guardar'}</button>
           </div>
           <fieldset disabled={configUnavailable || saving} className="min-w-0 border-0 p-0 disabled:opacity-60">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">

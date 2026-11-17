@@ -5,18 +5,30 @@ import { useVault } from '../../../context/VaultContext';
 import { c2Api } from '../../../lib/c2Api';
 
 export const OpsecPanel: React.FC = () => {
-  const { t, selectedIface, opsecState, refreshOpsec, refreshInterfaces, addLog } = useC2();
-  const { showToast } = useVault();
+  const {
+    t,
+    selectedIface,
+    activeEngagementId,
+    engagements,
+    opsecState,
+    refreshOpsec,
+    refreshInterfaces,
+    addLog,
+  } = useC2();
+  const { confirm, showToast } = useVault();
 
   const [hostnameInput, setHostnameInput] = useState('');
   const [prettyInput, setPrettyInput] = useState('');
   const [macInput, setMacInput] = useState('');
   const [vendor, setVendor] = useState('');
   const [busy, setBusy] = useState(false);
+  const [macError, setMacError] = useState('');
 
   const hostnameId = useId();
   const prettyId = useId();
   const macId = useId();
+  const macHelpId = useId();
+  const macErrorId = useId();
   const vendorId = useId();
 
   const vendors = opsecState?.vendors ?? [];
@@ -39,6 +51,41 @@ export const OpsecPanel: React.FC = () => {
   );
 
   const isSpoofed = Boolean(opsecState?.spoofed || activeLink?.spoofed);
+  const activeEngagement = engagements.find(
+    (engagement) => engagement.id === activeEngagementId && engagement.active_now
+  ) || null;
+  const canApplyIdentity = Boolean(activeEngagement && activeIfaceName && opsecState);
+  const applyBlockReason = !activeEngagement
+    ? t('opsec.scopeRequired')
+    : !activeIfaceName
+    ? t('opsec.needIface')
+    : !opsecState
+    ? t('opsec.stateUnavailable')
+    : '';
+
+  const validateMacInput = () => {
+    const mac = macInput.trim();
+    const valid = !mac || /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/i.test(mac);
+    setMacError(valid ? '' : t('opsec.macFormatError'));
+    return valid;
+  };
+
+  const confirmChange = (title: string, message: string, confirmLabel = t('opsec.confirmApply')) =>
+    confirm({
+      title,
+      message,
+      confirmLabel,
+      cancelLabel: t('opsec.confirmCancel'),
+      tone: 'danger',
+    });
+
+  const requireApplyScope = () => {
+    if (canApplyIdentity) return true;
+    const message = applyBlockReason || t('opsec.scopeRequired');
+    addLog('error', message);
+    showToast(message, 'warning');
+    return false;
+  };
 
   const runOpsecAction = async (fn: () => Promise<void>) => {
     setBusy(true);
@@ -54,34 +101,47 @@ export const OpsecPanel: React.FC = () => {
   };
 
   const handleRestore = () =>
-    void runOpsecAction(async () => {
-      await c2Api.restoreOpsec({});
-      await Promise.all([refreshOpsec(), refreshInterfaces()]);
-      showToast(t('opsec.restore'), 'info');
-    });
+    void (async () => {
+      const accepted = await confirmChange(
+        t('opsec.restoreConfirmTitle'),
+        t('opsec.restoreConfirmMessage'),
+        t('opsec.restore')
+      );
+      if (!accepted) return;
+      await runOpsecAction(async () => {
+        await c2Api.restoreOpsec({});
+        await Promise.all([refreshOpsec(), refreshInterfaces()]);
+        showToast(t('opsec.restore'), 'info');
+      });
+    })();
 
   const handleApplyProfile = (profileId: string) =>
-    void runOpsecAction(async () => {
-      if (!activeIfaceName) {
-        const msg = t('opsec.needIface');
-        addLog('error', msg);
-        showToast(msg, 'warning');
-        return;
-      }
-      addLog('opsec', t('opsec.applying', { id: profileId, iface: activeIfaceName }));
-      await c2Api.applyOpsecProfile({
-        interface: activeIfaceName,
-        profile: profileId,
-        dhcp: false,
+    void (async () => {
+      if (!requireApplyScope()) return;
+      const profile = profiles.find((item) => item.id === profileId);
+      if (!profile) return;
+      const accepted = await confirmChange(
+        t('opsec.profileConfirmTitle'),
+        t('opsec.profileConfirmMessage', { profile: profile.label, iface: activeIfaceName })
+      );
+      if (!accepted) return;
+      await runOpsecAction(async () => {
+        addLog('opsec', t('opsec.applying', { id: profileId, iface: activeIfaceName }));
+        await c2Api.applyOpsecProfile({
+          interface: activeIfaceName,
+          profile: profileId,
+          dhcp: false,
+        });
+        await Promise.all([refreshOpsec(), refreshInterfaces()]);
+        showToast(t('opsec.covered'), 'success');
       });
-      await Promise.all([refreshOpsec(), refreshInterfaces()]);
-      showToast(t('opsec.covered'), 'success');
-    });
+    })();
 
   const handleGenerateMac = () =>
     void runOpsecAction(async () => {
       const res = await c2Api.generateOpsec({ vendor: vendor || null });
       setMacInput(res.mac);
+      setMacError('');
       addLog('opsec', t('opsec.macGen', { vendor: res.vendor, mac: res.mac }));
     });
 
@@ -107,18 +167,27 @@ export const OpsecPanel: React.FC = () => {
       showToast(msg, 'warning');
       return;
     }
-    void runOpsecAction(async () => {
-      await c2Api.applyOpsecIdentity({
-        interface: activeIfaceName,
-        hostname: host,
-        pretty: prettyInput.trim() || null,
-        mac: macInput.trim() || null,
-        vendor: vendor || null,
-        dhcp: false,
+    if (!validateMacInput() || !requireApplyScope()) return;
+    void (async () => {
+      const plannedMac = macInput.trim() || t('opsec.generatedMac', { vendor: vendor || '-' });
+      const accepted = await confirmChange(
+        t('opsec.identityConfirmTitle'),
+        t('opsec.identityConfirmMessage', { host, mac: plannedMac, iface: activeIfaceName })
+      );
+      if (!accepted) return;
+      await runOpsecAction(async () => {
+        await c2Api.applyOpsecIdentity({
+          interface: activeIfaceName,
+          hostname: host,
+          pretty: prettyInput.trim() || null,
+          mac: macInput.trim() || null,
+          vendor: vendor || null,
+          dhcp: false,
+        });
+        await Promise.all([refreshOpsec(), refreshInterfaces()]);
+        showToast(t('opsec.apply'), 'success');
       });
-      await Promise.all([refreshOpsec(), refreshInterfaces()]);
-      showToast(t('opsec.apply'), 'success');
-    });
+    })();
   };
 
   const handleHostnameOnly = () => {
@@ -129,14 +198,23 @@ export const OpsecPanel: React.FC = () => {
       showToast(msg, 'warning');
       return;
     }
-    void runOpsecAction(async () => {
-      await c2Api.setOpsecHostname({
-        hostname: host,
-        pretty: prettyInput.trim() || null,
+    if (!requireApplyScope()) return;
+    void (async () => {
+      const accepted = await confirmChange(
+        t('opsec.hostnameConfirmTitle'),
+        t('opsec.hostnameConfirmMessage', { host }),
+        t('opsec.hostOnly')
+      );
+      if (!accepted) return;
+      await runOpsecAction(async () => {
+        await c2Api.setOpsecHostname({
+          hostname: host,
+          pretty: prettyInput.trim() || null,
+        });
+        await refreshOpsec();
+        showToast(t('opsec.hostOnly'), 'success');
       });
-      await refreshOpsec();
-      showToast(t('opsec.hostOnly'), 'success');
-    });
+    })();
   };
 
   const handleMacOnly = () => {
@@ -146,16 +224,26 @@ export const OpsecPanel: React.FC = () => {
       showToast(msg, 'warning');
       return;
     }
-    void runOpsecAction(async () => {
-      await c2Api.setOpsecMac({
-        interface: activeIfaceName,
-        mac: macInput.trim() || null,
-        vendor: vendor || null,
-        dhcp: false,
+    if (!validateMacInput() || !requireApplyScope()) return;
+    void (async () => {
+      const plannedMac = macInput.trim() || t('opsec.generatedMac', { vendor: vendor || '-' });
+      const accepted = await confirmChange(
+        t('opsec.macConfirmTitle'),
+        t('opsec.macConfirmMessage', { mac: plannedMac, iface: activeIfaceName }),
+        t('opsec.macOnly')
+      );
+      if (!accepted) return;
+      await runOpsecAction(async () => {
+        await c2Api.setOpsecMac({
+          interface: activeIfaceName,
+          mac: macInput.trim() || null,
+          vendor: vendor || null,
+          dhcp: false,
+        });
+        await Promise.all([refreshOpsec(), refreshInterfaces()]);
+        showToast(t('opsec.macOnly'), 'success');
       });
-      await Promise.all([refreshOpsec(), refreshInterfaces()]);
-      showToast(t('opsec.macOnly'), 'success');
-    });
+    })();
   };
 
   return (
@@ -164,7 +252,7 @@ export const OpsecPanel: React.FC = () => {
       <section className="rounded-xl border border-obsidian-border bg-obsidian-panel p-4 sm:p-5 shadow-obsidian">
         <div className="flex flex-wrap items-center justify-between gap-2.5">
           <div className="flex items-center gap-2.5">
-            <UserCheck size={18} className="shrink-0 text-obsidian-gold" aria-hidden="true" />
+            <UserCheck size={18} className="shrink-0 text-obsidian-muted" aria-hidden="true" />
             <h2 className="font-heading text-base font-bold text-white">{t('opsec.title')}</h2>
           </div>
 
@@ -172,22 +260,47 @@ export const OpsecPanel: React.FC = () => {
             type="button"
             onClick={handleRestore}
             disabled={busy}
-            className="inline-flex min-h-[44px] items-center gap-2 rounded-lg border border-red-500/40 bg-obsidian-dangerBg px-3.5 py-2 text-xs font-semibold text-red-300 transition-colors hover:border-red-400 hover:bg-red-950/60 disabled:cursor-not-allowed disabled:opacity-50"
+            className="ui-action-danger"
           >
             <RotateCcw size={14} aria-hidden="true" />
             <span>{t('opsec.restore')}</span>
+            {/* [Acción destructiva] Detiene o revierte la operación. */}
           </button>
         </div>
 
         <p className="mt-2 text-xs leading-relaxed text-obsidian-muted">{t('opsec.hint')}</p>
 
-        <div className="mt-4 grid grid-cols-1 gap-3 rounded-xl border border-obsidian-border bg-obsidian-surface p-4 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="flex flex-col gap-0.5">
+        <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">
+          {activeEngagement ? (
+            <span className="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-emerald-500/30 bg-emerald-950/30 px-2.5 text-emerald-200">
+              {t('scope.label')}
+              <strong className="font-medium">{activeEngagement.title}</strong>
+            </span>
+          ) : (
+            <p role="status" className="inline-flex min-h-9 items-center rounded-md border border-amber-500/40 bg-amber-950/25 px-2.5 text-amber-200">
+              {t('opsec.scopeRequired')}
+            </p>
+          )}
+        </div>
+
+        {busy && <p role="status" aria-live="polite" className="mt-3 text-xs font-medium text-amber-200">{t('opsec.busy')}</p>}
+
+        <div className="mt-4 grid grid-cols-1 gap-3 rounded-xl border border-obsidian-border bg-obsidian-surface p-4 sm:grid-cols-2 xl:grid-cols-5">
+          <div className="flex min-w-0 flex-col gap-0.5">
+            <span className="text-[11px] font-medium uppercase tracking-wider text-obsidian-muted">
+              {t('opsec.activeInterface')}
+            </span>
+            <strong className="font-mono text-sm text-white break-all">
+              {activeIfaceName || t('opsec.noInterface')}
+            </strong>
+          </div>
+
+          <div className="flex min-w-0 flex-col gap-0.5">
             <span className="text-[11px] font-medium uppercase tracking-wider text-obsidian-muted">
               {t('opsec.host')}
             </span>
             <strong className="font-mono text-sm text-white break-all">
-              {opsecState?.hostname || '-'}
+              {!opsecState ? t('opsec.stateUnavailable') : opsecState.hostname || t('opsec.notReported')}
             </strong>
           </div>
 
@@ -195,7 +308,9 @@ export const OpsecPanel: React.FC = () => {
             <span className="text-[11px] font-medium uppercase tracking-wider text-obsidian-muted">
               {t('opsec.mac')}
             </span>
-            <strong className="font-mono text-sm text-white">{activeLink?.mac || '-'}</strong>
+            <strong className="font-mono text-sm text-white break-all">
+              {!opsecState ? t('opsec.stateUnavailable') : activeLink?.mac || t('opsec.notReported')}
+            </strong>
           </div>
 
           <div className="flex flex-col gap-0.5">
@@ -203,7 +318,7 @@ export const OpsecPanel: React.FC = () => {
               {t('opsec.perm')}
             </span>
             <strong className="font-mono text-sm text-obsidian-muted">
-              {activeLink?.permanent || '-'}
+              {!opsecState ? t('opsec.stateUnavailable') : activeLink?.permanent || t('opsec.notReported')}
             </strong>
           </div>
 
@@ -214,13 +329,15 @@ export const OpsecPanel: React.FC = () => {
             <div>
               <span
                 className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 font-mono text-xs font-semibold ${
-                  isSpoofed
-                    ? 'border-obsidian-gold/50 bg-obsidian-gold/15 text-obsidian-gold'
+                  !opsecState
+                    ? 'border-amber-500/40 bg-amber-950/25 text-amber-200'
+                    : isSpoofed
+                    ? 'border-obsidian-accent bg-obsidian-surface text-white'
                     : 'border-obsidian-border bg-obsidian-panel text-obsidian-muted'
                 }`}
               >
                 <Shield size={12} aria-hidden="true" />
-                <span>{isSpoofed ? t('opsec.covered') : t('opsec.real')}</span>
+                <span>{!opsecState ? t('opsec.identityUnknown') : isSpoofed ? t('opsec.covered') : t('opsec.real')}</span>
               </span>
             </div>
           </div>
@@ -230,10 +347,12 @@ export const OpsecPanel: React.FC = () => {
       {/* Quick Profiles */}
       <section className="rounded-xl border border-obsidian-border bg-obsidian-panel p-4 sm:p-5 shadow-obsidian">
         <h3 className="font-heading text-sm font-bold text-white">{t('opsec.profiles')}</h3>
-        <p className="mt-1 text-xs text-obsidian-muted">{t('opsec.profilesHint')}</p>
+        <p className="mt-1 text-xs leading-relaxed text-obsidian-muted">{t('opsec.profilesHint')}</p>
+
+        {applyBlockReason && <p role="status" className="mt-3 rounded-lg border border-amber-500/40 bg-amber-950/25 px-3 py-2 text-xs leading-relaxed text-amber-200">{applyBlockReason}</p>}
 
         {profiles.length === 0 ? (
-          <p className="mt-3 text-xs text-obsidian-muted">-</p>
+          <p className="mt-3 rounded-lg border border-dashed border-obsidian-border px-3 py-4 text-xs text-obsidian-muted">{t('opsec.noProfiles')}</p>
         ) : (
           <div className="mt-3 grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
             {profiles.map((profile) => (
@@ -241,11 +360,14 @@ export const OpsecPanel: React.FC = () => {
                 key={profile.id}
                 type="button"
                 onClick={() => handleApplyProfile(profile.id)}
-                disabled={busy}
-                className="flex min-h-[56px] flex-col items-start justify-center gap-1 rounded-xl border border-obsidian-border bg-obsidian-surface p-3.5 text-left transition-colors hover:border-obsidian-gold/60 hover:bg-obsidian-gold/10 disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={busy || !canApplyIdentity}
+                aria-label={`${t('opsec.applyProfile')}: ${profile.label}`}
+                className="ui-action-secondary min-h-[72px] flex-col items-start gap-1 p-3.5 text-left"
               >
                 <span className="text-xs font-semibold text-white">{profile.label}</span>
                 <span className="text-[11px] leading-snug text-obsidian-muted">{profile.blurb}</span>
+                <span className="mt-1 text-[11px] font-semibold text-obsidian-muted">{t('opsec.applyProfile')}</span>
+                {/* [Acción principal] Aplica el perfil tras su confirmación. */}
               </button>
             ))}
           </div>
@@ -268,7 +390,7 @@ export const OpsecPanel: React.FC = () => {
                 value={hostnameInput}
                 onChange={(e) => setHostnameInput(e.target.value)}
                 placeholder="DESKTOP-7K2M9XQ"
-                className="min-h-[44px] w-full rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 font-mono text-xs text-white placeholder:text-slate-500 focus:border-obsidian-gold focus:outline-none"
+                className="min-h-[44px] w-full rounded-lg border border-slate-600 bg-obsidian-surface px-3 py-2 font-mono text-xs text-white placeholder:text-slate-500 focus:border-obsidian-borderLight focus:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-accent focus-visible:ring-offset-2 focus-visible:ring-offset-obsidian-panel"
               />
             </div>
 
@@ -282,30 +404,39 @@ export const OpsecPanel: React.FC = () => {
                 value={prettyInput}
                 onChange={(e) => setPrettyInput(e.target.value)}
                 placeholder="DESKTOP"
-                className="min-h-[44px] w-full rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 font-mono text-xs text-white placeholder:text-slate-500 focus:border-obsidian-gold focus:outline-none"
+                className="min-h-[44px] w-full rounded-lg border border-slate-600 bg-obsidian-surface px-3 py-2 font-mono text-xs text-white placeholder:text-slate-500 focus:border-obsidian-borderLight focus:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-accent focus-visible:ring-offset-2 focus-visible:ring-offset-obsidian-panel"
               />
             </div>
           </div>
 
-          <div className="space-y-2">
-            <label htmlFor={macId} className="block text-xs font-medium text-obsidian-muted">
-              {t('opsec.macIn')}
-            </label>
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div>
+              <label htmlFor={macId} className="mb-1.5 block text-xs font-medium text-obsidian-muted">
+                {t('opsec.macIn')}
+              </label>
               <input
                 id={macId}
                 type="text"
                 value={macInput}
-                onChange={(e) => setMacInput(e.target.value)}
+                onChange={(e) => { setMacInput(e.target.value); setMacError(''); }}
+                onBlur={validateMacInput}
+                aria-invalid={Boolean(macError)}
+                aria-describedby={`${macHelpId}${macError ? ` ${macErrorId}` : ''}`}
                 placeholder="aa:bb:cc:dd:ee:ff"
-                className="min-h-[44px] w-full rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 font-mono text-xs text-white placeholder:text-slate-500 focus:border-obsidian-gold focus:outline-none"
+                className="min-h-[44px] w-full rounded-lg border border-slate-600 bg-obsidian-surface px-3 py-2 font-mono text-xs text-white placeholder:text-slate-500 focus:border-obsidian-borderLight focus:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-accent focus-visible:ring-offset-2 focus-visible:ring-offset-obsidian-panel aria-[invalid=true]:border-rose-400"
               />
+              <p id={macHelpId} className="mt-1.5 text-[11px] leading-relaxed text-obsidian-muted">{t('opsec.macFormatHelp')}</p>
+              {macError && <p id={macErrorId} role="alert" className="mt-1 text-xs text-rose-300">{macError}</p>}
+            </div>
+            <div>
+              <label htmlFor={vendorId} className="mb-1.5 block text-xs font-medium text-obsidian-muted">
+                {t('opsec.vendor')}
+              </label>
               <select
                 id={vendorId}
-                aria-label="Vendor OUI"
                 value={vendor}
                 onChange={(e) => setVendor(e.target.value)}
-                className="min-h-[44px] w-full rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 font-mono text-xs text-white focus:border-obsidian-gold focus:outline-none"
+                className="min-h-[44px] w-full rounded-lg border border-slate-600 bg-obsidian-surface px-3 py-2 font-mono text-xs text-white focus:border-obsidian-borderLight focus:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-accent focus-visible:ring-offset-2 focus-visible:ring-offset-obsidian-panel"
               >
                 {vendors.length === 0 ? (
                   <option value="" className="bg-obsidian-panel">
@@ -326,53 +457,69 @@ export const OpsecPanel: React.FC = () => {
                 type="button"
                 onClick={handleGenerateMac}
                 disabled={busy}
-                className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 text-xs font-medium text-white transition-colors hover:border-obsidian-borderLight disabled:opacity-50"
+                className="ui-action-secondary"
               >
                 <RefreshCw size={13} aria-hidden="true" />
                 <span>{t('opsec.genMac')}</span>
+                {/* [Acción secundaria] Abre o ajusta la operación actual. */}
               </button>
               <button
                 type="button"
                 onClick={handleGenerateHostname}
                 disabled={busy}
-                className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 text-xs font-medium text-white transition-colors hover:border-obsidian-borderLight disabled:opacity-50"
+                className="ui-action-secondary"
               >
                 <Sparkles size={13} aria-hidden="true" />
                 <span>{t('opsec.genHost')}</span>
+                {/* [Acción secundaria] Abre o ajusta la operación actual. */}
               </button>
             </div>
           </div>
 
-          <p className="rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 text-xs text-obsidian-muted">
+            <p className="rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 text-xs leading-relaxed text-obsidian-muted">
             {t('opsec.networkHint')}
           </p>
 
           <div className="flex flex-wrap items-center gap-2.5 pt-1">
             <button
               type="submit"
-              disabled={busy}
-              className="inline-flex min-h-[44px] items-center gap-2 rounded-lg border border-obsidian-gold/50 bg-obsidian-gold/20 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-obsidian-gold/30 disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={busy || !canApplyIdentity}
+              className="ui-action-primary"
             >
               <Shield size={14} aria-hidden="true" />
               <span>{t('opsec.apply')}</span>
-            </button>
-            <button
-              type="button"
-              onClick={handleHostnameOnly}
-              disabled={busy}
-              className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-obsidian-border bg-obsidian-surface px-3.5 py-2 text-xs font-medium text-obsidian-muted transition-colors hover:border-obsidian-borderLight hover:text-white disabled:opacity-50"
-            >
-              <span>{t('opsec.hostOnly')}</span>
-            </button>
-            <button
-              type="button"
-              onClick={handleMacOnly}
-              disabled={busy}
-              className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-obsidian-border bg-obsidian-surface px-3.5 py-2 text-xs font-medium text-obsidian-muted transition-colors hover:border-obsidian-borderLight hover:text-white disabled:opacity-50"
-            >
-              <span>{t('opsec.macOnly')}</span>
+              {/* [Acción principal] Inicia o confirma la operación. */}
             </button>
           </div>
+
+          <details className="rounded-lg border border-obsidian-border bg-obsidian-surface">
+            <summary className="flex min-h-11 cursor-pointer items-center rounded-lg px-3 text-[13px] font-medium text-obsidian-muted hover:bg-obsidian-panel hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent">
+              {t('opsec.advancedChanges')}
+            </summary>
+            <div className="space-y-2 border-t border-obsidian-border px-3 py-3">
+              <p className="text-xs leading-relaxed text-obsidian-muted">{t('opsec.advancedHint')}</p>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={handleHostnameOnly}
+                  disabled={busy || !canApplyIdentity}
+                  className="ui-action-secondary"
+                >
+                  <span>{t('opsec.hostOnly')}</span>
+                  {/* [Acción secundaria] Abre o ajusta la operación actual. */}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleMacOnly}
+                  disabled={busy || !canApplyIdentity}
+                  className="ui-action-secondary"
+                >
+                  <span>{t('opsec.macOnly')}</span>
+                  {/* [Acción secundaria] Abre o ajusta la operación actual. */}
+                </button>
+              </div>
+            </div>
+          </details>
         </form>
       </section>
     </div>

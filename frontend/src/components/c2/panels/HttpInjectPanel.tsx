@@ -58,11 +58,11 @@ export const HttpInjectPanel: React.FC = () => {
   };
 
   return (
-    <div className="space-y-4">
-      <section className="rounded-xl border border-obsidian-border bg-obsidian-panel p-4 sm:p-5 shadow-obsidian">
+    <div className="min-w-0">
+      <section className="border-t border-obsidian-border py-4 sm:py-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2.5">
-            <Code2 size={18} className="shrink-0 text-obsidian-gold" aria-hidden="true" />
+            <Code2 size={18} className="shrink-0 text-obsidian-muted" aria-hidden="true" />
             <h2 className="font-heading text-base font-bold text-white">{t('http.title')}</h2>
           </div>
           <span
@@ -95,7 +95,7 @@ export const HttpInjectPanel: React.FC = () => {
               value={arpTarget}
               onChange={(e) => setArpTarget(e.target.value)}
               placeholder="192.168.100.17"
-              className="min-h-[44px] w-full rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 font-mono text-xs text-white placeholder:text-slate-500 focus:border-obsidian-gold focus:outline-none"
+              className="min-h-[44px] w-full rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 font-mono text-xs text-white placeholder:text-obsidian-muted focus:border-obsidian-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-accent"
             />
             <p className="mt-1 text-[11px] text-obsidian-muted">{t('http.targetHint')}</p>
           </div>
@@ -109,21 +109,21 @@ export const HttpInjectPanel: React.FC = () => {
               value={injectPayload}
               onChange={(e) => setInjectPayload(e.target.value)}
               placeholder="<script>alert('pwned')</script>"
-              className="w-full rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 font-mono text-xs text-white placeholder:text-slate-500 focus:border-obsidian-gold focus:outline-none"
+              className="w-full rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 font-mono text-xs text-white placeholder:text-obsidian-muted focus:border-obsidian-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-accent"
             />
           </div>
 
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <label
               htmlFor={sslstripId}
-              className="inline-flex min-h-[44px] cursor-pointer items-center gap-2.5 rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 text-xs text-white transition-colors hover:border-obsidian-borderLight"
+              className="inline-flex min-h-[44px] cursor-pointer items-center gap-2.5 border-b border-obsidian-border px-1 py-2 text-xs text-white transition-colors hover:text-white"
             >
               <input
                 id={sslstripId}
                 type="checkbox"
                 checked={sslstrip}
                 onChange={(e) => setSslstrip(e.target.checked)}
-                className="h-4 w-4 rounded border-obsidian-border bg-obsidian-bg accent-obsidian-gold"
+                className="h-4 w-4 rounded border-obsidian-border bg-obsidian-bg accent-obsidian-accent"
               />
               <span>{t('http.sslstrip')}</span>
             </label>
@@ -138,7 +138,7 @@ export const HttpInjectPanel: React.FC = () => {
                 inputMode="numeric"
                 value={proxyPort}
                 onChange={(e) => setProxyPort(e.target.value)}
-                className="min-h-[44px] w-28 rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 font-mono text-xs text-white focus:border-obsidian-gold focus:outline-none"
+                className="min-h-[44px] w-28 rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 font-mono text-xs text-white focus:border-obsidian-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-accent"
               />
             </div>
           </div>
@@ -147,25 +147,27 @@ export const HttpInjectPanel: React.FC = () => {
             <button
               type="submit"
               disabled={busy || isRunning}
-              className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg border border-obsidian-gold/50 bg-obsidian-gold/20 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-obsidian-gold/30 disabled:cursor-not-allowed disabled:opacity-50"
+              className="ui-action-primary"
             >
-              <Play size={14} aria-hidden="true" />
+              <Play size={16} aria-hidden="true" />
               <span>{t('http.start')}</span>
+              {/* [Acción principal] Inicia o confirma la operación. */}
             </button>
             <button
               type="button"
               onClick={() => void handleStop()}
               disabled={busy || !isRunning}
-              className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg border border-red-500/40 bg-obsidian-dangerBg px-4 py-2 text-xs font-semibold text-red-300 transition-colors hover:border-red-400 hover:bg-red-950/60 disabled:cursor-not-allowed disabled:opacity-50"
+              className="ui-action-danger"
             >
-              <Square size={14} aria-hidden="true" />
+              <Square size={16} aria-hidden="true" />
               <span>{t('http.stop')}</span>
+              {/* [Acción destructiva] Detiene o revierte la operación. */}
             </button>
           </div>
         </form>
       </section>
 
-      <section className="rounded-xl border border-obsidian-border bg-obsidian-panel p-4 sm:p-5 shadow-obsidian">
+      <section className="border-t border-obsidian-border py-4 sm:py-5">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <h3 className="font-heading text-sm font-bold text-white">HTTP</h3>
@@ -177,17 +179,18 @@ export const HttpInjectPanel: React.FC = () => {
             type="button"
             onClick={clearHttpRequests}
             disabled={httpRequests.length === 0}
-            className="inline-flex min-h-[44px] lg:min-h-10 items-center gap-1.5 rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-1.5 text-xs font-medium text-obsidian-muted transition-colors hover:border-obsidian-borderLight hover:text-white disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-gold"
+            className="ui-action-secondary"
           >
-            <Trash2 size={13} aria-hidden="true" />
+            <Trash2 size={16} aria-hidden="true" />
             <span>{t('console.clear')}</span>
+            {/* [Acción secundaria] Abre o ajusta la operación actual. */}
           </button>
         </div>
 
-        <div className="overflow-x-auto rounded-lg border border-obsidian-border">
+        <div className="overflow-x-auto border-y border-obsidian-border">
           <table className="w-full min-w-[520px] border-collapse text-left text-xs">
             <thead>
-              <tr className="border-b border-obsidian-border bg-obsidian-surface text-[11px] font-semibold uppercase tracking-wider text-obsidian-muted">
+              <tr className="border-b border-obsidian-border text-xs font-semibold text-obsidian-muted">
                 <th className="px-3 py-2.5">{t('http.host')}</th>
                 <th className="px-3 py-2.5">{t('http.path')}</th>
                 <th className="px-3 py-2.5">{t('http.dst')}</th>
@@ -205,13 +208,13 @@ export const HttpInjectPanel: React.FC = () => {
                   <tr key={req.id || `${req.host}-${req.path}-${idx}`} className="hover:bg-obsidian-surface/60">
                     <td className="px-3 py-2 font-mono text-white">
                       {req.method ? (
-                        <span className="mr-1.5 rounded border border-obsidian-gold/40 bg-obsidian-gold/10 px-1.5 py-0.5 text-[10px] text-obsidian-gold">
+                        <span className="mr-1.5 rounded border border-obsidian-border bg-obsidian-surface px-1.5 py-0.5 text-[10px] text-obsidian-muted">
                           {req.method}
                         </span>
                       ) : null}
                       {req.host || '-'}
                     </td>
-                    <td className="px-3 py-2 font-mono text-slate-200 break-all">{req.path || '/'}</td>
+                    <td className="px-3 py-2 font-mono text-obsidian-text break-all">{req.path || '/'}</td>
                     <td className="px-3 py-2 font-mono text-obsidian-muted">{req.dst || '-'}</td>
                   </tr>
                 ))

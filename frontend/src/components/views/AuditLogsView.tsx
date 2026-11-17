@@ -42,11 +42,11 @@ const AuditDetails: React.FC<AuditDetailsProps> = ({ text, entityType, entity, i
     <div className="min-w-0">
       <p className={`whitespace-pre-wrap break-words ${value ? '' : 'text-white/40'}`}>{preview}</p>
       <details className="group mt-1.5">
-        <summary className="inline-flex min-h-8 cursor-pointer list-none items-center text-[11px] font-medium text-indigo-300 underline decoration-indigo-300/40 underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 [&::-webkit-details-marker]:hidden">
+        <summary className="inline-flex min-h-11 cursor-pointer list-none items-center text-[11px] font-medium text-obsidian-muted underline decoration-obsidian-borderLight underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent [&::-webkit-details-marker]:hidden">
           <span className="group-open:hidden">Ver más</span>
           <span className="hidden group-open:inline">Ver menos</span>
         </summary>
-        <div className="mt-2 space-y-2 rounded-lg border border-obsidian-border bg-obsidian-bg/70 p-2.5 text-[11px]">
+        <div className="mt-2 space-y-2 border-t border-obsidian-border pt-2 text-[11px]">
           <p className="whitespace-pre-wrap break-words">{value || 'Este registro no incluye una descripción adicional.'}</p>
           <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 border-t border-obsidian-border pt-2 text-obsidian-muted">
             {entityType && <><dt>Tipo</dt><dd className="break-words text-obsidian-text">{getEntityTypeLabel(entityType)}</dd></>}
@@ -178,47 +178,39 @@ export const AuditLogsView: React.FC = () => {
   };
 
   const getActionBadge = (action: string) => {
-    switch (action) {
-      case 'vault_unlock':
-        return <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">Desbloqueo</span>;
-      case 'export':
-        return <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">Exportación</span>;
-      case 'restore':
-        return <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-amber-500/10 text-amber-400 border border-amber-500/20">Restauración</span>;
-      case 'create':
-        return <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Creación</span>;
-      case 'update':
-        return <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">Actualización</span>;
-      case 'delete':
-        return <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-rose-500/10 text-rose-400 border border-rose-500/20">Eliminación</span>;
-      case 'copy_secret':
-        return <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-purple-500/10 text-purple-400 border border-purple-500/20">Copia de acceso</span>;
-      case 'update_2fa':
-        return <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-blue-500/10 text-blue-400 border border-blue-500/20">Verificación en dos pasos</span>;
-      case 'contact_followup':
-      case 'contact_attempt':
-        return <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-amber-500/10 text-amber-300 border border-amber-500/20">Seguimiento</span>;
-      case 'billing_renewal':
-        return <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">Renovación</span>;
-      case 'auto_archive':
-        return <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-slate-500/10 text-slate-300 border border-slate-500/20">Archivado</span>;
-      case 'reactivate':
-        return <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-cyan-500/10 text-cyan-300 border border-cyan-500/20">Reactivación</span>;
-      case 'recycle_demo':
-        return <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">Demo reutilizada</span>;
-      case 'auto_purge':
-        return <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-rose-500/10 text-rose-300 border border-rose-500/20">Limpieza automática</span>;
-      case 'permanent_delete':
-        return <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-rose-500/10 text-rose-300 border border-rose-500/20">Eliminación permanente</span>;
-      default:
-        return <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-white/5 text-white/60 border border-white/10">Otro cambio</span>;
-    }
+    const label = ({
+      vault_unlock: 'Desbloqueo',
+      export: 'Exportación',
+      restore: 'Restauración',
+      create: 'Creación',
+      update: 'Actualización',
+      delete: 'Eliminación',
+      copy_secret: 'Copia de acceso',
+      update_2fa: 'Verificación en dos pasos',
+      contact_followup: 'Seguimiento',
+      contact_attempt: 'Seguimiento',
+      billing_renewal: 'Renovación',
+      auto_archive: 'Archivado',
+      reactivate: 'Reactivación',
+      recycle_demo: 'Demo reutilizada',
+      auto_purge: 'Limpieza automática',
+      permanent_delete: 'Eliminación permanente',
+    } as Record<string, string>)[action] || 'Otro cambio';
+    const destructive = ['delete', 'auto_purge', 'permanent_delete'].includes(action);
+    return (
+      <span className={`px-2 py-0.5 rounded border text-[11px] font-mono ${destructive
+        ? 'border-rose-500/30 bg-rose-500/10 text-rose-300'
+        : 'border-obsidian-border bg-obsidian-surface text-obsidian-muted'
+      }`}>
+        {label}
+      </span>
+    );
   };
 
   if (!isUnlocked) {
     return (
       <div className="flex flex-col items-center justify-center h-full p-8 text-center">
-        <div className="w-16 h-16 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 mb-4">
+        <div className="w-16 h-16 rounded-xl bg-obsidian-surface border border-obsidian-border flex items-center justify-center text-obsidian-muted mb-4">
           <Shield className="w-8 h-8" aria-hidden="true" />
         </div>
         <div className="flex items-center justify-center gap-2 mb-6">
@@ -231,7 +223,7 @@ export const AuditLogsView: React.FC = () => {
         <button
           type="button"
           onClick={openUnlockModal}
-          className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-medium transition-all shadow-lg shadow-indigo-600/30 flex items-center gap-2"
+          className="ui-action-primary"
         >
           <Lock className="w-4 h-4" aria-hidden="true" /> Desbloquear con contraseña de acceso
         </button>
@@ -247,10 +239,10 @@ export const AuditLogsView: React.FC = () => {
   const searchPending = searchTerm.trim() !== debouncedSearch;
 
   return (
-    <div className="mx-auto max-w-7xl min-w-0 space-y-4 p-3 sm:space-y-6 sm:p-8">
+    <div className="mx-auto max-w-7xl min-w-0 space-y-4 p-3 sm:space-y-4 sm:p-4">
       <div className="flex min-w-0 flex-wrap items-center gap-2 border-b border-obsidian-border pb-3">
         <div className="mr-auto flex min-w-0 items-center gap-2">
-          <Shield className="w-4 h-4 text-indigo-400 flex-shrink-0" aria-hidden="true" />
+          <Shield className="w-[18px] h-[18px] text-obsidian-muted flex-shrink-0" aria-hidden="true" />
           <h1 className="truncate text-base font-bold text-white">
             Historial de actividad <span className="font-normal text-obsidian-muted">({total})</span>
           </h1>
@@ -271,14 +263,14 @@ export const AuditLogsView: React.FC = () => {
               setSearchTerm(e.target.value);
               setOffset(0);
             }}
-            className="min-h-10 w-full rounded-lg border border-obsidian-border bg-obsidian-surface pl-9 pr-3 text-xs text-white placeholder-obsidian-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
+            className="min-h-11 w-full rounded-lg border border-obsidian-border bg-obsidian-surface pl-9 pr-3 text-xs text-white placeholder-obsidian-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent"
           />
         </label>
         <select
           value={selectedAction}
           onChange={(event) => handleActionChange(event.target.value)}
           aria-label="Filtrar por acción"
-          className="min-h-10 w-32 min-w-0 rounded-lg border border-obsidian-border bg-obsidian-surface px-2 text-xs text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 sm:w-40"
+          className="min-h-11 w-32 min-w-0 rounded-lg border border-obsidian-border bg-obsidian-surface px-2 text-xs text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent sm:w-40"
         >
             {[
               ['all', 'Todas'],
@@ -304,23 +296,25 @@ export const AuditLogsView: React.FC = () => {
               </option>
             ))}
         </select>
+        {/* [Estado seleccionable] Alterna la visibilidad de datos en el historial. */}
         <button
           type="button"
           onClick={() => setShowSensitiveData((visible) => !visible)}
           aria-pressed={showSensitiveData}
           aria-label={showSensitiveData ? 'Ocultar datos sensibles' : 'Mostrar datos sensibles'}
           title={showSensitiveData ? 'Ocultar datos sensibles' : 'Mostrar datos sensibles'}
-          className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-lg border border-obsidian-border bg-obsidian-surface text-obsidian-muted hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
+          className="ui-action-toggle"
         >
-          {showSensitiveData ? <EyeOff size={15} aria-hidden="true" /> : <Eye size={15} aria-hidden="true" />}
+          {showSensitiveData ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}
         </button>
+        {/* [Icono] Actualizar o exportar la página actual del historial. */}
         <button
           type="button"
           onClick={fetchLogs}
           disabled={loading}
           aria-label="Actualizar registros de actividad"
           title="Actualizar"
-          className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-lg border border-obsidian-border bg-obsidian-surface text-obsidian-muted hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 disabled:opacity-50"
+          className="ui-action-icon"
         >
           <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" />
         </button>
@@ -330,7 +324,7 @@ export const AuditLogsView: React.FC = () => {
           disabled={loading || searchPending || Boolean(loadError) || logs.length === 0}
           aria-label="Descargar página"
           title="Descargar página"
-          className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-lg border border-obsidian-border bg-obsidian-surface text-obsidian-muted hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 disabled:cursor-not-allowed disabled:opacity-50"
+          className="ui-action-icon"
         >
           <Download className="h-4 w-4" aria-hidden="true" />
         </button>
@@ -359,7 +353,7 @@ export const AuditLogsView: React.FC = () => {
           onAction={fetchLogs}
         />
       ) : (
-        <div className="overflow-hidden rounded-2xl border border-obsidian-border bg-obsidian-panel">
+        <div className="overflow-hidden rounded-xl border border-obsidian-border bg-obsidian-panel">
           <div className="divide-y divide-obsidian-border md:hidden">
             {(loading || searchPending) && logs.length === 0 ? (
               <p className="p-4 text-xs text-white/50" role="status">
@@ -375,7 +369,7 @@ export const AuditLogsView: React.FC = () => {
                       setSearchTerm('');
                       handleActionChange('all');
                     }}
-                    className="px-3 py-1.5 rounded-lg bg-obsidian-bg border border-obsidian-border text-white hover:bg-obsidian-surface"
+                    className="ui-action-secondary"
                   >
                     Limpiar filtros
                   </button>
@@ -442,7 +436,7 @@ export const AuditLogsView: React.FC = () => {
                             setSearchTerm('');
                             handleActionChange('all');
                           }}
-                          className="mt-2 inline-flex px-3 py-1.5 rounded-lg bg-obsidian-bg border border-obsidian-border text-white text-xs font-sans hover:bg-obsidian-surface"
+                          className="ui-action-secondary mt-2"
                         >
                           Limpiar filtros
                         </button>
@@ -473,7 +467,7 @@ export const AuditLogsView: React.FC = () => {
                           <td className="py-3 px-2 whitespace-nowrap xl:px-3 2xl:px-4">{getActionBadge(log.action)}</td>
                           <td className="py-3 px-2 text-white/70 capitalize whitespace-nowrap xl:px-3 2xl:px-4">{getEntityTypeLabel(log.entity_type)}</td>
                           <td className="py-3 px-2 text-white font-medium max-w-[200px] break-words xl:px-3 2xl:px-4">
-                            {entity ? <span className="text-indigo-300">{entity}</span> : <span className="text-white/30">—</span>}
+                            {entity ? <span className="text-obsidian-text">{entity}</span> : <span className="text-white/30">—</span>}
                           </td>
                           <td className="min-w-[180px] py-3 px-2 text-white/70 xl:px-3 2xl:px-4">
                             <p className="whitespace-pre-wrap break-words">{preview}</p>
@@ -487,7 +481,7 @@ export const AuditLogsView: React.FC = () => {
                                 else next.add(log.id);
                                 return next;
                               })}
-                              className="mt-1 inline-flex min-h-8 items-center text-[11px] font-medium text-indigo-300 underline decoration-indigo-300/40 underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
+                              className="mt-1 inline-flex min-h-11 items-center text-[11px] font-medium text-obsidian-muted underline decoration-obsidian-borderLight underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent"
                             >
                               {isExpanded ? 'Ver menos' : 'Ver más'}
                             </button>
@@ -522,9 +516,9 @@ export const AuditLogsView: React.FC = () => {
         </div>
       )}
 
-      {/* Pagination Bar */}
+      {/* [Navegación] Paginación del historial, sin modificar registros. */}
       {total > PAGE_SIZE && !loadError && (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-obsidian-border bg-obsidian-panel px-4 py-2.5 text-xs text-obsidian-muted">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-obsidian-border bg-obsidian-panel px-4 py-3 text-xs text-obsidian-muted">
           <span>
             Mostrando {startItem}–{endItem} de {total} registros
           </span>
@@ -533,19 +527,19 @@ export const AuditLogsView: React.FC = () => {
               type="button"
               disabled={!canPrev || loading || searchPending}
               onClick={() => setOffset((prev) => Math.max(0, prev - PAGE_SIZE))}
-              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-obsidian-surface border border-obsidian-border text-white hover:bg-obsidian-border disabled:opacity-40 disabled:cursor-not-allowed"
+              className="ui-action-secondary"
             >
-              <ChevronLeft size={14} aria-hidden="true" />
+              <ChevronLeft size={16} aria-hidden="true" />
               <span>Anterior</span>
             </button>
             <button
               type="button"
               disabled={!canNext || loading || searchPending}
               onClick={() => setOffset((prev) => prev + PAGE_SIZE)}
-              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-obsidian-surface border border-obsidian-border text-white hover:bg-obsidian-border disabled:opacity-40 disabled:cursor-not-allowed"
+              className="ui-action-secondary"
             >
               <span>Siguiente</span>
-              <ChevronRight size={14} aria-hidden="true" />
+              <ChevronRight size={16} aria-hidden="true" />
             </button>
           </div>
         </div>

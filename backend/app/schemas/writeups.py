@@ -349,6 +349,25 @@ class WriteupSummaryOut(BaseModel):
     created_at: datetime
 
 
+class WriteupOverviewBucket(BaseModel):
+    label: str
+    count: int
+    percentage: float
+
+
+class WriteupOverviewOut(BaseModel):
+    report_count: int
+    total_words: int
+    estimated_reading_minutes: int
+    largest_document_title: str | None = None
+    largest_document_words: int
+    language_distribution: list[WriteupOverviewBucket]
+    export_count: int
+    export_distribution: list[WriteupOverviewBucket]
+    revision_count: int
+    unreadable_documents: int = 0
+
+
 class WriteupDetailOut(WriteupSummaryOut):
     cvss_vector: str | None = None
     markdown_content: str

@@ -15,6 +15,17 @@ const sectionViews: Record<SectionType, React.LazyExoticComponent<React.Componen
   graph: lazy(() => import('../views/GraphView').then((module) => ({ default: module.GraphView }))),
   writeups: lazy(() => import('../writeups/WriteupsView').then((module) => ({ default: module.WriteupsView }))),
   subscriptions: lazy(() => import('../views/SubscriptionsView').then((module) => ({ default: module.SubscriptionsView }))),
+  overview_finances: lazy(() => import('../views/SubscriptionsView').then((module) => ({ default: module.SubscriptionsView }))),
+  finance_income: lazy(() => import('../views/SubscriptionsView').then((module) => ({ default: module.SubscriptionsView }))),
+  finance_services: lazy(() => import('../views/SubscriptionsView').then((module) => ({ default: module.SubscriptionsView }))),
+  finance_expenses: lazy(() => import('../views/SubscriptionsView').then((module) => ({ default: module.SubscriptionsView }))),
+  finance_cards: lazy(() => import('../views/SubscriptionsView').then((module) => ({ default: module.SubscriptionsView }))),
+  overview_prospection: lazy(() => import('../views/ModuleOverviewView').then((module) => ({ default: module.ModuleOverviewView }))),
+  overview_communications: lazy(() => import('../views/ModuleOverviewView').then((module) => ({ default: module.ModuleOverviewView }))),
+  overview_security: lazy(() => import('../views/ModuleOverviewView').then((module) => ({ default: module.ModuleOverviewView }))),
+  overview_c2: lazy(() => import('../views/ModuleOverviewView').then((module) => ({ default: module.ModuleOverviewView }))),
+  overview_activity: lazy(() => import('../views/ModuleOverviewView').then((module) => ({ default: module.ModuleOverviewView }))),
+  overview_settings: lazy(() => import('../views/ModuleOverviewView').then((module) => ({ default: module.ModuleOverviewView }))),
   trash: lazy(() => import('../views/TrashView').then((module) => ({ default: module.TrashView }))),
   settings: SettingsView,
   settings_appearance: SettingsView,
@@ -60,8 +71,8 @@ class SectionErrorBoundary extends React.Component<
         <h2 className="text-lg font-semibold text-white">No se pudo abrir este apartado</h2>
         <p className="mt-2 text-sm text-obsidian-muted">La vista no terminó de cargarse. Puedes volver al resumen o recargar la aplicación.</p>
         <div className="mt-4 flex flex-wrap gap-2">
-          <button type="button" onClick={this.props.onBack} className="min-h-11 rounded-lg border border-obsidian-border px-4 text-sm text-white hover:bg-obsidian-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-300">Ir al resumen</button>
-          <button type="button" onClick={() => window.location.reload()} className="min-h-11 rounded-lg border border-obsidian-border bg-obsidian-panel px-4 text-sm font-semibold text-white hover:bg-obsidian-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-300">Recargar</button>
+          <button type="button" onClick={this.props.onBack} className="min-h-[44px] rounded-lg border border-obsidian-border px-4 text-sm text-white hover:bg-obsidian-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300">Ir al resumen</button>
+          <button type="button" onClick={() => window.location.reload()} className="min-h-[44px] rounded-lg bg-indigo-600 px-4 text-sm font-semibold text-white hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300">Recargar</button>
         </div>
       </section>
     );

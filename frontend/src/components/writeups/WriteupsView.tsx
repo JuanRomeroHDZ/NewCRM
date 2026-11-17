@@ -65,6 +65,7 @@ import { WriteupCorrelationsPanel } from './WriteupCorrelationsPanel';
 import { EMPTY_WRITEUP_WORKBENCH, evidenceForFinding } from './writeupWorkbenchUtils';
 import { correlateWriteup } from '../../lib/writeupCorrelations';
 import { MAX_REPORT_TEXT_LENGTH, MAX_REPORT_TITLE_LENGTH } from './writeupLimits';
+import type { WriteupDevDataset } from './writeupDevFixtures';
 import {
   calculateCvss31,
   type DiffLine,
@@ -78,12 +79,12 @@ const WriteupWorkbenchModal = React.lazy(() =>
   import('./WriteupWorkbenchModal').then((module) => ({ default: module.WriteupWorkbenchModal })),
 );
 
-const SEVERITY_CARD: Record<WriteupSeverity, string> = {
-  critica: 'border-rose-700/70 bg-rose-950/55 hover:bg-rose-900/55',
-  alta: 'border-orange-700/70 bg-orange-950/50 hover:bg-orange-900/50',
-  media: 'border-amber-700/70 bg-amber-950/45 hover:bg-amber-900/45',
-  baja: 'border-sky-800/70 bg-sky-950/45 hover:bg-sky-900/45',
-  informativa: 'border-slate-700 bg-slate-800/70 hover:bg-slate-700/70',
+const SEVERITY_BADGE: Record<WriteupSeverity, string> = {
+  critica: 'text-rose-300',
+  alta: 'text-rose-300',
+  media: 'text-amber-300',
+  baja: 'text-obsidian-muted',
+  informativa: 'text-obsidian-muted',
 };
 
 const SEVERITY_LABEL: Record<WriteupSeverity, string> = {
@@ -91,6 +92,26 @@ const SEVERITY_LABEL: Record<WriteupSeverity, string> = {
 };
 const STATUS_LABEL: Record<WriteupStatus, string> = {
   borrador: 'Borrador', en_revision: 'En revisión', finalizado: 'Finalizado', entregado: 'Entregado',
+};
+
+const formatWriteupCount = (value: number, singular: string, plural: string, locale: string) => {
+  const count = new Intl.NumberFormat(locale).format(value);
+  const noun = new Intl.PluralRules(locale).select(value) === 'one' ? singular : plural;
+  return `${count} ${noun}`;
+};
+
+const readDevDatasetFromUrl = (): WriteupDevDataset | null => {
+  if (!import.meta.env.DEV || typeof window === 'undefined') return null;
+  const value = new URLSearchParams(window.location.search).get('data');
+  return value === 'worst' || value === 'empty' || value === 'one' || value === '1000' ? value : null;
+};
+
+const updateDevDatasetUrl = (dataset: WriteupDevDataset | null) => {
+  if (!import.meta.env.DEV || typeof window === 'undefined') return;
+  const url = new URL(window.location.href);
+  if (dataset) url.searchParams.set('data', dataset);
+  else url.searchParams.delete('data');
+  window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
 };
 
 const MAX_FINDINGS_COUNT = 200;
@@ -209,6 +230,8 @@ export const WriteupsView: React.FC = () => {
     demoMode: c2DemoMode,
   } = useC2();
   const [items, setItems] = useState<WriteupSummary[]>([]);
+  const [devDataset, setDevDataset] = useState<WriteupDevDataset | null>(() => readDevDatasetFromUrl());
+  const isDevFixtureMode = import.meta.env.DEV && devDataset !== null;
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<WriteupDetail | null>(null);
   const [workbenchPanel, setWorkbenchPanel] = useState<{ tab: 'evidence' | 'progress' | 'snippets' | 'publish'; focusEvidenceId?: string | null } | null>(null);
@@ -278,6 +301,29 @@ export const WriteupsView: React.FC = () => {
     setEditVersion(draftVersion.current);
     setDirty(true);
   };
+
+  const handleDevDatasetChange = (value: string) => {
+    const nextDataset = value === 'worst' || value === 'empty' || value === 'one' || value === '1000'
+      ? value as WriteupDevDataset
+      : null;
+    updateDevDatasetUrl(nextDataset);
+    setSelectedId(null);
+    selectedIdRef.current = null;
+    setDevDataset(nextDataset);
+  };
+
+  const listWriteupPage = useCallback(async (filters: {
+    severity?: string;
+    q?: string;
+    limit: number;
+    offset: number;
+  }) => {
+    if (import.meta.env.DEV && devDataset) {
+      const { getWriteupDevPage } = await import('./writeupDevFixtures');
+      return getWriteupDevPage(devDataset, filters);
+    }
+    return api.listWriteupsPage(filters);
+  }, [devDataset]);
   const [showExportModal, setShowExportModal] = useState(false);
   const [lightboxAsset, setLightboxAsset] = useState<WriteupAsset | null>(null);
   const [diffRevision, setDiffRevision] = useState<WriteupRevision | null>(null);
@@ -1015,16 +1061,19 @@ export const WriteupsView: React.FC = () => {
     setListError('');
     setLoadMoreError('');
     try {
-      const [page, pros, projs] = await Promise.all([
-        api.listWriteupsPage({
+      const pageRequest = listWriteupPage({
           q: debouncedSearchQuery.trim() || undefined,
           severity: severityFilter || undefined,
           limit: 50,
           offset: 0,
-        }),
-        api.getProspects().catch(() => [] as Prospect[]),
-        api.getProjects().catch(() => [] as InternalProject[]),
-      ]);
+        });
+      const relatedRequest = devDataset
+        ? Promise.resolve([[], []] as [Prospect[], InternalProject[]])
+        : Promise.all([
+            api.getProspects().catch(() => [] as Prospect[]),
+            api.getProjects().catch(() => [] as InternalProject[]),
+          ]);
+      const [page, [pros, projs]] = await Promise.all([pageRequest, relatedRequest]);
       if (version !== listRequestVersion.current) return;
       setItems(page.items);
       setTotal(page.total);
@@ -1032,7 +1081,7 @@ export const WriteupsView: React.FC = () => {
       nextListOffset.current = page.items.length;
       setProspects(pros);
       setProjects(projs);
-      if (!selectedIdRef.current && page.items.length > 0) {
+      if (!devDataset && !selectedIdRef.current && page.items.length > 0) {
         setSelectedId(page.items[0].id);
       }
     } catch (err) {
@@ -1042,7 +1091,7 @@ export const WriteupsView: React.FC = () => {
     } finally {
       if (version === listRequestVersion.current) setLoadingList(false);
     }
-  }, [isUnlocked, debouncedSearchQuery, severityFilter]);
+  }, [isUnlocked, debouncedSearchQuery, severityFilter, devDataset, listWriteupPage]);
 
   const handleLoadMore = async () => {
     if (!isUnlocked || loadingMore || !hasMore) return;
@@ -1050,7 +1099,7 @@ export const WriteupsView: React.FC = () => {
     setLoadingMore(true);
     setLoadMoreError('');
     try {
-      const page = await api.listWriteupsPage({
+      const page = await listWriteupPage({
         q: debouncedSearchQuery.trim() || undefined,
         severity: severityFilter || undefined,
         limit: 50,
@@ -1342,6 +1391,7 @@ export const WriteupsView: React.FC = () => {
   };
 
   const handleCreateWriteup = async () => {
+    if (isDevFixtureMode) return;
     if (creationInProgressRef.current) return;
     creationInProgressRef.current = true;
     try {
@@ -1392,6 +1442,7 @@ export const WriteupsView: React.FC = () => {
   };
 
   const handleCreateFromC2Session = async () => {
+    if (isDevFixtureMode) return;
     if (creationInProgressRef.current) return;
     creationInProgressRef.current = true;
     try {
@@ -2308,8 +2359,9 @@ export const WriteupsView: React.FC = () => {
         <button
           type="button"
           onClick={openUnlockModal}
-          className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold"
+          className="ui-action-primary"
         >
+          {/* [Acción principal] Solicita el desbloqueo para abrir informes. */}
           Desbloquear bóveda
         </button>
       </div>
@@ -2329,7 +2381,7 @@ export const WriteupsView: React.FC = () => {
   }) : [], [detail, items, cveId, cweId, targetScope, prospectId, projectId, findings]);
 
   return (
-    <div className="writeups-view relative flex min-h-[calc(100dvh-4.5rem)] min-w-0 flex-col gap-3 overflow-x-clip p-2 sm:p-3 lg:h-[calc(100dvh-4.5rem)] lg:min-h-0 lg:flex-row lg:p-4">
+    <div className="writeups-view relative mx-2 box-border flex h-full min-h-[calc(100dvh-4.5rem)] w-auto min-w-0 max-w-full flex-col overflow-x-clip border border-obsidian-border p-2 lg:h-[calc(100dvh-4.5rem)] lg:min-h-0 lg:flex-row">
       {/* Mobile / Medium Drawer Backdrop */}
       {showList && (
         <button
@@ -2342,36 +2394,56 @@ export const WriteupsView: React.FC = () => {
 
       {/* Collapsible / Drawer Writeups List */}
       {showList && (
-        <aside aria-label="Lista de informes" className="fixed inset-y-0 left-0 z-40 flex w-80 max-w-[85vw] shrink-0 flex-col overflow-hidden border border-slate-800 bg-slate-900 shadow-2xl lg:static lg:z-auto lg:w-64 lg:rounded-2xl lg:shadow-none xl:w-72">
-          <div className="p-3 border-b border-slate-800 space-y-2">
+        <aside aria-label="Lista de informes" className="fixed inset-y-0 left-0 z-40 flex w-80 max-w-[85vw] shrink-0 flex-col overflow-hidden border-r border-obsidian-border bg-obsidian-panel shadow-2xl lg:static lg:z-auto lg:w-64 lg:shadow-none xl:w-72">
+          <div className="space-y-2 border-b border-obsidian-border p-3">
             <div className="flex items-center justify-between gap-2">
-              <h2 className="text-sm font-bold text-white flex items-center gap-2">
-                <BookOpen className="w-4 h-4 text-indigo-400" />
-                Informes ({total})
+              <h2 className="flex items-center gap-2 text-sm font-semibold text-obsidian-text">
+                <BookOpen className="h-4 w-4 text-obsidian-muted" aria-hidden="true" />
+                Informes <span className="font-mono text-xs text-obsidian-muted tabular-nums">({new Intl.NumberFormat(systemLocale || 'es-MX').format(total)})</span>
               </h2>
               <div className="flex items-center gap-1">
                 <button
                   type="button"
                   onClick={handleCreateWriteup}
-                  disabled={creatingWriteup}
-                  className="inline-flex min-h-[44px] lg:min-h-8 items-center gap-1 rounded-lg bg-indigo-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-indigo-500 disabled:cursor-wait disabled:opacity-60"
+                  disabled={creatingWriteup || isDevFixtureMode}
+                  className="ui-action-primary"
                 >
+                  {/* [Acción principal] Crea un informe nuevo. */}
                   <Plus className="w-3.5 h-3.5" aria-hidden="true" />
                   {creatingWriteup ? 'Creando…' : 'Nuevo'}
                 </button>
                 <button
                   type="button"
                   onClick={() => handleManualReportListChange(false)}
-                  className="inline-flex min-h-[44px] min-w-[44px] lg:min-h-8 lg:min-w-8 items-center justify-center rounded-lg p-1 text-slate-400 hover:bg-slate-800 hover:text-white"
+                  className="ui-action-icon"
                   aria-label="Cerrar panel"
                 >
+                  {/* [Icono] Oculta la lista de informes. */}
                   <X className="w-4 h-4" aria-hidden="true" />
                 </button>
               </div>
             </div>
 
+            {import.meta.env.DEV && !detail && (
+              <label className="flex min-h-[44px] items-center gap-2 border-t border-obsidian-border pt-2 text-[11px] text-obsidian-muted">
+                <span className="shrink-0">Datos de vista</span>
+                <select
+                  value={devDataset || ''}
+                  onChange={(event) => handleDevDatasetChange(event.target.value)}
+                  aria-label="Conjunto de datos de desarrollo para informes"
+                  className="min-h-[40px] min-w-0 flex-1 rounded-md border border-obsidian-border bg-obsidian-bg px-2 text-xs text-obsidian-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-accent"
+                >
+                  <option value="">Datos reales</option>
+                  <option value="worst">Peor caso</option>
+                  <option value="empty">Vacío</option>
+                  <option value="one">Un informe</option>
+                  <option value="1000">1,000 informes</option>
+                </select>
+              </label>
+            )}
+
             <div className="relative">
-              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" aria-hidden="true" />
+              <Search className="absolute left-2.5 top-3.5 h-3.5 w-3.5 text-obsidian-muted" aria-hidden="true" />
               <input
                 type="text"
                 value={searchQuery}
@@ -2379,7 +2451,7 @@ export const WriteupsView: React.FC = () => {
                 onChange={(e) => setSearchQuery(e.target.value)}
                 aria-label="Buscar informes"
                 placeholder="Buscar…"
-                className="w-full min-h-[44px] lg:min-h-8 pl-8 pr-2.5 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-xs text-slate-100"
+                className="min-h-[44px] w-full rounded-lg border border-obsidian-border bg-obsidian-bg py-1.5 pl-8 pr-2.5 text-xs text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-accent"
               />
             </div>
 
@@ -2388,7 +2460,7 @@ export const WriteupsView: React.FC = () => {
               value={severityFilter}
               onChange={(e) => setSeverityFilter(e.target.value)}
               aria-label="Filtrar informes por severidad"
-              className="w-full min-h-[44px] lg:min-h-8 appearance-none bg-slate-950 border border-slate-800 rounded-lg pl-2 pr-8 py-1.5 text-xs text-slate-200"
+              className="min-h-[44px] w-full appearance-none rounded-lg border border-obsidian-border bg-obsidian-bg py-1.5 pl-2 pr-8 text-xs text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-accent"
             >
               <option value="">Todas las severidades</option>
               <option value="critica">Crítica</option>
@@ -2397,59 +2469,72 @@ export const WriteupsView: React.FC = () => {
               <option value="baja">Baja</option>
               <option value="informativa">Informativa</option>
             </select>
-            <ChevronDown aria-hidden="true" className="pointer-events-none absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <ChevronDown aria-hidden="true" className="pointer-events-none absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 text-obsidian-muted" />
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
+          <div className="min-h-0 flex-1 overflow-y-auto px-0">
             {loadingList && items.length === 0 ? (
-              <p role="status" aria-live="polite" className="p-3 text-xs text-slate-400">Cargando informes…</p>
+              <p role="status" aria-live="polite" className="p-3 text-xs text-obsidian-muted">Cargando informes…</p>
             ) : listError && items.length === 0 ? (
-              <div className="space-y-2 p-3 text-xs text-rose-300">
-                <p role="alert">{listError}</p>
+              <div className="space-y-2 border-b border-obsidian-border p-3 text-xs text-rose-300">
+                <p role="alert" className="break-words">{listError}</p>
                 <button
                   type="button"
                   onClick={() => void loadList()}
-                  className="min-h-[44px] lg:min-h-9 rounded-lg border border-rose-500/30 px-3 text-rose-200 hover:bg-rose-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                  className="ui-action-secondary"
                 >
                   Reintentar
                 </button>
               </div>
             ) : items.length === 0 ? (
-              <div className="text-center p-4 text-xs text-slate-400 space-y-2">
-                <p>No hay informes guardados todavía.</p>
-                <p className="text-[11px] text-slate-500">Crea un informe vacío o importa datos desde Red y Lab (C2).</p>
+              <div className="space-y-2 border-b border-obsidian-border p-4 text-center text-xs text-obsidian-muted">
+                <p>{isDevFixtureMode ? 'Esta vista de prueba no contiene informes.' : 'No hay informes guardados todavía.'}</p>
+                {!isDevFixtureMode && <p className="text-[11px] text-obsidian-muted">Crea un informe o importa datos desde Red y Lab (C2).</p>}
               </div>
             ) : (
               items.map((item) => {
                 const selected = selectedId === item.id;
-                return (
+                const rowContent = (
+                    <span className="block">
+                    <span className="mb-1 flex items-center justify-between gap-1">
+                      <span className="min-w-0 truncate text-[11px] font-medium text-obsidian-muted">{STATUS_LABEL[item.status] || item.status}</span>
+                      <span className={`shrink-0 rounded-sm border border-obsidian-border bg-obsidian-surface px-1.5 py-0.5 text-[10px] font-semibold ${SEVERITY_BADGE[item.severity] || SEVERITY_BADGE.media}`}>
+                        <span className="sr-only">Severidad: </span>{SEVERITY_LABEL[item.severity] || item.severity}
+                      </span>
+                    </span>
+                    <span className="block line-clamp-3 break-words text-sm font-medium text-obsidian-text" title={item.title}>{item.title}</span>
+                    <span className="mt-1 block line-clamp-2 break-words text-xs text-obsidian-muted" title={item.target_scope || 'Alcance no indicado'}>
+                      {item.target_scope || 'Alcance no indicado'}
+                    </span>
+                    <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-obsidian-muted tabular-nums">
+                      <span>{formatWriteupCount(item.boards_count, 'pizarra', 'pizarras', systemLocale || 'es-MX')}</span>
+                      <span aria-hidden="true">·</span>
+                      <span>{formatWriteupCount(item.citations_count, 'cita', 'citas', systemLocale || 'es-MX')}</span>
+                      <span aria-hidden="true">·</span>
+                      <span>{formatWriteupCount(item.assets_count, 'evidencia', 'evidencias', systemLocale || 'es-MX')}</span>
+                    </span>
+                    <span className="mt-1 block truncate text-[11px] text-obsidian-muted" title={`Actualizado ${formatApiDateTime(item.updated_at, systemLocale || 'es-MX')}`}>
+                      Actualizado {formatApiDateTime(item.updated_at, systemLocale || 'es-MX')}
+                    </span>
+                    </span>
+                  );
+                const rowClassName = `w-full border-b border-obsidian-border px-3 py-3 text-left transition-colors ${selected ? 'bg-obsidian-surface text-white' : 'text-obsidian-text hover:bg-obsidian-surface/50'}`;
+                const accessibleLabel = `${item.title}, severidad ${SEVERITY_LABEL[item.severity] || item.severity}, estado ${STATUS_LABEL[item.status] || item.status}, alcance ${item.target_scope || 'no indicado'}`;
+                return isDevFixtureMode ? (
+                  <article key={item.id} aria-label={accessibleLabel} className={rowClassName}>
+                    {rowContent}
+                  </article>
+                ) : (
                   <button
                     key={item.id}
                     type="button"
                     onClick={() => handleSelectWriteup(item.id)}
                     aria-current={selected ? 'true' : undefined}
-                    aria-label={`${item.title}, severidad ${SEVERITY_LABEL[item.severity] || item.severity}, estado ${STATUS_LABEL[item.status] || item.status}, alcance ${item.target_scope || 'no indicado'}`}
-                    className={`w-full rounded-xl border p-2.5 text-left text-white transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${
-                      SEVERITY_CARD[item.severity] || SEVERITY_CARD.media
-                    } ${selected ? '!border-emerald-400' : ''}`}
+                    aria-label={accessibleLabel}
+                    className={`${rowClassName} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-obsidian-accent`}
                   >
-                    <div className="flex items-center justify-between gap-1 mb-1">
-                      <span className="text-[10px] font-medium text-white/80">{STATUS_LABEL[item.status] || item.status}</span>
-                      <span className="shrink-0 rounded border border-white/20 bg-slate-950/50 px-1.5 py-0.5 text-[10px] font-semibold text-white">{SEVERITY_LABEL[item.severity] || item.severity}</span>
-                    </div>
-                    <div className="text-xs font-semibold line-clamp-2">{item.title}</div>
-                    <div className="mt-1 truncate text-[10px] text-slate-200/90" title={item.target_scope || 'Alcance no indicado'}>
-                      {item.target_scope || 'Alcance no indicado'}
-                    </div>
-                    <div className="text-[10px] text-slate-400 mt-1 flex items-center gap-2 tabular-nums">
-                      <span>{item.boards_count} pizarra</span>
-                      <span>· {item.citations_count} citas</span>
-                      <span>· {item.assets_count} med.</span>
-                    </div>
-                    <div className="mt-1 truncate text-[10px] text-slate-400" title={`Actualizado ${formatApiDateTime(item.updated_at, systemLocale || 'es-MX')}`}>
-                      Actualizado {formatApiDateTime(item.updated_at, systemLocale || 'es-MX')}
-                    </div>
+                    {rowContent}
                   </button>
                 );
               })
@@ -2462,7 +2547,7 @@ export const WriteupsView: React.FC = () => {
                   onClick={handleLoadMore}
                   disabled={loadingMore}
                   aria-label="Cargar más informes"
-                  className="inline-flex min-h-[44px] lg:min-h-9 items-center justify-center gap-2 rounded-lg border border-slate-700 bg-slate-900 px-3 text-xs font-medium text-slate-200 hover:border-indigo-400/60 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 disabled:cursor-wait disabled:opacity-60"
+                  className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg border border-obsidian-border bg-obsidian-surface px-3 text-xs font-medium text-obsidian-text hover:border-obsidian-borderLight hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-accent disabled:cursor-wait disabled:opacity-60"
                 >
                   {loadingMore && <RefreshCw className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />}
                   {loadingMore ? 'Cargando…' : loadMoreError ? 'Reintentar carga' : 'Cargar más'}
@@ -2474,7 +2559,7 @@ export const WriteupsView: React.FC = () => {
       )}
 
       {/* Main Editor + Whiteboard Workspace */}
-      <section aria-label="Editor del informe" className="flex min-h-[50vh] min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/50 lg:min-h-0">
+      <section aria-label="Editor del informe" className="flex min-h-[50vh] min-w-0 flex-1 flex-col overflow-hidden border-t border-obsidian-border bg-obsidian-bg lg:min-h-0 lg:border-l lg:border-t-0">
         {!detail ? loadingDetail ? (
           <div role="status" className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center text-slate-400">
             <RefreshCw className="h-6 w-6 animate-spin text-indigo-300" aria-hidden="true" />
@@ -2484,52 +2569,56 @@ export const WriteupsView: React.FC = () => {
           <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
             <p role="alert" className="max-w-md text-sm text-rose-300">{detailError}</p>
             <div className="flex flex-wrap justify-center gap-2">
-              {selectedId && <button type="button" onClick={() => void loadDetail(selectedId)} className="min-h-[44px] lg:min-h-9 rounded-lg bg-indigo-600 px-3 text-xs font-medium text-white hover:bg-indigo-500">Reintentar</button>}
-              {!showList && <button type="button" onClick={() => handleManualReportListChange(true)} className="min-h-[44px] lg:min-h-9 rounded-lg bg-slate-800 px-3 text-xs font-medium text-slate-200 hover:bg-slate-700">Ver lista</button>}
+              {selectedId && <button type="button" onClick={() => void loadDetail(selectedId)} className="ui-action-secondary">Reintentar</button>}
+              {!showList && <button type="button" onClick={() => handleManualReportListChange(true)} className="ui-action-secondary">Ver lista</button>}
             </div>
           </div>
         ) : (
-          <div className="flex-1 flex flex-col items-center justify-center text-slate-400 p-6 text-center gap-3">
-            <BookOpen className="w-10 h-10 text-slate-600" aria-hidden="true" />
-            <p className="text-sm max-w-md">
-              {total > 0
-                ? 'Selecciona un informe de la lista o crea un nuevo borrador.'
-                : 'Inicia un writeup desde cero o importa hosts, puertos y credenciales de tu sesión C2.'}
+          <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center text-obsidian-muted">
+            <BookOpen className="h-8 w-8 text-obsidian-muted" aria-hidden="true" />
+            <p className="max-w-md text-sm">
+              {isDevFixtureMode
+                ? 'Datos de muestra de solo lectura. Cambia el conjunto desde el control de desarrollo para revisar otros límites.'
+                : total > 0
+                  ? 'Selecciona un informe de la lista o crea un nuevo borrador.'
+                  : 'Inicia un informe desde cero o importa hosts, puertos y credenciales de tu sesión C2.'}
             </p>
             <div className="flex flex-wrap items-center justify-center gap-2.5">
               {!showList && (
                 <button
                   type="button"
                   onClick={() => handleManualReportListChange(true)}
-                  className="inline-flex min-h-[44px] lg:min-h-9 items-center gap-1.5 rounded-xl bg-slate-800 px-3.5 py-2 text-xs font-medium text-slate-200 hover:bg-slate-700"
+                  className="ui-action-secondary"
                 >
                   <PanelLeftOpen className="w-4 h-4" aria-hidden="true" />
                   Ver lista ({total})
                 </button>
               )}
-              <button
+              {!isDevFixtureMode && <button
                 type="button"
                 onClick={handleCreateWriteup}
                 disabled={creatingWriteup}
-                className="inline-flex min-h-[44px] lg:min-h-9 items-center gap-1.5 rounded-xl bg-obsidian-gold px-4 py-2 text-xs font-semibold text-black hover:brightness-110 disabled:cursor-wait disabled:opacity-60"
+                className="ui-action-primary"
               >
+                {/* [Acción principal] Inicia un borrador. */}
                 <Plus className="w-4 h-4" aria-hidden="true" />
                 {creatingWriteup ? 'Creando…' : 'Nuevo informe'}
-              </button>
-              <button
+              </button>}
+              {!isDevFixtureMode && <button
                 type="button"
                 onClick={handleCreateFromC2Session}
                 disabled={creatingWriteup}
-                className="inline-flex min-h-[44px] lg:min-h-9 items-center gap-1.5 rounded-xl border border-obsidian-borderLight bg-obsidian-panel px-4 py-2 text-xs font-semibold text-white hover:border-obsidian-gold disabled:cursor-wait disabled:opacity-60"
+                className="ui-action-secondary"
               >
-                <Radar className="w-4 h-4 text-obsidian-gold" aria-hidden="true" />
+                {/* [Acción secundaria] Importa información de la sesión C2. */}
+                <Radar className="w-4 h-4 text-obsidian-muted" aria-hidden="true" />
                 <span>
                   Importar sesión C2
                   {(c2Hosts.length + c2Ports.length + c2Creds.length) > 0
                     ? ` (${c2Hosts.length}h / ${c2Ports.length}p)`
                     : ''}
                 </span>
-              </button>
+              </button>}
             </div>
           </div>
         ) : (
@@ -2543,7 +2632,7 @@ export const WriteupsView: React.FC = () => {
                   onClick={() => handleManualReportListChange()}
                   title={showList ? 'Ocultar lista' : 'Mostrar lista'}
                   aria-label={showList ? 'Ocultar lista' : 'Mostrar lista'}
-                  className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 shrink-0"
+                  className="ui-action-icon shrink-0"
                 >
                   {showList ? <PanelLeftClose className="w-4 h-4" /> : <PanelLeftOpen className="w-4 h-4" />}
                 </button>
@@ -2602,6 +2691,7 @@ export const WriteupsView: React.FC = () => {
                 )}
                 </div>
               <div className="writeup-header-action-row">
+              {/* [Icono] Acciones del informe agrupadas junto al contexto de edición. */}
               <div className="writeup-header-actions" role="toolbar" aria-label="Acciones del informe">
                 <div className="writeup-header-action-group" role="group" aria-label="Paneles del informe">
                 <button
@@ -2609,7 +2699,7 @@ export const WriteupsView: React.FC = () => {
                   onClick={() => setWorkbenchPanel({ tab: 'evidence' })}
                   aria-label="Abrir laboratorio del informe"
                   title="Evidencias, progreso y fragmentos reutilizables"
-                  className={`writeup-header-compact-button inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border ${workbenchPanel ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200' : 'border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white'}`}
+                  className={`writeup-header-compact-button inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border ${workbenchPanel ? 'border-obsidian-accent bg-obsidian-surface text-white' : 'border-obsidian-borderLight bg-obsidian-panel text-obsidian-muted hover:bg-obsidian-surface hover:text-white'}`}
                 >
                   <ClipboardList className="h-4 w-4" aria-hidden="true" />
                 </button>
@@ -2650,7 +2740,7 @@ export const WriteupsView: React.FC = () => {
                   aria-expanded={showCorrelations}
                   aria-controls="writeup-correlations-panel"
                   aria-label="Mostrar u ocultar correlaciones"
-                  className={`writeup-header-compact-button h-10 w-10 shrink-0 justify-center rounded-lg border ${showCorrelations ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200' : 'border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white'}`}
+                  className={`writeup-header-compact-button h-10 w-10 shrink-0 justify-center rounded-lg border ${showCorrelations ? 'border-obsidian-accent bg-obsidian-surface text-white' : 'border-obsidian-borderLight bg-obsidian-panel text-obsidian-muted hover:bg-obsidian-surface hover:text-white'}`}
                   title="Detectar coincidencias con otros informes"
                 >
                   <GitCompare className="h-4 w-4" aria-hidden="true" />
@@ -2662,7 +2752,7 @@ export const WriteupsView: React.FC = () => {
                   aria-label="Mostrar u ocultar detalles del informe"
                   aria-expanded={showMetadata}
                   className={`writeup-header-compact-button h-10 w-10 shrink-0 justify-center rounded-lg border ${
-                    showMetadata ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-200' : 'bg-slate-800 border-slate-700 text-slate-300'
+                    showMetadata ? 'bg-obsidian-surface border-obsidian-accent text-white' : 'bg-obsidian-panel border-obsidian-borderLight text-obsidian-muted'
                   }`}
                   title="Mostrar u ocultar detalles del informe y sus relaciones"
                 >
@@ -2683,7 +2773,7 @@ export const WriteupsView: React.FC = () => {
                     onClick={() => void handleSaveWriteup(false)}
                     aria-label={saving ? 'Guardando informe' : dirty ? 'Guardar cambios del informe' : 'Informe guardado'}
                     className={`writeup-header-compact-button h-10 w-10 shrink-0 justify-center rounded-lg text-xs font-semibold flex items-center ${
-                      dirty ? 'bg-emerald-700 hover:bg-emerald-600 text-white' : 'bg-slate-800 hover:bg-slate-700 text-slate-200'
+                      dirty ? 'bg-indigo-600 hover:bg-indigo-500 text-white' : 'bg-obsidian-panel hover:bg-obsidian-surface text-obsidian-text'
                     }`}
                     title={saving ? 'Guardando informe' : dirty ? 'Guardar cambios del informe' : 'Informe guardado'}
                   >
@@ -2713,25 +2803,25 @@ export const WriteupsView: React.FC = () => {
                   </button>
 
                   <details className="relative">
-                    <summary data-caret="manual" aria-label="Más acciones del informe" title="Más acciones del informe" className="writeup-header-more-summary relative flex h-10 w-10 cursor-pointer list-none items-center justify-center rounded-lg bg-slate-800 text-xs text-slate-200 hover:bg-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 [&::-webkit-details-marker]:hidden"><MoreVertical className="h-4 w-4" aria-hidden="true" />{(recoveryCandidates.length > 0 || newRecoveryCopyAvailable || saveConflict) && <span className="writeup-header-pending-dot" aria-hidden="true" />}</summary>
-                    <div className="absolute right-0 z-30 mt-1 grid min-w-48 gap-1 rounded-lg border border-slate-700 bg-slate-900 p-2 shadow-xl">
+                    <summary data-caret="manual" aria-label="Más acciones del informe" title="Más acciones del informe" className="writeup-header-more-summary relative flex h-11 w-11 cursor-pointer list-none items-center justify-center rounded-lg border border-obsidian-borderLight bg-obsidian-panel text-obsidian-muted hover:bg-obsidian-surface hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent [&::-webkit-details-marker]:hidden"><MoreVertical className="h-4 w-4" aria-hidden="true" />{(recoveryCandidates.length > 0 || newRecoveryCopyAvailable || saveConflict) && <span className="writeup-header-pending-dot" aria-hidden="true" />}</summary>
+                    <div className="absolute right-0 z-30 mt-1 grid min-w-48 gap-1 rounded-lg border border-obsidian-border bg-obsidian-panel p-1 shadow-xl">
                   {recoveryCandidates.length > 0 && (
-                    <button type="button" onClick={() => setShowRecovery(true)} className="writeup-header-menu-item" aria-label={`Ver ${recoveryCandidates.length} copias locales recuperables`}>
+                    <button type="button" onClick={() => setShowRecovery(true)} className="ui-menu-item" aria-label={`Ver ${recoveryCandidates.length} copias locales recuperables`}>
                       <RefreshCw className="h-4 w-4 text-amber-300" aria-hidden="true" />
                       <span>Recuperación local ({recoveryCandidates.length})</span>
                     </button>
                   )}
-                  {newRecoveryCopyAvailable && <button type="button" onClick={() => void refreshRecoveryCopies()} className="writeup-header-menu-item"><RefreshCw className="h-4 w-4" aria-hidden="true" /><span>Buscar copias de otras pestañas</span></button>}
+                  {newRecoveryCopyAvailable && <button type="button" onClick={() => void refreshRecoveryCopies()} className="ui-menu-item"><RefreshCw className="h-4 w-4" aria-hidden="true" /><span>Buscar copias de otras pestañas</span></button>}
                   {saveConflict && <button type="button" onClick={async () => {
                     try { if (detail) { const latest = await api.getWriteup(detail.id); writeupVersionByReportRef.current[detail.id] = latest.updated_at; setConflictServer(latest); } }
                     catch { /* Keep the last retrieved version and permit retry. */ }
                     setShowConflict(true);
-                  }} className="writeup-header-menu-item"><GitCompare className="h-4 w-4 text-amber-300" aria-hidden="true" /><span>Comparar versiones</span></button>}
+                  }} className="ui-menu-item"><GitCompare className="h-4 w-4 text-amber-300" aria-hidden="true" /><span>Comparar versiones</span></button>}
                   <button
                     type="button"
                     disabled={isWriteupEditingBlocked}
                     onClick={() => void handleCreateMilestone()}
-                    className="writeup-header-menu-item"
+                    className="ui-menu-item"
                     title="Guardar una versión importante con nombre"
                     aria-label="Hito · Nombrar versión importante"
                   >
@@ -2742,7 +2832,7 @@ export const WriteupsView: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => void handleCloneWriteup()}
-                    className="writeup-header-menu-item"
+                    className="ui-menu-item"
                     title="Duplicar informe con sus hallazgos, texto y pizarras"
                     aria-label="Duplicar informe"
                   >
@@ -2753,7 +2843,7 @@ export const WriteupsView: React.FC = () => {
                     type="button"
                     disabled={isWriteupEditingBlocked}
                     onClick={handleDeleteWriteup}
-                    className="writeup-header-menu-item writeup-header-menu-danger"
+                    className="ui-menu-item writeup-header-menu-danger"
                     title="Eliminar informe"
                     aria-label="Eliminar informe"
                   >
@@ -2905,12 +2995,12 @@ export const WriteupsView: React.FC = () => {
 
             {editLockState?.kind === 'manual' || detail.manual_locked ? (
               <div role="status" aria-live="polite" className="flex flex-wrap items-center gap-2 border-b border-slate-800 bg-slate-950/80 px-3 py-2 text-xs text-slate-300">
-                <Lock className="h-4 w-4 shrink-0 text-obsidian-gold" aria-hidden="true" />
+                <Lock className="h-4 w-4 shrink-0 text-obsidian-muted" aria-hidden="true" />
                 <span>Edición bloqueada manualmente{detail.manual_locked_by ? ` por ${detail.manual_locked_by}` : ''}. Puedes leer y exportar el informe.</span>
               </div>
             ) : editLockState?.kind === 'blocked' || editLockState?.kind === 'unavailable' ? (
               <div role="status" aria-live="polite" className="flex flex-wrap items-center gap-2 border-b border-slate-800 bg-slate-950/80 px-3 py-2 text-xs text-slate-300">
-                <Lock className="h-4 w-4 shrink-0 text-obsidian-gold" aria-hidden="true" />
+                <Lock className="h-4 w-4 shrink-0 text-obsidian-muted" aria-hidden="true" />
                 <span>{editLockState.message} El borrador local cifrado se conserva; puedes seguir leyendo y exportar.</span>
               </div>
             ) : editLockState?.kind === 'acquiring' ? (
@@ -3062,12 +3152,12 @@ export const WriteupsView: React.FC = () => {
                       const counts = sevOrder.map((s) => findings.filter((x) => x.severity === s).length);
                       const maxCount = Math.max(1, ...counts);
                       return (
-                        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 items-end pt-1">
+                        <div className="grid grid-cols-2 items-end gap-x-2 pt-1 sm:grid-cols-5">
                           {sevOrder.map((sevKey, i) => {
                             const cnt = counts[i];
                             const barHeight = Math.max(6, Math.round((cnt / maxCount) * 38));
                             return (
-                              <div key={sevKey} className="flex flex-col items-center gap-1 bg-slate-900/70 rounded-lg py-2 px-1 border border-slate-800/80">
+                              <div key={sevKey} className="flex flex-col items-center gap-1 border-b border-slate-800/80 px-1 py-2 last:border-b-0 sm:border-b-0 sm:border-r sm:last:border-r-0">
                                 <span className="text-xs font-bold text-white tabular-nums">{cnt}</span>
                                 <svg width="36" height="40" viewBox="0 0 36 40" aria-hidden="true">
                                   <rect x="6" y={40 - barHeight} width="24" height={barHeight} rx="4" fill={SEVERITY_BAR_COLOR[sevKey]} fillOpacity="0.85" />
@@ -3120,7 +3210,7 @@ export const WriteupsView: React.FC = () => {
                         ]);
                         markDirty();
                       }}
-                      className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="ui-action-primary"
                       title={`Máximo ${MAX_FINDINGS_COUNT} hallazgos por informe`}
                     >
                       <Plus className="w-3.5 h-3.5" />
@@ -3213,6 +3303,7 @@ export const WriteupsView: React.FC = () => {
                               placeholder="CVSS"
                               className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-100"
                             />
+                            {/* [Estado seleccionable] Muestra u oculta la calculadora CVSS. */}
                             <button
                               type="button"
                               onClick={() => {
@@ -3223,12 +3314,14 @@ export const WriteupsView: React.FC = () => {
                                   setFindingCvssEditorIdx(idx);
                                 }
                               }}
-                              className={`p-1.5 rounded border ${
+                              className={`inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg border ${
                                 findingCvssEditorIdx === idx
                                   ? 'bg-indigo-600 border-indigo-400 text-white'
                                   : 'bg-slate-900 border-slate-700 text-cyan-300 hover:bg-slate-800'
                               }`}
                               title="Calculadora CVSS 3.1 para este hallazgo"
+                              aria-label="Calculadora CVSS 3.1 para este hallazgo"
+                              aria-pressed={findingCvssEditorIdx === idx}
                             >
                               <Calculator className="w-3.5 h-3.5" />
                             </button>
@@ -3246,7 +3339,8 @@ export const WriteupsView: React.FC = () => {
                                 }));
                                 markDirty();
                               }}
-                              className="p-1.5 rounded text-rose-400 hover:bg-rose-950/40"
+                              className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg text-rose-400 hover:bg-obsidian-surface"
+                              aria-label={`Eliminar hallazgo ${f.title || idx + 1}`}
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
@@ -3255,7 +3349,7 @@ export const WriteupsView: React.FC = () => {
 
                         <div className="space-y-1">
                           <span className="text-slate-300">Evidencias vinculadas</span>
-                          {evidenceForFinding(workbench, f.id).length > 0 && <div className="flex flex-wrap gap-1.5 py-1">{evidenceForFinding(workbench, f.id).map((evidence) => <button key={evidence.id} type="button" onClick={() => setWorkbenchPanel({ tab: 'evidence', focusEvidenceId: evidence.id })} className="inline-flex min-h-8 items-center gap-1 rounded border border-slate-700 px-2 text-emerald-300 hover:bg-slate-800"><ClipboardList className="h-3.5 w-3.5" />{evidence.title || 'Evidencia sin título'}</button>)}</div>}
+                          {evidenceForFinding(workbench, f.id).length > 0 && <div className="flex flex-wrap gap-1.5 py-1">{evidenceForFinding(workbench, f.id).map((evidence) => <button key={evidence.id} type="button" onClick={() => setWorkbenchPanel({ tab: 'evidence', focusEvidenceId: evidence.id })} className="ui-action-secondary"><ClipboardList className="h-3.5 w-3.5" />{evidence.title || 'Evidencia sin título'}</button>)}</div>}
                           {detail.assets.length === 0 ? <p className="text-slate-400">Agrega una imagen al informe para vincularla.</p> : detail.assets.map((asset) => (
                             <label key={asset.id} className="flex items-center gap-2 py-1">
                               <input type="checkbox" checked={(f.evidence_asset_ids || []).includes(asset.id)} onChange={(event) => {
@@ -3265,7 +3359,7 @@ export const WriteupsView: React.FC = () => {
                                 setFindings(next); markDirty();
                               }} />
                               <span className="min-w-0 truncate">{asset.caption || asset.filename}</span>
-                              <button type="button" onClick={() => setLightboxAsset(asset)} className="text-emerald-300 hover:underline">Ver</button>
+                              <button type="button" onClick={() => setLightboxAsset(asset)} className="ui-action-secondary">Ver</button>
                             </label>
                           ))}
                         </div>
@@ -3351,7 +3445,7 @@ export const WriteupsView: React.FC = () => {
                                         markDirty();
                                         setFindingCvssEditorIdx(null);
                                       }}
-                                      className="px-2 py-0.5 rounded bg-emerald-600 hover:bg-emerald-500 text-white text-[11px]"
+                                      className="ui-action-primary"
                                     >
                                       Aplicar
                                     </button>
@@ -3446,7 +3540,7 @@ export const WriteupsView: React.FC = () => {
                           type="button"
                           disabled={isWriteupEditingBlocked}
                           onClick={() => mediaTabUploadRef.current?.click()}
-                          className="px-2.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium flex items-center gap-1"
+                          className="ui-action-primary"
                         >
                           <Upload className="w-3.5 h-3.5" />
                           Subir media
@@ -3494,15 +3588,16 @@ export const WriteupsView: React.FC = () => {
                             )}
                             <div className="flex-1 min-w-0 text-xs">
                               <div className="font-medium text-slate-200 truncate">{asset.filename}</div>
-                              {findings.filter(finding => (finding.evidence_asset_ids || []).includes(asset.id)).map(finding => <button key={finding.id} type="button" className="block text-emerald-300 hover:underline" onClick={() => { void handleWorkspaceModeChange('findings'); }}>Hallazgo: {finding.title || finding.id}</button>)}
+                              {findings.filter(finding => (finding.evidence_asset_ids || []).includes(asset.id)).map(finding => <button key={finding.id} type="button" className="ui-nav-action" onClick={() => { void handleWorkspaceModeChange('findings'); }}>Hallazgo: {finding.title || finding.id}</button>)}
                               <div className="text-[11px] text-slate-400 tabular-nums">
                                 {asset.mime_type} · {(asset.optimized_size_bytes / 1024).toFixed(1)} KB ({savedPct}% ahorro)
                               </div>
                             </div>
+                            {/* [Icono] Inspecciona el medio adjunto. */}
                             <button
                               type="button"
                               onClick={() => setLightboxAsset(asset)}
-                              className="p-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200"
+                              className="ui-action-icon"
                               title="Ampliar evidencia"
                               aria-label="Inspeccionar evidencia"
                             >
@@ -3513,10 +3608,11 @@ export const WriteupsView: React.FC = () => {
                                 type="button"
                                 disabled={isWriteupEditingBlocked || convertingAssetId === asset.id}
                                 onClick={() => void handleConvertVideoToGif(asset.id)}
-                                className="px-2 py-1 rounded bg-emerald-600/20 hover:bg-emerald-600/35 border border-emerald-500/30 text-emerald-300 text-[11px] flex items-center gap-1 shrink-0"
+                                className="ui-action-secondary shrink-0"
                                 title="Convertir este video a GIF animado sin metadatos"
                               >
-                                <Film className="w-3.5 h-3.5" />
+                                {/* [Acción secundaria] Convierte el video a GIF. */}
+                                <Film className="w-4 h-4" aria-hidden="true" />
                                 {convertingAssetId === asset.id ? 'Convirtiendo…' : 'A GIF'}
                               </button>
                             )}
@@ -3528,20 +3624,23 @@ export const WriteupsView: React.FC = () => {
                                 markDirty();
                                 showToast('Referencia añadida al informe', 'success');
                               }}
-                              className="p-1.5 rounded bg-slate-800 hover:bg-slate-700 text-indigo-300"
+                              className="ui-action-icon"
                               title="Añadir al informe"
+                              aria-label="Añadir medio al informe"
                             >
+                              {/* [Icono] Inserta la referencia del medio. */}
                               <Copy className="w-3.5 h-3.5" />
                             </button>
                             <button
                               type="button"
                               disabled={isWriteupEditingBlocked}
                               onClick={() => void handleDeleteAsset(asset)}
-                              className="p-1.5 rounded text-slate-400 hover:text-rose-400"
+                              className="ui-action-icon text-rose-300"
                               title="Eliminar medio"
                               aria-label="Eliminar medio"
                             >
-                              <Trash2 className="w-3.5 h-3.5" />
+                              {/* [Acción destructiva] Elimina el medio adjunto. */}
+                              <Trash2 className="w-4 h-4" aria-hidden="true" />
                             </button>
                           </div>
                         );
@@ -3574,7 +3673,7 @@ export const WriteupsView: React.FC = () => {
                                 <button
                                   type="button"
                                   onClick={() => handleJumpToCitation(cit)}
-                                  className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 text-[11px]"
+                                  className="ui-action-secondary"
                                 >
                                   Ir a línea
                                 </button>
@@ -3582,7 +3681,7 @@ export const WriteupsView: React.FC = () => {
                                   <button
                                     type="button"
                                     onClick={() => void handleReanchorCitation(cit)}
-                                    className="px-2 py-0.5 rounded bg-amber-500/20 hover:bg-amber-500/35 border border-amber-500/30 text-amber-200 text-[11px] flex items-center gap-1"
+                                    className="ui-action-secondary"
                                   >
                                     <RefreshCw className="w-3 h-3" />
                                     Vincular de nuevo
@@ -3596,42 +3695,44 @@ export const WriteupsView: React.FC = () => {
                       )}
                     </div>
 
-                    <div className="space-y-2">
+                    <div className="space-y-2 border-t border-slate-800 pt-3">
                       <h3 className="text-xs font-semibold text-slate-300">Historial de revisiones</h3>
                       {revisions.length === 0 ? (
                         <p className="text-xs text-slate-400">Guarda una revisión desde la parte superior para poder restaurarla después.</p>
                       ) : (
-                        revisions.map((rev) => (
-                          <div key={rev.id} className="flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-xl bg-slate-950/70 border border-slate-800 text-xs">
-                            <div>
-                              <div className="font-medium text-slate-200">
-                                v{rev.revision_number} · {rev.change_note || 'Revisión'}
+                        <div className="divide-y divide-slate-800">
+                          {revisions.map((rev) => (
+                            <div key={rev.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5 text-xs">
+                              <div className="min-w-0">
+                                <div className="font-medium text-slate-200">
+                                  v{rev.revision_number} · {rev.change_note || 'Revisión'}
+                                </div>
+                                <div className="break-all font-mono text-[10px] text-slate-400">
+                                  {formatApiDateTime(rev.created_at, systemLocale || 'es-MX')} · {rev.content_hash.slice(0, 12)}
+                                </div>
                               </div>
-                              <div className="text-[10px] text-slate-400 font-mono">
-                                {formatApiDateTime(rev.created_at, systemLocale || 'es-MX')} · {rev.content_hash.slice(0, 12)}
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => setDiffRevision(rev)}
+                                  className="ui-action-secondary"
+                                  title="Comparar línea por línea contra el borrador actual"
+                                >
+                                  <GitCompare className="w-3 h-3" />
+                                  Diff
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => void handleRestoreRevision(rev)}
+                                  className="ui-action-secondary"
+                                >
+                                  <RotateCcw className="w-3 h-3" />
+                                  Restaurar
+                                </button>
                               </div>
                             </div>
-                            <div className="flex items-center gap-1.5">
-                              <button
-                                type="button"
-                                onClick={() => setDiffRevision(rev)}
-                                className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-cyan-300 flex items-center gap-1"
-                                title="Comparar línea por línea contra el borrador actual"
-                              >
-                                <GitCompare className="w-3 h-3" />
-                                Diff
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => void handleRestoreRevision(rev)}
-                                className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-indigo-300 flex items-center gap-1"
-                              >
-                                <RotateCcw className="w-3 h-3" />
-                                Restaurar
-                              </button>
-                            </div>
-                          </div>
-                        ))
+                          ))}
+                        </div>
                       )}
                     </div>
 
@@ -3718,7 +3819,7 @@ export const WriteupsView: React.FC = () => {
                 ref={modalCloseRef}
                 type="button"
                 onClick={() => setLightboxAsset(null)}
-                className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
+                className="ui-action-icon shrink-0"
                 aria-label="Cerrar visor"
               >
                 <X className="w-4 h-4" />
@@ -3753,7 +3854,7 @@ export const WriteupsView: React.FC = () => {
                     void navigator.clipboard?.writeText(lightboxAsset.sha256);
                   showToast('Código de verificación copiado', 'info');
                   }}
-                  className="min-h-11 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-100 flex items-center gap-1"
+                  className="ui-action-secondary"
                 >
                   <Copy className="w-3.5 h-3.5" />
                   Copiar código de verificación
@@ -3766,7 +3867,7 @@ export const WriteupsView: React.FC = () => {
                     setLightboxAsset(null);
                     showToast('Evidencia añadida al informe', 'success');
                   }}
-                  className="min-h-11 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium"
+                  className="ui-action-primary"
                 >
                   Añadir al informe
                 </button>
@@ -3784,7 +3885,7 @@ export const WriteupsView: React.FC = () => {
                 <h3 id="writeup-recovery-title" className="font-semibold">Copias locales recuperables</h3>
                 <p className="mt-1 text-sm text-slate-300">Cada pestaña guarda su propia copia cifrada. Recupera la que tenga tus cambios más recientes; las demás se conservan.</p>
               </div>
-              <button ref={recoveryCloseRef} type="button" onClick={() => setShowRecovery(false)} className="min-h-11 rounded-lg bg-slate-800 px-4 py-2 text-sm">Conservar y cerrar</button>
+              <button ref={recoveryCloseRef} type="button" onClick={() => setShowRecovery(false)} className="ui-action-secondary">Conservar y cerrar</button>
             </div>
             <div className="min-h-0 space-y-3 overflow-y-auto p-4" aria-label="Copias guardadas en este navegador">
               {recoveryCandidates.map((candidate, index) => {
@@ -3804,7 +3905,7 @@ export const WriteupsView: React.FC = () => {
                         {stale && <p className="mt-2 flex items-center gap-1 text-xs text-amber-200"><AlertTriangle className="h-3.5 w-3.5" />El informe del servidor cambió; habrá que comparar antes de guardar.</p>}
                         <p className="mt-2 line-clamp-2 break-words text-xs text-slate-300">{preview.slice(0, 240) || 'El borrador no contiene texto Markdown.'}</p>
                       </div>
-                      <button type="button" onClick={() => restoreRecoveryCandidate(candidate)} className="min-h-11 shrink-0 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500">
+                      <button type="button" onClick={() => restoreRecoveryCandidate(candidate)} className="ui-action-primary shrink-0">
                         {stale ? 'Comparar y recuperar' : 'Recuperar copia'}
                       </button>
                     </div>
@@ -3817,24 +3918,24 @@ export const WriteupsView: React.FC = () => {
         </div>
       )}
 
-      {/* Line-by-Line Revision Diff Modal */}
+      {/* [Estado seleccionable] Comparación y elección consciente ante un conflicto de edición. */}
       {showConflict && saveConflict && detail && (
         <div ref={conflictDialogRef} className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" role="dialog" aria-modal="true" aria-labelledby="writeup-conflict-title">
           <div className="flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-xl border border-slate-700 bg-slate-950 text-slate-100 shadow-xl">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 p-4">
               <div><h3 id="writeup-conflict-title" className="font-semibold">El informe cambió en otra sesión</h3><p className="mt-1 text-sm text-slate-300">Compara el Markdown y los campos antes de elegir qué versión guardar.</p></div>
-              <button ref={conflictCloseRef} type="button" onClick={() => setShowConflict(false)} className="min-h-11 rounded-lg bg-slate-800 px-4 py-2 text-sm">Cerrar</button>
+              <button ref={conflictCloseRef} type="button" onClick={() => setShowConflict(false)} className="ui-action-secondary">Cerrar</button>
             </div>
             <div className="min-h-0 overflow-auto p-4">
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <div className="flex gap-2" role="group" aria-label="Vista de comparación">
-                  <button type="button" aria-pressed={conflictCompareMode === 'diff'} onClick={() => setConflictCompareMode('diff')} className={`min-h-10 rounded-lg px-3 text-xs ${conflictCompareMode === 'diff' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-200'}`}>Cambios por línea</button>
-                  <button type="button" aria-pressed={conflictCompareMode === 'side-by-side'} onClick={() => setConflictCompareMode('side-by-side')} className={`min-h-10 rounded-lg px-3 text-xs ${conflictCompareMode === 'side-by-side' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-200'}`}>Lado a lado</button>
+                  <button type="button" aria-pressed={conflictCompareMode === 'diff'} onClick={() => setConflictCompareMode('diff')} className="ui-action-toggle">Cambios por línea</button>
+                  <button type="button" aria-pressed={conflictCompareMode === 'side-by-side'} onClick={() => setConflictCompareMode('side-by-side')} className="ui-action-toggle">Lado a lado</button>
                 </div>
                 {conflictCompareMode === 'diff' && conflictDiff.length > 400 && <div className="flex items-center gap-2 text-xs text-slate-300">
                   <span>Filas {conflictDiffPage * 400 + 1}–{Math.min((conflictDiffPage + 1) * 400, conflictDiff.length)} de {conflictDiff.length}</span>
-                  <button type="button" disabled={conflictDiffPage === 0} onClick={() => setConflictDiffPage(page => Math.max(0, page - 1))} className="min-h-10 rounded bg-slate-800 px-3 disabled:opacity-40">Anterior</button>
-                  <button type="button" disabled={(conflictDiffPage + 1) * 400 >= conflictDiff.length} onClick={() => setConflictDiffPage(page => page + 1)} className="min-h-10 rounded bg-slate-800 px-3 disabled:opacity-40">Siguiente</button>
+                  <button type="button" disabled={conflictDiffPage === 0} onClick={() => setConflictDiffPage(page => Math.max(0, page - 1))} className="ui-action-secondary">Anterior</button>
+                  <button type="button" disabled={(conflictDiffPage + 1) * 400 >= conflictDiff.length} onClick={() => setConflictDiffPage(page => page + 1)} className="ui-action-secondary">Siguiente</button>
                 </div>}
               </div>
               {conflictCompareMode === 'diff' ? (
@@ -3857,7 +3958,7 @@ export const WriteupsView: React.FC = () => {
               </div>
             </div>
             <div className="flex flex-wrap items-center justify-end gap-2 border-t border-slate-800 p-4">
-              <button type="button" onClick={() => setShowConflict(false)} className="rounded-lg bg-slate-800 px-4 py-2 text-sm">Seguir con mi borrador</button>
+              <button type="button" onClick={() => setShowConflict(false)} className="ui-action-secondary">Seguir con mi borrador</button>
               <button type="button" onClick={async () => {
                 const accepted = await confirm({ title: 'Usar mi borrador', message: 'Al guardar se reemplazarán el texto y los campos del informe en el servidor con los de tu borrador. Se volverá a comprobar que no haya cambios nuevos.', confirmLabel: 'Usar mi borrador', tone: 'warning' });
                 if (!accepted) return;
@@ -3865,13 +3966,13 @@ export const WriteupsView: React.FC = () => {
                   const latest = await api.getWriteup(detail.id);
                   if (selectedIdRef.current === detail.id) { writeupVersionByReportRef.current[detail.id] = latest.updated_at; setDetail(latest); setSaveConflict(false); setConflictServer(null); setShowConflict(false); setSaveError(''); }
                 } catch (err) { showToast(err instanceof Error ? err.message : 'No se pudo comprobar el informe.', 'error'); }
-              }} className="rounded-lg bg-amber-900 px-4 py-2 text-sm text-white hover:bg-amber-800">Usar mi borrador</button>
+              }} className="ui-action-secondary">Usar mi borrador</button>
               <button type="button" onClick={async () => {
                 const accepted = await confirm({ title: 'Cargar la versión guardada', message: 'Se reemplazarán los cambios locales de este editor. Copia antes cualquier contenido que quieras conservar.', confirmLabel: 'Cargar versión guardada', tone: 'warning' });
                 if (!accepted) return;
             try { const latest = await api.getWriteup(detail.id); if (selectedIdRef.current === detail.id) { writeupVersionByReportRef.current[detail.id] = latest.updated_at; recoveredSourceRef.current = null; hydrateDraft(latest); setSaveError(''); } }
                 catch (err) { showToast(err instanceof Error ? err.message : 'No se pudo cargar el informe.', 'error'); }
-              }} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500">Cargar versión guardada</button>
+              }} className="ui-action-primary">Cargar versión guardada</button>
             </div>
           </div>
         </div>
@@ -3895,7 +3996,7 @@ export const WriteupsView: React.FC = () => {
                 <p className="text-[11px] text-slate-400">Compara, previsualiza y restaura una versión anterior.</p>
               </div>
               <div className="flex max-w-full flex-wrap items-center gap-2">
-                {diffRevision && revisionSelectionExplicit && <button type="button" disabled={revisionDetailLoading} onClick={() => void handleRestoreRevision(diffRevision, true)} className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium flex items-center gap-1 disabled:cursor-wait disabled:opacity-50">
+                {diffRevision && revisionSelectionExplicit && <button type="button" disabled={revisionDetailLoading} onClick={() => void handleRestoreRevision(diffRevision, true)} className="ui-action-secondary">
                   <RotateCcw className="w-3.5 h-3.5" /> Restaurar v{diffRevision.revision_number}
                 </button>}
                 {diffRevision && !revisionSelectionExplicit && <span className="self-center text-[11px] text-slate-400">Elige una versión para habilitar la restauración.</span>}
@@ -3903,7 +4004,7 @@ export const WriteupsView: React.FC = () => {
                   ref={modalCloseRef}
                   type="button"
                   onClick={closeRevisionHistory}
-                  className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
+                  className="ui-action-icon shrink-0"
                   aria-label="Cerrar comparación"
                 >
                   <X className="w-4 h-4" />
@@ -3912,8 +4013,9 @@ export const WriteupsView: React.FC = () => {
             </div>
             {diffRevision && <div className="flex flex-wrap gap-2 px-4 py-2 border-b border-slate-800">
               <span className="mr-auto self-center text-xs text-slate-400">v{diffRevision.revision_number} · {diffRevision.change_note || 'Revisión'} · {formatApiDateTime(diffRevision.created_at, systemLocale || 'es-MX')}</span>
-              <button type="button" onClick={() => setRevisionView('diff')} aria-pressed={revisionView === 'diff'} className={`px-3 py-1.5 rounded text-xs ${revisionView === 'diff' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-200'}`}>Cambios</button>
-              <button type="button" onClick={() => setRevisionView('preview')} aria-pressed={revisionView === 'preview'} className={`px-3 py-1.5 rounded text-xs ${revisionView === 'preview' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-200'}`}>Vista previa</button>
+              {/* [Estado seleccionable] Alterna entre diferencias y documento renderizado. */}
+              <button type="button" onClick={() => setRevisionView('diff')} aria-pressed={revisionView === 'diff'} className="ui-action-toggle">Cambios</button>
+              <button type="button" onClick={() => setRevisionView('preview')} aria-pressed={revisionView === 'preview'} className="ui-action-toggle">Vista previa</button>
             </div>}
             <div className="flex flex-1 min-h-0 flex-col sm:flex-row overflow-auto">
               <nav aria-label="Versiones del informe" className="sm:w-72 shrink-0 border-b sm:border-b-0 sm:border-r border-slate-800 p-3 overflow-auto">
@@ -3936,68 +4038,69 @@ export const WriteupsView: React.FC = () => {
                       </label>
                       <label className="text-[11px] text-slate-300">Desde<input aria-label="Fecha inicial" type="date" value={revisionAfter} onChange={event => setRevisionAfter(event.target.value)} className="mt-1 min-h-10 w-full rounded bg-slate-950 px-2 text-xs text-white" /></label>
                       <label className="text-[11px] text-slate-300">Hasta<input aria-label="Fecha final" type="date" value={revisionBefore} onChange={event => setRevisionBefore(event.target.value)} className="mt-1 min-h-10 w-full rounded bg-slate-950 px-2 text-xs text-white" /></label>
-                      <button type="submit" disabled={revisionLoading} className="col-span-2 min-h-10 rounded bg-indigo-600 px-3 text-xs font-medium text-white disabled:opacity-50">{revisionLoading ? 'Aplicando…' : 'Aplicar filtros'}</button>
-                      {revisionFilterCount > 0 && <button type="button" disabled={revisionLoading} onClick={() => { setRevisionSearch(''); setRevisionType(''); setRevisionAuthor(''); setRevisionAfter(''); setRevisionBefore(''); void openRevisionHistory(true); }} className="col-span-2 min-h-10 rounded border border-slate-700 px-3 text-xs text-slate-200 disabled:opacity-50">Limpiar filtros</button>}
+                      {/* [Acción principal] Aplica los filtros del historial; la secundaria los restablece. */}
+                      <button type="submit" disabled={revisionLoading} className="ui-action-primary col-span-2">{revisionLoading ? 'Aplicando…' : 'Aplicar filtros'}</button>
+                      {revisionFilterCount > 0 && <button type="button" disabled={revisionLoading} onClick={() => { setRevisionSearch(''); setRevisionType(''); setRevisionAuthor(''); setRevisionAfter(''); setRevisionBefore(''); void openRevisionHistory(true); }} className="ui-action-secondary col-span-2">Limpiar filtros</button>}
                     </div>
                   </details>
                 </form>
                 <p className="mt-3 text-xs font-semibold text-slate-300">Versiones ({revisions.length})</p>
                 {revisionTree.map(([key, group], index) => <details key={key} open={index === 0} className="mt-2">
                   <summary className="cursor-pointer rounded px-2 py-2 text-xs font-medium text-slate-200 hover:bg-slate-800">{group.label} <span className="text-slate-500">({group.revisions.length})</span></summary>
-                  <div className="mt-1 space-y-1">
-                    {group.revisions.map(rev => <button key={rev.id} type="button" onClick={() => void selectRevision(rev)} aria-current={rev.id === diffRevision?.id ? 'true' : undefined} className={`w-full rounded border px-2 py-2 text-left text-xs ${rev.id === diffRevision?.id ? 'border-emerald-700/50 bg-emerald-950/30 text-white' : 'border-slate-800 text-slate-300 hover:border-slate-700 hover:bg-slate-800'}`}>
+                  <div className="mt-1 divide-y divide-slate-800">
+                    {group.revisions.map(rev => <button key={rev.id} type="button" onClick={() => void selectRevision(rev)} aria-current={rev.id === diffRevision?.id ? 'true' : undefined} className={`w-full px-2 py-2 text-left text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-obsidian-accent ${rev.id === diffRevision?.id ? 'bg-emerald-950/30 text-white' : 'text-slate-300 hover:bg-slate-800'}`}>
                       <span className="block font-medium">v{rev.revision_number} · {rev.change_note || 'Revisión'}</span>
                       <span className="mt-1 block text-slate-400">{rev.created_by_name || 'Sistema'} · {formatApiDateTime(rev.created_at, systemLocale || 'es-MX')}</span>
                     </button>)}
                   </div>
                 </details>)}
                 {!revisionLoading && revisions.length === 0 && <p className="mt-3 text-xs text-slate-400">No hay versiones con estos filtros.</p>}
-                {revisions.length > 0 && !revisionEnd && <button type="button" onClick={() => void loadMoreRevisions()} disabled={revisionLoading} className="w-full mt-2 min-h-10 px-3 py-2 text-xs text-slate-200 bg-slate-800 rounded disabled:opacity-50">{revisionLoading ? 'Cargando…' : 'Cargar versiones anteriores'}</button>}
+                {revisions.length > 0 && !revisionEnd && <button type="button" onClick={() => void loadMoreRevisions()} disabled={revisionLoading} className="ui-action-secondary w-full mt-2">{revisionLoading ? 'Cargando…' : 'Cargar versiones anteriores'}</button>}
               </nav>
-              {!diffRevision ? <div className="flex flex-1 items-center justify-center p-8 text-center text-sm text-slate-400">Selecciona una versión para ver los cambios.</div> : revisionDetailLoading ? <div role="status" className="flex flex-1 items-center justify-center p-8 text-sm text-slate-300">Cargando la versión completa…</div> : revisionView === 'preview' ? <div className="flex-1 overflow-auto p-4 bg-slate-950">
-                {diffRevision.snapshot ? <div className="mb-6 space-y-3 text-sm text-slate-200">
-                  <section className="rounded-lg border border-slate-800 bg-slate-900/70 p-3">
+              {!diffRevision ? <div className="flex flex-1 items-center justify-center p-8 text-center text-sm text-slate-400">Selecciona una versión para ver los cambios.</div> : revisionDetailLoading ? <div role="status" className="flex flex-1 items-center justify-center p-8 text-sm text-slate-300">Cargando la versión completa…</div> : revisionView === 'preview' ? <div className="flex-1 overflow-auto p-4">
+                {diffRevision.snapshot ? <div className="mb-6 space-y-0 text-sm text-slate-200">
+                  <section className="border-b border-slate-700/70 pb-3">
                     <h3 className="text-lg font-semibold text-white">{String(diffRevision.snapshot.fields.title || 'Informe sin título')}</h3>
                     <p className="mt-1 text-xs text-slate-300">Estado: {String(diffRevision.snapshot.fields.status || '—')} · Severidad: {String(diffRevision.snapshot.fields.severity || '—')} · CVSS: {String(diffRevision.snapshot.fields.cvss_score ?? '—')}</p>
                     <p className="mt-1 text-xs text-slate-400">CWE: {String(diffRevision.snapshot.fields.cwe_id || '—')} · CVE: {String(diffRevision.snapshot.fields.cve_id || '—')} · Alcance: {String(diffRevision.snapshot.fields.target_scope || '—')}</p>
                     {diffRevision.snapshot.executive_summary && <p className="mt-3 whitespace-pre-wrap">{diffRevision.snapshot.executive_summary}</p>}
                   </section>
-                  {diffRevision.snapshot.findings.length > 0 && <section className="rounded-lg border border-slate-800 bg-slate-900/70 p-3">
+                  {diffRevision.snapshot.findings.length > 0 && <section className="border-b border-slate-700/70 py-3">
                     <h4 className="font-semibold text-white">Hallazgos · {diffRevision.snapshot.findings.length}</h4>
-                    <div className="mt-2 space-y-2">{diffRevision.snapshot.findings.map((finding, index) => <details key={`${finding.id}-${index}`} className="rounded border border-slate-800 p-2">
+                    <div className="mt-2 divide-y divide-slate-800">{diffRevision.snapshot.findings.map((finding, index) => <details key={`${finding.id}-${index}`} className="py-2 first:pt-0">
                       <summary className="cursor-pointer font-medium">{finding.id} · {finding.title} <span className="text-slate-400">({finding.severity})</span></summary>
                       {finding.affected_target && <p className="mt-2 break-all text-xs text-slate-400">Activo: {finding.affected_target}</p>}
                       {finding.summary && <p className="mt-2 whitespace-pre-wrap text-xs">{finding.summary}</p>}
                       {finding.remediation && <p className="mt-2 whitespace-pre-wrap text-xs text-emerald-200">Remediación: {finding.remediation}</p>}
                     </details>)}</div>
                   </section>}
-                  {diffRevision.snapshot.boards.length > 0 && <section className="rounded-lg border border-slate-800 bg-slate-900/70 p-3">
+                  {diffRevision.snapshot.boards.length > 0 && <section className="border-b border-slate-700/70 py-3">
                     <h4 className="font-semibold text-white">Pizarras · {diffRevision.snapshot.boards.length}</h4>
-                    <div className="mt-2 space-y-2">{diffRevision.snapshot.boards.map(board => <details key={board.id} className="rounded border border-slate-800 p-2">
+                    <div className="mt-2 divide-y divide-slate-800">{diffRevision.snapshot.boards.map(board => <details key={board.id} className="py-2 first:pt-0">
                       <summary className="cursor-pointer">{board.title} · {board.element_count} elementos</summary>
                       {board.svg_snapshot && <img loading="lazy" src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(board.svg_snapshot)}`} alt={`Vista guardada de la pizarra ${board.title}`} className="mt-2 max-h-80 max-w-full rounded border border-slate-700 bg-slate-950 object-contain" />}
                     </details>)}</div>
                   </section>}
-                  {diffRevision.snapshot.citations.length > 0 && <section className="rounded-lg border border-slate-800 bg-slate-900/70 p-3">
+                  {diffRevision.snapshot.citations.length > 0 && <section className="border-b border-slate-700/70 py-3">
                     <h4 className="font-semibold text-white">Citas y vínculos · {diffRevision.snapshot.citations.length}</h4>
-                    <div className="mt-2 space-y-2">{diffRevision.snapshot.citations.map(citation => <article key={citation.id} className="rounded border border-slate-800 p-2 text-xs">
+                    <div className="mt-2 divide-y divide-slate-800">{diffRevision.snapshot.citations.map(citation => <article key={citation.id} className="py-2 text-xs first:pt-0">
                       <p className="font-medium">{citation.anchor_id} · líneas {citation.line_start}–{citation.line_end}{citation.heading_path ? ` · ${citation.heading_path}` : ''}</p>
                       <blockquote className="mt-1 border-l-2 border-slate-600 pl-2 text-slate-300">{citation.quoted_text}</blockquote>
                       {citation.note && <p className="mt-1 text-slate-400">{citation.note}</p>}
                     </article>)}</div>
                   </section>}
-                  {(diffRevision.snapshot.assets?.length || 0) > 0 && <section className="rounded-lg border border-slate-800 bg-slate-900/70 p-3">
+                  {(diffRevision.snapshot.assets?.length || 0) > 0 && <section className="py-3">
                     <h4 className="font-semibold text-white">Evidencias · {diffRevision.snapshot.assets?.length || 0}</h4>
-                    <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">{diffRevision.snapshot.assets?.map(asset => <figure key={asset.id} className="min-w-0 rounded border border-slate-800 p-2">
+                    <div className="mt-2 grid grid-cols-1 divide-y divide-slate-800 sm:grid-cols-2 sm:divide-y-0 sm:divide-x">{diffRevision.snapshot.assets?.map(asset => <figure key={asset.id} className="min-w-0 py-2 sm:px-3 first:pl-0">
                       {assetUrls[asset.id] && <img loading="lazy" src={assetUrls[asset.id]} alt={asset.caption || asset.filename} className="max-h-48 max-w-full rounded object-contain" />}
                       <figcaption className="mt-1 break-all text-xs">{asset.filename}{asset.caption ? ` · ${asset.caption}` : ''}</figcaption>
                     </figure>)}</div>
                   </section>}
                 </div> : <p className="mb-4 rounded border border-amber-800/60 bg-amber-950/30 p-3 text-sm text-amber-200">Esta revisión antigua solo conserva el Markdown. Las versiones creadas ahora también incluyen los datos, hallazgos, pizarras, citas y evidencias.</p>}
-                <MarkdownRichPreview markdown={diffRevision.markdown_content || ''} redactPreview={false} boards={diffRevision.snapshot?.boards ?? detail.boards} assets={diffRevision.snapshot?.assets ?? detail.assets} assetObjectUrls={assetUrls} /></div> : <div className="flex-1 overflow-auto p-3 bg-slate-950 font-mono text-xs space-y-0.5">
+                <MarkdownRichPreview markdown={diffRevision.markdown_content || ''} redactPreview={false} boards={diffRevision.snapshot?.boards ?? detail.boards} assets={diffRevision.snapshot?.assets ?? detail.assets} assetObjectUrls={assetUrls} /></div> : <div className="flex-1 overflow-auto p-3 font-mono text-xs space-y-0.5">
               {changedRevisionSections.length > 0 && <p className="mb-3 rounded bg-amber-950/50 p-2 font-sans text-amber-200">También cambiaron: {changedRevisionSections.join(', ')}. Abre Vista previa para consultar la versión guardada.</p>}
               {diffLoading && <p role="status" className="py-3 font-sans text-slate-300">Calculando cambios…</p>}
-              {diffError && <div role="alert" className="py-3 font-sans text-rose-300">{diffError} <button type="button" onClick={() => setDiffAttempt(value => value + 1)} className="rounded bg-slate-800 px-3 py-2 text-slate-100">Reintentar</button></div>}
+              {diffError && <div role="alert" className="py-3 font-sans text-rose-300">{diffError} <button type="button" onClick={() => setDiffAttempt(value => value + 1)} className="ui-action-secondary">Reintentar</button></div>}
               {revisionDiff.slice(diffPage * 300, (diffPage + 1) * 300).map((ln, i) => (
                 <div
                   key={i}
@@ -4015,7 +4118,7 @@ export const WriteupsView: React.FC = () => {
                   {ln.text || ' '}
                 </div>
               ))}
-              {revisionDiff.length > 300 && <div className="flex items-center gap-3 py-3 font-sans text-slate-200"><button type="button" disabled={diffPage === 0} onClick={() => setDiffPage(page => page - 1)} className="px-3 py-2 bg-slate-800 rounded disabled:opacity-40">Anterior</button><span>Bloque {diffPage + 1} de {Math.ceil(revisionDiff.length / 300)}</span><button type="button" disabled={(diffPage + 1) * 300 >= revisionDiff.length} onClick={() => setDiffPage(page => page + 1)} className="px-3 py-2 bg-slate-800 rounded disabled:opacity-40">Siguiente</button></div>}
+              {revisionDiff.length > 300 && <div className="flex items-center gap-3 py-3 font-sans text-slate-200"><button type="button" disabled={diffPage === 0} onClick={() => setDiffPage(page => page - 1)} className="ui-action-secondary">Anterior</button><span>Bloque {diffPage + 1} de {Math.ceil(revisionDiff.length / 300)}</span><button type="button" disabled={(diffPage + 1) * 300 >= revisionDiff.length} onClick={() => setDiffPage(page => page + 1)} className="ui-action-secondary">Siguiente</button></div>}
               </div>}
             </div>
           </div>

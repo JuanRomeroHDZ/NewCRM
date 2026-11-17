@@ -32,13 +32,14 @@ export const SecretField: React.FC<SecretFieldProps> = ({
   }, [canReveal, value]);
 
   return (
-    <div className={`inline-flex min-w-0 max-w-full items-center gap-1.5 px-2.5 py-1 rounded-md bg-indigo-600 border border-obsidian-border group ${className}`}>
-      <span className="min-w-0 overflow-x-auto whitespace-nowrap font-mono text-xs text-obsidian-text tracking-wider select-all">
+    <div className={`inline-flex min-h-11 min-w-0 max-w-full items-center gap-1.5 rounded-md border border-obsidian-border bg-obsidian-bg px-2.5 py-1 group ${className}`}>
+      <span className="min-w-0 overflow-x-auto whitespace-nowrap font-mono text-xs text-obsidian-text select-all">
         {canReveal && revealed && value ? value : masked}
       </span>
 
-      <div className="flex items-center gap-1 opacity-70 group-hover:opacity-100 transition-opacity">
+      <div className="flex items-center gap-1">
         {canReveal && value && (
+          /* [Estado seleccionable] Revela u oculta el valor protegido. */
           <button
             type="button"
             onClick={(e) => {
@@ -48,16 +49,16 @@ export const SecretField: React.FC<SecretFieldProps> = ({
             title={revealed ? 'Ocultar' : 'Revelar en pantalla'}
             aria-label={`${revealed ? 'Ocultar' : 'Mostrar'} ${label}`}
             aria-pressed={revealed}
-            className="p-1 text-obsidian-muted hover:text-white rounded hover:bg-obsidian-border transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
+            className="ui-action-icon ui-action-toggle"
           >
-            {revealed ? <EyeOff size={13} aria-hidden="true" /> : <Eye size={13} aria-hidden="true" />}
+            {revealed ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}
           </button>
         )}
 
         <CopyButton
           value={value || ''}
           label={label}
-          size="sm"
+          size="md"
           requireVaultPassword={requireVaultPassword}
           onClickCustom={onCopyRequest}
         />

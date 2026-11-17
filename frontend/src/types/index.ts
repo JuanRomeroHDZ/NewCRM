@@ -727,6 +727,25 @@ export interface WriteupSummary {
   created_at: string;
 }
 
+export interface WriteupOverviewBucket {
+  label: string;
+  count: number;
+  percentage: number;
+}
+
+export interface WriteupOverview {
+  report_count: number;
+  total_words: number;
+  estimated_reading_minutes: number;
+  largest_document_title?: string | null;
+  largest_document_words: number;
+  language_distribution: WriteupOverviewBucket[];
+  export_count: number;
+  export_distribution: WriteupOverviewBucket[];
+  revision_count: number;
+  unreadable_documents: number;
+}
+
 export interface WriteupDetail extends WriteupSummary {
   manual_locked?: boolean;
   manual_locked_by?: string | null;

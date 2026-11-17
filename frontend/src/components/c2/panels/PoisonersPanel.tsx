@@ -91,11 +91,11 @@ export const PoisonersPanel: React.FC = () => {
   };
 
   return (
-    <div className="space-y-4">
-      <section className="rounded-xl border border-obsidian-border bg-obsidian-panel p-4 sm:p-5 shadow-obsidian">
+    <div className="min-w-0">
+      <section className="border-t border-obsidian-border py-4 sm:py-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2.5">
-            <Radio size={18} className="shrink-0 text-obsidian-gold" aria-hidden="true" />
+            <Radio size={18} className="shrink-0 text-obsidian-muted" aria-hidden="true" />
             <h2 className="font-heading text-base font-bold text-white">{t('poison.title')}</h2>
           </div>
           <div className="flex flex-wrap items-center gap-1.5">
@@ -134,56 +134,56 @@ export const PoisonersPanel: React.FC = () => {
           <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
             <label
               htmlFor={llmnrId}
-              className="flex min-h-[44px] cursor-pointer items-center gap-2.5 rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 text-xs text-white transition-colors hover:border-obsidian-borderLight"
+              className="flex min-h-[44px] cursor-pointer items-center gap-2.5 border-b border-obsidian-border px-1 py-2 text-xs text-white transition-colors hover:text-white"
             >
               <input
                 id={llmnrId}
                 type="checkbox"
                 checked={llmnr}
                 onChange={(e) => setLlmnr(e.target.checked)}
-                className="h-4 w-4 rounded border-obsidian-border bg-obsidian-bg accent-obsidian-gold"
+                className="h-4 w-4 rounded border-obsidian-border bg-obsidian-bg accent-obsidian-accent"
               />
               <span>{t('poison.llmnr')}</span>
             </label>
 
             <label
               htmlFor={nbtnsId}
-              className="flex min-h-[44px] cursor-pointer items-center gap-2.5 rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 text-xs text-white transition-colors hover:border-obsidian-borderLight"
+              className="flex min-h-[44px] cursor-pointer items-center gap-2.5 border-b border-obsidian-border px-1 py-2 text-xs text-white transition-colors hover:text-white"
             >
               <input
                 id={nbtnsId}
                 type="checkbox"
                 checked={nbtns}
                 onChange={(e) => setNbtns(e.target.checked)}
-                className="h-4 w-4 rounded border-obsidian-border bg-obsidian-bg accent-obsidian-gold"
+                className="h-4 w-4 rounded border-obsidian-border bg-obsidian-bg accent-obsidian-accent"
               />
               <span>{t('poison.nbtns')}</span>
             </label>
 
             <label
               htmlFor={mdnsId}
-              className="flex min-h-[44px] cursor-pointer items-center gap-2.5 rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 text-xs text-white transition-colors hover:border-obsidian-borderLight"
+              className="flex min-h-[44px] cursor-pointer items-center gap-2.5 border-b border-obsidian-border px-1 py-2 text-xs text-white transition-colors hover:text-white"
             >
               <input
                 id={mdnsId}
                 type="checkbox"
                 checked={mdns}
                 onChange={(e) => setMdns(e.target.checked)}
-                className="h-4 w-4 rounded border-obsidian-border bg-obsidian-bg accent-obsidian-gold"
+                className="h-4 w-4 rounded border-obsidian-border bg-obsidian-bg accent-obsidian-accent"
               />
               <span>{t('poison.mdns')}</span>
             </label>
 
             <label
               htmlFor={wpadId}
-              className="flex min-h-[44px] cursor-pointer items-center gap-2.5 rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 text-xs text-white transition-colors hover:border-obsidian-borderLight"
+              className="flex min-h-[44px] cursor-pointer items-center gap-2.5 border-b border-obsidian-border px-1 py-2 text-xs text-white transition-colors hover:text-white"
             >
               <input
                 id={wpadId}
                 type="checkbox"
                 checked={wpad}
                 onChange={(e) => setWpad(e.target.checked)}
-                className="h-4 w-4 rounded border-obsidian-border bg-obsidian-bg accent-obsidian-gold"
+                className="h-4 w-4 rounded border-obsidian-border bg-obsidian-bg accent-obsidian-accent"
               />
               <span>{t('poison.wpad')}</span>
             </label>
@@ -200,7 +200,7 @@ export const PoisonersPanel: React.FC = () => {
                 value={spoofIp}
                 onChange={(e) => setSpoofIp(e.target.value)}
                 placeholder="192.168.1.50"
-                className="min-h-[44px] w-full rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 font-mono text-xs text-white placeholder:text-slate-500 focus:border-obsidian-gold focus:outline-none"
+                className="min-h-[44px] w-full rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 font-mono text-xs text-white placeholder:text-obsidian-muted focus:border-obsidian-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-accent"
               />
             </div>
 
@@ -215,7 +215,7 @@ export const PoisonersPanel: React.FC = () => {
                 value={proxyPort}
                 onChange={(e) => setProxyPort(e.target.value)}
                 disabled={!wpad}
-                className="min-h-[44px] w-full rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 font-mono text-xs text-white focus:border-obsidian-gold focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                className="min-h-[44px] w-full rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 font-mono text-xs text-white focus:border-obsidian-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-accent disabled:cursor-not-allowed disabled:opacity-50"
               />
             </div>
           </div>
@@ -224,25 +224,27 @@ export const PoisonersPanel: React.FC = () => {
             <button
               type="submit"
               disabled={busy || isAnyRunning}
-              className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg border border-obsidian-gold/50 bg-obsidian-gold/20 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-obsidian-gold/30 disabled:cursor-not-allowed disabled:opacity-50"
+              className="ui-action-primary"
             >
-              <Play size={14} aria-hidden="true" />
+              <Play size={16} aria-hidden="true" />
               <span>{t('poison.start')}</span>
+              {/* [Acción principal] Inicia o confirma la operación. */}
             </button>
             <button
               type="button"
               onClick={() => void handleStop()}
               disabled={busy || !isAnyRunning}
-              className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg border border-red-500/40 bg-obsidian-dangerBg px-4 py-2 text-xs font-semibold text-red-300 transition-colors hover:border-red-400 hover:bg-red-950/60 disabled:cursor-not-allowed disabled:opacity-50"
+              className="ui-action-danger"
             >
-              <Square size={14} aria-hidden="true" />
+              <Square size={16} aria-hidden="true" />
               <span>{t('poison.stop')}</span>
+              {/* [Acción destructiva] Detiene o revierte la operación. */}
             </button>
           </div>
         </form>
       </section>
 
-      <section className="rounded-xl border border-obsidian-border bg-obsidian-panel p-4 sm:p-5 shadow-obsidian">
+      <section className="border-t border-obsidian-border py-4 sm:py-5">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <h3 className="font-heading text-sm font-bold text-white">{t('nav.poison')}</h3>
@@ -254,17 +256,18 @@ export const PoisonersPanel: React.FC = () => {
             type="button"
             onClick={clearPoisonEvents}
             disabled={poisonEvents.length === 0}
-            className="inline-flex min-h-[44px] lg:min-h-10 items-center gap-1.5 rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-1.5 text-xs font-medium text-obsidian-muted transition-colors hover:border-obsidian-borderLight hover:text-white disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-gold"
+            className="ui-action-secondary"
           >
-            <Trash2 size={13} aria-hidden="true" />
+            <Trash2 size={16} aria-hidden="true" />
             <span>{t('console.clear')}</span>
+            {/* [Acción secundaria] Abre o ajusta la operación actual. */}
           </button>
         </div>
 
-        <div className="overflow-x-auto rounded-lg border border-obsidian-border">
+        <div className="overflow-x-auto border-y border-obsidian-border">
           <table className="w-full min-w-[480px] border-collapse text-left text-xs">
             <thead>
-              <tr className="border-b border-obsidian-border bg-obsidian-surface text-[11px] font-semibold uppercase tracking-wider text-obsidian-muted">
+              <tr className="border-b border-obsidian-border text-xs font-semibold text-obsidian-muted">
                 <th className="px-3 py-2.5">Proto</th>
                 <th className="px-3 py-2.5">{t('poison.name')}</th>
                 <th className="px-3 py-2.5">{t('poison.src')}</th>
@@ -281,7 +284,7 @@ export const PoisonersPanel: React.FC = () => {
                 poisonEvents.map((ev, idx) => (
                   <tr key={ev.id || `${ev.proto}-${ev.name}-${ev.src}-${idx}`} className="hover:bg-obsidian-surface/60">
                     <td className="px-3 py-2 font-mono">
-                      <span className="rounded border border-obsidian-gold/35 bg-obsidian-gold/10 px-2 py-0.5 text-[11px] font-semibold text-obsidian-gold">
+                      <span className="rounded border border-obsidian-border bg-obsidian-surface px-2 py-0.5 text-[11px] font-semibold text-obsidian-muted">
                         {ev.proto}
                       </span>
                     </td>

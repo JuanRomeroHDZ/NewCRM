@@ -64,13 +64,14 @@ export const CopyButton: React.FC<CopyButtonProps> = ({
 
   return (
     <>
+      {/* [Icono] Copia el valor asociado y muestra la confirmación. */}
       <button
         type="button"
         onClick={handleCopy}
         aria-haspopup={requireVaultPassword && !onClickCustom ? 'dialog' : undefined}
         title={`Copiar ${label}`}
         aria-label={`Copiar ${label}`}
-        className={`inline-flex items-center justify-center p-1.5 rounded-md transition-all text-obsidian-muted hover:text-white hover:bg-obsidian-surface border border-transparent hover:border-obsidian-borderLight focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 active:scale-95 ${className} ${
+        className={`ui-action-icon ${className} ${
           copied ? 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10' : ''
         }`}
       >

@@ -147,35 +147,36 @@ export const ProspectsView: React.FC = () => {
   };
 
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-4 p-3 sm:space-y-5 sm:p-6 lg:p-8">
+    <div className="mx-auto w-full max-w-7xl space-y-4 px-4 py-4 sm:space-y-6 sm:px-6 sm:py-6">
       <header className="flex min-w-0 flex-wrap items-center justify-between gap-3">
-        <div className="flex min-w-0 items-start gap-2.5">
-          <Briefcase size={19} className="mt-1 shrink-0 text-indigo-300" aria-hidden="true" />
+        <div className="flex min-w-0 items-start gap-3">
+          <Briefcase size={18} className="mt-1 shrink-0 text-obsidian-muted" aria-hidden="true" />
           <div className="min-w-0">
             <h1 className="text-lg font-bold tracking-tight text-white sm:text-xl">Prospectos</h1>
             <p className="mt-0.5 text-xs text-obsidian-muted">Oportunidades y seguimiento.</p>
           </div>
         </div>
         <div className="flex max-w-full flex-wrap gap-2">
+          {/* [Navegación] Abre la captura desde el contexto de prospectos. */}
           <button
             type="button"
             onClick={() => setActiveSection('capture')}
-            className="inline-flex min-h-10 w-44 max-w-full items-center justify-center gap-2 rounded-lg border border-obsidian-border bg-obsidian-surface px-3 text-xs font-semibold text-obsidian-text transition-colors hover:border-indigo-500/40 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
+            className="ui-action-secondary max-w-full"
           >
-            <MapPinned size={15} className="text-indigo-300" aria-hidden="true" /> Captar en mapa
+            <MapPinned size={16} className="text-obsidian-muted" aria-hidden="true" /> Captar en mapa
           </button>
           <button
             type="button"
             onClick={() => (isUnlocked ? openProspectModal() : openUnlockModal())}
-            className="inline-flex min-h-10 w-44 max-w-full items-center justify-center gap-2 rounded-lg bg-indigo-600 px-3 text-xs font-semibold text-white transition-colors hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
-          >
-            <Plus size={15} aria-hidden="true" /> Nuevo prospecto
+            className="ui-action-primary max-w-full"
+          >{/* [Acción principal] Inicia o confirma la tarea de este espacio. */}
+            <Plus size={16} aria-hidden="true" /> Nuevo prospecto
           </button>
         </div>
       </header>
 
-      <section aria-labelledby="prospectos-lista" className="overflow-hidden rounded-2xl border border-obsidian-border bg-obsidian-card">
-        <div className="border-b border-obsidian-border p-3 sm:p-5">
+      <section aria-labelledby="prospectos-lista" className="overflow-hidden rounded-xl border border-obsidian-border bg-obsidian-panel">
+        <div className="border-b border-obsidian-border p-4 sm:p-6">
           <div className="mb-3 flex flex-wrap items-baseline justify-between gap-1">
             <h2 id="prospectos-lista" className="text-base font-semibold text-white">
               Seguimiento
@@ -187,9 +188,9 @@ export const ProspectsView: React.FC = () => {
           <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(12rem,0.45fr)]">
             <label className="min-w-0 text-xs font-medium text-obsidian-muted">
               Buscar
-              <span className="relative mt-1.5 block">
+              <span className="relative mt-2 block">
                 <Search
-                  size={15}
+                  size={16}
                   className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-obsidian-muted"
                   aria-hidden="true"
                 />
@@ -209,7 +210,7 @@ export const ProspectsView: React.FC = () => {
               <select
                 value={status}
                 onChange={(event) => setStatus(event.target.value)}
-                className="mt-1.5 min-h-11 w-full rounded-xl border border-obsidian-border bg-obsidian-bg px-3 text-sm text-white focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                className="mt-2 min-h-11 w-full rounded-xl border border-obsidian-border bg-obsidian-bg px-3 text-sm text-white focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
               >
                 <option value="todos">Todas las etapas</option>
                 {PROSPECT_STATUS_OPTIONS.map((option) => (
@@ -228,14 +229,14 @@ export const ProspectsView: React.FC = () => {
             <button
               type="button"
               onClick={openUnlockModal}
-              className="text-indigo-300 underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
-            >
+              className="ui-action-secondary"
+            >{/* [Acción secundaria] Mantiene disponible esta acción en su contexto. */}
               Desbloquear
             </button>
           </div>
         ) : loading && visibleProspects.length === 0 ? (
-          <div role="status" className="flex items-center gap-2.5 p-6 text-sm text-obsidian-muted">
-            <LoaderCircle size={18} className="animate-spin text-indigo-300" aria-hidden="true" />
+          <div role="status" className="flex items-center gap-3 p-6 text-sm text-obsidian-muted">
+            <LoaderCircle size={18} className="animate-spin text-obsidian-muted" aria-hidden="true" />
             <span>Cargando prospectos…</span>
           </div>
         ) : error && visibleProspects.length === 0 ? (
@@ -262,11 +263,12 @@ export const ProspectsView: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setActiveSection('capture')}
-                className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-indigo-500/25 bg-indigo-500/10 px-3 text-xs font-semibold text-indigo-200 hover:bg-indigo-500/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
+                className="ui-action-secondary"
               >
-                <MapPinned size={14} aria-hidden="true" />
+                {/* [Navegación] Lleva a la búsqueda desde el estado vacío. */}
+                <MapPinned size={16} aria-hidden="true" />
                 Buscar negocios
-                <ArrowUpRight size={13} aria-hidden="true" />
+                <ArrowUpRight size={16} aria-hidden="true" />
               </button>
             )}
           </div>
@@ -291,6 +293,21 @@ export const ProspectsView: React.FC = () => {
             {visibleProspects.map((prospect) => {
               const statusMeta = getStatusMeta(prospect.status);
               const slaMeta = getSlaBadgeMeta(prospect.sla_status);
+              const slaDotClass = prospect.sla_status === 'cumplido'
+                ? 'bg-emerald-400'
+                : prospect.sla_status === 'vencido'
+                  ? 'bg-rose-400'
+                  : 'bg-amber-400';
+              const statusBadgeClass = prospect.status === 'respondido'
+                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+                : prospect.status === 'tiempo_agotado'
+                  ? 'border-rose-500/30 bg-rose-500/10 text-rose-300'
+                  : 'border-obsidian-border bg-obsidian-surface text-obsidian-muted';
+              const statusDotClass = prospect.status === 'respondido'
+                ? 'bg-emerald-400'
+                : prospect.status === 'tiempo_agotado'
+                  ? 'bg-rose-400'
+                  : 'bg-obsidian-muted';
               const contactPreview = prospect.whatsapp || prospect.phones;
               const followupCount = prospect.followup_count ?? 0;
               const maxFollowups = prospect.max_followup_attempts ?? 3;
@@ -300,8 +317,9 @@ export const ProspectsView: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => openInspector('prospect', prospect.id)}
-                    className="flex min-h-[76px] w-full flex-col gap-2.5 px-4 py-3.5 text-left transition-colors hover:bg-obsidian-surface/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400 sm:flex-row sm:items-center sm:justify-between sm:px-5"
+                    className="ui-nav-action min-h-[76px] w-full flex-col items-stretch gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5"
                   >
+                    {/* [Navegación] Abre el detalle del prospecto seleccionado. */}
                     <div className="min-w-0 flex-1 space-y-1">
                       <span className="block break-words text-sm font-medium text-white">
                         {prospect.company_name}
@@ -309,25 +327,25 @@ export const ProspectsView: React.FC = () => {
                       <span className="block break-words text-xs text-obsidian-muted">
                         {prospect.contact_name || prospect.contact_email || 'Sin contacto registrado'}
                       </span>
-                      <div className="flex flex-wrap items-center gap-1.5 pt-0.5 text-[11px]">
+                      <div className="flex flex-wrap items-center gap-2 pt-0.5 text-[11px]">
                         {(prospect.estimated_value || 0) > 0 && (
-                          <span className="inline-flex items-center gap-1 rounded-md border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 font-mono font-semibold text-emerald-300">
-                            <DollarSign size={10} aria-hidden="true" />
+                          <span className="inline-flex items-center gap-2 font-mono font-semibold text-obsidian-text">
+                            <DollarSign size={16} className="text-obsidian-muted" aria-hidden="true" />
                             <span>{formatEstimatedValue(prospect.estimated_value, prospect.currency)}</span>
                           </span>
                         )}
-                        <span className="inline-flex items-center gap-1 rounded-md border border-obsidian-border bg-obsidian-surface px-2 py-0.5 text-obsidian-text">
-                          <Clock size={10} className="text-indigo-300" aria-hidden="true" />
+                        <span className="inline-flex items-center gap-1 text-obsidian-muted">
+                          <Clock size={16} className="text-obsidian-muted" aria-hidden="true" />
                           <span>
                             Seguimientos: {followupCount}/{maxFollowups}
                           </span>
                         </span>
                         {contactPreview && (
-                          <span className="inline-flex max-w-full items-center gap-1 truncate rounded-md border border-obsidian-border bg-obsidian-bg px-2 py-0.5 font-mono text-obsidian-muted">
+                          <span className="inline-flex max-w-full items-center gap-1 truncate font-mono text-obsidian-muted">
                             {prospect.whatsapp ? (
-                              <MessageCircle size={10} className="shrink-0 text-emerald-400" aria-hidden="true" />
+                              <MessageCircle size={16} className="shrink-0 text-obsidian-muted" aria-hidden="true" />
                             ) : (
-                              <Phone size={10} className="shrink-0 text-cyan-400" aria-hidden="true" />
+                              <Phone size={16} className="shrink-0 text-obsidian-muted" aria-hidden="true" />
                             )}
                             <span className="truncate">{contactPreview}</span>
                           </span>
@@ -335,17 +353,17 @@ export const ProspectsView: React.FC = () => {
                       </div>
                     </div>
 
-                    <div className="flex shrink-0 flex-wrap items-center gap-1.5 sm:justify-end">
+                    <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
                       <span
                         className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium ${slaMeta.badgeClass}`}
                       >
-                        <span className={`h-1.5 w-1.5 rounded-full ${slaMeta.dotClass}`} aria-hidden="true" />
+                        <span className={`h-1.5 w-1.5 rounded-full ${slaDotClass}`} aria-hidden="true" />
                         <span>{slaMeta.shortLabel}</span>
                       </span>
                       <span
-                        className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-medium ${statusMeta.badgeClass}`}
+                        className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[10px] font-medium ${statusBadgeClass}`}
                       >
-                        <span className={`h-1.5 w-1.5 rounded-full ${statusMeta.dotClass}`} aria-hidden="true" />
+                        <span className={`h-1.5 w-1.5 rounded-full ${statusDotClass}`} aria-hidden="true" />
                         <span>{statusMeta.label}</span>
                       </span>
                     </div>
@@ -365,9 +383,9 @@ export const ProspectsView: React.FC = () => {
               onClick={handleLoadMore}
               disabled={loadingMore}
               aria-label="Cargar más prospectos"
-              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-obsidian-border bg-obsidian-surface px-4 text-xs font-semibold text-obsidian-text transition-colors hover:border-indigo-400/60 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 disabled:cursor-wait disabled:opacity-60"
-            >
-              {loadingMore && <LoaderCircle size={14} className="animate-spin" aria-hidden="true" />}
+              className="ui-action-secondary"
+            >{/* [Acción secundaria] Ejecuta la operación de apoyo en este espacio. */}
+              {loadingMore && <LoaderCircle size={16} className="animate-spin" aria-hidden="true" />}
               {loadingMore ? 'Cargando…' : loadMoreError ? 'Reintentar carga' : 'Cargar más'}
             </button>
           </div>

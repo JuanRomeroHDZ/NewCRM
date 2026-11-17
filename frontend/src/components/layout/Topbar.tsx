@@ -13,6 +13,7 @@ interface TopbarProps {
 
 export const Topbar: React.FC<TopbarProps> = ({ onMenuClick, menuTriggerRef, isMenuOpen }) => {
   const { activeSection, activeScope, setActiveScope } = useVault();
+  const isC2Section = activeSection.startsWith('c2_');
   const [saveNotice, setSaveNotice] = useState('');
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -37,6 +38,17 @@ export const Topbar: React.FC<TopbarProps> = ({ onMenuClick, menuTriggerRef, isM
     graph: { title: 'Mapa de Conexiones', compactTitle: 'Conexiones', tooltip: 'Diagrama visual que muestra qué servicios y clientes dependen de cada correo y tarjeta.' },
     writeups: { title: 'Informes de seguridad', compactTitle: 'Informes', tooltip: 'Documenta revisiones de seguridad, dibuja esquemas y exporta informes.' },
     subscriptions: { title: 'Finanzas, Ingresos y Vencimientos', compactTitle: 'Finanzas', tooltip: 'Control de suscripciones, gastos únicos, pagos recibidos de clientes y vencimientos de dominios o hosting.' },
+    overview_prospection: { title: 'Vista general · Prospección', compactTitle: 'Prospección', tooltip: 'Resumen de prospectos y captación.' },
+    overview_communications: { title: 'Vista general · Correo y servicios', compactTitle: 'Correo y servicios', tooltip: 'Resumen de correos principales, servicios vinculados y relaciones.' },
+    overview_finances: { title: 'Finanzas · Ingresos y vencimientos', compactTitle: 'Finanzas', tooltip: 'Resumen financiero y accesos a pagos, servicios, gastos y métodos de pago.' },
+    overview_security: { title: 'Vista general · Seguridad', compactTitle: 'Seguridad', tooltip: 'Resumen de credenciales, informes y estado de seguridad.' },
+    overview_c2: { title: 'Vista general · Red y Lab', compactTitle: 'Red y Lab', tooltip: 'Estado de la sesión C2 y accesos a sus herramientas.' },
+    overview_activity: { title: 'Vista general · Actividad y papelera', compactTitle: 'Actividad', tooltip: 'Resumen del historial y elementos eliminados.' },
+    overview_settings: { title: 'Vista general · Ajustes', compactTitle: 'Ajustes', tooltip: 'Estado de preferencias y configuración.' },
+    finance_income: { title: 'Finanzas · Ingresos y pagos', compactTitle: 'Ingresos' },
+    finance_services: { title: 'Finanzas · Servicios y vencimientos', compactTitle: 'Servicios' },
+    finance_expenses: { title: 'Finanzas · Gastos', compactTitle: 'Gastos' },
+    finance_cards: { title: 'Finanzas · Tarjetas y métodos', compactTitle: 'Tarjetas' },
     trash: { title: 'Papelera', compactTitle: 'Papelera', tooltip: 'Elementos eliminados recientemente que puedes restaurar o borrar de forma definitiva.' },
     settings: { title: 'Ajustes y Seguridad', compactTitle: 'Ajustes', tooltip: 'Configura tu contraseña de acceso, tiempos de bloqueo automático, presupuesto y respaldos.' },
     settings_appearance: { title: 'Ajustes', compactTitle: 'Ajustes' },
@@ -74,21 +86,22 @@ export const Topbar: React.FC<TopbarProps> = ({ onMenuClick, menuTriggerRef, isM
   ] as const;
 
   return (
-    <header className="app-topbar relative z-20 flex min-w-0 shrink-0 items-center justify-between gap-2 border-b border-obsidian-border bg-obsidian-panel/95 px-3 py-2 sm:flex-nowrap sm:gap-3 sm:px-4 md:py-2.5">
+    <header className="app-topbar relative z-20 flex min-w-0 shrink-0 flex-wrap items-center justify-between gap-2 border-b border-obsidian-border bg-obsidian-panel/95 px-3 py-2 sm:gap-3 sm:px-4 md:py-2.5">
       {/* Title & Optional Context Tooltip */}
-      <div className="flex min-w-0 flex-1 items-center gap-2">
+      <div className="flex min-w-[min(100%,9rem)] flex-1 items-center gap-2">
+        {/* [Icono] Abrir la navegación en pantallas estrechas. */}
         <button
           ref={menuTriggerRef}
           type="button"
           onClick={onMenuClick}
           aria-expanded={Boolean(isMenuOpen)}
           aria-controls="primary-navigation"
-          className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-obsidian-muted transition-colors hover:bg-obsidian-surface hover:text-white active:bg-obsidian-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 lg:hidden"
+          className="ui-action-icon h-11 w-11 shrink-0 lg:hidden"
           aria-label={isMenuOpen ? 'Cerrar menú de navegación' : 'Abrir menú de navegación'}
         >
           {isMenuOpen ? <X size={20} aria-hidden="true" /> : <Menu size={20} aria-hidden="true" />}
         </button>
-        <h1 className="truncate text-sm font-semibold text-white sm:text-base" title={currentInfo.title}>
+        <h1 className="min-w-0 truncate text-sm font-semibold text-white sm:text-base" title={currentInfo.title}>
           <span className="topbar-title-full">{currentInfo.title}</span>
           <span className="topbar-title-compact">{currentInfo.compactTitle}</span>
         </h1>
@@ -99,18 +112,20 @@ export const Topbar: React.FC<TopbarProps> = ({ onMenuClick, menuTriggerRef, isM
         )}
       </div>
 
-      <span role="status" className="min-w-0 truncate text-xs text-emerald-300">{activeSection === 'writeups' ? saveNotice : ''}</span>
-      <label className="relative shrink-0">
-        <span className="sr-only">Filtrar información por ámbito</span>
-        <select
-          value={activeScope}
-          onChange={(event) => setActiveScope(event.target.value as typeof activeScope)}
-          className="min-h-11 max-w-[120px] appearance-none rounded-md border border-obsidian-border bg-obsidian-panel pl-3 pr-8 text-xs font-medium text-obsidian-text transition-colors hover:bg-obsidian-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 sm:max-w-none"
-        >
-          {scopeOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-        </select>
-        <ChevronDown size={14} aria-hidden="true" className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-300" />
-      </label>
+      {activeSection === 'writeups' && saveNotice && <span role="status" className="min-w-0 max-w-full break-words text-xs text-emerald-300">{saveNotice}</span>}
+      {!isC2Section && (
+        <label className="relative shrink-0">
+          <span className="sr-only">Filtrar información por ámbito</span>
+          <select
+            value={activeScope}
+            onChange={(event) => setActiveScope(event.target.value as typeof activeScope)}
+            className="min-h-11 max-w-[120px] appearance-none rounded-md border border-obsidian-border bg-obsidian-panel pl-3 pr-8 text-xs font-medium text-obsidian-text transition-colors hover:bg-obsidian-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent sm:max-w-none"
+          >
+            {scopeOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+          </select>
+          <ChevronDown size={14} aria-hidden="true" className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-obsidian-muted" />
+        </label>
+      )}
 
     </header>
   );

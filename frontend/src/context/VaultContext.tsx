@@ -42,7 +42,18 @@ export type SectionType =
   | 'c2_mitm6'
   | 'c2_wifi'
   | 'c2_camera'
-  | 'c2_opsec';
+  | 'c2_opsec'
+  | 'overview_prospection'
+  | 'overview_communications'
+  | 'overview_finances'
+  | 'overview_security'
+  | 'overview_c2'
+  | 'overview_activity'
+  | 'overview_settings'
+  | 'finance_income'
+  | 'finance_services'
+  | 'finance_expenses'
+  | 'finance_cards';
 
 export type InspectorEntityType = 'email' | 'platform' | 'payment' | 'prospect';
 
@@ -78,6 +89,7 @@ interface VaultContextType {
   // Actions
   unlockVault: (password: string) => Promise<void>;
   lockVault: () => Promise<void>;
+  recordVaultActivity: () => Promise<{ remaining_seconds: number; account_active: boolean | null }>;
   panicLock: () => Promise<void>;
   setupMasterPassword: (password: string) => Promise<void>;
   copyToClipboard: (text: string, label?: string) => Promise<boolean>;
@@ -187,7 +199,7 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [allowRevealPasswords, setAllowRevealPasswords] = useState<boolean>(false);
   const [searchHotkey, setSearchHotkey] = useState<string>('ctrl+k');
   const [accentColor, setAccentColor] = useState<string>(DEFAULT_ACCENT_COLOR);
-  const [canvasStyle, setCanvasStyle] = useState<string>('dot-grid');
+  const [canvasStyle, setCanvasStyle] = useState<string>('plain');
 
   // Global Scope Filter
   const [activeScope, setActiveScopeState] = useState<ScopeFilter>(() => {
@@ -360,7 +372,7 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       setAllowRevealPasswords(status.allow_reveal_passwords);
       setSearchHotkey(status.search_hotkey || 'ctrl+k');
       setAccentColor(normalizeAccentColor(status.accent_color));
-      setCanvasStyle(['dot-grid', 'subtle-grid', 'plain'].includes(status.canvas_style) ? status.canvas_style : 'dot-grid');
+      setCanvasStyle('plain');
 
       if (!status.is_unlocked && getApiVaultToken()) {
         setApiVaultToken(null);
@@ -461,6 +473,22 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     'MXN';
   const systemLocale = runtimeConfig?.currency_config?.locale || 'es-MX';
 
+  const recordVaultActivity = useCallback(async () => {
+    if (!isUnlocked) throw new Error('La bóveda está bloqueada.');
+    const vaultToken = getApiVaultToken();
+    const userToken = getApiUserToken();
+    const result = await api.recordVaultActivity();
+    if (vaultToken && vaultToken === getApiVaultToken()) {
+      vaultStatusRequests.current.invalidate();
+      setRemainingSeconds(result.remaining_seconds);
+      if (result.account_active === false && userToken && userToken === getApiUserToken()) {
+        setApiUserToken(null);
+        window.dispatchEvent(new CustomEvent('core_user_session_expired'));
+      }
+    }
+    return result;
+  }, [isUnlocked]);
+
   // Only real user interaction extends the server-side inactivity deadline.
   useEffect(() => {
     if (!isUnlocked) return;
@@ -469,18 +497,7 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const recordActivity = () => {
       if (document.visibilityState !== 'visible' || Date.now() - lastAttempt < 15000) return;
       lastAttempt = Date.now();
-      const token = getApiVaultToken();
-      const userToken = getApiUserToken();
-      void api.recordVaultActivity().then(({ remaining_seconds, account_active }) => {
-        if (active && token && token === getApiVaultToken()) {
-          vaultStatusRequests.current.invalidate();
-          setRemainingSeconds(remaining_seconds);
-          if (account_active === false && userToken && userToken === getApiUserToken()) {
-            setApiUserToken(null);
-            window.dispatchEvent(new CustomEvent('core_user_session_expired'));
-          }
-        }
-      }).catch(() => { lastAttempt = 0; });
+      void recordVaultActivity().catch(() => { lastAttempt = 0; });
     };
     const events = ['pointerdown', 'keydown', 'input', 'wheel', 'touchstart'] as const;
     events.forEach((event) => window.addEventListener(event, recordActivity, { passive: true }));
@@ -488,7 +505,7 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       active = false;
       events.forEach((event) => window.removeEventListener(event, recordActivity));
     };
-  }, [isUnlocked]);
+  }, [isUnlocked, recordVaultActivity]);
 
   // Confirm expiry with the server: another tab may have extended the session.
   useEffect(() => {
@@ -760,6 +777,7 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         defaultEntityScope,
         unlockVault,
         lockVault,
+        recordVaultActivity,
         panicLock,
         setupMasterPassword,
         copyToClipboard,

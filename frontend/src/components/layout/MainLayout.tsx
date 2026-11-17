@@ -21,11 +21,10 @@ function getAccentTextColor(color: string): string {
 }
 
 export const MainLayout: React.FC = () => {
-  const { canvasStyle, accentColor, selectedEntity, isSetup, setActiveSection } = useVault();
+  const { accentColor, selectedEntity, isSetup, setActiveSection } = useVault();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const menuTriggerRef = useRef<HTMLButtonElement>(null);
   const wasMobileNavOpen = useRef(false);
-  const canvasClass = canvasStyle === 'dot-grid' ? 'dot-grid-canvas' : canvasStyle === 'subtle-grid' ? 'subtle-grid' : '';
 
   useEffect(() => {
     if (!isSetup) {
@@ -51,7 +50,7 @@ export const MainLayout: React.FC = () => {
   return (
     <C2Provider>
       <div
-        className={`brand-theme flex h-[100dvh] min-h-[100dvh] w-full overflow-hidden bg-obsidian-bg text-obsidian-text ${canvasClass}`}
+        className="brand-theme flex h-[100dvh] min-h-[100dvh] w-full overflow-hidden bg-obsidian-bg text-obsidian-text"
         style={{
           ['--brand-accent' as any]: accentColor,
           ['--brand-accent-contrast' as any]: getAccentTextColor(accentColor),
@@ -63,7 +62,7 @@ export const MainLayout: React.FC = () => {
             type="button"
             aria-label="Cerrar menú de navegación"
             onClick={() => setMobileNavOpen(false)}
-            className="fixed inset-0 z-40 bg-black/65 backdrop-blur-[2px] lg:hidden"
+            className="fixed inset-0 z-40 bg-obsidian-bg/75 backdrop-blur-[2px] lg:hidden"
           />
         )}
 

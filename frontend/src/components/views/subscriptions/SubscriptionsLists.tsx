@@ -14,10 +14,10 @@ import { RealProfitSummary } from '../../../lib/financeUtils';
 import { SectionType } from '../../../context/VaultContext';
 
 export const INCOME_CATEGORIES: { value: IncomeCategory; label: string; badge: string }[] = [
-  { value: 'anticipo', label: 'Anticipo de Proyecto', badge: 'bg-indigo-500/15 text-indigo-300 border-indigo-500/30' },
-  { value: 'liquidacion', label: 'Liquidación de Página Web', badge: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30' },
-  { value: 'iguala_mensual', label: 'Iguala Mensual / Mantenimiento', badge: 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30' },
-  { value: 'dominio_hosting', label: 'Cobro de Dominio / Hosting', badge: 'bg-amber-500/15 text-amber-300 border-amber-500/30' },
+  { value: 'anticipo', label: 'Anticipo de Proyecto', badge: 'bg-obsidian-surface text-obsidian-muted border-obsidian-border' },
+  { value: 'liquidacion', label: 'Liquidación de Página Web', badge: 'bg-obsidian-surface text-obsidian-muted border-obsidian-border' },
+  { value: 'iguala_mensual', label: 'Iguala Mensual / Mantenimiento', badge: 'bg-obsidian-surface text-obsidian-muted border-obsidian-border' },
+  { value: 'dominio_hosting', label: 'Cobro de Dominio / Hosting', badge: 'bg-obsidian-surface text-obsidian-muted border-obsidian-border' },
   { value: 'otro', label: 'Otro Ingreso', badge: 'bg-obsidian-surface text-obsidian-text border-obsidian-border' },
 ];
 
@@ -29,6 +29,7 @@ export const RENEWAL_SERVICE_TYPES: { value: RenewalServiceType; label: string }
 ];
 
 interface SubscriptionsListsProps {
+  mode: 'all' | 'income' | 'services' | 'expenses' | 'cards';
   filteredIncomes: ClientIncome[];
   filteredRenewals: DomainRenewal[];
   filteredExpenses: OneTimeExpense[];
@@ -61,6 +62,7 @@ interface SubscriptionsListsProps {
 }
 
 export const SubscriptionsLists: React.FC<SubscriptionsListsProps> = ({
+  mode,
   filteredIncomes,
   filteredRenewals,
   filteredExpenses,
@@ -92,14 +94,19 @@ export const SubscriptionsLists: React.FC<SubscriptionsListsProps> = ({
   handleDeletePaymentMethod,
 }) => {
   const isProfitBase = profitCurrencyView === baseCurrency;
+  const showIncome = mode === 'all' || mode === 'income';
+  const showServices = mode === 'all' || mode === 'services';
+  const showExpenses = mode === 'all' || mode === 'expenses';
+  const showCards = mode === 'all' || mode === 'cards';
 
   return (
     <>
       {/* MÓDULO 1: CONTROL DE INGRESOS Y PAGOS RECIBIDOS */}
-      <div className="p-4 sm:p-6 rounded-2xl bg-obsidian-panel border border-obsidian-border space-y-4 shadow-xl">
+      {showIncome && (
+      <div className="p-3 sm:p-4 rounded-xl bg-obsidian-panel border border-obsidian-border space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-obsidian-border/70">
           <div className="flex items-center gap-2 min-w-0">
-            <Wallet size={16} className="text-emerald-400 shrink-0" aria-hidden="true" />
+            <Wallet size={18} className="text-obsidian-muted shrink-0" aria-hidden="true" />
             <h3 className="text-sm font-bold text-white tracking-tight truncate">
               Control de Ingresos y Pagos Recibidos ({filteredIncomes.length})
             </h3>
@@ -108,22 +115,22 @@ export const SubscriptionsLists: React.FC<SubscriptionsListsProps> = ({
           <button
             type="button"
             onClick={openNewIncomeModal}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-sm transition-all shrink-0"
-          >
-            <Plus size={13} aria-hidden="true" />
+            className="ui-action-primary shrink-0"
+          >{/* [Acción principal] Inicia o confirma la tarea de este espacio. */}
+            <Plus size={16} aria-hidden="true" />
             <span>Registrar Pago</span>
           </button>
         </div>
 
         {filteredIncomes.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3.5">
+          <div className="divide-y divide-obsidian-border">
             {filteredIncomes.map((inc) => {
               const catMeta = INCOME_CATEGORIES.find((c) => c.value === inc.category) || INCOME_CATEGORIES[0];
               const isPaid = inc.status === 'cobrado';
               return (
                 <div
                   key={inc.id}
-                  className="p-4 rounded-xl bg-obsidian-surface/60 border border-obsidian-border hover:border-obsidian-borderLight transition-all space-y-2.5 min-w-0 flex flex-col justify-between"
+                  className="min-w-0 py-3 first:pt-1 last:pb-1 space-y-3"
                 >
                   <div className="space-y-2 min-w-0">
                     <div className="flex items-start justify-between gap-2">
@@ -140,29 +147,32 @@ export const SubscriptionsLists: React.FC<SubscriptionsListsProps> = ({
                       </span>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-1.5">
+                    <div className="flex flex-wrap items-center gap-2">
                       <span className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${catMeta.badge}`}>
                         {catMeta.label}
                       </span>
+                      {/* [Estado seleccionable] El color y la etiqueta muestran el estado actual del pago; pulsar lo cambia. */}
                       <button
                         type="button"
                         onClick={() => handleToggleIncomeStatus(inc)}
-                        className={`px-2 py-0.5 rounded text-[10px] font-semibold border transition-colors ${
+                        className={`inline-flex min-h-11 items-center gap-2 rounded-lg border px-3 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-accent ${
                           isPaid
                             ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/25'
                             : 'bg-amber-500/15 text-amber-300 border-amber-500/30 hover:bg-amber-500/25'
                         }`}
-                        title="Clic para cambiar entre Cobrado y Pendiente"
+                        title="Cambiar estado del pago"
+                        aria-label={`Pago ${isPaid ? 'cobrado' : 'pendiente por cobrar'} de ${inc.client_name}. Cambiar estado`}
                       >
                         {isPaid ? 'Cobrado' : 'Pendiente por cobrar'}
+                        <RefreshCw size={14} aria-hidden="true" />
                       </button>
                       {inc.is_recurring && (
-                        <span className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-cyan-500/10 text-cyan-300 border border-cyan-500/20">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-obsidian-surface text-obsidian-muted border border-obsidian-border">
                           Mensual
                         </span>
                       )}
                       {inc.scope && inc.scope !== 'business' && (
-                        <span className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-purple-500/10 text-purple-300 border border-purple-500/20 capitalize">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-obsidian-surface text-obsidian-muted border border-obsidian-border capitalize">
                           {inc.scope === 'personal' ? 'Personal' : 'Compartido'}
                         </span>
                       )}
@@ -184,30 +194,32 @@ export const SubscriptionsLists: React.FC<SubscriptionsListsProps> = ({
                         <button
                           type="button"
                           onClick={() => handleCloneIncome(inc)}
-                          className="px-2 py-0.5 rounded bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/30 text-[10px] font-sans font-semibold inline-flex items-center gap-1"
+                          className="ui-action-secondary items-center gap-1"
                           title="Repetir cobro (+1 mes) al mes siguiente"
-                        >
-                          <Repeat size={10} aria-hidden="true" />
+                        >{/* [Acción secundaria] Mantiene disponible esta acción en su contexto. */}
+                          <Repeat size={16} aria-hidden="true" />
                           <span>+1 mes</span>
                         </button>
                       )}
+                      {/* [Acción secundaria] Edita un pago existente. */}
                       <button
                         type="button"
                         onClick={() => openEditIncomeModal(inc)}
-                        className="p-1 text-obsidian-muted hover:text-white rounded hover:bg-obsidian-panel"
+                        className="ui-action-icon"
                         title="Editar pago"
                         aria-label={`Editar pago de ${inc.client_name}`}
                       >
-                        <Edit3 size={12} aria-hidden="true" />
+                        <Edit3 size={16} aria-hidden="true" />
                       </button>
+                      {/* [Acción destructiva] Envía el pago a la papelera. */}
                       <button
                         type="button"
                         onClick={() => handleDeleteIncome(inc)}
-                        className="p-1 text-obsidian-muted hover:text-rose-400 rounded hover:bg-obsidian-panel"
+                        className="ui-action-icon ui-action-danger"
                         title="Enviar a la papelera"
                         aria-label={`Eliminar pago de ${inc.client_name}`}
                       >
-                        <Trash2 size={12} aria-hidden="true" />
+                        <Trash2 size={16} aria-hidden="true" />
                       </button>
                     </div>
                   </div>
@@ -216,18 +228,20 @@ export const SubscriptionsLists: React.FC<SubscriptionsListsProps> = ({
             })}
           </div>
         ) : (
-          <div className="py-8 px-4 rounded-xl bg-obsidian-bg/50 border border-obsidian-border text-center space-y-2">
+          <div className="py-6 text-center space-y-2 text-xs text-obsidian-muted">
             <p className="text-xs text-obsidian-muted">
               Aún no has registrado pagos recibidos de clientes (anticipos, liquidaciones o igualas mensuales).
             </p>
           </div>
         )}
       </div>
+      )}
 
-      <section className="space-y-3 rounded-2xl border border-obsidian-border bg-obsidian-panel p-3 sm:p-4" aria-labelledby="renewal-monitor-title">
+      {showServices && <>
+      <section className="space-y-3 rounded-xl border border-obsidian-border bg-obsidian-panel p-3 sm:p-4" aria-labelledby="renewal-monitor-title">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-obsidian-border/70 pb-3">
           <div className="flex min-w-0 items-center gap-2">
-            <Server size={16} className="shrink-0 text-cyan-400" aria-hidden="true" />
+            <Server size={18} className="shrink-0 text-obsidian-muted" aria-hidden="true" />
             <h3 id="renewal-monitor-title" className="truncate text-sm font-bold text-white">
               Servicios y vencimientos ({filteredRenewals.length})
             </h3>
@@ -236,22 +250,22 @@ export const SubscriptionsLists: React.FC<SubscriptionsListsProps> = ({
           <button
             type="button"
             onClick={openNewRenewalModal}
-            className="inline-flex min-h-10 items-center gap-1.5 rounded-lg bg-indigo-600 px-3 text-xs font-semibold text-white transition-colors hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
-          >
-            <Plus size={13} aria-hidden="true" />
+            className="ui-action-primary"
+          >{/* [Acción principal] Inicia o confirma la tarea de este espacio. */}
+            <Plus size={16} aria-hidden="true" />
             <span>Agregar servicio</span>
           </button>
           <details className="group basis-full border-t border-obsidian-border/50 pt-2 text-[11px]">
-            <summary className="inline-flex min-h-8 cursor-pointer list-none items-center gap-2 text-obsidian-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400 [&::-webkit-details-marker]:hidden">
+            <summary className="inline-flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-lg px-2 text-obsidian-muted hover:bg-obsidian-surface hover:text-obsidian-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent [&::-webkit-details-marker]:hidden">
               <span>Costos anuales estimados</span>
               <span className="text-[10px]">Opcional</span>
             </summary>
             <div className="flex flex-wrap gap-x-4 gap-y-1 pb-1 font-mono">
               <span className="text-obsidian-muted">
-                Por mi cuenta: <strong className="text-rose-300">${formatAmount(realProfit.myRenewalsYearlyMXN)} MXN/año</strong>
+                Por mi cuenta: <strong className="text-obsidian-text">${formatAmount(realProfit.myRenewalsYearlyMXN)} MXN/año</strong>
               </span>
               <span className="text-obsidian-muted">
-                Por cuenta del cliente: <strong className="text-emerald-300">${formatAmount(realProfit.clientRenewalsYearlyMXN)} MXN/año</strong>
+                Por cuenta del cliente: <strong className="text-obsidian-text">${formatAmount(realProfit.clientRenewalsYearlyMXN)} MXN/año</strong>
               </span>
             </div>
           </details>
@@ -284,7 +298,7 @@ export const SubscriptionsLists: React.FC<SubscriptionsListsProps> = ({
                         {ren.scope === 'personal' ? 'Personal' : ren.client_name}
                       </p>
                     </div>
-                    <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+                    <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
                       <span className={`rounded-md px-2 py-1 text-[10px] font-semibold ${
                         isUrgent ? 'bg-rose-500/15 text-rose-300' : isSoon ? 'bg-amber-500/15 text-amber-300' : 'bg-obsidian-surface text-obsidian-muted'
                       }`}>
@@ -293,36 +307,36 @@ export const SubscriptionsLists: React.FC<SubscriptionsListsProps> = ({
                       <button
                         type="button"
                         onClick={() => handleOpenAdvanceRenewalModal(ren)}
-                        className="inline-flex min-h-8 items-center gap-1 rounded-lg border border-emerald-500/30 px-2 text-[10px] font-semibold text-emerald-300 transition-colors hover:bg-emerald-500/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-300"
+                        className="ui-action-secondary items-center gap-1"
                         title="Registrar renovación y avanzar la próxima fecha"
-                      >
-                        <RefreshCw size={11} aria-hidden="true" />
+                      >{/* [Acción secundaria] Mantiene disponible esta acción en su contexto. */}
+                        <RefreshCw size={16} aria-hidden="true" />
                         <span>Renovar</span>
                       </button>
                       <button
                         type="button"
                         onClick={() => openEditRenewalModal(ren)}
-                        className="inline-flex min-h-8 min-w-8 items-center justify-center rounded-lg text-obsidian-muted hover:bg-obsidian-surface hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400"
+                        className="ui-action-icon"
                         title="Editar servicio"
                         aria-label={`Editar servicio ${ren.domain_or_service}`}
-                      >
-                        <Edit3 size={13} aria-hidden="true" />
+                      >{/* [Icono] Acción identificada por su nombre accesible. */}
+                        <Edit3 size={16} aria-hidden="true" />
                       </button>
                       <button
                         type="button"
                         onClick={() => handleDeleteRenewal(ren)}
-                        className="inline-flex min-h-8 min-w-8 items-center justify-center rounded-lg text-obsidian-muted hover:bg-obsidian-surface hover:text-rose-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-rose-400"
+                        className="ui-action-icon ui-action-danger"
                         title="Enviar a la papelera"
                         aria-label={`Eliminar servicio ${ren.domain_or_service}`}
-                      >
-                        <Trash2 size={13} aria-hidden="true" />
+                      >{/* [Acción destructiva] Envía el elemento a la papelera. */}
+                        <Trash2 size={16} aria-hidden="true" />
                       </button>
                     </div>
                   </div>
                   <details className="group mt-1.5">
-                    <summary data-caret="manual" className="inline-flex min-h-8 cursor-pointer list-none items-center gap-1.5 text-[10px] text-indigo-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-400 [&::-webkit-details-marker]:hidden">
+                    <summary data-caret="manual" className="inline-flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-lg px-2 text-xs text-obsidian-muted hover:bg-obsidian-surface hover:text-obsidian-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent [&::-webkit-details-marker]:hidden">
                       <span>Ver detalles</span>
-                      <ChevronDown size={12} aria-hidden="true" className="transition-transform group-open:rotate-180" />
+                      <ChevronDown size={16} aria-hidden="true" className="transition-transform group-open:rotate-180" />
                     </summary>
                     <div className="grid grid-cols-1 gap-x-5 gap-y-1 border-t border-obsidian-border/50 pt-2 text-[11px] sm:grid-cols-2">
                       <span className="text-obsidian-muted">Proveedor: <strong className="font-medium text-obsidian-text">{ren.provider || 'Sin indicar'}</strong></span>
@@ -346,12 +360,14 @@ export const SubscriptionsLists: React.FC<SubscriptionsListsProps> = ({
           </p>
         )}
       </section>
+      </>}
 
       {/* MÓDULO 3: GASTOS ÚNICOS Y COMPRAS VARIABLES (NO RECURRENTES) */}
-      <div className="p-4 sm:p-6 rounded-2xl bg-obsidian-panel border border-obsidian-border space-y-4 shadow-xl">
+      {showExpenses && (
+      <div className="p-3 sm:p-4 rounded-xl bg-obsidian-panel border border-obsidian-border space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-obsidian-border/70">
           <div className="flex items-center gap-2 min-w-0">
-            <Receipt size={16} className="text-purple-400 shrink-0" aria-hidden="true" />
+            <Receipt size={18} className="text-obsidian-muted shrink-0" aria-hidden="true" />
             <h3 className="text-sm font-bold text-white tracking-tight truncate">
               Gastos Únicos y Compras Variables ({filteredExpenses.length})
             </h3>
@@ -360,14 +376,14 @@ export const SubscriptionsLists: React.FC<SubscriptionsListsProps> = ({
           <button
             type="button"
             onClick={openNewExpenseModal}
-            className="inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-xl bg-purple-600 px-3 py-1.5 text-xs font-semibold text-white transition-all hover:bg-purple-500"
-          >
-            <Plus size={13} aria-hidden="true" />
+            className="ui-action-primary shrink-0"
+          >{/* [Acción principal] Inicia o confirma la tarea de este espacio. */}
+            <Plus size={16} aria-hidden="true" />
             <span>Registrar gasto</span>
           </button>
           <div className="flex basis-full flex-wrap items-center gap-2">
             <span className="text-[11px] font-mono text-obsidian-muted">
-              Total este mes: <strong className="text-purple-300">${formatAmount(isProfitBase ? realProfit.variableMonthExpenseMXN : realProfit.variableMonthExpenseUSD)} {profitCurrencyView}</strong>
+              Total este mes: <strong className="text-white">${formatAmount(isProfitBase ? realProfit.variableMonthExpenseMXN : realProfit.variableMonthExpenseUSD)} {profitCurrencyView}</strong>
             </span>
             <span className="text-obsidian-muted">•</span>
             <span className="text-[11px] font-mono text-obsidian-muted">
@@ -377,11 +393,11 @@ export const SubscriptionsLists: React.FC<SubscriptionsListsProps> = ({
         </div>
 
         {filteredExpenses.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3.5">
+          <div className="divide-y divide-obsidian-border">
             {filteredExpenses.map((exp) => (
               <div
                 key={exp.id}
-                className="p-4 rounded-xl bg-obsidian-surface/60 border border-obsidian-border hover:border-obsidian-borderLight transition-all space-y-2.5 min-w-0 flex flex-col justify-between"
+                className="min-w-0 py-3 first:pt-1 last:pb-1 space-y-3"
               >
                 <div className="space-y-2 min-w-0">
                   <div className="flex items-start justify-between gap-2">
@@ -393,16 +409,16 @@ export const SubscriptionsLists: React.FC<SubscriptionsListsProps> = ({
                         {exp.category}
                       </span>
                     </div>
-                    <span className="font-mono text-xs font-bold text-purple-300 shrink-0">
+                    <span className="font-mono text-xs font-bold text-white shrink-0">
                       ${formatAmount(exp.amount)} {exp.currency}
                     </span>
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-purple-500/10 text-purple-300 border border-purple-500/25">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-obsidian-surface text-obsidian-muted border border-obsidian-border">
                       {exp.category}
                     </span>
-                    <span className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-obsidian-panel border border-obsidian-border text-obsidian-text capitalize">
+                    <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-obsidian-panel border border-obsidian-border text-obsidian-text capitalize">
                       {exp.scope === 'business' ? 'Empresa' : exp.scope === 'personal' ? 'Personal' : 'Compartido'}
                     </span>
                   </div>
@@ -422,20 +438,20 @@ export const SubscriptionsLists: React.FC<SubscriptionsListsProps> = ({
                     <button
                       type="button"
                       onClick={() => openEditExpenseModal(exp)}
-                      className="p-1 text-obsidian-muted hover:text-white rounded hover:bg-obsidian-panel"
+                      className="ui-action-icon"
                       title="Editar gasto único"
                       aria-label={`Editar gasto ${exp.concept}`}
-                    >
-                      <Edit3 size={12} aria-hidden="true" />
+                    >{/* [Icono] Acción identificada por su nombre accesible. */}
+                      <Edit3 size={16} aria-hidden="true" />
                     </button>
                     <button
                       type="button"
                       onClick={() => handleDeleteExpense(exp)}
-                      className="p-1 text-obsidian-muted hover:text-rose-400 rounded hover:bg-obsidian-panel"
+                      className="ui-action-icon ui-action-danger"
                       title="Enviar a la papelera"
                       aria-label={`Eliminar gasto ${exp.concept}`}
-                    >
-                      <Trash2 size={12} aria-hidden="true" />
+                    >{/* [Acción destructiva] Envía el elemento a la papelera. */}
+                      <Trash2 size={16} aria-hidden="true" />
                     </button>
                   </div>
                 </div>
@@ -443,36 +459,38 @@ export const SubscriptionsLists: React.FC<SubscriptionsListsProps> = ({
             ))}
           </div>
         ) : (
-          <div className="py-8 px-4 rounded-xl bg-obsidian-bg/50 border border-obsidian-border text-center space-y-2">
+          <div className="py-6 text-center space-y-2 text-xs text-obsidian-muted">
             <p className="text-xs text-obsidian-muted">
               No hay compras ni gastos únicos variables registrados (hardware, licencias vitalicias, insumos, etc.).
             </p>
           </div>
         )}
       </div>
+      )}
 
       {/* Payment Cards Grid */}
-      <div className="p-4 sm:p-6 rounded-2xl bg-obsidian-panel border border-obsidian-border space-y-4 shadow-xl">
+      {showCards && (
+      <div className="p-3 sm:p-4 rounded-xl bg-obsidian-panel border border-obsidian-border space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-obsidian-border/70">
           <div className="flex items-center gap-2 min-w-0">
-            <CreditCard size={16} className="text-cyan-400 shrink-0" aria-hidden="true" />
+            <CreditCard size={18} className="text-obsidian-muted shrink-0" aria-hidden="true" />
             <h3 className="text-sm font-bold text-white tracking-tight">Tarjetas y métodos de pago ({filteredPaymentMethods.length})</h3>
             <InfoTooltip content="Los números de tarjeta, código CVV y notas privadas se guardan encriptados en tu base de datos local." />
           </div>
-          <button type="button" onClick={() => { if (!isUnlocked) openUnlockModal(); else openPaymentModal(); }} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold">
-            <Plus size={13} aria-hidden="true" /> Agregar tarjeta
+          <button type="button" onClick={() => { if (!isUnlocked) openUnlockModal(); else openPaymentModal(); }} className="ui-action-primary">{/* [Acción principal] Inicia o confirma la tarea de este espacio. */}
+            <Plus size={16} aria-hidden="true" /> Agregar tarjeta
           </button>
         </div>
 
         {filteredPaymentMethods.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          <div className="divide-y divide-obsidian-border">
             {filteredPaymentMethods.map((pay) => {
               const linked = platforms.filter((p) => p.payment_method_id === pay.id);
 
               return (
                 <div
                   key={pay.id}
-                  className="p-5 rounded-2xl bg-gradient-to-br from-obsidian-panel to-obsidian-card border border-obsidian-border hover:border-obsidian-borderLight transition-all space-y-4 shadow-xl min-w-0 overflow-hidden"
+                  className="min-w-0 space-y-3 py-4 first:pt-1 last:pb-1"
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
@@ -480,7 +498,7 @@ export const SubscriptionsLists: React.FC<SubscriptionsListsProps> = ({
                       <span className="text-[11px] text-obsidian-muted truncate block">{pay.issuer}</span>
                     </div>
                     <div className="flex items-center gap-1 flex-shrink-0">
-                      <div className="px-2.5 py-1 rounded-xl bg-obsidian-surface border border-obsidian-border text-white font-mono text-xs font-bold">
+                      <div className="px-3 py-1 rounded-md border border-obsidian-border text-white font-mono text-xs font-bold">
                         *{pay.last_four}
                       </div>
                       <button
@@ -491,23 +509,23 @@ export const SubscriptionsLists: React.FC<SubscriptionsListsProps> = ({
                         }}
                         title="Editar tarjeta"
                         aria-label={`Editar tarjeta ${pay.alias}`}
-                        className="p-1.5 text-obsidian-muted hover:text-white rounded-lg hover:bg-obsidian-surface transition-colors"
-                      >
-                        <Edit3 size={13} aria-hidden="true" />
+                        className="ui-action-icon"
+                      >{/* [Icono] Acción identificada por su nombre accesible. */}
+                        <Edit3 size={16} aria-hidden="true" />
                       </button>
                       <button
                         type="button"
                         onClick={() => handleDeletePaymentMethod(pay)}
                         title="Enviar tarjeta a la papelera"
                         aria-label={`Eliminar tarjeta ${pay.alias}`}
-                        className="p-1.5 text-obsidian-muted hover:text-rose-400 rounded-lg hover:bg-obsidian-surface transition-colors"
-                      >
-                        <Trash2 size={13} aria-hidden="true" />
+                        className="ui-action-icon ui-action-danger"
+                      >{/* [Acción destructiva] Envía el elemento a la papelera. */}
+                        <Trash2 size={16} aria-hidden="true" />
                       </button>
                     </div>
                   </div>
 
-                  <div className="p-3 rounded-xl bg-obsidian-surface/60 border border-obsidian-border text-xs space-y-2">
+                  <div className="border-t border-obsidian-border pt-2 text-xs space-y-2">
                     <div>
                       <div className="text-obsidian-muted text-[10px]">Número de Tarjeta / Cuenta</div>
                       <SecretField
@@ -540,8 +558,8 @@ export const SubscriptionsLists: React.FC<SubscriptionsListsProps> = ({
                           key={item.id}
                           type="button"
                           onClick={() => openInspector('platform', item.id)}
-                          className="w-full text-left flex items-center justify-between gap-2 p-2 rounded-lg bg-obsidian-bg hover:bg-obsidian-surface border border-obsidian-border text-xs cursor-pointer transition-colors min-w-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
-                        >
+                        className="ui-nav-action w-full items-center justify-between gap-2 py-2 min-w-0"
+                        >{/* [Navegación] Mantiene disponible esta acción en su contexto. */}
                           <div className="flex items-center gap-2 min-w-0">
                             <PlatformIcon name={item.name} iconUrl={item.icon_url} size="sm" />
                             <div className="min-w-0">
@@ -553,7 +571,7 @@ export const SubscriptionsLists: React.FC<SubscriptionsListsProps> = ({
                               )}
                             </div>
                           </div>
-                          <span className="font-mono text-emerald-400 font-semibold flex-shrink-0">
+                          <span className="font-mono text-obsidian-text font-semibold flex-shrink-0">
                             ${item.subscription_cost} {item.currency}
                           </span>
                         </button>
@@ -570,16 +588,18 @@ export const SubscriptionsLists: React.FC<SubscriptionsListsProps> = ({
             })}
           </div>
         ) : (
-          <div className="py-8 px-4 rounded-xl bg-obsidian-bg/50 border border-obsidian-border text-center">
+          <div className="py-6 text-center text-xs text-obsidian-muted">
             <p className="text-xs text-obsidian-muted">No hay tarjetas registradas.</p>
           </div>
         )}
       </div>
+      )}
 
       {/* Next Renewals Timeline & Trial Alerts with Direct Principal Email Link */}
+      {showServices && <>
       <div className="space-y-4 pt-4 border-t border-obsidian-border">
         <div className="flex items-center gap-2">
-          <Calendar className="text-cyan-400 w-4 h-4 flex-shrink-0" aria-hidden="true" />
+          <Calendar className="text-obsidian-muted w-[18px] h-[18px] flex-shrink-0" aria-hidden="true" />
           <h3 className="text-sm font-bold text-white tracking-tight truncate">
             Calendario de Suscripciones y Pruebas Gratis ({activeOrTrialPlatforms.length})
           </h3>
@@ -587,23 +607,23 @@ export const SubscriptionsLists: React.FC<SubscriptionsListsProps> = ({
         </div>
 
         {activeOrTrialPlatforms.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+          <div className="divide-y divide-obsidian-border">
             {activeOrTrialPlatforms.map((p) => {
               const isTrial = p.subscription_status === 'free_trial';
               return (
                 <div
                   key={p.id}
-                  className="p-4 rounded-xl bg-obsidian-surface/60 hover:bg-obsidian-surface border border-obsidian-border hover:border-cyan-500/30 transition-all space-y-2.5 group min-w-0"
+                  className="space-y-3 py-3 first:pt-1 last:pb-1 group min-w-0"
                 >
                   <button
                     type="button"
                     onClick={() => openInspector('platform', p.id)}
-                    className="w-full text-left flex items-center justify-between gap-2 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
-                  >
-                    <div className="flex items-center gap-2.5 min-w-0">
+                    className="ui-nav-action w-full items-center justify-between gap-2"
+                  >{/* [Navegación] Mantiene disponible esta acción en su contexto. */}
+                    <div className="flex items-center gap-3 min-w-0">
                       <PlatformIcon name={p.name} iconUrl={p.icon_url} size="sm" />
                       <div className="min-w-0">
-                        <span className="font-semibold text-white text-xs block group-hover:text-cyan-300 transition-colors truncate" title={p.name}>
+                        <span className="font-semibold text-white text-xs block transition-colors truncate" title={p.name}>
                           {p.name}
                         </span>
                         <span className="text-[10px] text-obsidian-muted capitalize block truncate">
@@ -612,7 +632,7 @@ export const SubscriptionsLists: React.FC<SubscriptionsListsProps> = ({
                       </div>
                     </div>
 
-                    <span className="font-mono text-xs font-bold text-emerald-400 flex-shrink-0">
+                    <span className="font-mono text-xs font-bold text-obsidian-text flex-shrink-0">
                       ${p.subscription_cost} {p.currency}
                     </span>
                   </button>
@@ -625,9 +645,9 @@ export const SubscriptionsLists: React.FC<SubscriptionsListsProps> = ({
                           if (p.email_id) openInspector('email', p.email_id);
                         }}
                         title={`Ver correo principal: ${p.email_address}`}
-                        className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-obsidian-panel hover:bg-indigo-500/15 border border-obsidian-border hover:border-indigo-500/30 text-[10px] font-mono text-obsidian-muted hover:text-indigo-300 transition-colors max-w-full min-w-0"
-                      >
-                        <Mail size={10} className="text-indigo-400 flex-shrink-0" aria-hidden="true" />
+                        className="ui-nav-action items-center gap-2 max-w-full min-w-0"
+                      >{/* [Navegación] Mantiene disponible esta acción en su contexto. */}
+                        <Mail size={16} className="text-obsidian-muted flex-shrink-0" aria-hidden="true" />
                         <span className="truncate">{p.email_address}</span>
                       </button>
                     </div>
@@ -654,7 +674,7 @@ export const SubscriptionsLists: React.FC<SubscriptionsListsProps> = ({
             })}
           </div>
         ) : (
-          <div className="py-10 px-4 rounded-2xl bg-obsidian-panel border border-obsidian-border text-center text-xs text-obsidian-muted">
+          <div className="py-6 text-center text-xs text-obsidian-muted">
             No hay suscripciones activas ni pruebas gratuitas registradas.
           </div>
         )}
@@ -665,7 +685,7 @@ export const SubscriptionsLists: React.FC<SubscriptionsListsProps> = ({
         <div className="space-y-3 pt-4 border-t border-obsidian-border">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 min-w-0">
-              <History size={15} className="text-emerald-400 shrink-0" aria-hidden="true" />
+              <History size={18} className="text-obsidian-muted shrink-0" aria-hidden="true" />
               <h3 className="text-sm font-bold text-white tracking-tight truncate">
                 Historial de Cobros Automáticos ({billingHistory.length})
               </h3>
@@ -674,30 +694,30 @@ export const SubscriptionsLists: React.FC<SubscriptionsListsProps> = ({
             <button
               type="button"
               onClick={() => setActiveSection('audit_logs')}
-              className="text-xs text-indigo-400 hover:text-indigo-300 font-medium"
-            >
+              className="ui-nav-action"
+            >{/* [Navegación] Mantiene disponible esta acción en su contexto. */}
               Ver Historial de Actividad
             </button>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2.5">
+          <div className="divide-y divide-obsidian-border">
             {billingHistory.slice(0, 6).map((rec) => (
               <button
                 key={rec.id}
                 type="button"
                 onClick={() => openInspector('platform', rec.platform_id)}
-                className="w-full text-left p-3 rounded-xl bg-obsidian-panel border border-obsidian-border hover:border-emerald-500/30 transition-all cursor-pointer flex items-center justify-between gap-2 min-w-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
-              >
+                className="ui-nav-action w-full py-3 items-center justify-between gap-2 min-w-0"
+              >{/* [Navegación] Mantiene disponible esta acción en su contexto. */}
                 <div className="min-w-0">
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <CheckCircle2 size={12} className="text-emerald-400 shrink-0" aria-hidden="true" />
+                  <div className="flex items-center gap-2 min-w-0">
+                    <CheckCircle2 size={16} className="text-emerald-400 shrink-0" aria-hidden="true" />
                     <span className="font-bold text-white text-xs truncate">{rec.platform_name}</span>
                   </div>
                   <div className="text-[10px] text-obsidian-muted font-mono truncate mt-0.5">
                     Fecha: {rec.charged_date || rec.billing_date} • Ciclo: {rec.billing_cycle}
                   </div>
                 </div>
-                <span className="font-mono text-xs font-bold text-emerald-400 shrink-0">
+                <span className="font-mono text-xs font-bold text-obsidian-text shrink-0">
                   ${rec.amount} {rec.currency}
                 </span>
               </button>
@@ -705,6 +725,7 @@ export const SubscriptionsLists: React.FC<SubscriptionsListsProps> = ({
           </div>
         </div>
       )}
+      </>}
     </>
   );
 };

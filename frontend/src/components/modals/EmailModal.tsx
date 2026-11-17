@@ -214,14 +214,12 @@ export const EmailModal: React.FC = () => {
         role="dialog"
         aria-modal="true"
         aria-labelledby="email-modal-title"
-        className="relative w-full max-w-2xl bg-obsidian-panel border border-obsidian-borderLight rounded-xl sm:rounded-2xl shadow-2xl p-4 sm:p-6 overflow-hidden max-h-[calc(100dvh-1rem)] sm:max-h-[90dvh] flex flex-col"
+        className="relative w-full max-w-2xl bg-obsidian-panel border border-obsidian-border rounded-xl shadow-xl p-4 sm:p-6 overflow-hidden max-h-[calc(100dvh-1rem)] sm:max-h-[90dvh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between pb-4 border-b border-obsidian-border">
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className="p-2 rounded-xl bg-indigo-500/10 text-indigo-400 flex-shrink-0">
-              <Mail size={20} aria-hidden="true" />
-            </div>
+            <Mail size={18} className="shrink-0 text-obsidian-muted" aria-hidden="true" />
             <div className="min-w-0">
               <h2 id="email-modal-title" className="text-base font-bold text-white tracking-tight truncate">
                 {editingEmailId ? 'Editar Correo Principal' : 'Agregar Correo Principal'}
@@ -232,8 +230,8 @@ export const EmailModal: React.FC = () => {
             type="button"
             onClick={closeEmailModal}
             aria-label="Cerrar formulario"
-            className="inline-flex min-w-[44px] min-h-[44px] lg:min-w-9 lg:min-h-9 items-center justify-center p-2 text-obsidian-muted hover:text-white rounded-lg hover:bg-obsidian-surface flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
-          >
+            className="ui-action-icon flex-shrink-0"
+          >{/* [Icono] Acción identificada por su nombre accesible. */}
             <X size={18} aria-hidden="true" />
           </button>
         </div>
@@ -246,14 +244,14 @@ export const EmailModal: React.FC = () => {
             </div>
           )}
           {formError && (
-            <div role="alert" className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 flex items-start gap-2 text-rose-300 text-xs">
-              <AlertCircle size={15} className="text-rose-400 flex-shrink-0 mt-0.5" aria-hidden="true" />
+            <div role="alert" className="flex items-start gap-2 rounded-lg border border-obsidian-border bg-obsidian-surface p-3 text-xs text-obsidian-muted">
+              <AlertCircle size={16} className="mt-0.5 flex-shrink-0 text-rose-400" aria-hidden="true" />
               <span className="break-words">{formError}</span>
             </div>
           )}
 
           {/* Ámbito (Empresa vs Personal) */}
-          <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-xl bg-obsidian-surface/60 border border-obsidian-border max-[480px]:flex-col max-[480px]:items-start">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-obsidian-border pb-3 max-[480px]:flex-col max-[480px]:items-start">
             <span className="text-[11px] font-semibold text-white">Ámbito del Correo:</span>
             <div className="flex min-w-0 flex-wrap items-center gap-1 max-[480px]:grid max-[480px]:w-full max-[480px]:grid-cols-2">
               {([
@@ -266,12 +264,8 @@ export const EmailModal: React.FC = () => {
                   type="button"
                   aria-pressed={scope === opt.val}
                   onClick={() => setScope(opt.val)}
-                  className={`min-h-9 min-w-0 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all max-[480px]:w-full ${
-                    scope === opt.val
-                      ? 'bg-indigo-600 text-white'
-                      : 'bg-obsidian-bg text-obsidian-muted hover:text-white border border-obsidian-border'
-                  }`}
-                >
+                  className="ui-action-toggle"
+                >{/* [Estado seleccionable] La opción activa se identifica con aria-pressed. */}
                   {opt.label}
                 </button>
               ))}
@@ -357,7 +351,7 @@ export const EmailModal: React.FC = () => {
           </div>
 
           {/* Recovery & 2FA */}
-          <div className="p-4 rounded-xl bg-obsidian-surface/60 border border-obsidian-border space-y-3">
+          <div className="space-y-3 border-t border-obsidian-border pt-4">
             <div>
               <span className="font-semibold text-white uppercase text-[10px] tracking-wider block">
                 Recuperación y verificación en dos pasos
@@ -436,8 +430,9 @@ export const EmailModal: React.FC = () => {
               <button
                 type="button"
                 onClick={addAlias}
-                className="px-3 py-1.5 rounded-xl bg-obsidian-surface hover:bg-obsidian-border text-white border border-obsidian-border text-xs flex-shrink-0"
+                className="ui-action-secondary shrink-0"
               >
+                {/* [Acción secundaria] Añade un alias al borrador. */}
                 Añadir Alias
               </button>
             </div>
@@ -446,7 +441,8 @@ export const EmailModal: React.FC = () => {
                 {aliases.map((al, idx) => (
                   <span key={idx} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-obsidian-surface border border-obsidian-border font-mono text-[11px] text-white max-w-full">
                     <span className="truncate">{al}</span>
-                    <button type="button" onClick={() => setAliases(aliases.filter((_, i) => i !== idx))} className="text-obsidian-muted hover:text-rose-400 flex-shrink-0">
+                    <button type="button" onClick={() => setAliases(aliases.filter((_, i) => i !== idx))} aria-label={`Quitar alias ${al}`} className="ui-action-icon ui-action-danger shrink-0">
+                      {/* [Acción destructiva] Quita el alias del borrador. */}
                       &times;
                     </button>
                   </span>
@@ -477,8 +473,9 @@ export const EmailModal: React.FC = () => {
               <button
                 type="button"
                 onClick={addBackupCode}
-                className="px-3 py-1.5 rounded-xl bg-obsidian-surface hover:bg-obsidian-border text-white border border-obsidian-border text-xs flex-shrink-0"
+                className="ui-action-secondary shrink-0"
               >
+                {/* [Acción secundaria] Añade el código al borrador. */}
                 Añadir Código
               </button>
             </div>
@@ -496,10 +493,11 @@ export const EmailModal: React.FC = () => {
                       }}
                       title="Marcar como usado"
                     />
-                    <span className={`truncate ${bc.is_used ? 'line-through text-obsidian-muted' : 'text-emerald-400'}`}>
+                    <span className={`truncate ${bc.is_used ? 'line-through text-obsidian-muted' : 'text-obsidian-text'}`}>
                       {bc.code}
                     </span>
-                    <button type="button" onClick={() => setBackupCodes(backupCodes.filter((_, i) => i !== idx))} className="text-obsidian-muted hover:text-rose-400 flex-shrink-0">
+                    <button type="button" onClick={() => setBackupCodes(backupCodes.filter((_, i) => i !== idx))} aria-label={`Quitar código de recuperación ${idx + 1}`} className="ui-action-icon ui-action-danger shrink-0">
+                      {/* [Acción destructiva] Quita el código del borrador. */}
                       &times;
                     </button>
                   </div>
@@ -528,15 +526,15 @@ export const EmailModal: React.FC = () => {
             <button
               type="button"
               onClick={closeEmailModal}
-              className="px-4 py-2 text-xs font-medium text-obsidian-muted hover:text-white"
-            >
+              className="ui-action-secondary"
+            >{/* [Acción secundaria] Permite volver o reintentar sin modificar otros datos. */}
               Cancelar
             </button>
             <button
               type="submit"
               disabled={loading || loadingDetail || detailFailed}
-              className="inline-flex items-center gap-1.5 px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md shadow-indigo-600/20 disabled:opacity-50"
-            >
+              className="ui-action-primary"
+            >{/* [Acción principal] Inicia o confirma la tarea de este espacio. */}
               {loading ? 'Guardando...' : editingEmailId ? 'Guardar Cambios' : 'Guardar Correo Principal'}
             </button>
           </div>

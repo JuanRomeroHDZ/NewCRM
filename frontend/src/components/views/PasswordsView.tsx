@@ -248,9 +248,10 @@ export const PasswordsView: React.FC = () => {
           <InfoTooltip title="Acceso protegido" content="Desbloquea el espacio para consultar contraseñas y notas privadas." />
         </div>
         <p className="mx-auto max-w-md text-sm text-obsidian-muted">Desbloquea la bóveda para consultar o guardar información privada.</p>
+        {/* [Acción principal] Abrir la bóveda; la generación es secundaria. */}
         <div className="flex flex-wrap justify-center gap-2">
-          <button type="button" onClick={openUnlockModal} className="min-h-10 rounded-lg bg-indigo-600 px-4 text-xs font-semibold text-white hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300">Desbloquear bóveda</button>
-          <button type="button" onClick={openPasswordGen} className="min-h-10 rounded-lg border border-obsidian-border bg-obsidian-panel px-4 text-xs font-medium text-white hover:bg-obsidian-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300">Generar contraseña</button>
+          <button type="button" onClick={openUnlockModal} className="ui-action-primary">Desbloquear bóveda</button>
+          <button type="button" onClick={openPasswordGen} className="ui-action-secondary">Generar contraseña</button>
         </div>
       </div>
     );
@@ -261,7 +262,7 @@ export const PasswordsView: React.FC = () => {
       <header className="space-y-3">
         <div className="flex min-w-0 items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2">
-            {activeTab === 'passwords' ? <Key className="shrink-0 text-indigo-300" size={18} aria-hidden="true" /> : <FolderLock className="shrink-0 text-indigo-300" size={18} aria-hidden="true" />}
+            {activeTab === 'passwords' ? <Key className="shrink-0 text-obsidian-muted" size={18} aria-hidden="true" /> : <FolderLock className="shrink-0 text-obsidian-muted" size={18} aria-hidden="true" />}
             <h2 className="truncate text-base font-semibold text-white">
               {activeTab === 'passwords' ? `Claves (${filteredCredentials.length})` : `Recursos (${filteredResources.length})`}
             </h2>
@@ -271,7 +272,7 @@ export const PasswordsView: React.FC = () => {
             />
           </div>
           {activeTab === 'resources' && (
-            <button type="button" onClick={openCreateResource} className="min-h-10 shrink-0 rounded-lg bg-indigo-600 px-3 text-xs font-semibold text-white hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300">Nuevo recurso</button>
+            <button type="button" onClick={openCreateResource} className="ui-action-primary shrink-0">Nuevo recurso</button>
           )}
         </div>
         {activeTab === 'passwords' && (
@@ -285,7 +286,7 @@ export const PasswordsView: React.FC = () => {
             <button
               type="button"
               onClick={openPasswordGen}
-              className="min-h-10 shrink-0 rounded-lg border border-obsidian-border bg-obsidian-panel px-3 text-xs font-semibold text-white hover:bg-obsidian-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300"
+              className="ui-action-secondary shrink-0"
             >
               <span className="hidden sm:inline">Generar contraseña</span>
               <span className="sm:hidden">Generar</span>
@@ -294,12 +295,13 @@ export const PasswordsView: React.FC = () => {
         )}
       </header>
 
+      {/* [Navegación] La pestaña activa identifica la colección visible. */}
       <div role="tablist" aria-label="Colecciones" className="flex min-w-0 gap-1 border-b border-obsidian-border">
-        <button type="button" role="tab" id="passwords-tab" aria-label="Contraseñas y llaves" aria-controls="passwords-panel" aria-selected={activeTab === 'passwords'} onClick={() => selectTab('passwords')} className={`inline-flex min-h-10 min-w-0 flex-1 items-center justify-center gap-1.5 border-b-2 px-2 text-xs font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 sm:flex-initial sm:gap-2 sm:px-3 ${activeTab === 'passwords' ? 'border-indigo-400 text-white' : 'border-transparent text-obsidian-muted hover:text-white'}`}>
-          <Key size={14} className="shrink-0" aria-hidden="true" /><span className="truncate">Claves</span><span className="shrink-0 rounded bg-white/10 px-1.5 py-0.5 text-[10px]">{filteredCredentials.length}</span>
+        <button type="button" role="tab" id="passwords-tab" aria-label="Contraseñas y llaves" aria-controls="passwords-panel" aria-selected={activeTab === 'passwords'} onClick={() => selectTab('passwords')} className="ui-action-toggle min-w-0 flex-1 sm:flex-initial">
+          <Key size={16} className="shrink-0" aria-hidden="true" /><span className="truncate">Claves</span><span className="shrink-0 rounded bg-white/10 px-1.5 py-0.5 text-[10px]">{filteredCredentials.length}</span>
         </button>
-        <button type="button" role="tab" id="resources-tab" aria-label="Recursos y notas" aria-controls="resources-panel" aria-selected={activeTab === 'resources'} onClick={() => selectTab('resources')} className={`inline-flex min-h-10 min-w-0 flex-1 items-center justify-center gap-1.5 border-b-2 px-2 text-xs font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 sm:flex-initial sm:gap-2 sm:px-3 ${activeTab === 'resources' ? 'border-indigo-400 text-white' : 'border-transparent text-obsidian-muted hover:text-white'}`}>
-          <FolderLock size={14} className="shrink-0" aria-hidden="true" /><span className="truncate">Notas</span><span className="shrink-0 rounded bg-white/10 px-1.5 py-0.5 text-[10px]">{filteredResources.length}</span>
+        <button type="button" role="tab" id="resources-tab" aria-label="Recursos y notas" aria-controls="resources-panel" aria-selected={activeTab === 'resources'} onClick={() => selectTab('resources')} className="ui-action-toggle min-w-0 flex-1 sm:flex-initial">
+          <FolderLock size={16} className="shrink-0" aria-hidden="true" /><span className="truncate">Notas</span><span className="shrink-0 rounded bg-white/10 px-1.5 py-0.5 text-[10px]">{filteredResources.length}</span>
         </button>
       </div>
 

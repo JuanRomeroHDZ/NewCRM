@@ -149,11 +149,11 @@ export const HostsPanel: React.FC = () => {
   const showExploitsSection = exploitsCheckedIp !== null || exploitResults.length > 0;
 
   return (
-    <section className="rounded-xl border border-obsidian-border bg-obsidian-panel p-4 sm:p-5 shadow-obsidian">
+    <section className="border-t border-obsidian-border py-4 sm:py-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-2.5">
-            <Server size={18} className="text-obsidian-gold" aria-hidden="true" />
+            <Server size={18} className="text-obsidian-muted" aria-hidden="true" />
             <h2 className="font-heading text-base font-bold text-white">{t('hosts.title')}</h2>
             <span className="rounded border border-obsidian-border bg-obsidian-surface px-2 py-0.5 font-mono text-[11px] text-obsidian-muted">
               {hosts.length}
@@ -172,22 +172,23 @@ export const HostsPanel: React.FC = () => {
             type="button"
             onClick={() => void handleScanNetwork()}
             disabled={scanning}
-            className="inline-flex min-h-[44px] items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-gold"
+            className="ui-action-primary"
           >
             {scanning ? (
-              <Loader2 size={15} className="animate-spin" aria-hidden="true" />
+              <Loader2 size={16} className="animate-spin" aria-hidden="true" />
             ) : (
-              <Radar size={15} aria-hidden="true" />
+              <Radar size={16} aria-hidden="true" />
             )}
             <span>{scanning ? t('topo.scanning') : t('hosts.scan')}</span>
+            {/* [Acción principal] Inicia o confirma la operación. */}
           </button>
         </div>
       </div>
 
-      {/* Mobile card list (< md): zero horizontal clipping */}
-      <div className="mt-4 space-y-2.5 md:hidden">
+      {/* Mobile host list (< md): zero horizontal clipping */}
+      <div className="mt-4 divide-y divide-obsidian-border border-y border-obsidian-border md:hidden">
         {hosts.length === 0 ? (
-          <div className="rounded-xl border border-obsidian-border bg-obsidian-surface/60 px-3 py-5 text-xs text-obsidian-muted">
+          <div className="px-3 py-5 text-xs text-obsidian-muted">
             {lang === 'es'
               ? 'Sin hosts descubiertos aún. Pulsa Escanear red para lanzar un barrido ARP.'
               : 'No hosts discovered yet. Click Scan network to run an ARP sweep.'}
@@ -208,15 +209,11 @@ export const HostsPanel: React.FC = () => {
             return (
               <article
                 key={`card-${h.ip}-${h.mac}`}
-                className={`rounded-xl border p-3 transition-colors ${
-                  isPinned
-                    ? 'border-obsidian-gold/50 bg-obsidian-gold/5'
-                    : 'border-obsidian-border bg-obsidian-surface/70'
-                }`}
+                className={`py-3 transition-colors ${isPinned ? 'bg-obsidian-accent/10 px-3' : 'px-4'}`}
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="font-mono text-sm font-semibold text-white">{h.ip}</span>
-                  <span className="rounded-md bg-emerald-950/40 px-2 py-0.5 font-mono text-[11px] text-emerald-300">
+                  <span className="font-mono text-[11px] text-obsidian-muted">
                     {osDisplay}
                   </span>
                 </div>
@@ -229,40 +226,40 @@ export const HostsPanel: React.FC = () => {
                     type="button"
                     onClick={() => handlePinTarget(h.ip)}
                     aria-pressed={isPinned}
-                    className={`inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-lg border px-2.5 text-xs font-semibold transition-colors ${
-                      isPinned
-                        ? 'border-obsidian-gold bg-obsidian-gold/20 text-amber-200'
-                        : 'border-indigo-500/40 bg-indigo-600/20 text-white hover:border-obsidian-gold'
-                    }`}
+                    className="ui-action-toggle"
                   >
-                    <Crosshair size={13} aria-hidden="true" />
+                    <Crosshair size={16} aria-hidden="true" />
                     <span>{t('hosts.target')}</span>
+                    {/* [Estado seleccionable] Cambia la selección indicada. */}
                   </button>
                   <button
                     type="button"
                     onClick={() => scanHostPorts(h.ip)}
-                    className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-lg border border-obsidian-border bg-obsidian-panel px-2.5 text-xs font-medium text-obsidian-text hover:border-obsidian-gold hover:text-white"
+                    className="ui-action-secondary"
                   >
-                    <ScanSearch size={13} aria-hidden="true" />
+                    <ScanSearch size={16} aria-hidden="true" />
                     <span>{t('hosts.ports')}</span>
+                    {/* [Acción secundaria] Abre o ajusta la operación actual. */}
                   </button>
                   <button
                     type="button"
                     onClick={() => void handleFingerprint(h)}
                     disabled={isFpBusy}
-                    className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-lg border border-obsidian-border bg-obsidian-panel px-2.5 text-xs font-medium text-obsidian-text hover:border-obsidian-gold hover:text-white disabled:opacity-60"
+                    className="ui-action-secondary"
                   >
-                    {isFpBusy ? <Loader2 size={13} className="animate-spin" aria-hidden="true" /> : <Cpu size={13} aria-hidden="true" />}
+                    {isFpBusy ? <Loader2 size={16} className="animate-spin" aria-hidden="true" /> : <Cpu size={16} aria-hidden="true" />}
                     <span>{t('hosts.osBtn')}</span>
+                    {/* [Acción secundaria] Abre o ajusta la operación actual. */}
                   </button>
                   <button
                     type="button"
                     onClick={() => void handleCheckExploits(h.ip)}
                     disabled={isExpBusy}
-                    className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-lg border border-obsidian-border bg-obsidian-panel px-2.5 text-xs font-medium text-obsidian-text hover:border-obsidian-gold hover:text-white disabled:opacity-60"
+                    className="ui-action-secondary"
                   >
-                    {isExpBusy ? <Loader2 size={13} className="animate-spin" aria-hidden="true" /> : <Bug size={13} aria-hidden="true" />}
+                    {isExpBusy ? <Loader2 size={16} className="animate-spin" aria-hidden="true" /> : <Bug size={16} aria-hidden="true" />}
                     <span>Exploits</span>
+                    {/* [Acción secundaria] Abre o ajusta la operación actual. */}
                   </button>
                 </div>
               </article>
@@ -272,10 +269,10 @@ export const HostsPanel: React.FC = () => {
       </div>
 
       {/* Desktop data table (>= md) */}
-      <div className="mt-4 hidden md:block overflow-x-auto rounded-xl border border-obsidian-border bg-obsidian-surface/60">
+      <div className="mt-4 hidden md:block overflow-x-auto border-y border-obsidian-border">
         <table className="w-full min-w-[660px] border-collapse text-left text-xs">
           <thead>
-            <tr className="border-b border-obsidian-border bg-obsidian-surface text-[11px] font-semibold uppercase tracking-wider text-obsidian-muted">
+            <tr className="border-b border-obsidian-border text-xs font-semibold text-obsidian-muted">
               <th scope="col" className="px-3 py-2.5">IP</th>
               <th scope="col" className="px-3 py-2.5">MAC</th>
               <th scope="col" className="px-3 py-2.5">{t('hosts.vendor')}</th>
@@ -309,51 +306,50 @@ export const HostsPanel: React.FC = () => {
                 return (
                   <tr
                     key={`${h.ip}-${h.mac}`}
-                    className={`transition-colors hover:bg-obsidian-panel/70 ${
-                      isPinned ? 'bg-obsidian-gold/5' : ''
+                    className={`transition-colors hover:bg-obsidian-surface/50 ${
+                      isPinned ? 'bg-obsidian-accent/10' : ''
                     }`}
                   >
                     <td className="px-3 py-2.5 font-mono text-white whitespace-nowrap">{h.ip}</td>
                     <td className="px-3 py-2.5 font-mono text-obsidian-muted whitespace-nowrap">{h.mac}</td>
                     <td className="px-3 py-2.5 text-obsidian-text">{h.vendor || '-'}</td>
-                    <td className="px-3 py-2.5 font-mono text-emerald-300">{osDisplay}</td>
+                    <td className="px-3 py-2.5 font-mono text-obsidian-text">{osDisplay}</td>
                     <td className="px-3 py-2.5">
                       <div className="flex flex-wrap items-center justify-end gap-1.5">
                         <button
                           type="button"
                           onClick={() => handlePinTarget(h.ip)}
                           aria-pressed={isPinned}
-                          className={`inline-flex min-h-[44px] lg:min-h-9 items-center gap-1 rounded-lg border px-2.5 py-1 text-[11px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-gold ${
-                            isPinned
-                              ? 'border-obsidian-gold bg-obsidian-gold/20 text-amber-200'
-                              : 'border-indigo-500/40 bg-indigo-600/20 text-white hover:border-obsidian-gold hover:bg-obsidian-surface'
-                          }`}
+                          className="ui-action-toggle"
                         >
-                          <Crosshair size={12} aria-hidden="true" />
+                          <Crosshair size={16} aria-hidden="true" />
                           <span>{t('hosts.target')}</span>
+                          {/* [Estado seleccionable] Cambia la selección indicada. */}
                         </button>
 
                         <button
                           type="button"
                           onClick={() => scanHostPorts(h.ip)}
-                          className="inline-flex min-h-[44px] lg:min-h-9 items-center gap-1 rounded-lg border border-obsidian-border bg-obsidian-panel px-2.5 py-1 text-[11px] font-medium text-obsidian-text transition-colors hover:border-obsidian-gold hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-gold"
+                          className="ui-action-secondary"
                         >
-                          <ScanSearch size={12} aria-hidden="true" />
+                          <ScanSearch size={16} aria-hidden="true" />
                           <span>{t('hosts.ports')}</span>
+                          {/* [Acción secundaria] Abre o ajusta la operación actual. */}
                         </button>
 
                         <button
                           type="button"
                           onClick={() => void handleFingerprint(h)}
                           disabled={isFpBusy}
-                          className="inline-flex min-h-[44px] lg:min-h-9 items-center gap-1 rounded-lg border border-obsidian-border bg-obsidian-panel px-2.5 py-1 text-[11px] font-medium text-obsidian-text transition-colors hover:border-obsidian-gold hover:text-white disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-gold"
+                          className="ui-action-secondary"
                         >
                           {isFpBusy ? (
-                            <Loader2 size={12} className="animate-spin" aria-hidden="true" />
+                            <Loader2 size={16} className="animate-spin" aria-hidden="true" />
                           ) : (
-                            <Cpu size={12} aria-hidden="true" />
+                            <Cpu size={16} aria-hidden="true" />
                           )}
                           <span>{t('hosts.osBtn')}</span>
+                          {/* [Acción secundaria] Abre o ajusta la operación actual. */}
                         </button>
 
                         <button
@@ -367,14 +363,15 @@ export const HostsPanel: React.FC = () => {
                               ? 'Ir a Puertos si no hay escaneo previo'
                               : 'Switches to Ports if not scanned yet'
                           }
-                          className="inline-flex min-h-[44px] lg:min-h-9 items-center gap-1 rounded-lg border border-obsidian-border bg-obsidian-panel px-2.5 py-1 text-[11px] font-medium text-obsidian-text transition-colors hover:border-obsidian-gold hover:text-white disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-gold"
+                          className="ui-action-secondary"
                         >
                           {isExpBusy ? (
-                            <Loader2 size={12} className="animate-spin" aria-hidden="true" />
+                            <Loader2 size={16} className="animate-spin" aria-hidden="true" />
                           ) : (
-                            <Bug size={12} aria-hidden="true" />
+                            <Bug size={16} aria-hidden="true" />
                           )}
                           <span>Exploits</span>
+                          {/* [Acción secundaria] Abre o ajusta la operación actual. */}
                         </button>
                       </div>
                     </td>

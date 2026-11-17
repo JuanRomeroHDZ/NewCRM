@@ -7,9 +7,6 @@ import {
   ExternalLink,
   Edit3,
   Trash2,
-  Briefcase,
-  User,
-  Users,
   AlertTriangle,
   LoaderCircle,
   Lock,
@@ -18,7 +15,6 @@ import { useVault } from '../../context/VaultContext';
 import { api } from '../../lib/api';
 import { PlatformAccount, EmailAccount } from '../../types';
 import { PlatformIcon } from '../common/PlatformIcon';
-import { TagBadge } from '../common/TagBadge';
 import { SecretField } from '../common/SecretField';
 import { CopyButton } from '../common/CopyButton';
 import { InfoTooltip } from '../common/InfoTooltip';
@@ -172,11 +168,11 @@ export const PlatformsView: React.FC = () => {
   const hasActiveFilters = Boolean(search || selectedEmail || selectedStatus || selectedTag);
 
   return (
-    <div className="mx-auto max-w-7xl min-w-0 space-y-4 p-3 sm:space-y-6 sm:p-8 animate-fadeIn">
+    <div className="mx-auto max-w-7xl min-w-0 space-y-4 px-4 py-4 sm:space-y-6 sm:px-6 sm:py-6 animate-fadeIn">
       {/* Header and Add button */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex min-w-0 items-center gap-2">
-          <Globe className="flex-shrink-0 text-indigo-400" size={18} aria-hidden="true" />
+          <Globe className="flex-shrink-0 text-obsidian-muted" size={18} aria-hidden="true" />
           <h2 aria-live="polite" className="truncate text-base font-bold tracking-tight text-white">
             Cuentas y Servicios ({filteredPlatforms.length})
           </h2>
@@ -190,7 +186,7 @@ export const PlatformsView: React.FC = () => {
 
       {/* Locked Banner */}
       {!isUnlocked && (
-        <div className="flex flex-col justify-between gap-3 rounded-2xl border border-amber-500/25 bg-amber-500/10 p-4 sm:flex-row sm:items-center">
+        <div className="flex flex-col justify-between gap-3 rounded-xl border border-amber-500/25 bg-amber-500/10 p-4 sm:flex-row sm:items-center">
           <div className="flex min-w-0 items-start gap-3 text-xs text-amber-200 sm:items-center">
             <Lock size={16} className="mt-0.5 flex-shrink-0 text-amber-400 sm:mt-0" aria-hidden="true" />
             <span className="leading-relaxed">
@@ -200,22 +196,22 @@ export const PlatformsView: React.FC = () => {
           <button
             type="button"
             onClick={openUnlockModal}
-            className="min-h-10 flex-shrink-0 self-end rounded-lg bg-indigo-600 px-3 text-xs font-semibold text-white whitespace-nowrap hover:bg-indigo-500 sm:self-auto"
-          >
+            className="ui-action-primary flex-shrink-0 self-end sm:self-auto"
+          >{/* [Acción principal] Inicia o confirma la tarea de este espacio. */}
             Desbloquear Bóveda
           </button>
         </div>
       )}
 
       {/* Filter Toolbar */}
-      <div className="flex min-w-0 flex-wrap items-center gap-2 border-y border-obsidian-border py-2.5 text-xs">
+      <div className="flex min-w-0 flex-wrap items-center gap-2 border-y border-obsidian-border py-3 text-xs">
         <div className="flex min-w-0 flex-[1_1_24rem] flex-wrap items-center gap-2">
           {/* Search box */}
           <div className="relative min-w-[min(100%,12rem)] flex-[1_1_10rem] max-w-[14rem]">
             <label htmlFor={searchInputId} className="sr-only">
               Buscar cuentas o servicios
             </label>
-            <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-obsidian-muted" aria-hidden="true" />
+            <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-obsidian-muted" aria-hidden="true" />
             <input
               id={searchInputId}
               type="search"
@@ -224,7 +220,7 @@ export const PlatformsView: React.FC = () => {
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Buscar servicio o usuario..."
               aria-label="Buscar por nombre de servicio o usuario"
-              className="min-h-10 w-full rounded-lg border border-obsidian-border bg-obsidian-bg py-1.5 pl-8 pr-3 text-xs text-white placeholder-obsidian-muted/60 focus:border-indigo-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+              className="min-h-[44px] w-full rounded-lg border border-obsidian-border bg-obsidian-bg py-2 pl-9 pr-3 text-xs text-white placeholder-obsidian-muted/60 focus:border-indigo-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
             />
           </div>
 
@@ -237,7 +233,7 @@ export const PlatformsView: React.FC = () => {
             aria-label="Filtrar por correo principal"
             value={selectedEmail}
             onChange={(e) => setSelectedEmail(e.target.value)}
-            className="min-h-10 max-w-full min-w-[min(100%,7rem)] flex-[1_1_7rem] rounded-lg border border-obsidian-border bg-obsidian-bg px-2.5 text-obsidian-text focus:border-indigo-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 sm:max-w-[220px]"
+            className="min-h-[44px] max-w-full min-w-[min(100%,7rem)] flex-[1_1_7rem] rounded-lg border border-obsidian-border bg-obsidian-bg px-3 text-obsidian-text focus:border-indigo-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 sm:max-w-[220px]"
           >
             <option value="">Correos</option>
             {filteredEmails.map((e) => (
@@ -256,7 +252,7 @@ export const PlatformsView: React.FC = () => {
             aria-label="Filtrar por estado de suscripción"
             value={selectedStatus}
             onChange={(e) => setSelectedStatus(e.target.value)}
-            className="min-h-10 max-w-full min-w-[min(100%,7rem)] flex-[1_1_7rem] rounded-lg border border-obsidian-border bg-obsidian-bg px-2.5 text-obsidian-text focus:border-indigo-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 sm:max-w-[180px]"
+            className="min-h-[44px] max-w-full min-w-[min(100%,7rem)] flex-[1_1_7rem] rounded-lg border border-obsidian-border bg-obsidian-bg px-3 text-obsidian-text focus:border-indigo-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 sm:max-w-[180px]"
           >
             <option value="">Estados</option>
             <option value="active">Activa (Con cobro)</option>
@@ -277,7 +273,7 @@ export const PlatformsView: React.FC = () => {
                 aria-label="Filtrar por etiqueta"
                 value={selectedTag}
                 onChange={(e) => setSelectedTag(e.target.value)}
-                className="min-h-10 max-w-full min-w-[min(100%,8rem)] flex-[1_1_9rem] rounded-lg border border-obsidian-border bg-obsidian-bg px-2.5 text-obsidian-text focus:border-indigo-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 sm:max-w-[160px]"
+                className="min-h-[44px] max-w-full min-w-[min(100%,8rem)] flex-[1_1_9rem] rounded-lg border border-obsidian-border bg-obsidian-bg px-3 text-obsidian-text focus:border-indigo-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 sm:max-w-[160px]"
               >
                 <option value="">Todas las Etiquetas</option>
                 {allTags.map((t) => (
@@ -295,15 +291,14 @@ export const PlatformsView: React.FC = () => {
           <div
             role="group"
             aria-label="Modo de visualización"
-            className="hidden h-10 shrink-0 items-center rounded-lg border border-obsidian-border bg-obsidian-bg p-1 md:flex"
+            className="hidden min-h-[52px] shrink-0 items-center rounded-lg border border-obsidian-border bg-obsidian-bg p-1 md:flex"
           >
+            {/* [Estado seleccionable] Cambia la presentación sin modificar los servicios. */}
             <button
               type="button"
               aria-pressed={viewMode === 'table'}
               onClick={() => setViewMode('table')}
-              className={`h-8 rounded-md px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
-                viewMode === 'table' ? 'bg-obsidian-surface text-white' : 'text-obsidian-muted hover:text-white'
-              }`}
+              className="ui-action-toggle"
             >
               Tabla
             </button>
@@ -311,9 +306,7 @@ export const PlatformsView: React.FC = () => {
               type="button"
               aria-pressed={viewMode === 'grid'}
               onClick={() => setViewMode('grid')}
-              className={`h-8 rounded-md px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
-                viewMode === 'grid' ? 'bg-obsidian-surface text-white' : 'text-obsidian-muted hover:text-white'
-              }`}
+              className="ui-action-toggle"
             >
               Tarjetas
             </button>
@@ -322,9 +315,9 @@ export const PlatformsView: React.FC = () => {
             <button
               type="button"
               onClick={() => openPlatformModal()}
-              className="inline-flex min-h-10 max-w-full shrink-0 items-center justify-center gap-1.5 rounded-lg bg-indigo-600 px-3 text-xs font-semibold text-white transition-colors hover:bg-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
-            >
-              <Plus size={14} aria-hidden="true" />
+              className="ui-action-primary max-w-full shrink-0"
+            >{/* [Acción principal] Inicia o confirma la tarea de este espacio. */}
+              <Plus size={16} aria-hidden="true" />
               <span>Nuevo servicio</span>
             </button>
           )}
@@ -335,9 +328,9 @@ export const PlatformsView: React.FC = () => {
       {loading && (
         <div
           role="status"
-          className="flex items-center justify-center gap-2.5 rounded-2xl border border-obsidian-border bg-obsidian-panel p-8 text-xs text-obsidian-muted"
+          className="flex items-center justify-center gap-3 rounded-xl border border-obsidian-border bg-obsidian-panel p-6 text-xs text-obsidian-muted sm:p-8"
         >
-          <LoaderCircle size={18} className="animate-spin text-indigo-400" aria-hidden="true" />
+          <LoaderCircle size={18} className="animate-spin text-obsidian-muted" aria-hidden="true" />
           <span>Cargando cuentas y servicios…</span>
         </div>
       )}
@@ -381,8 +374,9 @@ export const PlatformsView: React.FC = () => {
                         type="button"
                         onClick={() => openInspector('platform', p.id)}
                         aria-label={`Ver detalles de ${p.name}`}
-                        className="flex min-w-0 max-w-full items-center gap-2.5 rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                        className="ui-nav-action min-w-0 max-w-full gap-3"
                       >
+                        {/* [Navegación] Abre el detalle del servicio. */}
                         <PlatformIcon name={p.name} iconUrl={p.icon_url} size="sm" />
                         <div className="min-w-0">
                           <span
@@ -405,31 +399,22 @@ export const PlatformsView: React.FC = () => {
 
                     <td className="hidden whitespace-nowrap px-4 py-3 xl:table-cell">
                       {p.scope === 'personal' ? (
-                        <span className="inline-flex items-center gap-1 rounded border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-400">
-                          <User size={10} aria-hidden="true" />
-                          <span>Personal</span>
-                        </span>
+                        <span className="text-xs text-obsidian-muted">Personal</span>
                       ) : p.scope === 'shared' ? (
-                        <span className="inline-flex items-center gap-1 rounded border border-purple-500/20 bg-purple-500/10 px-2 py-0.5 text-[10px] font-semibold text-purple-400">
-                          <Users size={10} aria-hidden="true" />
-                          <span>Compartido</span>
-                        </span>
+                        <span className="text-xs text-obsidian-muted">Compartido</span>
                       ) : (
-                        <span className="inline-flex items-center gap-1 rounded border border-indigo-500/20 bg-indigo-500/10 px-2 py-0.5 text-[10px] font-semibold text-indigo-400">
-                          <Briefcase size={10} aria-hidden="true" />
-                          <span>Empresa</span>
-                        </span>
+                        <span className="text-xs text-obsidian-muted">Empresa</span>
                       )}
                     </td>
 
-                    <td className="max-w-[190px] truncate px-4 py-3 font-mono text-[11px] text-cyan-300">
+                    <td className="max-w-[190px] truncate px-4 py-3 font-mono text-[11px] text-obsidian-text">
                       {p.email_id ? (
                         <button
                           type="button"
                           onClick={() => openInspector('email', p.email_id!)}
                           title={p.specific_alias || p.email_address || ''}
-                          className="max-w-full truncate hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
-                        >
+                          className="ui-nav-action max-w-full"
+                        >{/* [Navegación] Mantiene disponible esta acción en su contexto. */}
                           {p.specific_alias || p.email_address}
                         </button>
                       ) : (
@@ -446,7 +431,7 @@ export const PlatformsView: React.FC = () => {
                           <CopyButton
                             value={p.username || p.specific_alias || ''}
                             label="Usuario"
-                            className="min-h-[32px] min-w-[32px]"
+                            className="min-h-[40px] min-w-[40px]"
                           />
                         )}
                       </div>
@@ -454,7 +439,7 @@ export const PlatformsView: React.FC = () => {
 
                     <td className="px-4 py-3">
                       {p.access_type === 'sso' ? (
-                        <span className="rounded border border-indigo-500/20 bg-indigo-500/10 px-2 py-0.5 text-[10px] font-semibold text-indigo-400">
+                        <span className="text-xs text-obsidian-muted">
                           Inicio con correo
                         </span>
                       ) : (
@@ -475,14 +460,14 @@ export const PlatformsView: React.FC = () => {
                           Prueba Gratuita
                         </span>
                       ) : (
-                        <span className="text-[10px] uppercase text-obsidian-muted">{p.subscription_status}</span>
+                        <span className={`text-[10px] uppercase ${p.subscription_status === 'cancelled' ? 'text-rose-300' : p.subscription_status === 'paused' ? 'text-amber-300' : 'text-obsidian-muted'}`}>{p.subscription_status}</span>
                       )}
                     </td>
 
                     <td className="hidden px-4 py-3 xl:table-cell">
                       <div className="flex max-w-[160px] flex-wrap gap-1">
                         {p.tags?.slice(0, 2).map((t, idx) => (
-                          <TagBadge key={idx} name={t.name} color={t.color} />
+                          <span key={idx} className="rounded border border-obsidian-border bg-obsidian-surface px-2 py-0.5 text-[10px] text-obsidian-muted">{t.name}</span>
                         ))}
                       </div>
                     </td>
@@ -496,9 +481,9 @@ export const PlatformsView: React.FC = () => {
                             rel="noopener noreferrer"
                             title="Abrir sitio oficial"
                             aria-label={`Abrir sitio oficial de ${p.name}`}
-                            className="inline-flex min-h-[44px] min-w-[44px] lg:min-h-9 lg:min-w-9 items-center justify-center rounded-lg hover:bg-obsidian-surface hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                            className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg hover:bg-obsidian-surface hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-accent"
                           >
-                            <ExternalLink size={14} aria-hidden="true" />
+                            <ExternalLink size={16} aria-hidden="true" />
                           </a>
                         )}
                         <button
@@ -509,18 +494,18 @@ export const PlatformsView: React.FC = () => {
                           }}
                           title="Editar plataforma"
                           aria-label={`Editar ${p.name}`}
-                          className="inline-flex min-h-[44px] min-w-[44px] lg:min-h-9 lg:min-w-9 items-center justify-center rounded-lg hover:bg-obsidian-surface hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
-                        >
-                          <Edit3 size={14} aria-hidden="true" />
+                          className="ui-action-icon"
+                        >{/* [Icono] Acción identificada por su nombre accesible. */}
+                          <Edit3 size={16} aria-hidden="true" />
                         </button>
                         <button
                           type="button"
                           onClick={() => handleDeletePlatform(p)}
                           title="Eliminar plataforma"
                           aria-label={`Eliminar ${p.name}`}
-                          className="inline-flex min-h-[44px] min-w-[44px] lg:min-h-9 lg:min-w-9 items-center justify-center rounded-lg hover:bg-obsidian-surface hover:text-rose-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
-                        >
-                          <Trash2 size={14} aria-hidden="true" />
+                          className="ui-action-icon ui-action-danger"
+                        >{/* [Acción destructiva] Envía el elemento a la papelera. */}
+                          <Trash2 size={16} aria-hidden="true" />
                         </button>
                       </div>
                     </td>
@@ -557,15 +542,15 @@ export const PlatformsView: React.FC = () => {
             return (
               <article
                 key={p.id}
-                className="group min-w-0 space-y-2 overflow-hidden rounded-xl border border-obsidian-border bg-obsidian-panel p-3 transition-colors hover:border-obsidian-borderLight"
+                className="group min-w-0 space-y-2 overflow-hidden rounded-xl border border-obsidian-border bg-obsidian-panel p-4 transition-colors hover:border-obsidian-borderLight"
               >
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <button
                     type="button"
                     onClick={() => openInspector('platform', p.id)}
                     aria-label={`Ver detalles de ${p.name}`}
-                    className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
-                  >
+                    className="ui-nav-action min-w-0 flex-1 items-center gap-3"
+                  >{/* [Navegación] Mantiene disponible esta acción en su contexto. */}
                     <PlatformIcon name={p.name} iconUrl={p.icon_url} size="sm" />
                     <div className="min-w-0 flex-1">
                       <h3
@@ -575,7 +560,7 @@ export const PlatformsView: React.FC = () => {
                         {p.name}
                       </h3>
                     </div>
-                    <ArrowRight size={13} className="shrink-0 text-obsidian-muted" aria-hidden="true" />
+                    <ArrowRight size={16} className="shrink-0 text-obsidian-muted" aria-hidden="true" />
                   </button>
 
                   <div className="flex flex-shrink-0 items-center gap-1">
@@ -586,9 +571,9 @@ export const PlatformsView: React.FC = () => {
                         rel="noopener noreferrer"
                         title="Abrir enlace"
                         aria-label={`Abrir enlace de ${p.name}`}
-                        className="inline-flex min-h-[44px] min-w-[44px] lg:min-h-9 lg:min-w-9 items-center justify-center rounded-lg text-obsidian-muted hover:bg-obsidian-surface hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                        className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg text-obsidian-muted hover:bg-obsidian-surface hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
                       >
-                        <ExternalLink size={14} aria-hidden="true" />
+                        <ExternalLink size={16} aria-hidden="true" />
                       </a>
                     )}
                     <button
@@ -599,25 +584,25 @@ export const PlatformsView: React.FC = () => {
                       }}
                       title="Editar plataforma"
                       aria-label={`Editar ${p.name}`}
-                      className="inline-flex min-h-[44px] min-w-[44px] lg:min-h-9 lg:min-w-9 items-center justify-center rounded-lg text-obsidian-muted hover:bg-obsidian-surface hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
-                    >
-                      <Edit3 size={14} aria-hidden="true" />
+                      className="ui-action-icon"
+                    >{/* [Icono] Acción identificada por su nombre accesible. */}
+                      <Edit3 size={16} aria-hidden="true" />
                     </button>
                     <button
                       type="button"
                       onClick={() => handleDeletePlatform(p)}
                       title="Eliminar plataforma"
                       aria-label={`Eliminar ${p.name}`}
-                      className="inline-flex min-h-[44px] min-w-[44px] lg:min-h-9 lg:min-w-9 items-center justify-center rounded-lg text-obsidian-muted hover:bg-obsidian-surface hover:text-rose-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
-                    >
-                      <Trash2 size={14} aria-hidden="true" />
+                      className="ui-action-icon ui-action-danger"
+                    >{/* [Acción destructiva] Envía el elemento a la papelera. */}
+                      <Trash2 size={16} aria-hidden="true" />
                     </button>
                   </div>
                 </div>
 
                 <div className="flex min-w-0 items-center justify-between gap-2 border-t border-obsidian-border/60 pt-2 text-[10px]">
                   <span className="truncate text-obsidian-muted">{scopeLabel}</span>
-                  <span className={`shrink-0 truncate font-medium ${p.subscription_status === 'active' ? 'text-emerald-300' : 'text-obsidian-muted'}`}>
+                  <span className={`shrink-0 truncate font-medium ${p.subscription_status === 'free_trial' || p.subscription_status === 'paused' ? 'text-amber-300' : p.subscription_status === 'cancelled' ? 'text-rose-300' : 'text-obsidian-muted'}`}>
                     {statusLabel}
                   </span>
                 </div>
@@ -630,9 +615,7 @@ export const PlatformsView: React.FC = () => {
       {/* Clean Empty State */}
       {!loading && !error && filteredPlatforms.length === 0 && isUnlocked && (
         <div className="space-y-3 rounded-xl border border-obsidian-border bg-obsidian-panel px-4 py-8 text-center">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl border border-indigo-500/20 bg-indigo-500/10 text-indigo-400">
-            <Globe size={22} aria-hidden="true" />
-          </div>
+          <Globe size={18} className="mx-auto text-obsidian-muted" aria-hidden="true" />
           <h3 className="text-sm font-semibold text-white">
             {hasActiveFilters
               ? 'No se encontraron plataformas con los filtros seleccionados'
@@ -648,17 +631,17 @@ export const PlatformsView: React.FC = () => {
                   setSelectedStatus('');
                   setSelectedTag('');
                 }}
-                className="min-h-[40px] rounded-xl border border-obsidian-border bg-obsidian-surface px-3.5 py-2 text-xs font-medium text-white hover:bg-obsidian-border"
-              >
+                className="ui-action-secondary"
+              >{/* [Acción secundaria] Mantiene disponible esta acción en su contexto. */}
                 Limpiar Filtros
               </button>
             )}
             <button
               type="button"
               onClick={() => openPlatformModal()}
-              className="inline-flex min-h-[40px] items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white shadow-md shadow-indigo-600/20 hover:bg-indigo-500"
-            >
-              <Plus size={14} aria-hidden="true" />
+              className="ui-action-primary"
+            >{/* [Acción principal] Inicia o confirma la tarea de este espacio. */}
+              <Plus size={16} aria-hidden="true" />
               <span>Vincular plataforma</span>
             </button>
           </div>

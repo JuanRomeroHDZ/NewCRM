@@ -26,7 +26,7 @@ export const SettingsView: React.FC = () => {
   const {
     activeSection, setActiveSection, isUnlocked, openUnlockModal, timeoutMinutes,
     clipboardClearSeconds, allowRevealPasswords, searchHotkey,
-    accentColor, setAccentColor, canvasStyle, setCanvasStyle,
+    accentColor, setAccentColor, setCanvasStyle,
     openImportModal, openEnvExport, openEmergencyKit, openPasswordGen, refreshVaultStatus, showToast, triggerDataReload, systemLocale,
   } = useVault();
 
@@ -35,7 +35,6 @@ export const SettingsView: React.FC = () => {
   const [localReveal, setLocalReveal] = useState(allowRevealPasswords);
   const [localHotkey, setLocalHotkey] = useState(searchHotkey);
   const [localAccent, setLocalAccent] = useState(accentColor || '#0F766E');
-  const [localCanvas, setLocalCanvas] = useState(canvasStyle || 'dot-grid');
 
   // Phase 7 Operational & Security Policies
   const [rotationRootDays, setRotationRootDays] = useState<number>(90);
@@ -95,8 +94,7 @@ export const SettingsView: React.FC = () => {
     setLocalReveal(allowRevealPasswords);
     setLocalHotkey(searchHotkey);
     setLocalAccent(accentColor || '#0F766E');
-    setLocalCanvas(canvasStyle || 'dot-grid');
-  }, [timeoutMinutes, clipboardClearSeconds, allowRevealPasswords, searchHotkey, accentColor, canvasStyle]);
+  }, [timeoutMinutes, clipboardClearSeconds, allowRevealPasswords, searchHotkey, accentColor]);
 
   const loadVaultSettings = useCallback(async () => {
     const generation = ++vaultSettingsGeneration.current;
@@ -138,7 +136,7 @@ export const SettingsView: React.FC = () => {
   if (!isUnlocked) {
     return (
       <div className="p-8 max-w-xl mx-auto text-center space-y-6 pt-24 animate-fadeIn">
-        <div className="w-16 h-16 mx-auto rounded-3xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
+        <div className="w-16 h-16 mx-auto rounded-2xl bg-obsidian-surface border border-obsidian-border flex items-center justify-center text-obsidian-muted">
           <Lock size={32} aria-hidden="true" />
         </div>
         <div className="flex items-center justify-center gap-2">
@@ -153,7 +151,7 @@ export const SettingsView: React.FC = () => {
         <button
           type="button"
           onClick={openUnlockModal}
-          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-lg shadow-indigo-600/30"
+          className="ui-action-primary"
         >
           <span>Desbloquear con contraseña de acceso</span>
         </button>
@@ -182,7 +180,7 @@ export const SettingsView: React.FC = () => {
         allow_reveal_passwords: localReveal,
         search_hotkey: localHotkey,
         accent_color: localAccent,
-        canvas_style: localCanvas,
+        canvas_style: 'plain',
         password_rotation_days_root: rotationRootDays,
         password_rotation_days_secondary: rotationSecondaryDays,
         max_followup_attempts: maxFollowupAttempts,
@@ -209,7 +207,7 @@ export const SettingsView: React.FC = () => {
 
       await api.updateSettings(payload);
       setAccentColor(localAccent);
-      setCanvasStyle(localCanvas);
+      setCanvasStyle('plain');
       await refreshVaultStatus();
       triggerDataReload();
       setNewMasterPassword('');
@@ -246,9 +244,9 @@ export const SettingsView: React.FC = () => {
   const currencySelectOptions = ['MXN', 'USD'];
 
   return (
-    <div className="mx-auto max-w-4xl min-w-0 space-y-5 p-3 sm:space-y-7 sm:p-8 animate-fadeIn">
+    <div className="mx-auto max-w-4xl min-w-0 space-y-4 p-3 sm:space-y-4 sm:p-4 animate-fadeIn">
       <div className="flex items-center gap-2 min-w-0">
-        <Settings className="text-indigo-400 flex-shrink-0" size={18} aria-hidden="true" />
+        <Settings className="text-obsidian-muted flex-shrink-0" size={18} aria-hidden="true" />
         <h2 className="text-base font-bold text-white tracking-tight">
           Preferencias
         </h2>
@@ -264,53 +262,35 @@ export const SettingsView: React.FC = () => {
         </p>
       )}
       {vaultSettingsError && (
-        <div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-200">
+        <div role="alert" className="flex flex-wrap items-center justify-between gap-2 py-2 text-xs text-rose-200">
           <span>No se cargaron tus ajustes. Para evitar reemplazarlos con valores iniciales, vuelve a intentarlo antes de guardar.</span>
-          <button type="button" onClick={() => void loadVaultSettings()} className="shrink-0 font-semibold underline underline-offset-2 hover:text-white">
+          <button type="button" onClick={() => void loadVaultSettings()} className="ui-action-secondary shrink-0">
             Reintentar
           </button>
         </div>
       )}
 
-      <form onSubmit={handleSavePreferences} className="space-y-4 sm:space-y-5">
+      <form onSubmit={handleSavePreferences} className="space-y-4 sm:space-y-4">
         {/* Visual Customization (Notion & Obsidian aesthetics) */}
-        <div id="settings-appearance" tabIndex={-1} style={{ outline: activeSection === 'settings_appearance' ? '2px solid var(--accent-color, #818cf8)' : undefined, outlineOffset: '2px' }} className="min-w-0 scroll-mt-4 space-y-4 rounded-xl border border-obsidian-border bg-obsidian-panel p-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 sm:p-5">
+        <section id="settings-appearance" tabIndex={-1} style={{ outline: activeSection === 'settings_appearance' ? '2px solid var(--brand-accent, #0F766E)' : undefined, outlineOffset: '2px' }} className="min-w-0 scroll-mt-4 space-y-2 border-b border-obsidian-border pb-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent">
           <h3 className="text-sm font-bold text-white flex items-center gap-2">
-            <Palette size={16} className="text-indigo-400" aria-hidden="true" />
+            <Palette size={16} className="text-obsidian-muted" aria-hidden="true" />
             <span>Apariencia</span>
           </h3>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-            {/* Canvas pattern */}
-            <div className="space-y-1.5">
-                <label htmlFor="canvas-style-select" className="text-obsidian-text font-medium block">
-                Fondo de la interfaz
-              </label>
-              <select
-                id="canvas-style-select"
-                value={localCanvas}
-                onChange={(e) => setLocalCanvas(e.target.value)}
-                className="w-full px-3.5 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white focus:outline-none focus:border-indigo-500"
-              >
-                <option value="dot-grid">Puntos Discretos</option>
-                <option value="subtle-grid">Cuadrícula Fina</option>
-                <option value="plain">Fondo Liso</option>
-              </select>
-            </div>
-          </div>
-        </div>
+          <p className="text-xs leading-5 text-obsidian-muted">La interfaz usa superficies neutras; el lienzo de mapas y pizarras conserva sus propias herramientas de color.</p>
+        </section>
 
         {/* Security Parameters */}
-        <div id="settings-session" tabIndex={-1} style={{ outline: activeSection === 'settings_session' ? '2px solid var(--accent-color, #818cf8)' : undefined, outlineOffset: '2px' }} className="min-w-0 scroll-mt-4 space-y-4 rounded-xl border border-obsidian-border bg-obsidian-panel p-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 sm:p-4">
+        <div id="settings-session" tabIndex={-1} style={{ outline: activeSection === 'settings_session' ? '2px solid var(--brand-accent, #0F766E)' : undefined, outlineOffset: '2px' }} className="min-w-0 scroll-mt-4 space-y-4 rounded-xl border border-obsidian-border bg-obsidian-panel p-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent sm:p-4">
           <div className="flex items-center gap-2">
-            <Shield size={16} className="text-indigo-400" aria-hidden="true" />
+            <Shield size={16} className="text-obsidian-muted" aria-hidden="true" />
             <h3 className="text-sm font-bold text-white">Sesión y Portapapeles</h3>
             <InfoTooltip content="Elige cuántos minutos permanece desbloqueada la sesión y cuántos segundos dura una contraseña copiada antes de borrarse del portapapeles." />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
             {/* Auto-Lock timer */}
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label htmlFor="vault-timeout-select" className="text-obsidian-text font-medium block">
                 Bloquear Automáticamente por Inactividad
               </label>
@@ -318,7 +298,7 @@ export const SettingsView: React.FC = () => {
                 id="vault-timeout-select"
                 value={localTimeout}
                 onChange={(e) => setLocalTimeout(Number(e.target.value))}
-                className="w-full px-3.5 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white focus:outline-none focus:border-indigo-500"
+                className="w-full px-3 py-2 rounded-lg min-h-11 bg-obsidian-bg border border-obsidian-border text-white focus:outline-none focus:border-obsidian-accent"
               >
                 <option value={1}>1 minuto</option>
                 <option value={5}>5 minutos</option>
@@ -337,7 +317,7 @@ export const SettingsView: React.FC = () => {
             </div>
 
             {/* Clipboard clear timer */}
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label htmlFor="clipboard-clear-select" className="text-obsidian-text font-medium block">
                 Borrar Contraseña Copiada del Portapapeles
               </label>
@@ -345,7 +325,7 @@ export const SettingsView: React.FC = () => {
                 id="clipboard-clear-select"
                 value={localClipboard}
                 onChange={(e) => setLocalClipboard(Number(e.target.value))}
-                className="w-full px-3.5 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white focus:outline-none focus:border-indigo-500"
+                className="w-full px-3 py-2 rounded-lg min-h-11 bg-obsidian-bg border border-obsidian-border text-white focus:outline-none focus:border-obsidian-accent"
               >
                 <option value={10}>A los 10 segundos</option>
                 <option value={20}>A los 20 segundos</option>
@@ -355,7 +335,7 @@ export const SettingsView: React.FC = () => {
             </div>
 
             {/* Search Hotkey */}
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label htmlFor="search-hotkey-input" className="text-obsidian-text font-medium block">
                 Atajo de Teclado del Buscador Rápido
               </label>
@@ -365,19 +345,19 @@ export const SettingsView: React.FC = () => {
                 maxLength={INPUT_LIMITS.HOTKEY}
                 value={localHotkey}
                 onChange={(e) => setLocalHotkey(e.target.value)}
-                className="w-full px-3.5 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white font-mono text-xs focus:outline-none focus:border-indigo-500"
+                className="w-full px-3 py-2 rounded-lg min-h-11 bg-obsidian-bg border border-obsidian-border text-white font-mono text-xs focus:outline-none focus:border-obsidian-accent"
               />
             </div>
 
             {/* Reveal passwords toggle */}
-            <div className="space-y-1.5 flex flex-col justify-end">
-              <div className="flex items-center gap-3 p-2.5 rounded-xl bg-obsidian-bg border border-obsidian-border">
+            <div className="space-y-2 flex flex-col justify-end">
+              <div className="flex items-center gap-3 border-t border-obsidian-border pt-3">
                 <input
                   id="reveal-passwords-checkbox"
                   type="checkbox"
                   checked={localReveal}
                   onChange={(e) => setLocalReveal(e.target.checked)}
-                  className="rounded border-obsidian-border bg-obsidian-panel text-indigo-600 focus:ring-0"
+                  className="rounded border-obsidian-border bg-obsidian-panel text-obsidian-accent focus:ring-0"
                 />
                 <label htmlFor="reveal-passwords-checkbox" className="text-white font-medium cursor-pointer flex-1">
                   Permitir Ver Contraseñas en Pantalla
@@ -389,9 +369,9 @@ export const SettingsView: React.FC = () => {
         </div>
 
         {/* Reglas de Rotación, Papelera Híbrida, Presupuesto y Seguimiento */}
-        <div id="settings-limits" tabIndex={-1} style={{ outline: activeSection === 'settings_limits' ? '2px solid var(--accent-color, #818cf8)' : undefined, outlineOffset: '2px' }} className="min-w-0 scroll-mt-4 space-y-5 rounded-xl border border-obsidian-border bg-obsidian-panel p-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 sm:p-5">
+        <div id="settings-limits" tabIndex={-1} style={{ outline: activeSection === 'settings_limits' ? '2px solid var(--brand-accent, #0F766E)' : undefined, outlineOffset: '2px' }} className="min-w-0 scroll-mt-4 space-y-5 rounded-xl border border-obsidian-border bg-obsidian-panel p-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent sm:p-6">
           <div className="flex items-center gap-2">
-            <Clock size={16} className="text-indigo-400" aria-hidden="true" />
+            <Clock size={16} className="text-obsidian-muted" aria-hidden="true" />
             <h3 className="text-sm font-bold text-white">
               Recordatorios y límites
             </h3>
@@ -400,15 +380,15 @@ export const SettingsView: React.FC = () => {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
             {/* Root Emails Password Rotation */}
-            <div className="space-y-1.5">
-              <label htmlFor="rotation-root-select" className="text-obsidian-text font-medium flex items-center gap-1.5">
+            <div className="space-y-2">
+              <label htmlFor="rotation-root-select" className="text-obsidian-text font-medium flex items-center gap-2">
                 <span>Aviso para Cambiar Contraseña en Correos Principales</span>
               </label>
               <select
                 id="rotation-root-select"
                 value={rotationRootDays}
                 onChange={(e) => setRotationRootDays(Number(e.target.value))}
-                className="w-full px-3.5 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white focus:outline-none focus:border-indigo-500"
+                className="w-full px-3 py-2 rounded-lg min-h-11 bg-obsidian-bg border border-obsidian-border text-white focus:outline-none focus:border-obsidian-accent"
               >
                 <option value={90}>Cada 90 días (Recomendado)</option>
                 <option value={180}>Cada 180 días</option>
@@ -417,15 +397,15 @@ export const SettingsView: React.FC = () => {
             </div>
 
             {/* Secondary Accounts Password Rotation */}
-            <div className="space-y-1.5">
-              <label htmlFor="rotation-secondary-select" className="text-obsidian-text font-medium flex items-center gap-1.5">
+            <div className="space-y-2">
+              <label htmlFor="rotation-secondary-select" className="text-obsidian-text font-medium flex items-center gap-2">
                 <span>Aviso para Cambiar Contraseña en Cuentas y Servicios</span>
               </label>
               <select
                 id="rotation-secondary-select"
                 value={rotationSecondaryDays}
                 onChange={(e) => setRotationSecondaryDays(Number(e.target.value))}
-                className="w-full px-3.5 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white focus:outline-none focus:border-indigo-500"
+                className="w-full px-3 py-2 rounded-lg min-h-11 bg-obsidian-bg border border-obsidian-border text-white focus:outline-none focus:border-obsidian-accent"
               >
                 <option value={90}>Cada 90 días</option>
                 <option value={180}>Cada 180 días (Recomendado)</option>
@@ -434,15 +414,15 @@ export const SettingsView: React.FC = () => {
             </div>
 
             {/* Max Follow-up Attempts before Cold Archive */}
-            <div className="space-y-1.5">
-              <label htmlFor="max-followup-select" className="text-obsidian-text font-medium flex items-center gap-1.5">
+            <div className="space-y-2">
+              <label htmlFor="max-followup-select" className="text-obsidian-text font-medium flex items-center gap-2">
                 <span>Intentos de Seguimiento Antes de Archivar Prospecto</span>
               </label>
               <select
                 id="max-followup-select"
                 value={maxFollowupAttempts}
                 onChange={(e) => setMaxFollowupAttempts(Number(e.target.value))}
-                className="w-full px-3.5 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white focus:outline-none focus:border-indigo-500"
+                className="w-full px-3 py-2 rounded-lg min-h-11 bg-obsidian-bg border border-obsidian-border text-white focus:outline-none focus:border-obsidian-accent"
               >
                 <option value={3}>3 intentos sin respuesta (Predeterminado)</option>
                 <option value={4}>4 intentos sin respuesta</option>
@@ -450,9 +430,9 @@ export const SettingsView: React.FC = () => {
             </div>
 
             {/* Monthly Budget Cap */}
-            <div className="min-w-0 max-w-md space-y-1.5">
-              <label htmlFor="budget-cap-amount" className="text-obsidian-text font-medium flex items-center gap-1.5">
-                <Target size={13} className="text-indigo-400 shrink-0" aria-hidden="true" />
+            <div className="min-w-0 max-w-md space-y-2">
+              <label htmlFor="budget-cap-amount" className="text-obsidian-text font-medium flex items-center gap-2">
+                <Target size={16} className="text-obsidian-muted shrink-0" aria-hidden="true" />
                 <span>Límite mensual</span>
                 <InfoTooltip content="Máximo para el gasto en suscripciones. Usa 0 para dejarlo sin límite." />
               </label>
@@ -469,7 +449,7 @@ export const SettingsView: React.FC = () => {
                     setBudgetCapAmount(decimal < 0 ? value : `${value.slice(0, decimal + 1)}${value.slice(decimal + 1).replace(/\./g, '')}`);
                   }}
                   placeholder="Ej. 5000"
-                  className="min-w-0 flex-1 px-3.5 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white font-mono text-xs focus:outline-none focus:border-indigo-500"
+                  className="min-w-0 min-h-11 flex-1 px-3 py-2 rounded-lg bg-obsidian-bg border border-obsidian-border text-white font-mono text-xs focus:outline-none focus:border-obsidian-accent"
                 />
                 <label htmlFor="budget-cap-currency" className="sr-only">
                   Moneda del presupuesto mensual
@@ -478,7 +458,7 @@ export const SettingsView: React.FC = () => {
                   id="budget-cap-currency"
                   value={budgetCapCurrency}
                   onChange={(e) => setBudgetCapCurrency(e.target.value)}
-                  className="w-20 shrink-0 px-2 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white font-semibold sm:w-28 sm:px-3"
+                  className="w-20 min-h-11 shrink-0 px-2 py-2 rounded-lg bg-obsidian-bg border border-obsidian-border text-white font-semibold sm:w-28 sm:px-3"
                 >
                   {currencySelectOptions.map((code) => (
                     <option key={code} value={code}>
@@ -492,16 +472,16 @@ export const SettingsView: React.FC = () => {
         </div>
 
         {/* Change Master Password */}
-        <div id="settings-access" tabIndex={-1} style={{ outline: activeSection === 'settings_access' ? '2px solid var(--accent-color, #818cf8)' : undefined, outlineOffset: '2px' }} className="min-w-0 scroll-mt-4 space-y-4 rounded-xl border border-obsidian-border bg-obsidian-panel p-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 sm:p-5">
+        <div id="settings-access" tabIndex={-1} style={{ outline: activeSection === 'settings_access' ? '2px solid var(--brand-accent, #0F766E)' : undefined, outlineOffset: '2px' }} className="min-w-0 scroll-mt-4 space-y-4 rounded-xl border border-obsidian-border bg-obsidian-panel p-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent sm:p-6">
           <div className="flex items-center gap-2">
-            <Key size={16} className="text-indigo-400" aria-hidden="true" />
+            <Key size={16} className="text-obsidian-muted" aria-hidden="true" />
             <h3 className="text-sm font-bold text-white">Cambiar contraseña de acceso</h3>
             <InfoTooltip content="Cambia la contraseña de acceso con la que desbloqueas tus datos. Recuerda actualizar tu Hoja de Recuperación después del cambio." />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
             {newMasterPassword && (
-              <div className="space-y-1.5 md:col-span-2">
+              <div className="space-y-2 md:col-span-2">
                 <label className="text-obsidian-text font-medium block" htmlFor="current-access-password">
                   Contraseña actual
                 </label>
@@ -512,11 +492,11 @@ export const SettingsView: React.FC = () => {
                   maxLength={INPUT_LIMITS.MASTER_PASSWORD}
                   value={currentMasterPassword}
                   onChange={(e) => setCurrentMasterPassword(e.target.value)}
-                  className="w-full px-3.5 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-indigo-500"
+                  className="w-full px-3 py-2 rounded-lg min-h-11 bg-obsidian-bg border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-obsidian-accent"
                 />
               </div>
             )}
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label htmlFor="new-access-password" className="text-obsidian-text font-medium block">
                 Nueva contraseña de acceso
               </label>
@@ -533,11 +513,11 @@ export const SettingsView: React.FC = () => {
                   }
                 }}
                 placeholder="Dejar en blanco para mantener actual"
-                className="w-full px-3.5 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-indigo-500"
+                className="w-full px-3 py-2 rounded-lg min-h-11 bg-obsidian-bg border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-obsidian-accent"
               />
             </div>
 
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label htmlFor="confirm-access-password" className="text-obsidian-text font-medium block">
                 Confirmar Nueva contraseña de acceso
               </label>
@@ -548,76 +528,77 @@ export const SettingsView: React.FC = () => {
                 value={confirmMasterPassword}
                 onChange={(e) => setConfirmMasterPassword(e.target.value)}
                 placeholder="Repetir nueva contraseña"
-                className="w-full px-3.5 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-indigo-500"
+                className="w-full px-3 py-2 rounded-lg min-h-11 bg-obsidian-bg border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-obsidian-accent"
               />
             </div>
           </div>
         </div>
 
-        {/* Save button */}
+        {/* [Acción principal] Guardar los cambios de las preferencias. */}
         <div className="flex justify-end">
           <button
             type="submit"
             disabled={isSaving || vaultSettingsLoading || Boolean(vaultSettingsError)}
-            className="inline-flex items-center gap-2 px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white text-xs font-semibold shadow-lg shadow-indigo-600/20 transition-all disabled:opacity-50"
+            className="ui-action-primary"
           >
-            <Save size={14} aria-hidden="true" />
+            <Save size={16} aria-hidden="true" />
             <span>{isSaving ? 'Guardando...' : 'Guardar cambios'}</span>
           </button>
         </div>
       </form>
 
-      <section id="settings-network" tabIndex={-1} style={{ outline: activeSection === 'settings_network' ? '2px solid var(--accent-color, #818cf8)' : undefined, outlineOffset: '2px' }} className="scroll-mt-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300">
+      <section id="settings-network" tabIndex={-1} style={{ outline: activeSection === 'settings_network' ? '2px solid var(--brand-accent, #0F766E)' : undefined, outlineOffset: '2px' }} className="scroll-mt-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent">
         <RuntimeConfigSection />
       </section>
 
-      <section id="settings-tools" tabIndex={-1} style={{ outline: activeSection === 'settings_tools' ? '2px solid var(--accent-color, #818cf8)' : undefined, outlineOffset: '2px' }} aria-labelledby="settings-tools-heading" className="scroll-mt-4 rounded-xl border border-obsidian-border bg-obsidian-panel p-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300">
+      <section id="settings-tools" tabIndex={-1} style={{ outline: activeSection === 'settings_tools' ? '2px solid var(--brand-accent, #0F766E)' : undefined, outlineOffset: '2px' }} aria-labelledby="settings-tools-heading" className="scroll-mt-4 rounded-xl border border-obsidian-border bg-obsidian-panel p-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent">
         <h3 id="settings-tools-heading" className="text-sm font-bold text-white">Herramientas</h3>
+        {/* [Acción secundaria] Abrir las herramientas sin cambiar datos directamente. */}
         <div className="mt-3 flex flex-wrap gap-2">
-          <button type="button" onClick={openEnvExport} className="min-h-10 rounded-lg border border-obsidian-border bg-obsidian-surface px-3 text-xs font-medium text-white hover:bg-obsidian-border">Exportar configuración</button>
-          <button type="button" onClick={openEmergencyKit} className="min-h-10 rounded-lg border border-obsidian-border bg-obsidian-surface px-3 text-xs font-medium text-white hover:bg-obsidian-border">Hoja de recuperación</button>
-          <button type="button" onClick={openPasswordGen} className="min-h-10 rounded-lg border border-obsidian-border bg-obsidian-surface px-3 text-xs font-medium text-white hover:bg-obsidian-border">Generar contraseña</button>
+          <button type="button" onClick={openEnvExport} className="ui-action-secondary">Exportar configuración</button>
+          <button type="button" onClick={openEmergencyKit} className="ui-action-secondary">Hoja de recuperación</button>
+          <button type="button" onClick={openPasswordGen} className="ui-action-secondary">Generar contraseña</button>
         </div>
       </section>
 
       {/* Backup & Import/Export Section */}
-      <div id="settings-backup" tabIndex={-1} style={{ outline: activeSection === 'settings_backup' ? '2px solid var(--accent-color, #818cf8)' : undefined, outlineOffset: '2px' }} className="grid scroll-mt-4 grid-cols-1 gap-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300 md:grid-cols-2">
+      <div id="settings-backup" tabIndex={-1} style={{ outline: activeSection === 'settings_backup' ? '2px solid var(--brand-accent, #0F766E)' : undefined, outlineOffset: '2px' }} className="grid scroll-mt-4 grid-cols-1 gap-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent md:grid-cols-2">
         {/* Import */}
-        <div className="flex min-w-0 flex-col justify-between gap-3 rounded-xl border border-obsidian-border bg-obsidian-panel p-3 sm:p-5">
+        <div className="flex min-w-0 flex-col justify-between gap-3 rounded-xl border border-obsidian-border bg-obsidian-panel p-3 sm:p-6">
           <div className="flex items-center gap-2">
-            <Upload size={16} className="text-emerald-400 flex-shrink-0" aria-hidden="true" />
+            <Upload size={18} className="text-obsidian-muted flex-shrink-0" aria-hidden="true" />
             <h3 className="text-sm font-bold text-white truncate">Importar Contraseñas</h3>
             <InfoTooltip content="Importa tus cuentas desde Bitwarden, 1Password, Google Chrome o archivos CSV/JSON." />
           </div>
           <button
             type="button"
             onClick={openImportModal}
-            className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-obsidian-surface hover:bg-obsidian-border border border-obsidian-border text-white text-xs font-semibold transition-all w-full"
+            className="ui-action-secondary w-full"
           >
-            <Upload size={14} aria-hidden="true" />
+            <Upload size={16} aria-hidden="true" />
             <span>Importar</span>
           </button>
         </div>
 
         {/* Export */}
-        <div className="flex min-w-0 flex-col justify-between gap-3 rounded-xl border border-obsidian-border bg-obsidian-panel p-3 sm:p-5">
+        <div className="flex min-w-0 flex-col justify-between gap-3 rounded-xl border border-obsidian-border bg-obsidian-panel p-3 sm:p-6">
           <div className="flex items-center gap-2">
-            <Download size={16} className="text-cyan-400 flex-shrink-0" aria-hidden="true" />
+            <Download size={18} className="text-obsidian-muted flex-shrink-0" aria-hidden="true" />
             <h3 className="text-sm font-bold text-white truncate">Descargar Respaldo Encriptado</h3>
             <InfoTooltip content="Descarga un archivo JSON con el respaldo encriptado de tus correos, cuentas y métodos de pago." />
           </div>
           <button
             type="button"
             onClick={handleExportVault}
-            className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-obsidian-surface hover:bg-obsidian-border border border-obsidian-border text-white text-xs font-semibold transition-all w-full"
+            className="ui-action-secondary w-full"
           >
-            <Download size={14} aria-hidden="true" />
+            <Download size={16} aria-hidden="true" />
             <span>Descargar respaldo</span>
           </button>
         </div>
       </div>
 
-      <section id="settings-team" tabIndex={-1} style={{ outline: activeSection === 'settings_team' ? '2px solid var(--accent-color, #818cf8)' : undefined, outlineOffset: '2px' }} className="scroll-mt-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-300">
+      <section id="settings-team" tabIndex={-1} style={{ outline: activeSection === 'settings_team' ? '2px solid var(--brand-accent, #0F766E)' : undefined, outlineOffset: '2px' }} className="scroll-mt-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent">
         <OperatorAuthSection />
       </section>
     </div>

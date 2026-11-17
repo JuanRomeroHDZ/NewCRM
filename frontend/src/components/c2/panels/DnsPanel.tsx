@@ -83,11 +83,11 @@ export const DnsPanel: React.FC = () => {
   };
 
   return (
-    <section className="rounded-xl border border-obsidian-border bg-obsidian-panel p-4 sm:p-5 shadow-obsidian">
+    <section className="border-t border-obsidian-border py-4 sm:py-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-2.5">
-            <Route size={18} className="text-obsidian-gold" aria-hidden="true" />
+            <Route size={18} className="text-obsidian-muted" aria-hidden="true" />
             <h2 className="font-heading text-base font-bold text-white">{t('dns.title')}</h2>
             <span
               className={`rounded border px-2 py-0.5 font-mono text-[11px] font-semibold ${
@@ -111,7 +111,7 @@ export const DnsPanel: React.FC = () => {
 
       <form
         onSubmit={(e) => void handleStart(e)}
-        className="mt-4 space-y-4 rounded-xl border border-obsidian-border bg-obsidian-surface/60 p-4"
+        className="mt-4 space-y-4 border-t border-obsidian-border pt-4"
       >
         <div>
           <label
@@ -126,7 +126,7 @@ export const DnsPanel: React.FC = () => {
             value={redirectsText}
             onChange={(e) => setRedirectsText(e.target.value)}
             placeholder={'portal.planta.local=10.10.20.50\nscada.local=10.10.20.50'}
-            className="mt-1 w-full rounded-lg border border-obsidian-border bg-obsidian-panel p-3 font-mono text-xs text-white placeholder:text-obsidian-muted focus:border-obsidian-gold focus:outline-none"
+            className="mt-1 w-full rounded-lg border border-obsidian-border bg-obsidian-surface p-3 font-mono text-xs text-white placeholder:text-obsidian-muted focus:border-obsidian-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-accent"
           />
         </div>
 
@@ -143,7 +143,7 @@ export const DnsPanel: React.FC = () => {
             value={spoofAllIp}
             onChange={(e) => setSpoofAllIp(e.target.value)}
             placeholder="10.10.20.50"
-            className="mt-1 min-h-[44px] w-full max-w-md rounded-lg border border-obsidian-border bg-obsidian-panel px-3 py-2 font-mono text-xs text-white placeholder:text-obsidian-muted focus:border-obsidian-gold focus:outline-none"
+            className="mt-1 min-h-[44px] w-full max-w-md rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 font-mono text-xs text-white placeholder:text-obsidian-muted focus:border-obsidian-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-accent"
           />
         </div>
 
@@ -151,28 +151,30 @@ export const DnsPanel: React.FC = () => {
           <button
             type="submit"
             disabled={busy || running}
-            className="inline-flex min-h-[44px] items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-gold"
+            className="ui-action-primary"
           >
             {busy && !running ? (
-              <Loader2 size={15} className="animate-spin" aria-hidden="true" />
+              <Loader2 size={16} className="animate-spin" aria-hidden="true" />
             ) : (
-              <Play size={15} aria-hidden="true" />
+              <Play size={16} aria-hidden="true" />
             )}
             <span>{t('dns.start')}</span>
+            {/* [Acción principal] Inicia o confirma la operación. */}
           </button>
 
           <button
             type="button"
             onClick={() => void handleStop()}
             disabled={busy || !running}
-            className="inline-flex min-h-[44px] items-center gap-2 rounded-lg border border-red-500/40 bg-obsidian-dangerBg px-4 py-2 text-xs font-semibold text-red-200 transition-colors hover:border-red-400 hover:text-white disabled:cursor-not-allowed disabled:opacity-45 focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-gold"
+            className="ui-action-danger"
           >
             {busy && running ? (
-              <Loader2 size={15} className="animate-spin" aria-hidden="true" />
+              <Loader2 size={16} className="animate-spin" aria-hidden="true" />
             ) : (
-              <Square size={14} aria-hidden="true" />
+              <Square size={16} aria-hidden="true" />
             )}
             <span>{t('dns.stop')}</span>
+            {/* [Acción destructiva] Detiene o revierte la operación. */}
           </button>
         </div>
       </form>

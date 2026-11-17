@@ -361,38 +361,39 @@ export const InspectorDrawer: React.FC = () => {
             </div>
           </div>
 
+          {/* [Icono] Editar, enviar a papelera o cerrar el inspector. */}
           <div className="flex flex-shrink-0 items-center gap-1">
             <button
               type="button"
               onClick={handleEdit}
               title="Editar datos"
               aria-label="Editar datos"
-              className="inline-flex min-h-[44px] min-w-[44px] lg:min-h-9 lg:min-w-9 items-center justify-center rounded-lg text-obsidian-muted transition-colors hover:bg-obsidian-surface hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+              className="ui-action-icon"
             >
-              <Edit3 size={15} aria-hidden="true" />
+              <Edit3 size={16} aria-hidden="true" />
             </button>
             <button
               type="button"
               onClick={handleDelete}
               title="Enviar a papelera"
               aria-label="Enviar a papelera"
-              className="inline-flex min-h-[44px] min-w-[44px] lg:min-h-9 lg:min-w-9 items-center justify-center rounded-lg text-obsidian-muted transition-colors hover:bg-obsidian-surface hover:text-rose-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
+              className="ui-action-icon ui-action-danger"
             >
-              <Trash2 size={15} aria-hidden="true" />
+              <Trash2 size={16} aria-hidden="true" />
             </button>
             <button
               type="button"
               onClick={closeInspector}
               title="Cerrar inspector"
               aria-label="Cerrar inspector"
-              className="inline-flex min-h-[44px] min-w-[44px] lg:min-h-9 lg:min-w-9 items-center justify-center rounded-lg text-obsidian-muted transition-colors hover:bg-obsidian-surface hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+              className="ui-action-icon"
             >
               <X size={17} aria-hidden="true" />
             </button>
           </div>
         </div>
 
-      {/* Tabs */}
+      {/* [Navegación] Pestañas del detalle seleccionado. */}
       <div
         role="tablist"
         aria-label="Secciones del inspector"
@@ -403,11 +404,7 @@ export const InspectorDrawer: React.FC = () => {
           role="tab"
           aria-selected={activeTab === 'general'}
           onClick={() => setActiveTab('general')}
-          className={`whitespace-nowrap border-b-2 px-3 py-2.5 text-xs font-medium transition-all ${
-            activeTab === 'general'
-              ? 'border-indigo-500 font-semibold text-white'
-              : 'border-transparent text-obsidian-muted hover:text-white'
-          }`}
+          className="ui-action-toggle whitespace-nowrap"
         >
           {isProspect ? 'Ficha y Seguimiento' : 'General'}
         </button>
@@ -417,15 +414,11 @@ export const InspectorDrawer: React.FC = () => {
             role="tab"
             aria-selected={activeTab === 'credentials'}
             onClick={() => setActiveTab('credentials')}
-            className={`flex items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2.5 text-xs font-medium transition-all ${
-              activeTab === 'credentials'
-                ? 'border-indigo-500 font-semibold text-white'
-                : 'border-transparent text-obsidian-muted hover:text-white'
-            }`}
+            className="ui-action-toggle whitespace-nowrap"
           >
-            <Key size={13} aria-hidden="true" />
+            <Key size={16} aria-hidden="true" />
             <span>Contraseñas</span>
-            {!isUnlocked && <Lock size={11} className="text-amber-400" aria-hidden="true" />}
+            {!isUnlocked && <Lock size={16} className="text-amber-400" aria-hidden="true" />}
           </button>
         )}
         {isPlatform && (
@@ -434,15 +427,11 @@ export const InspectorDrawer: React.FC = () => {
             role="tab"
             aria-selected={activeTab === 'api_keys'}
             onClick={() => setActiveTab('api_keys')}
-            className={`flex items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2.5 text-xs font-medium transition-all ${
-              activeTab === 'api_keys'
-                ? 'border-indigo-500 font-semibold text-white'
-                : 'border-transparent text-obsidian-muted hover:text-white'
-            }`}
+            className="ui-action-toggle whitespace-nowrap"
           >
-            <Code size={13} aria-hidden="true" />
+            <Code size={16} aria-hidden="true" />
             <span>Llaves API</span>
-            {!isUnlocked && <Lock size={11} className="text-amber-400" aria-hidden="true" />}
+            {!isUnlocked && <Lock size={16} className="text-amber-400" aria-hidden="true" />}
           </button>
         )}
         {isPlatform && (
@@ -451,13 +440,9 @@ export const InspectorDrawer: React.FC = () => {
             role="tab"
             aria-selected={activeTab === 'subscription'}
             onClick={() => setActiveTab('subscription')}
-            className={`flex items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2.5 text-xs font-medium transition-all ${
-              activeTab === 'subscription'
-                ? 'border-indigo-500 font-semibold text-white'
-                : 'border-transparent text-obsidian-muted hover:text-white'
-            }`}
+            className="ui-action-toggle whitespace-nowrap"
           >
-            <CreditCard size={13} aria-hidden="true" />
+            <CreditCard size={16} aria-hidden="true" />
             <span>Suscripción</span>
           </button>
         )}
@@ -467,13 +452,9 @@ export const InspectorDrawer: React.FC = () => {
             role="tab"
             aria-selected={activeTab === 'history'}
             onClick={() => setActiveTab('history')}
-            className={`flex items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2.5 text-xs font-medium transition-all ${
-              activeTab === 'history'
-                ? 'border-indigo-500 font-semibold text-white'
-                : 'border-transparent text-obsidian-muted hover:text-white'
-            }`}
+            className="ui-action-toggle whitespace-nowrap"
           >
-            <History size={13} aria-hidden="true" />
+            <History size={16} aria-hidden="true" />
             <span>Historial</span>
           </button>
         )}
@@ -502,7 +483,7 @@ export const InspectorDrawer: React.FC = () => {
               <div className="space-y-4 text-xs">
                 {isEmail && emailData && (
                   <>
-                    <div className="space-y-2 rounded-xl border border-obsidian-border bg-obsidian-surface p-3">
+                    <div className="space-y-2 border-b border-obsidian-border pb-3">
                       <div className="text-obsidian-muted">Dirección Principal</div>
                       <div className="flex items-center justify-between gap-2">
                         <span className="select-all break-all font-mono text-sm font-medium text-white">
@@ -511,44 +492,44 @@ export const InspectorDrawer: React.FC = () => {
                         <CopyButton
                           value={emailData.address}
                           label="Correo"
-                          className="min-h-[32px] min-w-[32px]"
+                          className="min-h-[44px] min-w-[44px]"
                         />
                       </div>
                     </div>
 
                     {emailData.inbox_url && (
-                      <div className="flex items-center justify-between gap-2 rounded-xl border border-obsidian-border bg-obsidian-surface p-3">
+                      <div className="flex items-center justify-between gap-2 border-b border-obsidian-border py-3">
                         <span className="text-obsidian-muted">Bandeja de Entrada</span>
                         <a
                           href={emailData.inbox_url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 font-medium text-indigo-400 hover:text-indigo-300"
+                          className="inline-flex min-h-[44px] items-center gap-2 font-medium text-obsidian-text hover:text-white"
                         >
                           <span>Abrir Webmail</span>
-                          <ExternalLink size={13} aria-hidden="true" />
+                          <ExternalLink size={16} aria-hidden="true" />
                         </a>
                       </div>
                     )}
 
                     {emailData.aliases && emailData.aliases.length > 0 && (
-                      <div className="space-y-2 rounded-xl border border-obsidian-border bg-obsidian-surface p-3">
+                      <div className="space-y-2 border-b border-obsidian-border pb-3">
                         <span className="block text-obsidian-muted">Alias / Sub-direcciones vinculadas</span>
                         <div className="space-y-1">
                           {emailData.aliases.map((al, idx) => (
                             <div
                               key={idx}
-                              className="flex items-center justify-between gap-2 rounded bg-obsidian-bg p-1.5 font-mono text-[11px] text-obsidian-text"
+                              className="flex items-center justify-between gap-2 border-b border-obsidian-border py-1.5 font-mono text-[11px] text-obsidian-text"
                             >
                               <span className="truncate">{al}</span>
-                              <CopyButton value={al} label="Alias" className="min-h-[30px] min-w-[30px]" />
+                              <CopyButton value={al} label="Alias" className="min-h-[44px] min-w-[44px]" />
                             </div>
                           ))}
                         </div>
                       </div>
                     )}
 
-                    <div className="space-y-1 rounded-xl border border-obsidian-border bg-obsidian-surface p-3">
+                    <div className="space-y-1 border-b border-obsidian-border pb-3">
                       <span className="block text-obsidian-muted">Cuentas y Servicios Asociados</span>
                       <span className="text-sm font-semibold text-white">
                         {emailData.platform_count} servicios dependen de este correo
@@ -556,24 +537,25 @@ export const InspectorDrawer: React.FC = () => {
                     </div>
 
                     {/* Correlated Prospects / Demos for this Email */}
-                    <div className="space-y-2.5 rounded-xl border border-obsidian-border bg-obsidian-surface p-3.5">
+                    <div className="space-y-3 border-b border-obsidian-border pb-3">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <span className="flex items-center gap-1.5 font-medium text-obsidian-muted">
-                          <Rocket size={13} className="text-indigo-400" aria-hidden="true" />
+                          <Rocket size={18} className="text-obsidian-muted" aria-hidden="true" />
                           <span>Prospectos y Demos Vinculados ({emailProspects.length})</span>
                         </span>
+                        {/* [Acción principal] Crear un prospecto vinculado. */}
                         <button
                           type="button"
                           onClick={() => openProspectModal(emailData.id)}
-                          className="inline-flex min-h-[32px] items-center gap-1 rounded-lg border border-indigo-500/30 bg-indigo-600/20 px-2.5 py-1 text-[10px] font-semibold text-indigo-300 hover:bg-indigo-600/30"
+                          className="ui-action-primary"
                         >
-                          <Plus size={11} aria-hidden="true" />
+                          <Plus size={16} aria-hidden="true" />
                           <span>Nuevo Prospecto</span>
                         </button>
                       </div>
 
                       {emailProspects.length > 0 ? (
-                        <div className="space-y-1.5">
+                        <div className="divide-y divide-obsidian-border">
                           {emailProspects.map((pr) => {
                             const prStatus = getStatusMeta(pr.status);
                             const prSla = getSlaBadgeMeta(pr.sla_status);
@@ -582,7 +564,7 @@ export const InspectorDrawer: React.FC = () => {
                                 key={pr.id}
                                 type="button"
                                 onClick={() => openInspector('prospect', pr.id)}
-                                className="flex w-full items-center justify-between gap-2 rounded-lg border border-obsidian-border bg-obsidian-bg p-2.5 text-left transition-colors hover:bg-obsidian-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                                className="ui-nav-action w-full justify-between py-2.5"
                               >
                                 <div className="min-w-0">
                                   <div className="truncate text-xs font-semibold text-white">
@@ -609,7 +591,7 @@ export const InspectorDrawer: React.FC = () => {
                     </div>
 
                     {emailData.notes && (
-                      <div className="space-y-1 rounded-xl border border-obsidian-border bg-obsidian-surface p-3">
+                      <div className="space-y-1 border-b border-obsidian-border pb-3">
                         <span className="block text-obsidian-muted">Notas</span>
                         <p className="whitespace-pre-wrap break-words leading-relaxed text-obsidian-text">
                           {emailData.notes}
@@ -639,7 +621,7 @@ export const InspectorDrawer: React.FC = () => {
 
                 {isPlatform && platformData && (
                   <>
-                    <div className="space-y-2 rounded-xl border border-obsidian-border bg-obsidian-surface p-3">
+                    <div className="space-y-2 border-b border-obsidian-border pb-3">
                       <div className="text-obsidian-muted">Usuario o Correo de Acceso</div>
                       <div className="flex min-w-0 items-center justify-between gap-2">
                         <span
@@ -656,19 +638,19 @@ export const InspectorDrawer: React.FC = () => {
                             ''
                           }
                           label="Usuario"
-                          className="min-h-[32px] min-w-[32px]"
+                          className="min-h-[44px] min-w-[44px]"
                         />
                       </div>
-                      <div className="flex min-w-0 items-center justify-between gap-2 border-t border-obsidian-border/50 pt-1 text-[11px] text-obsidian-muted">
+                      <div className="flex min-w-0 items-center justify-between gap-2 border-t border-obsidian-border pt-2 text-xs text-obsidian-muted">
                         <span className="truncate" title={platformData.email_address}>
                           Correo principal:{' '}
-                          <span className="font-mono text-indigo-300">{platformData.email_address}</span>
+                          <span className="font-mono text-obsidian-text">{platformData.email_address}</span>
                         </span>
                         {platformData.email_id && (
                           <button
                             type="button"
                             onClick={() => platformData.email_id && openInspector('email', platformData.email_id)}
-                            className="min-h-[28px] shrink-0 rounded border border-indigo-500/25 bg-indigo-500/10 px-2 py-0.5 text-[10px] font-semibold text-indigo-300 hover:bg-indigo-500/20"
+                            className="ui-action-secondary shrink-0"
                           >
                             Abrir Correo
                           </button>
@@ -677,21 +659,21 @@ export const InspectorDrawer: React.FC = () => {
                     </div>
 
                     {platformData.login_url && (
-                      <div className="flex items-center justify-between gap-2 rounded-xl border border-obsidian-border bg-obsidian-surface p-3">
+                      <div className="flex items-center justify-between gap-2 border-b border-obsidian-border py-3">
                         <span className="shrink-0 text-obsidian-muted">Enlace de Acceso</span>
                         <a
                           href={platformData.login_url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex max-w-[200px] items-center gap-1 truncate font-medium text-indigo-400 hover:text-indigo-300"
+                          className="inline-flex min-h-[44px] max-w-[200px] items-center gap-2 truncate font-medium text-obsidian-text hover:text-white"
                         >
                           <span className="truncate">{platformData.login_url}</span>
-                          <ExternalLink size={13} className="flex-shrink-0" aria-hidden="true" />
+                          <ExternalLink size={16} className="flex-shrink-0" aria-hidden="true" />
                         </a>
                       </div>
                     )}
 
-                    <div className="space-y-2 rounded-xl border border-obsidian-border bg-obsidian-surface p-3">
+                    <div className="space-y-2 border-b border-obsidian-border pb-3">
                       <span className="block text-obsidian-muted">Etiquetas</span>
                       <div className="flex flex-wrap gap-1.5">
                         {platformData.tags && platformData.tags.length > 0 ? (
@@ -705,7 +687,7 @@ export const InspectorDrawer: React.FC = () => {
                     </div>
 
                     {platformData.notes && (
-                      <div className="space-y-1 rounded-xl border border-obsidian-border bg-obsidian-surface p-3">
+                      <div className="space-y-1 border-b border-obsidian-border pb-3">
                         <span className="block text-obsidian-muted">Notas</span>
                         <p className="whitespace-pre-wrap leading-relaxed text-obsidian-text">
                           {platformData.notes}
@@ -717,23 +699,23 @@ export const InspectorDrawer: React.FC = () => {
 
                 {isPayment && paymentData && (
                   <>
-                    <div className="space-y-2 rounded-xl border border-obsidian-border bg-obsidian-surface p-3">
+                    <div className="space-y-2 border-b border-obsidian-border pb-3">
                       <div className="text-obsidian-muted">Método de Pago</div>
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-sm font-semibold text-white">
                           {paymentData.alias} ({paymentData.issuer})
                         </span>
-                        <span className="font-mono text-xs text-emerald-300">•••• {paymentData.last_four}</span>
+                        <span className="font-mono text-xs text-obsidian-text">•••• {paymentData.last_four}</span>
                       </div>
                     </div>
-                    <div className="flex items-center justify-between gap-2 rounded-xl border border-obsidian-border bg-obsidian-surface p-3">
+                    <div className="flex items-center justify-between gap-2 border-b border-obsidian-border py-3">
                       <span className="text-obsidian-muted">Suscripciones vinculadas</span>
                       <span className="font-mono font-semibold text-white">
                         {paymentData.linked_subscriptions_count}
                       </span>
                     </div>
                     {paymentData.billing_notes && (
-                      <div className="space-y-1 rounded-xl border border-obsidian-border bg-obsidian-surface p-3">
+                      <div className="space-y-1 border-b border-obsidian-border pb-3">
                         <span className="block text-obsidian-muted">Notas de facturación</span>
                         <p className="whitespace-pre-wrap break-words text-obsidian-text">
                           {paymentData.billing_notes}
@@ -760,13 +742,13 @@ export const InspectorDrawer: React.FC = () => {
             {activeTab === 'api_keys' && isPlatform && platformData && (
               <div className="space-y-4 text-xs">
                 {!isUnlocked ? (
-                  <div className="space-y-2 rounded-2xl border border-amber-500/20 bg-amber-500/10 p-5 text-center">
-                    <Lock size={24} className="mx-auto text-amber-400" aria-hidden="true" />
+                  <div className="space-y-2 py-3 text-center">
+                    <Lock size={20} className="mx-auto text-amber-400" aria-hidden="true" />
                     <h3 className="font-semibold text-white">Llaves Protegidas</h3>
                     <button
                       type="button"
                       onClick={openUnlockModal}
-                      className="mt-2 min-h-[36px] rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-500"
+                      className="ui-action-primary mt-2"
                     >
                       Desbloquear
                     </button>
@@ -785,30 +767,30 @@ export const InspectorDrawer: React.FC = () => {
                         platformData.api_keys.map((ak) => (
                           <div
                             key={ak.id}
-                            className="space-y-1.5 rounded-xl border border-obsidian-border bg-obsidian-surface p-3"
+                            className="space-y-1.5 border-b border-obsidian-border pb-3"
                           >
                             <div className="flex flex-wrap items-center justify-between gap-2">
                               <span className="font-medium text-white">{ak.label}</span>
                               {ak.expires_at && (
                                 <span className="flex items-center gap-1 text-[10px] text-obsidian-muted">
-                                  <Clock size={10} aria-hidden="true" /> Expira: {ak.expires_at}
+                                  <Clock size={16} aria-hidden="true" /> Expira: {ak.expires_at}
                                 </span>
                               )}
                             </div>
                             <div className="flex min-w-0 items-center justify-between gap-2">
-                              <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-cyan-300">
+                              <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-obsidian-text">
                                 {ak.key || ak.key_masked}
                               </span>
                               <CopyButton
                                 value={ak.key || ''}
                                 label={`API Key (${ak.label})`}
-                                className="min-h-[30px] min-w-[30px] shrink-0"
+                                className="min-h-[44px] min-w-[44px] shrink-0"
                               />
                             </div>
                           </div>
                         ))
                       ) : (
-                        <div className="rounded-xl border border-obsidian-border bg-obsidian-surface p-4 text-center text-obsidian-muted">
+                        <div className="py-3 text-center text-obsidian-muted">
                           No hay llaves API configuradas para esta cuenta.
                         </div>
                       )}
@@ -824,9 +806,9 @@ export const InspectorDrawer: React.FC = () => {
                         platformData.env_variables.map((ev, idx) => (
                           <div
                             key={idx}
-                            className="flex min-w-0 flex-wrap items-center justify-between gap-2 rounded-xl border border-obsidian-border bg-obsidian-surface p-2.5 sm:flex-nowrap"
+                            className="flex min-w-0 flex-wrap items-center justify-between gap-2 border-b border-obsidian-border py-2.5 sm:flex-nowrap"
                           >
-                            <span className="min-w-0 truncate font-mono text-[11px] font-semibold text-amber-300">
+                            <span className="min-w-0 truncate font-mono text-[11px] font-semibold text-obsidian-text">
                               {ev.key}
                             </span>
                             <div className="flex min-w-0 max-w-full items-center gap-2">
@@ -836,13 +818,13 @@ export const InspectorDrawer: React.FC = () => {
                               <CopyButton
                                 value={ev.value || ''}
                                 label={`Variable ${ev.key}`}
-                                className="min-h-[30px] min-w-[30px] shrink-0"
+                                className="min-h-[44px] min-w-[44px] shrink-0"
                               />
                             </div>
                           </div>
                         ))
                       ) : (
-                        <div className="rounded-xl border border-obsidian-border bg-obsidian-surface p-4 text-center text-obsidian-muted">
+                        <div className="py-3 text-center text-obsidian-muted">
                           Sin variables de entorno guardadas.
                         </div>
                       )}
@@ -855,7 +837,7 @@ export const InspectorDrawer: React.FC = () => {
             {/* SUBSCRIPTION & BILLING TAB */}
             {activeTab === 'subscription' && isPlatform && platformData && (
               <div className="space-y-4 text-xs">
-                <div className="space-y-2 rounded-xl border border-obsidian-border bg-obsidian-surface p-3.5">
+                <div className="space-y-2 border-b border-obsidian-border pb-3">
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-obsidian-muted">Estado de la Cuenta</span>
                     <span
@@ -885,7 +867,7 @@ export const InspectorDrawer: React.FC = () => {
                 </div>
 
                 {platformData.trial_end_date && (
-                  <div className="flex items-start gap-2.5 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-amber-300">
+                  <div className="flex items-start gap-2.5 py-2 text-amber-300">
                     <AlertTriangle size={16} className="mt-0.5 flex-shrink-0" aria-hidden="true" />
                     <div>
                       <div className="text-xs font-semibold">Prueba Gratuita</div>
@@ -898,16 +880,16 @@ export const InspectorDrawer: React.FC = () => {
                 )}
 
                 {platformData.next_billing_date && (
-                  <div className="flex items-center justify-between gap-2 rounded-xl border border-obsidian-border bg-obsidian-surface p-3">
+                  <div className="flex items-center justify-between gap-2 border-b border-obsidian-border py-3">
                     <span className="text-obsidian-muted">Próxima Fecha de Renovación</span>
                     <span className="font-mono font-medium text-white">{platformData.next_billing_date}</span>
                   </div>
                 )}
 
                 {platformData.payment_alias && (
-                  <div className="flex items-center justify-between gap-2 rounded-xl border border-obsidian-border bg-obsidian-surface p-3">
+                  <div className="flex items-center justify-between gap-2 border-b border-obsidian-border py-3">
                     <span className="text-obsidian-muted">Método de Pago Vinculado</span>
-                    <span className="font-medium text-indigo-300">{platformData.payment_alias}</span>
+                    <span className="font-medium text-obsidian-text">{platformData.payment_alias}</span>
                   </div>
                 )}
               </div>
@@ -921,7 +903,7 @@ export const InspectorDrawer: React.FC = () => {
                 </span>
 
                 {!isUnlocked ? (
-                  <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-4 text-center text-amber-300">
+                  <div className="py-3 text-amber-300">
                     <Lock size={20} className="mx-auto mb-1 text-amber-400" aria-hidden="true" />
                     Ingresa tu contraseña de acceso para ver las contraseñas anteriores.
                   </div>
@@ -929,7 +911,7 @@ export const InspectorDrawer: React.FC = () => {
                   historyData.map((h) => (
                     <div
                       key={h.id}
-                      className="space-y-1 rounded-xl border border-obsidian-border bg-obsidian-surface p-3"
+                      className="space-y-1 border-b border-obsidian-border pb-3"
                     >
                       <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-obsidian-muted">
                         <span>
@@ -944,13 +926,13 @@ export const InspectorDrawer: React.FC = () => {
                         <CopyButton
                           value={h.password_plain || ''}
                           label="Contraseña previa"
-                          className="min-h-[30px] min-w-[30px] shrink-0"
+                          className="min-h-[44px] min-w-[44px] shrink-0"
                         />
                       </div>
                     </div>
                   ))
                 ) : (
-                  <div className="rounded-xl border border-obsidian-border bg-obsidian-surface p-4 text-center text-obsidian-muted">
+                  <div className="py-3 text-center text-obsidian-muted">
                     No se han registrado contraseñas anteriores para este elemento.
                   </div>
                 )}

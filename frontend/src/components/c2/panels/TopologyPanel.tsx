@@ -864,11 +864,11 @@ export const TopologyPanel: React.FC = () => {
     : null;
 
   return (
-    <section className="rounded-xl border border-obsidian-border bg-obsidian-panel p-4 sm:p-5 shadow-obsidian">
+    <section className="border-t border-obsidian-border py-4 sm:py-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="max-w-3xl">
           <div className="flex items-center gap-2.5">
-            <Network size={18} className="text-obsidian-gold" aria-hidden="true" />
+            <Network size={18} className="text-obsidian-muted" aria-hidden="true" />
             <h2 className="font-heading text-base font-bold text-white">{t('topo.title')}</h2>
             {topologyData && (
               <span className="rounded border border-obsidian-border bg-obsidian-surface px-2 py-0.5 font-mono text-[11px] text-obsidian-muted">
@@ -884,28 +884,30 @@ export const TopologyPanel: React.FC = () => {
             type="button"
             onClick={() => void handleRunTopology(false)}
             disabled={scanMode !== null}
-            className="inline-flex min-h-[44px] items-center gap-2 rounded-lg bg-indigo-600 px-3.5 py-2 text-xs font-semibold text-white transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-gold"
+            className="ui-action-primary"
           >
             {scanMode === 'quiet' ? (
-              <Loader2 size={15} className="animate-spin" aria-hidden="true" />
+              <Loader2 size={16} className="animate-spin" aria-hidden="true" />
             ) : (
-              <Radar size={15} aria-hidden="true" />
+              <Radar size={16} aria-hidden="true" />
             )}
             <span>{scanMode === 'quiet' ? t('topo.mapping') : t('topo.passive')}</span>
+            {/* [Acción principal] Inicia o confirma la operación. */}
           </button>
 
           <button
             type="button"
             onClick={() => void handleRunTopology(true)}
             disabled={scanMode !== null}
-            className="inline-flex min-h-[44px] items-center gap-2 rounded-lg border border-amber-500/40 bg-obsidian-surface px-3.5 py-2 text-xs font-semibold text-amber-200 transition-colors hover:border-obsidian-gold hover:text-white disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-gold"
+            className="ui-action-secondary"
           >
             {scanMode === 'aggressive' ? (
-              <Loader2 size={15} className="animate-spin" aria-hidden="true" />
+              <Loader2 size={16} className="animate-spin" aria-hidden="true" />
             ) : (
-              <Maximize2 size={15} aria-hidden="true" />
+              <Maximize2 size={16} aria-hidden="true" />
             )}
             <span>{scanMode === 'aggressive' ? t('topo.scanning') : t('topo.aggressive')}</span>
+            {/* [Acción secundaria] Abre o ajusta la operación actual. */}
           </button>
         </div>
       </div>
@@ -915,7 +917,7 @@ export const TopologyPanel: React.FC = () => {
         {/* Interactive Canvas */}
         <div
           ref={containerRef}
-          className="relative h-[420px] sm:h-[500px] w-full overflow-hidden rounded-xl border border-obsidian-border bg-obsidian-bg dot-grid-canvas"
+          className="relative h-[420px] sm:h-[500px] w-full overflow-hidden border border-obsidian-border bg-obsidian-bg dot-grid-canvas"
         >
           <canvas
             ref={canvasRef}
@@ -932,7 +934,7 @@ export const TopologyPanel: React.FC = () => {
           {/* Empty state overlay */}
           {(!topologyData || topologyData.nodes.length === 0) && (
             <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center p-6 text-center">
-              <Network size={28} className="mb-2 text-obsidian-gold/60" aria-hidden="true" />
+              <Network size={24} className="mb-2 text-obsidian-muted" aria-hidden="true" />
               <p className="text-xs text-obsidian-muted">
                 {lang === 'es'
                   ? 'Ejecuta un mapeo sigiloso o agresivo para visualizar los dispositivos de la red.'
@@ -945,16 +947,17 @@ export const TopologyPanel: React.FC = () => {
           <div
             role="group"
             aria-label={lang === 'es' ? 'Controles de zoom' : 'Zoom controls'}
-            className="absolute right-3 top-3 flex items-center gap-1 rounded-lg border border-obsidian-border bg-obsidian-panel/90 p-1 shadow-obsidian"
+            className="absolute right-3 top-3 flex items-center gap-1 border border-obsidian-border bg-obsidian-surface/95 p-1"
           >
             <button
               type="button"
               onClick={() => applyZoom(0.85)}
               title={lang === 'es' ? 'Alejar' : 'Zoom out'}
               aria-label={lang === 'es' ? 'Alejar' : 'Zoom out'}
-              className="inline-flex min-h-[44px] min-w-[44px] lg:min-h-9 lg:min-w-9 items-center justify-center rounded text-obsidian-muted transition-colors hover:bg-obsidian-surface hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-gold"
+              className="ui-action-icon"
             >
-              <ZoomOut size={14} aria-hidden="true" />
+              <ZoomOut size={16} aria-hidden="true" />
+              {/* [Icono] Ejecuta la acción identificada por su etiqueta accesible. */}
             </button>
             <span className="min-w-[44px] text-center font-mono text-[11px] text-obsidian-text">
               {zoomPct}%
@@ -964,18 +967,20 @@ export const TopologyPanel: React.FC = () => {
               onClick={() => applyZoom(1.18)}
               title={lang === 'es' ? 'Acercar' : 'Zoom in'}
               aria-label={lang === 'es' ? 'Acercar' : 'Zoom in'}
-              className="inline-flex min-h-[44px] min-w-[44px] lg:min-h-9 lg:min-w-9 items-center justify-center rounded text-obsidian-muted transition-colors hover:bg-obsidian-surface hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-gold"
+              className="ui-action-icon"
             >
-              <ZoomIn size={14} aria-hidden="true" />
+              <ZoomIn size={16} aria-hidden="true" />
+              {/* [Icono] Ejecuta la acción identificada por su etiqueta accesible. */}
             </button>
             <button
               type="button"
               onClick={handleResetView}
               title={lang === 'es' ? 'Restablecer vista' : 'Reset view'}
               aria-label={lang === 'es' ? 'Restablecer vista' : 'Reset view'}
-              className="inline-flex min-h-[44px] min-w-[44px] lg:min-h-9 lg:min-w-9 items-center justify-center rounded text-obsidian-muted transition-colors hover:bg-obsidian-surface hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-gold"
+              className="ui-action-icon"
             >
-              <RotateCcw size={14} aria-hidden="true" />
+              <RotateCcw size={16} aria-hidden="true" />
+              {/* [Icono] Ejecuta la acción identificada por su etiqueta accesible. */}
             </button>
           </div>
         </div>
@@ -983,14 +988,14 @@ export const TopologyPanel: React.FC = () => {
         {/* Right Column: Selected Node Details + Keyboard Accessible Node List */}
         <div className="flex flex-col gap-3">
           {selectedNode && selectedCfg && (
-            <div className="rounded-xl border border-obsidian-gold/40 bg-obsidian-surface p-3.5">
+            <div className="border-b border-obsidian-border pb-4">
               <div className="flex items-center justify-between gap-2 border-b border-obsidian-border pb-2.5">
                 <div className="flex items-center gap-2">
                   <TopoTypeSvg type={selectedNode.type} color={selectedCfg.color} size={18} />
                   <div>
                     <div className="text-xs font-bold text-white">{t(selectedCfg.label)}</div>
                     {selectedNode.label && (
-                      <div className="font-mono text-[11px] text-obsidian-gold">
+                      <div className="font-mono text-[11px] text-obsidian-muted">
                         {selectedNode.label}
                       </div>
                     )}
@@ -1003,9 +1008,10 @@ export const TopologyPanel: React.FC = () => {
                     setSelectedNode(null);
                   }}
                   aria-label={lang === 'es' ? 'Cerrar detalle' : 'Close details'}
-                  className="inline-flex min-h-[44px] min-w-[44px] lg:min-h-9 lg:min-w-9 items-center justify-center rounded-lg border border-obsidian-border bg-obsidian-panel text-obsidian-muted hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-gold"
+                  className="ui-action-icon"
                 >
-                  <X size={13} aria-hidden="true" />
+                  <X size={16} aria-hidden="true" />
+                  {/* [Icono] Ejecuta la acción identificada por su etiqueta accesible. */}
                 </button>
               </div>
 
@@ -1032,7 +1038,7 @@ export const TopologyPanel: React.FC = () => {
                 </div>
                 <div className="flex justify-between gap-2">
                   <dt className="text-obsidian-muted">{t('topo.f.os')}</dt>
-                  <dd className="font-mono text-emerald-300 text-right">
+                  <dd className="font-mono text-obsidian-text text-right">
                     {selectedNode.os
                       ? `${selectedNode.os}${selectedNode.ttl ? ` (TTL ${selectedNode.ttl})` : ''}`
                       : '-'}
@@ -1040,7 +1046,7 @@ export const TopologyPanel: React.FC = () => {
                 </div>
                 <div className="flex justify-between gap-2">
                   <dt className="text-obsidian-muted">{t('topo.f.ports')}</dt>
-                  <dd className="font-mono text-obsidian-gold text-right">
+                  <dd className="font-mono text-obsidian-text text-right">
                     {selectedNode.open_ports && selectedNode.open_ports.length > 0
                       ? selectedNode.open_ports.join(', ')
                       : '-'}
@@ -1070,18 +1076,20 @@ export const TopologyPanel: React.FC = () => {
                       pinHostTarget(selectedNode.ip!);
                       showToast(t('hosts.targetSet', { ip: selectedNode.ip! }), 'info');
                     }}
-                    className="inline-flex min-h-[44px] lg:min-h-9 flex-1 items-center justify-center gap-1.5 rounded-lg border border-indigo-500/40 bg-indigo-600/20 px-2.5 py-1 text-[11px] font-semibold text-white hover:border-obsidian-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-gold"
+                    className="ui-action-secondary flex-1"
                   >
-                    <Crosshair size={12} aria-hidden="true" />
+                    <Crosshair size={16} aria-hidden="true" />
                     <span>{t('hosts.target')}</span>
+                    {/* [Acción secundaria] Abre o ajusta la operación actual. */}
                   </button>
                   <button
                     type="button"
                     onClick={() => scanHostPorts(selectedNode.ip!)}
-                    className="inline-flex min-h-[44px] lg:min-h-9 flex-1 items-center justify-center gap-1.5 rounded-lg border border-obsidian-border bg-obsidian-panel px-2.5 py-1 text-[11px] font-medium text-obsidian-text hover:border-obsidian-gold hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-gold"
+                    className="ui-action-secondary flex-1"
                   >
-                    <ScanSearch size={12} aria-hidden="true" />
+                    <ScanSearch size={16} aria-hidden="true" />
                     <span>{t('hosts.ports')}</span>
+                    {/* [Acción secundaria] Abre o ajusta la operación actual. */}
                   </button>
                 </div>
               )}
@@ -1089,17 +1097,17 @@ export const TopologyPanel: React.FC = () => {
           )}
 
           {/* Accessible Node Filter + Keyboard Fallback List */}
-          <div className="flex flex-1 flex-col rounded-xl border border-obsidian-border bg-obsidian-surface/70 p-3">
+          <div className="flex flex-1 flex-col border-t border-obsidian-border pt-3 lg:border-l lg:border-t-0 lg:pl-4 lg:pt-0">
             <label
               htmlFor="topo-node-filter"
-              className="text-[11px] font-semibold uppercase tracking-wider text-obsidian-muted"
+              className="text-xs font-semibold text-obsidian-muted"
             >
               {lang === 'es' ? 'Nodos descubiertos' : 'Discovered nodes'} (
               {filteredNodes.length})
             </label>
             <div className="relative mt-2">
               <Search
-                size={13}
+                size={16}
                 className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-obsidian-muted"
                 aria-hidden="true"
               />
@@ -1111,7 +1119,7 @@ export const TopologyPanel: React.FC = () => {
                 placeholder={
                   lang === 'es' ? 'Filtrar IP, etiqueta, tipo...' : 'Filter IP, label, type...'
                 }
-                className="min-h-[44px] lg:min-h-[38px] w-full rounded-lg border border-obsidian-border bg-obsidian-panel pl-8 pr-3 font-mono text-xs text-white placeholder:text-obsidian-muted focus:border-obsidian-gold focus:outline-none"
+                className="min-h-[44px] w-full rounded-lg border border-obsidian-border bg-obsidian-surface pl-8 pr-3 font-mono text-xs text-white placeholder:text-obsidian-muted focus:border-obsidian-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-accent"
               />
             </div>
 
@@ -1132,11 +1140,7 @@ export const TopologyPanel: React.FC = () => {
                       type="button"
                       onClick={() => handleSelectNodeById(n)}
                       aria-pressed={active}
-                      className={`flex min-h-[44px] lg:min-h-[38px] w-full items-center justify-between gap-2 rounded-lg border px-2.5 py-1.5 text-left text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-gold ${
-                        active
-                          ? 'border-obsidian-gold bg-obsidian-gold/15 text-white'
-                          : 'border-obsidian-border/60 bg-obsidian-panel/70 text-obsidian-text hover:border-obsidian-borderLight hover:text-white'
-                      }`}
+                      className="ui-action-toggle w-full justify-between"
                     >
                       <span className="flex min-w-0 items-center gap-2">
                         <TopoTypeSvg type={n.type} color={cfg.color} size={15} />
@@ -1145,6 +1149,7 @@ export const TopologyPanel: React.FC = () => {
                       <span className="shrink-0 font-mono text-[11px] text-obsidian-muted">
                         {n.ip || t(cfg.label)}
                       </span>
+                      {/* [Estado seleccionable] Cambia la selección indicada. */}
                     </button>
                   );
                 })
@@ -1155,10 +1160,10 @@ export const TopologyPanel: React.FC = () => {
       </div>
 
       {/* Grouped Plant / Network Legend */}
-      <div className="mt-4 grid grid-cols-1 gap-3 rounded-xl border border-obsidian-border bg-obsidian-surface/60 p-3.5 md:grid-cols-2">
+      <div className="mt-4 grid grid-cols-1 gap-4 border-t border-obsidian-border pt-4 md:grid-cols-2">
         {TOPO_GROUPS.map((group) => (
           <div key={group.titleKey}>
-            <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-obsidian-gold">
+            <div className="mb-2 text-xs font-semibold text-obsidian-muted">
               {t(group.titleKey)}
             </div>
             <div className="flex flex-wrap gap-2">
@@ -1168,7 +1173,7 @@ export const TopologyPanel: React.FC = () => {
                 return (
                   <div
                     key={typeKey}
-                    className="inline-flex items-center gap-1.5 rounded-md border border-obsidian-border bg-obsidian-panel px-2 py-1 text-[11px] text-obsidian-text"
+                    className="inline-flex items-center gap-1.5 text-xs text-obsidian-text"
                   >
                     <TopoTypeSvg type={typeKey} color={cfg.color} size={14} />
                     <span>{t(cfg.label)}</span>

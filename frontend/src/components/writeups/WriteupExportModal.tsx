@@ -152,21 +152,22 @@ export const WriteupExportModal: React.FC<WriteupExportModalProps> = ({ writeup,
         aria-labelledby={titleId}
         aria-describedby={descriptionId}
         onClick={(e) => e.stopPropagation()}
-        className="my-auto flex max-h-[calc(100dvh-1rem)] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl"
+        className="my-auto flex max-h-[calc(100dvh-1rem)] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-obsidian-borderLight bg-obsidian-panel shadow-2xl"
       >
-        <div className="flex items-start justify-between gap-2 px-3 py-3 sm:px-5 sm:py-4 border-b border-slate-800">
+        <div className="flex items-start justify-between gap-2 px-3 py-3 sm:px-5 sm:py-4 border-b border-obsidian-border">
           <div className="min-w-0">
             <h2 id={titleId} className="text-base font-semibold text-white break-words">Exportar informe — {writeup.title}</h2>
-            <p id={descriptionId} className="mt-1 text-xs text-slate-400">El archivo se genera en esta computadora y no se envía a servicios externos.</p>
+            <p id={descriptionId} className="mt-1 text-xs text-obsidian-muted">El archivo se genera en esta computadora y no se envía a servicios externos.</p>
           </div>
-          <button ref={firstFormatRef} type="button" onClick={requestClose} disabled={exporting} aria-label="Cerrar ventana de exportación" className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60">
+          {/* [Icono] Cierra el diálogo sin exportar. */}
+          <button ref={firstFormatRef} type="button" onClick={requestClose} disabled={exporting} aria-label="Cerrar ventana de exportación" className="ui-action-icon shrink-0">
             <X className="w-4 h-4" aria-hidden="true" />
           </button>
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-5 space-y-5">
-          <section aria-label="Revisión antes de exportar" className="border-b border-slate-700 pb-4 text-xs text-slate-300">
-            <h3 className="mb-2 font-semibold text-slate-100">Revisión antes de exportar</h3>
+          <section aria-label="Revisión antes de exportar" className="border-b border-obsidian-borderLight pb-4 text-xs text-obsidian-muted">
+            <h3 className="mb-2 font-semibold text-obsidian-text">Revisión antes de exportar</h3>
             <ul className="space-y-1">
               <li>Imágenes locales ausentes: {publicationReview.missingImages}</li>
               <li>Enlaces vacíos: {publicationReview.emptyLinks}</li>
@@ -175,8 +176,9 @@ export const WriteupExportModal: React.FC<WriteupExportModalProps> = ({ writeup,
               <li>Campos de evidencia censurados: {publicationReview.redactedFields}</li>
               <li>Preguntas y pasos pendientes: {publicationReview.pendingQuestions + publicationReview.pendingSteps}</li>
             </ul>
-            <p className="mt-2 text-slate-400">La búsqueda es orientativa: revisa el contenido y las imágenes manualmente antes de compartir.</p>
+            <p className="mt-2 text-obsidian-muted">La búsqueda es orientativa: revisa el contenido y las imágenes manualmente antes de compartir.</p>
           </section>
+          {/* [Estado seleccionable] El formato activo se anuncia con aria-pressed. */}
           <div className="grid grid-cols-1 min-[360px]:grid-cols-2 sm:grid-cols-4 gap-2.5">
             {EXPORT_OPTIONS.map((opt) => {
               const Icon = opt.icon;
@@ -188,83 +190,79 @@ export const WriteupExportModal: React.FC<WriteupExportModalProps> = ({ writeup,
                   onClick={() => { setSelectedFormat(opt.format); setLastSha(null); setErrorMsg(null); }}
                   disabled={exporting}
                   aria-pressed={active}
-                  className={`min-h-11 min-w-0 text-left p-3 rounded-xl border transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 ${
-                    active
-                      ? 'bg-emerald-700/20 border-emerald-600 text-white'
-                      : 'bg-slate-950/60 border-slate-800 text-slate-300 hover:border-slate-700'
-                  }`}
+                  className="ui-action-toggle min-w-0 w-full flex-col items-stretch gap-0 p-3 text-left"
                 >
                   <div className="flex items-center justify-between mb-1.5">
-                    <Icon className={`w-4 h-4 ${active ? 'text-emerald-300' : 'text-slate-300'}`} aria-hidden="true" />
-                    <span className="text-[10px] font-mono text-slate-400">{opt.ext}</span>
+                    <Icon className={`w-4 h-4 ${active ? 'text-obsidian-accent' : 'text-obsidian-muted'}`} aria-hidden="true" />
+                    <span className="text-[10px] font-mono text-obsidian-muted">{opt.ext}</span>
                   </div>
                   <div className="text-xs font-semibold">{opt.label}</div>
-                  <div className="text-[11px] text-slate-400 mt-0.5 leading-snug">{opt.desc}</div>
+                  <div className="text-[11px] text-obsidian-muted mt-0.5 leading-snug">{opt.desc}</div>
                 </button>
               );
             })}
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-950/70 p-4 rounded-xl border border-slate-800">
-            {supportsTypography && <label className="flex items-center gap-2 text-xs text-slate-200">
+          <div className="grid grid-cols-1 gap-3 border-t border-obsidian-border py-4 sm:grid-cols-2">
+            {supportsTypography && <label className="flex items-center gap-2 text-xs text-obsidian-text">
               Tamaño del texto
-              <select value={fontSizePt} onChange={(event) => setFontSizePt(Number(event.target.value))} className="min-h-9 rounded-md border border-slate-700 bg-slate-950 px-2 text-white">
+              <select value={fontSizePt} onChange={(event) => setFontSizePt(Number(event.target.value))} className="min-h-[44px] rounded-md border border-obsidian-borderLight bg-obsidian-surface px-2 text-white">
                 {[8, 9, 10, 11, 12, 13, 14, 16, 18].map((size) => <option key={size} value={size}>{size} pt</option>)}
               </select>
             </label>}
-            <label className="flex items-start gap-2.5 cursor-pointer">
+            <label className="flex min-h-[44px] items-start gap-2.5 cursor-pointer">
               <input
                 type="checkbox"
                 checked={redactForClient}
                 onChange={(e) => setRedactForClient(e.target.checked)}
-                className="mt-0.5 rounded border-slate-600 bg-slate-800 text-indigo-600"
+                className="mt-0.5 rounded border-obsidian-borderLight bg-obsidian-surface accent-obsidian-accent"
               />
               <div>
-              <div className="text-xs font-medium text-slate-200">Copia para cliente (ocultar secretos)</div>
-                <div className="text-[11px] text-slate-400">Reemplaza segmentos {'{{redact:...}}'} por [REDACTED].</div>
+              <div className="text-xs font-medium text-obsidian-text">Copia para cliente (ocultar secretos)</div>
+                <div className="text-[11px] text-obsidian-muted">Reemplaza segmentos {'{{redact:...}}'} por [REDACTED].</div>
               </div>
             </label>
 
             {supportsDocumentIndexes && (
-              <div className="space-y-2 border-l border-slate-700 pl-4 text-xs text-slate-200">
-                {includeToc && <label className="flex items-center gap-2">Niveles de encabezado
-                  <select value={tocDepth} onChange={(event) => setTocDepth(Number(event.target.value))} className="min-h-9 rounded-md border border-slate-700 bg-slate-950 px-2 text-white">
+              <div className="space-y-2 border-l border-obsidian-borderLight pl-4 text-xs text-obsidian-text">
+                {includeToc && <label className="flex min-h-[44px] items-center gap-2">Niveles de encabezado
+                  <select value={tocDepth} onChange={(event) => setTocDepth(Number(event.target.value))} className="min-h-[44px] rounded-md border border-obsidian-borderLight bg-obsidian-surface px-2 text-white">
                     {[1, 2, 3, 4, 5, 6].map((level) => <option key={level} value={level}>Hasta H{level}</option>)}
                   </select>
                 </label>}
-                <label className="flex items-center gap-2"><input type="checkbox" checked={includeFigures} onChange={(event) => setIncludeFigures(event.target.checked)} /> Índice de figuras e imágenes</label>
-                <label className="flex items-center gap-2"><input type="checkbox" checked={includeTables} onChange={(event) => setIncludeTables(event.target.checked)} /> Índice de tablas</label>
+                <label className="flex min-h-[44px] items-center gap-2"><input type="checkbox" checked={includeFigures} onChange={(event) => setIncludeFigures(event.target.checked)} /> Índice de figuras e imágenes</label>
+                <label className="flex min-h-[44px] items-center gap-2"><input type="checkbox" checked={includeTables} onChange={(event) => setIncludeTables(event.target.checked)} /> Índice de tablas</label>
               </div>
             )}
 
-            {supportsDocumentIndexes && <label className="flex items-start gap-2.5 cursor-pointer">
+            {supportsDocumentIndexes && <label className="flex min-h-[44px] items-start gap-2.5 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={includeToc}
                   onChange={(e) => setIncludeToc(e.target.checked)}
-                  className="mt-0.5 rounded border-slate-600 bg-slate-800 text-indigo-600"
+                  className="mt-0.5 rounded border-obsidian-borderLight bg-obsidian-surface accent-obsidian-accent"
                 />
                 <div>
-                  <div className="text-xs font-medium text-slate-200">Tabla de contenidos</div>
-                  <div className="text-[11px] text-slate-300">Enlaza los encabezados disponibles en el formato elegido.</div>
+                  <div className="text-xs font-medium text-obsidian-text">Tabla de contenidos</div>
+                  <div className="text-[11px] text-obsidian-muted">Enlaza los encabezados disponibles en el formato elegido.</div>
                 </div>
               </label>}
 
-            <label className="flex items-start gap-2.5 cursor-pointer">
+            <label className="flex min-h-[44px] items-start gap-2.5 cursor-pointer">
               <input
                 type="checkbox"
                 checked={includeWatermark}
                 onChange={(e) => setIncludeWatermark(e.target.checked)}
-                className="mt-0.5 rounded border-slate-600 bg-slate-800 text-indigo-600"
+                className="mt-0.5 rounded border-obsidian-borderLight bg-obsidian-surface accent-obsidian-accent"
               />
               <div>
-                <div className="text-xs font-medium text-slate-200">Incluir cinta de confidencialidad</div>
-              <div className="text-[11px] text-slate-300">Agrega una marca al documento exportado.</div>
+                <div className="text-xs font-medium text-obsidian-text">Incluir cinta de confidencialidad</div>
+              <div className="text-[11px] text-obsidian-muted">Agrega una marca al documento exportado.</div>
               </div>
             </label>
 
             <div>
-              <label htmlFor={`${titleId}-watermark`} className="block text-[11px] text-slate-300 mb-1">Texto de confidencialidad (opcional)</label>
+              <label htmlFor={`${titleId}-watermark`} className="block text-[11px] text-obsidian-muted mb-1">Texto de confidencialidad (opcional)</label>
               <input
                 id={`${titleId}-watermark`}
                 type="text"
@@ -273,13 +271,13 @@ export const WriteupExportModal: React.FC<WriteupExportModalProps> = ({ writeup,
                 onChange={(e) => setWatermarkText(e.target.value)}
                 disabled={!includeWatermark}
                 placeholder="Escribe una marca de confidencialidad"
-                className="w-full min-h-11 min-w-0 bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-100 disabled:opacity-50"
+                className="w-full min-h-11 min-w-0 bg-obsidian-panel border border-obsidian-borderLight rounded-lg px-2.5 py-1.5 text-xs text-obsidian-text disabled:opacity-50"
               />
             </div>
           </div>
 
           {lastSha && (
-            <div role="status" className="flex min-w-0 items-center gap-2 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-xs text-emerald-200">
+            <div role="status" className="flex min-w-0 items-center gap-2 border border-obsidian-border bg-emerald-500/5 px-3 py-2 text-xs text-emerald-200">
               <CheckCircle2 className="w-4 h-4 shrink-0" />
               <div className="min-w-0 break-all">
                 Archivo generado. Código de verificación: <span className="font-mono">{lastSha}</span>
@@ -288,22 +286,24 @@ export const WriteupExportModal: React.FC<WriteupExportModalProps> = ({ writeup,
           )}
 
           {errorMsg && (
-            <div role="alert" className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs text-rose-200">
+            <div role="alert" className="border border-obsidian-border bg-rose-500/5 px-3 py-2 text-xs text-rose-200">
               {errorMsg}
             </div>
           )}
         </div>
 
-        <div className="flex flex-wrap items-center justify-end gap-2 px-3 py-3.5 sm:px-5 bg-slate-950/80 border-t border-slate-800">
-          <button type="button" onClick={requestClose} disabled={exporting} className="min-h-11 px-4 py-2 rounded-lg text-xs text-slate-200 hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60">
+        <div className="flex flex-wrap items-center justify-end gap-2 px-3 py-3.5 sm:px-5 bg-obsidian-surface/80 border-t border-obsidian-border">
+          {/* [Acción secundaria] Cerrar conserva el informe sin cambios. */}
+          <button type="button" onClick={requestClose} disabled={exporting} className="ui-action-secondary">
             Cerrar
           </button>
           <button
             type="button"
             disabled={exporting}
             onClick={handleRunExport}
-            className="min-h-11 min-w-0 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-2 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300"
+            className="ui-action-primary min-w-0"
           >
+            {/* [Acción principal] Genera y descarga el formato seleccionado. */}
             <Download className="w-4 h-4" />
             {exporting ? 'Compilando...' : `Descargar ${selectedFormat.toUpperCase()}`}
           </button>

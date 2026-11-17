@@ -365,15 +365,13 @@ export const ProspectModal: React.FC = () => {
         role="dialog"
         aria-modal="true"
         aria-labelledby="prospect-modal-title"
-        className="relative w-full max-w-2xl bg-obsidian-panel border border-obsidian-borderLight rounded-xl sm:rounded-2xl shadow-2xl p-4 sm:p-6 overflow-hidden max-h-[calc(100dvh-1rem)] sm:max-h-[90dvh] flex flex-col"
+        className="relative w-full max-w-2xl bg-obsidian-panel border border-obsidian-border rounded-xl shadow-xl p-4 sm:p-6 overflow-hidden max-h-[calc(100dvh-1rem)] sm:max-h-[90dvh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}
         <div className="flex items-center justify-between pb-4 border-b border-obsidian-border">
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className="p-2 rounded-xl bg-indigo-500/10 text-indigo-400 flex-shrink-0">
-              <Rocket size={20} aria-hidden="true" />
-            </div>
+            <Rocket size={18} className="shrink-0 text-obsidian-muted" aria-hidden="true" />
             <div className="min-w-0">
               <h2 id="prospect-modal-title" className="text-base font-bold text-white tracking-tight truncate">
                 {editingProspectId ? 'Editar Ficha de Prospecto / Página Demo' : 'Registrar Prospecto / Página Demo'}
@@ -384,8 +382,8 @@ export const ProspectModal: React.FC = () => {
             type="button"
             onClick={closeProspectModal}
             aria-label="Cerrar formulario"
-            className="inline-flex min-w-[44px] min-h-[44px] lg:min-w-9 lg:min-h-9 items-center justify-center p-2 text-obsidian-muted hover:text-white rounded-lg hover:bg-obsidian-surface flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
-          >
+            className="ui-action-icon flex-shrink-0"
+          >{/* [Icono] Acción identificada por su nombre accesible. */}
             <X size={18} aria-hidden="true" />
           </button>
         </div>
@@ -393,19 +391,19 @@ export const ProspectModal: React.FC = () => {
         <form onSubmit={handleSubmit} className="flex-1 min-h-0 flex flex-col overflow-hidden">
           <div className="flex-1 overflow-y-auto py-4 space-y-4 text-xs pr-1">
           {loadingDetail && (
-            <div className="p-3 rounded-xl bg-obsidian-surface border border-obsidian-border text-obsidian-muted text-xs" role="status">
+            <div className="text-xs text-obsidian-muted" role="status">
               Cargando ficha del prospecto...
             </div>
           )}
           {formError && (
-            <div role="alert" className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 flex items-start gap-2 text-rose-300 text-xs">
-              <AlertCircle size={15} className="text-rose-400 flex-shrink-0 mt-0.5" aria-hidden="true" />
+            <div role="alert" className="flex items-start gap-2 rounded-lg border border-obsidian-border bg-obsidian-surface p-3 text-xs text-obsidian-muted">
+              <AlertCircle size={16} className="mt-0.5 flex-shrink-0 text-rose-400" aria-hidden="true" />
               <span className="break-words">{formError}</span>
             </div>
           )}
 
           {/* Ámbito (Empresa vs Personal) */}
-          <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-xl bg-obsidian-surface/60 border border-obsidian-border">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-obsidian-border pb-3">
             <span className="text-[11px] font-semibold text-white">Ámbito del Prospecto / Cliente:</span>
             <div className="flex items-center gap-1">
               {([
@@ -418,12 +416,8 @@ export const ProspectModal: React.FC = () => {
                   type="button"
                   aria-pressed={scope === opt.val}
                   onClick={() => setScope(opt.val)}
-                  className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all ${
-                    scope === opt.val
-                      ? 'bg-indigo-600 text-white'
-                      : 'bg-obsidian-bg text-obsidian-muted hover:text-white border border-obsidian-border'
-                  }`}
-                >
+                  className="ui-action-toggle"
+                >{/* [Estado seleccionable] La opción activa se identifica con aria-pressed. */}
                   {opt.label}
                 </button>
               ))}
@@ -431,14 +425,15 @@ export const ProspectModal: React.FC = () => {
           </div>
 
           {/* Modalidad de Trabajo */}
-          <div className="p-3.5 rounded-xl bg-obsidian-surface/60 border border-obsidian-border space-y-2">
+          <div className="space-y-2 border-t border-obsidian-border pt-3">
             <div className="flex items-center gap-1.5">
-              <span className="font-semibold text-white uppercase text-[10px] tracking-wider">
+              <span className="text-xs font-semibold text-obsidian-text">
                 Modalidad del Flujo Comercial
               </span>
               <InfoTooltip content="Selecciona si primero construiste una página demo para mostrarle al cliente o si fue contacto directo para cotizar." />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              {/* [Estado seleccionable] Define la modalidad de seguimiento comercial. */}
               <button
                 type="button"
                 aria-pressed={workflowType === 'demo_first'}
@@ -448,13 +443,9 @@ export const ProspectModal: React.FC = () => {
                     setStatus('demo_creada');
                   }
                 }}
-                className={`p-3 rounded-xl border text-left transition-all flex items-start gap-2.5 ${
-                  workflowType === 'demo_first'
-                    ? 'bg-indigo-600/15 border-indigo-500 text-white shadow-sm'
-                    : 'bg-obsidian-bg border-obsidian-border text-obsidian-muted hover:text-white'
-                }`}
+                className="ui-action-toggle w-full items-start justify-start p-3 text-left"
               >
-                <Globe size={16} className={`flex-shrink-0 mt-0.5 ${workflowType === 'demo_first' ? 'text-indigo-400' : 'text-obsidian-muted'}`} />
+                <Globe size={16} className="mt-0.5 shrink-0 text-obsidian-muted" aria-hidden="true" />
                 <div className="min-w-0">
                   <div className="font-semibold text-xs">1. Página Demo Creada Primero</div>
                   <div className="text-[10px] text-obsidian-muted mt-0.5 leading-relaxed">
@@ -472,13 +463,9 @@ export const ProspectModal: React.FC = () => {
                     setStatus('en_cotizacion');
                   }
                 }}
-                className={`p-3 rounded-xl border text-left transition-all flex items-start gap-2.5 ${
-                  workflowType === 'direct_quote'
-                    ? 'bg-cyan-500/15 border-cyan-500 text-white shadow-sm'
-                    : 'bg-obsidian-bg border-obsidian-border text-obsidian-muted hover:text-white'
-                }`}
+                className="ui-action-toggle w-full items-start justify-start p-3 text-left"
               >
-                <Mail size={16} className={`flex-shrink-0 mt-0.5 ${workflowType === 'direct_quote' ? 'text-cyan-400' : 'text-obsidian-muted'}`} />
+                <Mail size={16} className="mt-0.5 shrink-0 text-obsidian-muted" aria-hidden="true" />
                 <div className="min-w-0">
                   <div className="font-semibold text-xs">2. Contacto Directo a Cotización</div>
                   <div className="text-[10px] text-obsidian-muted mt-0.5 leading-relaxed">
@@ -490,10 +477,10 @@ export const ProspectModal: React.FC = () => {
           </div>
 
           {/* BLOQUE 1: Datos del Prospecto y Página Demo */}
-          <div className="p-4 rounded-xl bg-obsidian-surface/60 border border-obsidian-border space-y-3">
+          <div className="space-y-3 border-t border-obsidian-border pt-4">
             <div className="flex items-center gap-1.5">
               <Globe size={12} className="text-indigo-400" />
-              <span className="font-semibold text-white uppercase text-[10px] tracking-wider">
+              <span className="text-xs font-semibold text-obsidian-text">
                 1. Datos del Prospecto y Página Demo
               </span>
             </div>
@@ -554,7 +541,7 @@ export const ProspectModal: React.FC = () => {
 
               <div>
                 <label htmlFor="prospect-whatsapp" className="text-obsidian-muted flex items-center gap-1.5 mb-1">
-                  <MessageCircle size={12} className="text-emerald-400" />
+                  <MessageCircle size={16} className="text-obsidian-muted" aria-hidden="true" />
                   <span>Número de WhatsApp (Con código de país)</span>
                 </label>
                 <input id="prospect-whatsapp"
@@ -569,7 +556,7 @@ export const ProspectModal: React.FC = () => {
 
               <div>
                 <label htmlFor="prospect-phones" className="text-obsidian-muted flex items-center gap-1.5 mb-1">
-                  <Phone size={12} className="text-cyan-400" />
+                  <Phone size={16} className="text-obsidian-muted" aria-hidden="true" />
                   <span>Teléfono(s) Fijo o Móvil</span>
                 </label>
                 <input id="prospect-phones"
@@ -672,9 +659,9 @@ export const ProspectModal: React.FC = () => {
             </summary>
             <div className="space-y-3 p-3 pt-0">
           {/* BLOQUE 2: Correlación de Emails */}
-          <div className="p-4 rounded-xl bg-obsidian-surface/60 border border-obsidian-border space-y-3">
+          <div className="space-y-3 border-t border-obsidian-border pt-4">
             <div>
-              <span className="font-semibold text-white uppercase text-[10px] tracking-wider flex items-center gap-1.5">
+              <span className="flex items-center gap-1.5 text-xs font-semibold text-obsidian-text">
                 <Mail size={12} className="text-indigo-400" />
                 <span>2. Correos de Contacto</span>
               </span>
@@ -706,7 +693,7 @@ export const ProspectModal: React.FC = () => {
                 </select>
 
                 {showInlineEmailCreate && (
-                  <div className="mt-2 p-2.5 rounded-xl bg-obsidian-bg border border-indigo-500/40 space-y-2">
+                  <div className="mt-3 space-y-2 border-t border-obsidian-border pt-3">
                     <span className="text-[11px] font-semibold text-white block">Nuevo Correo Principal al Vuelo:</span>
                     <input
                       type="email"
@@ -732,8 +719,8 @@ export const ProspectModal: React.FC = () => {
                         type="button"
                         onClick={handleQuickCreateEmail}
                         disabled={inlineEmailLoading}
-                        className="px-2.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shrink-0"
-                      >
+                        className="ui-action-primary shrink-0"
+                      >{/* [Acción principal] Inicia o confirma la tarea de este espacio. */}
                         {inlineEmailLoading ? 'Creando...' : 'Crear'}
                       </button>
                     </div>
@@ -774,11 +761,11 @@ export const ProspectModal: React.FC = () => {
           </div>
 
           {/* BLOQUE 3: Tiempo Límite de Respuesta y Seguimiento */}
-          <div className="p-4 rounded-xl bg-obsidian-surface/60 border border-obsidian-border space-y-3">
+          <div className="space-y-3 border-t border-obsidian-border pt-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-1.5">
                 <Clock size={12} className="text-amber-400" />
-                <span className="font-semibold text-white uppercase text-[10px] tracking-wider">
+                <span className="text-xs font-semibold text-obsidian-text">
                   3. Tiempo Límite de Respuesta y Seguimientos
                 </span>
                 <InfoTooltip content="Define en cuántas horas esperas respuesta inicial y cada cuántas horas volverás a contactar al cliente si no responde." />
@@ -786,8 +773,8 @@ export const ProspectModal: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setStartedAtInput(toLocalDatetimeInputValue())}
-                className="text-[11px] text-indigo-400 hover:text-indigo-300 font-medium flex items-center gap-1 px-2 py-1 rounded-lg bg-indigo-500/10 border border-indigo-500/20"
-              >
+                className="ui-action-secondary items-center gap-1"
+              >{/* [Acción secundaria] Mantiene disponible esta acción en su contexto. */}
                 <RotateCcw size={11} />
                 <span>Usar fecha/hora actual</span>
               </button>
@@ -832,12 +819,10 @@ export const ProspectModal: React.FC = () => {
                   key={preset.hours}
                   type="button"
                   onClick={() => setSlaHours(String(preset.hours))}
-                  className={`px-2.5 py-1 rounded-lg text-[11px] font-mono border transition-all ${
-                    Number(slaHours) === preset.hours
-                      ? 'bg-indigo-600 text-white border-indigo-500 font-semibold'
-                      : 'bg-obsidian-bg text-obsidian-muted border-obsidian-border hover:text-white'
-                  }`}
+                  aria-pressed={Number(slaHours) === preset.hours}
+                  className="ui-action-toggle"
                 >
+                  {/* [Estado seleccionable] Define el plazo de respuesta. */}
                   {preset.label}
                 </button>
               ))}
@@ -856,12 +841,8 @@ export const ProspectModal: React.FC = () => {
                       type="button"
                       onClick={() => setFollowupSlaHours(h)}
                       aria-pressed={followupSlaHours === h}
-                      className={`min-h-[44px] px-3 py-1.5 rounded-lg text-xs font-mono border transition-all ${
-                        followupSlaHours === h
-                          ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40 font-semibold'
-                          : 'bg-obsidian-bg text-obsidian-muted border-obsidian-border hover:text-white'
-                      }`}
-                    >
+                      className="ui-action-toggle"
+                    >{/* [Estado seleccionable] La opción activa se identifica con aria-pressed. */}
                       +{h}h
                     </button>
                   ))}
@@ -875,17 +856,13 @@ export const ProspectModal: React.FC = () => {
                 </div>
                 <div role="group" aria-labelledby="prospect-attempts-label" className="flex items-center gap-1.5">
                   {[3, 4].map((limit) => (
-                    <button
+              <button
                       key={limit}
                       type="button"
                       onClick={() => setMaxFollowupAttempts(limit)}
                       aria-pressed={maxFollowupAttempts === limit}
-                      className={`min-h-[44px] px-3 py-1.5 rounded-lg text-xs font-mono border transition-all ${
-                        maxFollowupAttempts === limit
-                          ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 font-semibold'
-                          : 'bg-obsidian-bg text-obsidian-muted border-obsidian-border hover:text-white'
-                      }`}
-                    >
+                      className="ui-action-toggle"
+                    >{/* [Estado seleccionable] La opción activa se identifica con aria-pressed. */}
                       {limit} intentos
                     </button>
                   ))}
@@ -928,8 +905,8 @@ export const ProspectModal: React.FC = () => {
                 <button
                   type="button"
                   onClick={addTag}
-                  className="px-3 py-1.5 rounded-xl bg-obsidian-surface hover:bg-obsidian-border text-white border border-obsidian-border text-xs flex-shrink-0"
-                >
+                  className="ui-action-secondary flex-shrink-0"
+                >{/* [Acción secundaria] Ejecuta la operación de apoyo en este espacio. */}
                   Añadir Etiqueta
                 </button>
               </div>
@@ -949,8 +926,10 @@ export const ProspectModal: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => setTags(tags.filter((_, i) => i !== idx))}
-                        className="opacity-75 hover:opacity-100 flex-shrink-0"
+                        aria-label={`Quitar etiqueta ${t.name}`}
+                        className="ui-action-icon ui-action-danger shrink-0"
                       >
+                        {/* [Acción destructiva] Quita la etiqueta del borrador. */}
                         &times;
                       </button>
                     </span>
@@ -980,15 +959,15 @@ export const ProspectModal: React.FC = () => {
             <button
               type="button"
               onClick={closeProspectModal}
-              className="px-4 py-2 text-xs font-medium text-obsidian-muted hover:text-white"
-            >
+              className="ui-action-secondary"
+            >{/* [Acción secundaria] Permite volver o reintentar sin modificar otros datos. */}
               Cancelar
             </button>
             <button
               type="submit"
               disabled={loading || loadingDetail || detailFailed}
-              className="inline-flex items-center gap-1.5 px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md shadow-indigo-600/20 disabled:opacity-50"
-            >
+              className="ui-action-primary"
+            >{/* [Acción principal] Inicia o confirma la tarea de este espacio. */}
               {loading ? 'Guardando...' : editingProspectId ? 'Guardar Cambios' : 'Registrar Prospecto'}
             </button>
           </div>

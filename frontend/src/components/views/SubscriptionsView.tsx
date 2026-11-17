@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
-  CreditCard, DollarSign, RefreshCw, Edit2, Lock, AlertTriangle, X
+  CreditCard, DollarSign, RefreshCw, Edit2, Lock, AlertTriangle, X, ArrowRight,
+  Wallet, Server, Receipt,
 } from 'lucide-react';
 import { useVault } from '../../context/VaultContext';
 import { api } from '../../lib/api';
@@ -26,7 +27,7 @@ export const SubscriptionsView: React.FC = () => {
   const {
     isUnlocked, openUnlockModal, openPaymentModal,
     openInspector, exchangeRate, refreshExchangeRate,
-    showToast, triggerDataReload, dataVersion, setActiveSection,
+    showToast, triggerDataReload, dataVersion, activeSection, setActiveSection,
     activeScope, matchesScope, defaultEntityScope,
     confirm, supportedCurrencies, baseCurrency, systemLocale, runtimeConfig
   } = useVault();
@@ -878,6 +879,11 @@ export const SubscriptionsView: React.FC = () => {
   const filteredRenewals = useMemo(() => renewals.filter((r) => matchesScope(r.scope)), [renewals, matchesScope]);
   const filteredExpenses = useMemo(() => expenses.filter((e) => matchesScope(e.scope)), [expenses, matchesScope]);
   const filteredPaymentMethods = useMemo(() => paymentMethods.filter((p) => matchesScope(p.scope)), [paymentMethods, matchesScope]);
+  const financeListMode: 'all' | 'income' | 'services' | 'expenses' | 'cards' =
+    activeSection === 'finance_income' ? 'income'
+      : activeSection === 'finance_services' ? 'services'
+        : activeSection === 'finance_expenses' ? 'expenses'
+          : activeSection === 'finance_cards' ? 'cards' : 'all';
 
   if (!isUnlocked) {
     return (
@@ -895,8 +901,8 @@ export const SubscriptionsView: React.FC = () => {
         <button
           type="button"
           onClick={openUnlockModal}
-          className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-xs font-semibold text-white shadow-lg shadow-indigo-600/30 hover:bg-indigo-500"
-        >
+          className="ui-action-primary"
+        >{/* [Acción principal] Inicia o confirma la tarea de este espacio. */}
           <span>Desbloquear con contraseña de acceso</span>
         </button>
       </div>
@@ -932,17 +938,62 @@ export const SubscriptionsView: React.FC = () => {
     );
   }
 
+  if (activeSection === 'overview_finances') {
+    const dueSoon = filteredRenewals.filter((item) => item.days_remaining <= 30 && item.days_remaining >= 0).length;
+    const financePanels = [
+      { id: 'finance_income' as const, label: 'Ingresos y pagos', description: `${filteredIncomes.length} registros · pagos recibidos de clientes`, icon: Wallet },
+      { id: 'finance_services' as const, label: 'Servicios y vencimientos', description: `${filteredRenewals.length} renovaciones · ${dueSoon} próximas en 30 días`, icon: Server },
+      { id: 'finance_expenses' as const, label: 'Gastos', description: `${filteredExpenses.length} gastos únicos registrados`, icon: Receipt },
+      { id: 'finance_cards' as const, label: 'Tarjetas y métodos', description: `${filteredPaymentMethods.length} métodos de pago guardados`, icon: CreditCard },
+    ];
+    const financialMetrics = [
+      { label: 'Ingresos del mes', value: `$${formatAmount(realProfit.monthIncomeMXN)} MXN` },
+      { label: 'Gastos mensuales', value: `$${formatAmount(realProfit.totalMonthlyExpenseMXN)} MXN` },
+      { label: 'Resultado neto', value: `${realProfit.netMonthMXN < 0 ? '−' : ''}$${formatAmount(Math.abs(realProfit.netMonthMXN))} MXN` },
+      { label: 'Vencimientos próximos', value: String(dueSoon) },
+    ];
+    return (
+      <div className="mx-auto w-full max-w-5xl min-w-0 space-y-5 p-4 sm:p-6">
+        {partialDataWarning && <p role="status" className="border-b border-obsidian-border pb-3 text-sm text-amber-200">{partialDataWarning}</p>}
+        <section className="border-b border-obsidian-border pb-4" aria-labelledby="finance-overview-title">
+          <h2 id="finance-overview-title" className="font-heading text-xl font-semibold text-obsidian-text">Finanzas</h2>
+          <p className="mt-1 text-sm text-obsidian-muted">Ingresos, vencimientos y gastos en un solo vistazo.</p>
+        </section>
+        <dl className="grid grid-cols-1 divide-y divide-obsidian-border sm:grid-cols-2 sm:divide-y-0">
+          {financialMetrics.map((metric, index) => (
+            <div key={metric.label} className={`py-3 first:pt-0 sm:px-4 sm:py-4 sm:first:pl-0 ${index % 2 === 0 ? 'sm:border-r sm:border-obsidian-border' : ''} ${index > 1 ? 'sm:border-t sm:border-obsidian-border' : ''}`}>
+              <dt className="text-xs text-obsidian-muted">{metric.label}</dt>
+              <dd className="mt-1 break-words font-mono text-lg font-semibold tabular-nums text-obsidian-text">{metric.value}</dd>
+            </div>
+          ))}
+        </dl>
+        <nav aria-label="Paneles de finanzas" className="divide-y divide-obsidian-border border-t border-obsidian-border">
+          {financePanels.map(({ id, label, description, icon: Icon }) => (
+            <button key={id} type="button" onClick={() => setActiveSection(id)} className="ui-nav-action w-full min-w-0 items-center gap-3 py-3">{/* [Navegación] Mantiene disponible esta acción en su contexto. */}
+              <Icon size={18} className="shrink-0 text-obsidian-muted" aria-hidden="true" />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-medium text-obsidian-text">{label}</span>
+                <span className="mt-0.5 block text-xs text-obsidian-muted">{description}</span>
+              </span>
+              <span className="inline-flex shrink-0 items-center gap-1 text-xs text-obsidian-muted group-hover:text-obsidian-text">Abrir <ArrowRight size={15} aria-hidden="true" /></span>
+            </button>
+          ))}
+        </nav>
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto max-w-7xl min-w-0 space-y-5 p-3 sm:space-y-7 sm:p-8 animate-fadeIn">
       {partialDataWarning && (
         <div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-200">
           <span>{partialDataWarning}</span>
-          <button type="button" onClick={() => void loadData()} className="shrink-0 font-semibold underline underline-offset-2 hover:text-white">
+          <button type="button" onClick={() => void loadData()} className="ui-action-secondary">{/* [Acción secundaria] Permite volver o reintentar sin modificar otros datos. */}
             Reintentar
           </button>
         </div>
       )}
-      {showRateNotice && (
+      {activeSection === 'subscriptions' && showRateNotice && (
         <div role="status" className="flex min-w-0 flex-wrap items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
           <AlertTriangle size={14} aria-hidden="true" />
           <span className="min-w-0 flex-1">El tipo de cambio requiere revisión.</span>
@@ -953,7 +1004,7 @@ export const SubscriptionsView: React.FC = () => {
               : 'La última actualización supera las 24 horas. Actualízala antes de usar los totales convertidos.'}
             position="bottom"
           />
-          <button type="button" onClick={dismissRateNotice} aria-label="Ocultar aviso de tipo de cambio" className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-amber-200/80 hover:bg-amber-500/15 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300">
+          <button type="button" onClick={dismissRateNotice} aria-label="Ocultar aviso de tipo de cambio" className="ui-action-icon min-w-11 shrink-0 items-center">{/* [Icono] Mantiene disponible esta acción en su contexto. */}
             <X size={14} aria-hidden="true" />
           </button>
         </div>
@@ -964,7 +1015,10 @@ export const SubscriptionsView: React.FC = () => {
         <div className="flex items-center gap-2 min-w-0">
           <CreditCard className="text-indigo-400 flex-shrink-0" size={18} aria-hidden="true" />
           <h2 className="text-base font-bold text-white tracking-tight truncate">
-            Finanzas
+            {activeSection === 'finance_income' ? 'Ingresos y pagos'
+              : activeSection === 'finance_services' ? 'Servicios y vencimientos'
+                : activeSection === 'finance_expenses' ? 'Gastos'
+                  : activeSection === 'finance_cards' ? 'Tarjetas y métodos de pago' : 'Finanzas'}
           </h2>
           <InfoTooltip
             title="Control Financiero Completo"
@@ -973,7 +1027,7 @@ export const SubscriptionsView: React.FC = () => {
           />
         </div>
 
-        <div className="flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto">
+        {activeSection === 'subscriptions' && <div className="flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto">
           {/* Compact Exchange Rate Control */}
           <div className="flex max-w-full min-w-0 flex-wrap items-center gap-1 rounded-lg bg-obsidian-panel px-2 py-1">
             {isEditingRate ? (
@@ -992,16 +1046,16 @@ export const SubscriptionsView: React.FC = () => {
                 <button
                   type="button"
                   onClick={handleSaveManualRate}
-                  className="px-2 py-0.5 rounded-lg bg-indigo-600 text-white text-[11px] font-semibold hover:bg-indigo-500"
-                >
+                  className="ui-action-primary"
+                >{/* [Acción principal] Inicia o confirma la tarea de este espacio. */}
                   OK
                 </button>
                 <button
                   type="button"
                   onClick={() => setIsEditingRate(false)}
                   aria-label="Cancelar edición de tipo de cambio"
-                  className="px-2 py-0.5 rounded-lg bg-obsidian-surface text-obsidian-muted text-[11px] hover:text-white"
-                >
+                  className="ui-action-secondary min-w-11"
+                >{/* [Acción secundaria] Mantiene disponible esta acción en su contexto. */}
                   X
                 </button>
               </div>
@@ -1015,8 +1069,8 @@ export const SubscriptionsView: React.FC = () => {
                   onClick={() => setIsEditingRate(true)}
                   title="Editar tipo de cambio manualmente"
                   aria-label="Editar tipo de cambio manualmente"
-                  className="inline-flex h-10 w-10 items-center justify-center text-obsidian-muted hover:text-white rounded-lg hover:bg-obsidian-surface transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-400"
-                >
+                  className="ui-action-icon"
+                >{/* [Icono] Acción identificada por su nombre accesible. */}
                   <Edit2 size={12} aria-hidden="true" />
                 </button>
                 <button
@@ -1025,18 +1079,18 @@ export const SubscriptionsView: React.FC = () => {
                   disabled={isSyncingRate}
                   title="Actualizar tipo de cambio desde internet"
                   aria-label="Actualizar tipo de cambio desde internet"
-                  className="inline-flex h-10 w-10 items-center justify-center text-obsidian-muted hover:text-white rounded-lg hover:bg-obsidian-surface transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-400 disabled:opacity-50"
-                >
+                  className="ui-action-secondary"
+                >{/* [Acción secundaria] Ejecuta la operación de apoyo en este espacio. */}
                   <RefreshCw size={12} className={isSyncingRate ? 'animate-spin text-indigo-400' : ''} aria-hidden="true" />
                 </button>
               </>
             )}
           </div>
 
-        </div>
+        </div>}
       </div>
 
-      <FinancialExecutiveSummary
+      {activeSection === 'subscriptions' && <FinancialExecutiveSummary
         fin={fin}
         realProfit={realProfit}
         budgetCapEval={budgetCapEval}
@@ -1061,9 +1115,10 @@ export const SubscriptionsView: React.FC = () => {
         openUnlockModal={openUnlockModal}
         openInspector={openInspector}
         setActiveSection={setActiveSection}
-      />
+      />}
 
       <SubscriptionsLists
+        mode={financeListMode}
         filteredIncomes={filteredIncomes}
         filteredRenewals={filteredRenewals}
         filteredExpenses={filteredExpenses}

@@ -55,23 +55,23 @@ export const EmergencyKitModal: React.FC = () => {
         aria-modal="true"
         aria-labelledby="emergency-kit-title"
         onClick={(e) => e.stopPropagation()}
-        className="recovery-print relative flex max-h-[92dvh] w-full max-w-2xl min-w-0 flex-col overflow-hidden rounded-2xl border border-obsidian-borderLight bg-obsidian-panel p-4 shadow-2xl sm:p-6"
+        className="recovery-print relative flex max-h-[92dvh] w-full max-w-2xl min-w-0 flex-col overflow-hidden rounded-xl border border-obsidian-border bg-obsidian-panel p-4 shadow-xl sm:p-6"
       >
         <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 border-b border-obsidian-border pb-4 print:hidden">
           <div className="flex min-w-0 items-center gap-2.5">
-            <Shield size={20} className="shrink-0 text-indigo-400" />
+            <Shield size={18} className="shrink-0 text-obsidian-muted" aria-hidden="true" />
             <h2 id="emergency-kit-title" className="min-w-0 text-base font-bold text-white">Hoja de recuperación</h2>
           </div>
           <div className="flex max-w-full flex-wrap items-center gap-2">
-            <button type="button" disabled={!kit || loading || error} onClick={() => window.print()} className="inline-flex min-h-[44px] lg:min-h-10 max-w-full items-center gap-2 rounded-xl bg-indigo-600 px-3 py-2 text-left text-xs font-semibold text-white hover:bg-indigo-500 disabled:opacity-50">
+            <button type="button" disabled={!kit || loading || error} onClick={() => window.print()} className="inline-flex min-h-[44px] max-w-full items-center gap-2 rounded-xl bg-indigo-600 px-3 py-2 text-left text-xs font-semibold text-white hover:bg-indigo-500 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-300">
               <Printer size={14} className="shrink-0" /> Imprimir o guardar PDF
             </button>
-            <button type="button" onClick={closeEmergencyKit} aria-label="Cerrar" className="inline-flex min-w-[44px] min-h-[44px] lg:min-w-9 lg:min-h-9 items-center justify-center rounded-lg p-2 text-obsidian-muted hover:bg-obsidian-surface hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"><X size={18} /></button>
+            <button type="button" onClick={closeEmergencyKit} aria-label="Cerrar" className="inline-flex min-w-[44px] min-h-[44px] items-center justify-center rounded-lg p-2 text-obsidian-muted hover:bg-obsidian-surface hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"><X size={18} aria-hidden="true" /></button>
           </div>
         </div>
         <div className="min-h-0 flex-1 space-y-5 overflow-y-auto py-4 text-sm text-obsidian-text print:overflow-visible print:text-black">
           {loading && <p role="status">Preparando tu hoja…</p>}
-          {error && <div role="alert" className="space-y-2"><p>No se pudo preparar la hoja.</p><button type="button" onClick={() => setAttempt((value) => value + 1)} className="text-indigo-300 underline">Intentar de nuevo</button></div>}
+          {error && <div role="alert" className="space-y-2 rounded-lg border border-obsidian-border bg-obsidian-surface p-3 text-xs text-rose-200"><p>No se pudo preparar la hoja.</p><button type="button" onClick={() => setAttempt((value) => value + 1)} className="min-h-[44px] underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400">Intentar de nuevo</button></div>}
           {kit && !loading && !error && <>
             <div className="space-y-1"><h3 className="font-bold text-white print:text-black">Hoja de recuperación</h3><p className="text-xs text-obsidian-muted print:text-gray-700">Guarda esta hoja en un lugar seguro. No incluye tus contraseñas ni sustituye una copia de tus datos.</p></div>
             <section className="space-y-2"><h3 className="font-semibold text-white print:text-black">Correos principales</h3>
@@ -81,7 +81,7 @@ export const EmergencyKitModal: React.FC = () => {
             <p className="text-xs text-obsidian-muted print:text-gray-700">Guarda también tu contraseña de acceso y una copia de seguridad en lugares separados.</p>
           </>}
         </div>
-        <div className="flex justify-end border-t border-obsidian-border pt-3 print:hidden"><button type="button" onClick={closeEmergencyKit} className="rounded-xl border border-obsidian-border bg-obsidian-surface px-4 py-2 text-xs font-semibold text-obsidian-text hover:bg-obsidian-border">Cerrar</button></div>
+        <div className="flex justify-end border-t border-obsidian-border pt-3 print:hidden"><button type="button" onClick={closeEmergencyKit} className="min-h-[44px] rounded-xl border border-obsidian-border bg-obsidian-surface px-4 py-2 text-xs font-semibold text-obsidian-text hover:bg-obsidian-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400">Cerrar</button></div>
       </div>
     </div>
   );
