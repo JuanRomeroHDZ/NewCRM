@@ -1,3 +1,4 @@
+import { parseCalendarDate } from './dates';
 import type { ClientIncome, DomainRenewal, OneTimeExpense, PlatformAccount, ScopeFilter } from '../types';
 
 export type ForecastKind = 'income' | 'subscription' | 'renewal' | 'expense';
@@ -29,13 +30,6 @@ export interface CashflowForecast {
 
 const DAY_MS = 86_400_000;
 const FORECAST_DAYS = 90;
-
-function parseDate(value?: string | null): Date | null {
-  if (!value || !/^\d{4}-\d{2}-\d{2}/.test(value)) return null;
-  const datePart = value.slice(0, 10);
-  const parsed = new Date(`${datePart}T00:00:00.000Z`);
-  return Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== datePart ? null : parsed;
-}
 
 function toDateString(date: Date): string {
   return date.toISOString().slice(0, 10);
@@ -150,8 +144,8 @@ export function projectCashflow90Days(
     if (!inScope(platform.scope, activeScope) || !['active', 'free_trial'].includes(platform.subscription_status)) return;
     const amount = Number(platform.subscription_cost) || 0;
     if (amount <= 0 || !['daily', 'weekly', 'monthly', 'yearly', 'annual'].includes(platform.billing_cycle)) return;
-    const nextBillingDate = parseDate(platform.next_billing_date);
-    const trialEndDate = parseDate(platform.trial_end_date);
+    const nextBillingDate = parseCalendarDate(platform.next_billing_date);
+    const trialEndDate = parseCalendarDate(platform.trial_end_date);
     const dueDate = platform.subscription_status === 'free_trial'
       ? nextBillingDate || trialEndDate
       : nextBillingDate;
@@ -184,7 +178,7 @@ export function projectCashflow90Days(
   incomes.forEach((income) => {
     if (income.is_deleted || !inScope(income.scope, activeScope)) return;
     const amount = Number(income.amount) || 0;
-    const anchor = parseDate(income.received_date);
+    const anchor = parseCalendarDate(income.received_date);
     if (income.status === 'pendiente' && anchor && anchor >= today) {
       addEvent(anchor, `${income.client_name} · ${income.concept}`, amount, income.currency, 'income', 'inflow', false);
     }
@@ -198,7 +192,7 @@ export function projectCashflow90Days(
 
   renewals.forEach((renewal) => {
     if (renewal.is_deleted || renewal.status !== 'activo' || !inScope(renewal.scope, activeScope)) return;
-    const date = parseDate(renewal.renewal_date);
+    const date = parseCalendarDate(renewal.renewal_date);
     if (!date) return;
     const isClientPaid = renewal.paid_by === 'client';
     const amount = isClientPaid ? Number(renewal.client_charge_amount) || 0 : Number(renewal.renewal_cost) || 0;
@@ -219,7 +213,7 @@ export function projectCashflow90Days(
 
   expenses.forEach((expense) => {
     if (expense.is_deleted || !inScope(expense.scope, activeScope)) return;
-    const date = parseDate(expense.expense_date);
+    const date = parseCalendarDate(expense.expense_date);
     if (!date) {
       if (expense.recurrence_cycle) undatedRecurringCount += 1;
       return;

@@ -71,6 +71,7 @@ This follows the user's request to standardize “todos los desplegables” and 
 
 - Las barras del editor y la pizarra son una sola fila compacta; si el ancho no alcanza, sus herramientas deben seguir disponibles mediante desplazamiento horizontal o un menú accesible, sin recortar controles. Agrupa funciones con separadores discretos.
 - En barras de herramientas, los botones de icono usan el mismo tamaño, iconos Lucide de 16 px y fondo transparente en reposo. El hover es neutral; un estado seleccionado usa una superficie neutral visible y `aria-pressed`. Crear o guardar desde una barra no lleva color permanente.
+- En la fila de la pizarra, los disparadores con chevrón comparten el tratamiento de Texto: sin borde visible en reposo. El selector de categoría conserva el borde de campo. Hover, panel abierto y selección usan una superficie neutra; el contorno queda para el foco de teclado o una acción destructiva.
 - Los menús muestran opciones como filas neutrales uniformes: el borde no debe hacer que una opción parezca seleccionada. Etiqueta las acciones y distingue el estado real mediante texto y atributos accesibles.
 - Los controles compactos del editor pueden reducir su altura visual frente a formularios generales, conservando objetivos utilizables y foco visible. No reduzcas tipografía hasta hacerla ilegible.
 
@@ -84,6 +85,8 @@ These rules follow the user's request to keep the preview “tal cual en .md”,
 
 - Add a clear `focus-visible` indicator to every keyboard-operable control.
 - Use shared components such as `ConfirmDialog`, `EmptyState`, and `InlineErrorNotice` when they fit the interaction.
+- Usa texto y color neutros para la ausencia de datos. Las marcas verdes de éxito requieren una comprobación con datos, un guardado confirmado o un estado operativo verificado.
+- Si falta el tipo de cambio, indica que el total combinado no está disponible. Conserva el importe original de cada registro y su divisa.
 - Make loading, empty, error, success, disabled, and permission-limited states explicit. State changes and validation errors should be announced accessibly. Startup may show a spinner only while React mounts; after 12 seconds or a script failure, replace it with a retry state instead of leaving an endless loading screen.
 - Confirm actions that change host identity, credentials, financial records, or other consequential state. Explain the target and likely impact in the confirmation.
 - Keep the action that changes state visually distinct from generating, previewing, or editing values.

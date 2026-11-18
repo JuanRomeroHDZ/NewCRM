@@ -168,3 +168,27 @@ Inventario estático del código, no medición de la interfaz renderizada. Las e
 - Los filtros nativos en `C2WorkspaceShell.tsx:558,725` usan `focus:outline-none`; revisar que el foco visible sea consistente también en el selector de autorización.
 - Los controles de Hosts aparecen en variantes para escritorio y móvil; cualquier estandarización debe aplicarse a ambas.
 - No se comprobó el comportamiento visual con zoom ni se ejecutaron operaciones, por tratarse de una auditoría estática; no se puede garantizar aquí ausencia de recortes o de inconsistencias adicionales.
+
+## Continuidad de la auditoría
+
+| Área | Comprobado en navegador | Pendiente |
+|---|---|---|
+| Inicio y Prospección | Guía, Captación en mapa, listado y formulario de prospectos. Captación volvió a cargar tras recargar la pestaña. El servidor había registrado un 404 para un archivo JS de la versión anterior. | Verificar distribución a un cuarto de pantalla y resultados con datos. |
+| Correo y servicios | Estados vacíos, formulario de correo, formulario de servicio y apertura del filtro de Conexiones. | Confirmar foco, recortes y acciones por fila con datos. |
+| Finanzas | Vistas de ingresos, vencimientos, gastos y tarjetas. Formularios abiertos y cerrados sin guardar. | Comprobar con registros de prueba la conversión, calendario y vínculo gasto–tarjeta de extremo a extremo. |
+| Informes y pizarra | Edición, dos vistas, previa e interna/cliente. El menú de listas abierto por teclado mostró doce opciones con nombre en la inspección del navegador, aunque la otra herramienta dejó esos nombres vacíos. A 1280 px CSS, con la navegación abierta, el documento y el contenido principal no desbordaron. La barra de pizarra tenía 56 px de desplazamiento interno. También se observó «Pizarra guardada» deshabilitado tras publicar. | Comprobar todas las categorías y variantes del editor, acciones con un informe de prueba y acceso a los extremos de la barra a anchos menores. |
+| Auditoría de seguridad | Captura del estado sin datos antes del cambio. Después de publicar se comprobó que los cinco mensajes vacíos usan el color neutro y no muestran icono de éxito. | Confirmar los estados con datos. |
+| Actividad, Papelera y Ajustes | Apertura de detalle de actividad, Papelera vacía y controles de Preferencias. En modo desarrollador se comprobó que «Actividad Reciente» cambia el contenido y muestra los registros con la sesión de equipo activa. | Papelera con elementos, formularios y subapartados de Ajustes. |
+| Red y Lab | Se visitaron los trece paneles en una sesión anterior. La revisión de acciones se limitó a estados y controles de interfaz disponibles. | Verificar el aspecto de los controles pasivos con la sesión de equipo activa y a ancho reducido. |
+
+La auditoría visual sigue abierta. Una vista inspeccionada por árbol accesible acredita roles, nombres y estados observados, pero no acredita color, contraste, hover ni ausencia de recortes.
+
+En modo desarrollador se comprobó que Texto, Seleccionar, Formas, Flechas, Símbolos y Estilo de trazo tienen fondo y borde transparentes en reposo y 44 px de alto. Se abrió Símbolos con el ratón y Formas con Enter. Formas mostró seis acciones, fondo neutro y foco visible. Se recorrieron también las categorías Insertar y Vista y exportación sin modificar el informe.
+
+En la configuración «Informe y pizarra» se midieron 555, 1033 y 1527 px CSS. El documento y el contenido principal no desbordaron en ninguno de los tres tamaños. A 555 px, la barra resolvió los 191 px de contenido adicional con desplazamiento horizontal propio.
+
+### Flujos con datos ficticios
+
+- **Informes.** Una recarga en la misma pestaña conservó «QA · Continuidad de informe», la vista «Informe y pizarra» y la segunda pizarra. La hora del último guardado aparece en la descripción del icono. Las pruebas automatizadas confirman que los borradores cifrados se pueden leer con su clave. La recuperación completa en navegador requiere volver a introducir la contraseña si la clave dejó de estar en memoria. El informe muestra «Revisar copia local» cuando encuentra una copia y el editor no tiene cambios pendientes.
+- **Finanzas.** El gasto mensual ficticio de 12.50 USD conservó la tarjeta al recargar. El calendario mostró tres mensualidades y presentó 12.50 USD o 231.86 MXN con la tasa de la instalación.
+- **Papelera.** Se restauró el gasto y reapareció en Gastos con la tarjeta, el importe y la periodicidad. Al terminar, ambos registros financieros ficticios quedaron en Papelera. La regresión de API repite el ciclo en una base desechable.

@@ -1111,7 +1111,7 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
               <button
                 type="button"
                 onClick={expenseClose}
-                aria-label="Cerrar modal de gasto único"
+                aria-label="Cerrar registro de gasto"
                 className="ui-action-icon shrink-0"
               >{/* [Icono] Acción identificada por su nombre accesible. */}
                 <X size={16} aria-hidden="true" />

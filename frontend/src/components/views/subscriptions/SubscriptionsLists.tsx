@@ -96,6 +96,12 @@ export const SubscriptionsLists: React.FC<SubscriptionsListsProps> = ({
   handleDeletePaymentMethod,
 }) => {
   const isProfitBase = profitCurrencyView === 'MXN';
+  const canConvertCurrency = Number.isFinite(usdRate) && usdRate > 0;
+  const canShowRenewalTotals = canConvertCurrency
+    || (isProfitBase && !filteredRenewals.some((renewal) => renewal.currency === 'USD' && Number(renewal.renewal_cost) !== 0));
+  const canShowExpenseTotals = canConvertCurrency
+    || (isProfitBase && !filteredExpenses.some((expense) => expense.currency === 'USD' && Number(expense.amount) !== 0));
+
   const showIncome = mode === 'all' || mode === 'income';
   const showServices = mode === 'all' || mode === 'services';
   const showExpenses = mode === 'all' || mode === 'expenses';
@@ -263,10 +269,10 @@ export const SubscriptionsLists: React.FC<SubscriptionsListsProps> = ({
             </summary>
             <div className="flex flex-wrap gap-x-4 gap-y-1 pb-1 font-mono">
               <span className="text-obsidian-muted">
-                Por mi cuenta: <strong className="text-obsidian-text">{profitCurrencyView === 'USD' && usdRate <= 0 ? 'Sin tipo de cambio' : `$${formatAmount(profitCurrencyView === 'USD' ? realProfit.myRenewalsYearlyMXN / usdRate : realProfit.myRenewalsYearlyMXN)} ${profitCurrencyView}/año`}</strong>
+                Por mi cuenta: <strong className="text-obsidian-text">{!canShowRenewalTotals ? 'Sin tipo de cambio' : `$${formatAmount(profitCurrencyView === 'USD' ? realProfit.myRenewalsYearlyMXN / usdRate : realProfit.myRenewalsYearlyMXN)} ${profitCurrencyView}/año`}</strong>
               </span>
               <span className="text-obsidian-muted">
-                Por cuenta del cliente: <strong className="text-obsidian-text">{profitCurrencyView === 'USD' && usdRate <= 0 ? 'Sin tipo de cambio' : `$${formatAmount(profitCurrencyView === 'USD' ? realProfit.clientRenewalsYearlyMXN / usdRate : realProfit.clientRenewalsYearlyMXN)} ${profitCurrencyView}/año`}</strong>
+                Por cuenta del cliente: <strong className="text-obsidian-text">{!canShowRenewalTotals ? 'Sin tipo de cambio' : `$${formatAmount(profitCurrencyView === 'USD' ? realProfit.clientRenewalsYearlyMXN / usdRate : realProfit.clientRenewalsYearlyMXN)} ${profitCurrencyView}/año`}</strong>
               </span>
             </div>
           </details>
@@ -385,11 +391,11 @@ export const SubscriptionsLists: React.FC<SubscriptionsListsProps> = ({
           </button>
           <div className="flex basis-full flex-wrap items-center gap-2">
             <span className="text-[11px] font-mono text-obsidian-muted">
-              Este mes (puntuales + recurrentes): <strong className="text-white">{!isProfitBase && usdRate <= 0 ? 'Sin tipo de cambio' : `$${formatAmount(isProfitBase ? realProfit.variableMonthExpenseMXN : realProfit.variableMonthExpenseUSD)} ${profitCurrencyView}`}</strong>
+              Este mes (puntuales + recurrentes): <strong className="text-white">{!canShowExpenseTotals ? 'Sin tipo de cambio' : `$${formatAmount(isProfitBase ? realProfit.variableMonthExpenseMXN : realProfit.variableMonthExpenseUSD)} ${profitCurrencyView}`}</strong>
             </span>
             <span className="text-obsidian-muted">•</span>
             <span className="text-[11px] font-mono text-obsidian-muted">
-              Estimado del año: <strong className="text-white/80">{!isProfitBase && usdRate <= 0 ? 'Sin tipo de cambio' : `$${formatAmount(isProfitBase ? realProfit.variableYearExpenseMXN : realProfit.variableYearExpenseUSD)} ${profitCurrencyView}`}</strong>
+              Estimado del año: <strong className="text-white/80">{!canShowExpenseTotals ? 'Sin tipo de cambio' : `$${formatAmount(isProfitBase ? realProfit.variableYearExpenseMXN : realProfit.variableYearExpenseUSD)} ${profitCurrencyView}`}</strong>
             </span>
           </div>
         </div>

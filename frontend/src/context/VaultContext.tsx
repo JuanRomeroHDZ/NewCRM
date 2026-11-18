@@ -5,55 +5,25 @@ import { ConfirmDialog, ConfirmDialogOptions } from '../components/common/Confir
 import { PromptDialog, PromptDialogOptions } from '../components/common/PromptDialog';
 import { deriveDraftKey } from '../lib/writeupDraftRecovery';
 import { createRequestSequence } from '../lib/requestSequence';
+import { useSessionState } from '../hooks/useSessionState';
 
-export type SectionType = 
-  | 'dashboard'
-  | 'help'
-  | 'emails'
-  | 'platforms'
-  | 'capture'
-  | 'prospects'
-  | 'passwords'
-  | 'graph'
-  | 'writeups'
-  | 'subscriptions'
-  | 'trash'
-  | 'settings'
-  | 'settings_appearance'
-  | 'settings_session'
-  | 'settings_limits'
-  | 'settings_access'
-  | 'settings_network'
-  | 'settings_writeups'
-  | 'settings_tools'
-  | 'settings_backup'
-  | 'settings_team'
-  | 'security_audit'
-  | 'audit_logs'
-  | 'c2_hosts'
-  | 'c2_topo'
-  | 'c2_ports'
-  | 'c2_mitm'
-  | 'c2_sniff'
-  | 'c2_dns'
-  | 'c2_creds'
-  | 'c2_http'
-  | 'c2_poison'
-  | 'c2_mitm6'
-  | 'c2_wifi'
-  | 'c2_camera'
-  | 'c2_opsec'
-  | 'overview_prospection'
-  | 'overview_communications'
-  | 'overview_finances'
-  | 'overview_security'
-  | 'overview_c2'
-  | 'overview_activity'
-  | 'overview_settings'
-  | 'finance_income'
-  | 'finance_services'
-  | 'finance_expenses'
-  | 'finance_cards';
+const sections = [
+  'dashboard', 'help', 'emails', 'platforms', 'capture', 'prospects',
+  'passwords', 'graph', 'writeups', 'subscriptions', 'trash', 'settings',
+  'settings_appearance', 'settings_session', 'settings_limits', 'settings_access', 'settings_network', 'settings_writeups',
+  'settings_tools', 'settings_backup', 'settings_team', 'security_audit', 'audit_logs', 'c2_hosts',
+  'c2_topo', 'c2_ports', 'c2_mitm', 'c2_sniff', 'c2_dns', 'c2_creds',
+  'c2_http', 'c2_poison', 'c2_mitm6', 'c2_wifi', 'c2_camera', 'c2_opsec',
+  'overview_prospection', 'overview_communications', 'overview_finances', 'overview_security', 'overview_c2', 'overview_activity',
+  'overview_settings', 'finance_income', 'finance_services', 'finance_expenses', 'finance_cards',
+] as const;
+
+export type SectionType = typeof sections[number];
+const validSections: ReadonlySet<unknown> = new Set(sections);
+
+function parseSection(value: unknown): SectionType | undefined {
+  return validSections.has(value) ? value as SectionType : undefined;
+}
 
 export type InspectorEntityType = 'email' | 'platform' | 'payment' | 'prospect';
 
@@ -69,6 +39,7 @@ interface VaultContextType {
   isSetup: boolean;
   isUnlocked: boolean;
   draftRecoveryKey: CryptoKey | null;
+  enableDraftRecovery: (password: string) => Promise<void>;
   vaultStatusError: string | null;
   remainingSeconds: number;
   timeoutMinutes: number;
@@ -226,7 +197,7 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const defaultEntityScope: EntityScope = activeScope === 'personal' ? 'personal' : 'business';
 
   // Navigation
-  const [activeSection, setActiveSection] = useState<SectionType>('dashboard');
+  const [activeSection, setActiveSection] = useSessionState<SectionType>('lessso.navigation.section', 'dashboard', parseSection);
   const [selectedEntity, setSelectedEntity] = useState<{ type: InspectorEntityType; id: string } | null>(null);
 
   // Modals
@@ -564,6 +535,16 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     selectedEntity,
   ]);
 
+  const enableDraftRecovery = async (password: string) => {
+    const token = getApiVaultToken();
+    if (!token) throw new Error('Desbloquea la bóveda para recuperar la copia.');
+    const { verified } = await api.verifyVaultPassword(password);
+    if (!verified) throw new Error('No se pudo verificar la contraseña de la bóveda.');
+    const recoveryKey = await deriveDraftKey(password);
+    if (getApiVaultToken() !== token) throw new Error('La sesión de bóveda cambió. Vuelve a intentarlo.');
+    setDraftRecoveryKey(recoveryKey);
+  };
+
   const unlockVault = async (password: string) => {
     const res = await api.unlockVault(password);
     vaultStatusRequests.current.invalidate();
@@ -761,6 +742,7 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         isSetup,
         isUnlocked,
         draftRecoveryKey,
+        enableDraftRecovery,
         vaultStatusError,
         remainingSeconds,
         timeoutMinutes,

@@ -2,12 +2,14 @@ import React, { useEffect, useRef, useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import {
   LayoutDashboard, Mail, Globe, Key, Network, CreditCard, Trash2, Settings, UserRound,
-  Lock, Unlock, Search, ChevronDown, Clock, PanelLeftClose, PanelLeftOpen,
+  Lock, Search, ChevronDown, Clock, PanelLeftClose, PanelLeftOpen,
   Shield, ShieldCheck, FileText, Rocket, MapPinned, Briefcase, X, BookOpen,
   Radar, Server, ScanSearch, ArrowLeftRight, Activity, Route, KeyRound,
-  Code2, Radio, Waypoints, Wifi, Camera, UserCheck, RotateCcw,
+  Code2, Radio, Waypoints, Wifi, Camera, UserCheck,
 } from 'lucide-react';
 import { useVault, SectionType } from '../../context/VaultContext';
+import { useSessionState } from '../../hooks/useSessionState';
+import { SidebarVaultFooter } from './SidebarVaultFooter';
 
 interface SidebarProps {
   isMobileOpen: boolean;
@@ -142,6 +144,13 @@ const navGroups: NavGroup[] = [
 ];
 
 const groupForSection = (section: SectionType) => navGroups.find((group) => group.overview === section || group.items.some((item) => item.id === section))?.id;
+
+function parseExpandedGroups(value: unknown): Record<string, boolean> | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return;
+  const stored = value as Record<string, unknown>;
+  return Object.fromEntries(navGroups.map(({ id }) => [id, stored[id] === true]));
+}
+
 const PROFILE_IMAGE_STORAGE_KEY = 'lessso-profile-image';
 
 const prepareProfileImage = async (file: File): Promise<string> => {
@@ -172,18 +181,16 @@ const prepareProfileImage = async (file: File): Promise<string> => {
 
 export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onCloseMobile }) => {
   const {
-    activeSection, setActiveSection, isUnlocked, remainingSeconds, openUnlockModal,
-    lockVault, openCommandPalette, recordVaultActivity, showToast,
-    searchHotkey,
+    activeSection, setActiveSection, isUnlocked, openUnlockModal, openCommandPalette, searchHotkey,
   } = useVault();
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useSessionState('lessso.navigation.collapsed', false,
+    (value) => typeof value === 'boolean' ? value : undefined);
   const [profileImage, setProfileImage] = useState(() => {
     try { return localStorage.getItem(PROFILE_IMAGE_STORAGE_KEY) || ''; } catch { return ''; }
   });
   const [imageError, setImageError] = useState('');
   const [imageUnavailable, setImageUnavailable] = useState(false);
   const [imageProcessing, setImageProcessing] = useState(false);
-  const [resettingTimer, setResettingTimer] = useState(false);
   const imageInput = useRef<HTMLInputElement>(null);
   const profileMenu = useRef<HTMLDetailsElement>(null);
   const chooseImage = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -220,7 +227,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onCloseMobile })
     }
   };
   const [isDesktop, setIsDesktop] = useState(() => typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches);
-  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({ inicio: true, prospeccion: true });
+  const [expandedGroups, setExpandedGroups] = useSessionState('lessso.navigation.groups', {}, parseExpandedGroups);
+  const previousSection = useRef(activeSection);
   const asideRef = useRef<HTMLElement>(null);
   const compact = collapsed && isDesktop;
 
@@ -233,9 +241,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onCloseMobile })
   }, []);
 
   useEffect(() => {
+    // Revela la sección al navegar. Al recargar, respeta los grupos guardados.
+    if (previousSection.current === activeSection) return;
+    previousSection.current = activeSection;
     const activeGroup = groupForSection(activeSection);
     if (activeGroup) setExpandedGroups((current) => ({ ...current, [activeGroup]: true }));
-  }, [activeSection]);
+  }, [activeSection, setExpandedGroups]);
 
   useEffect(() => {
     const aside = asideRef.current;
@@ -245,45 +256,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onCloseMobile })
     if (modalOpen) aside.querySelector<HTMLElement>('button:not([disabled])')?.focus();
   }, [isDesktop, isMobileOpen]);
 
-  const formatTimerParts = (secs: number) => {
-    const totalSeconds = Math.max(0, Math.floor(secs));
-    return {
-      hours: String(Math.floor(totalSeconds / 3600)).padStart(2, '0'),
-      minutes: String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, '0'),
-      seconds: String(totalSeconds % 60).padStart(2, '0'),
-    };
-  };
-
-  const formatTimer = (secs: number) => {
-    const { hours, minutes, seconds } = formatTimerParts(secs);
-    return `${hours}:${minutes}:${seconds}`;
-  };
-
-  const resetVaultTimer = async () => {
-    if (!isUnlocked || resettingTimer) return;
-    setResettingTimer(true);
-    try {
-      const result = await recordVaultActivity();
-      showToast(
-        result.account_active === false
-          ? 'La cuenta ya no está activa. Revisa tu sesión.'
-          : 'Temporizador de la bóveda reiniciado.',
-        result.account_active === false ? 'warning' : 'success',
-      );
-    } catch {
-      showToast('No se pudo reiniciar el temporizador. La bóveda permanece abierta.', 'error');
-    } finally {
-      setResettingTimer(false);
-    }
-  };
-
   const selectSection = (item: NavItem) => {
     setActiveSection(item.id);
     if (item.requiresVault && !isUnlocked) openUnlockModal();
     onCloseMobile();
   };
-
-  const toggleVault = () => isUnlocked ? lockVault() : openUnlockModal();
 
   const handleMobileTab = (event: React.KeyboardEvent<HTMLElement>) => {
     if (!isMobileOpen || isDesktop || event.key !== 'Tab' || !asideRef.current) return;
@@ -438,58 +415,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onCloseMobile })
         </ul>
       </nav>
 
-      <footer className={`shrink-0 border-t border-obsidian-border ${compact ? 'p-2' : 'p-3'}`}>
-        {compact ? (
-          <div className="flex items-center justify-center text-obsidian-muted">
-            <button
-              type="button"
-              onClick={toggleVault}
-              className="ui-action-icon shrink-0"
-              title={isUnlocked ? `Bóveda activa (${formatTimer(remainingSeconds)})` : 'Bóveda bloqueada'}
-              aria-label={isUnlocked ? 'Bloquear bóveda' : 'Desbloquear bóveda'}
-            >
-              {isUnlocked ? <Unlock size={16} className="text-emerald-400" aria-hidden="true" /> : <Lock size={16} className="text-obsidian-muted" aria-hidden="true" />}
-            </button>
-          </div>
-        ) : (
-          <div className="rounded-xl border border-obsidian-border bg-obsidian-panel p-3 text-obsidian-muted">
-            <div className="flex min-w-0 items-start justify-between gap-2">
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-xs font-semibold text-white">{isUnlocked ? 'Bóveda activa' : 'Bóveda bloqueada'}</div>
-                {isUnlocked ? (
-                  <div className="sidebar-timer mt-2 grid grid-cols-3 gap-1" aria-label={`Tiempo restante: ${formatTimer(remainingSeconds)}`}>
-                    {(['Horas', 'Minutos', 'Segundos'] as const).map((label, index) => {
-                      const parts = formatTimerParts(remainingSeconds);
-                      const value = [parts.hours, parts.minutes, parts.seconds][index];
-                      return (
-                        <div key={label} className="min-w-0 text-center">
-                          <span className="block text-[10px] text-obsidian-muted">{label}</span>
-                          <span className="font-mono text-xs tabular-nums text-obsidian-text">{value}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : <div className="mt-1 truncate text-[11px] text-obsidian-muted">Acceso cifrado</div>}
-              </div>
-              {/* [Icono] Bloquear o desbloquear la bóveda. */}
-              <button type="button" onClick={toggleVault} aria-label={isUnlocked ? 'Bloquear bóveda' : 'Desbloquear bóveda'} title={isUnlocked ? 'Bloquear bóveda' : 'Desbloquear bóveda'} className="ui-action-icon shrink-0">
-                {isUnlocked ? <Unlock size={16} className="text-emerald-400" aria-hidden="true" /> : <Lock size={16} aria-hidden="true" />}
-              </button>
-            </div>
-            {isUnlocked && (
-              <button
-                type="button"
-                onClick={() => void resetVaultTimer()}
-                disabled={resettingTimer}
-                className="ui-action-secondary mt-2 w-full whitespace-nowrap px-2 disabled:cursor-wait"
-              >
-                <RotateCcw size={16} className={resettingTimer ? 'animate-spin' : ''} aria-hidden="true" />
-                {resettingTimer ? 'Reiniciando…' : 'Reiniciar temporizador'}
-              </button>
-            )}
-          </div>
-        )}
-      </footer>
+      <SidebarVaultFooter />
       </>}
 
     </aside>

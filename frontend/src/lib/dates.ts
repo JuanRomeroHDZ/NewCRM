@@ -16,3 +16,11 @@ export function formatLocalDate(value: Date = new Date()): string {
   const day = String(value.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
 }
+
+/** Dates used for billing are calendar values, so use UTC fields for arithmetic. */
+export function parseCalendarDate(value?: string | null): Date | null {
+  if (!value || !/^\d{4}-\d{2}-\d{2}/.test(value)) return null;
+  const datePart = value.slice(0, 10);
+  const parsed = new Date(`${datePart}T00:00:00.000Z`);
+  return Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== datePart ? null : parsed;
+}

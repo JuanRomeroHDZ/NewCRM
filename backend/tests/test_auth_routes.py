@@ -230,6 +230,27 @@ async def test_fresh_bootstrap_is_one_time_and_requires_password_change(client, 
 
 
 @pytest.mark.asyncio
+async def test_logout_revokes_account_session_without_locking_vault(client, auth_token):
+    vault_headers = {"X-Vault-Token": auth_token}
+    account = await client.post(
+        "/api/v1/auth/bootstrap-account",
+        headers=vault_headers,
+        json={
+            "username": "session.owner",
+            "email": "session@example.test",
+            "full_name": "Session Owner",
+            "password": "SessionOwnerPassword123!",
+        },
+    )
+    assert account.status_code == 201
+    account_headers = {"Authorization": f"Bearer {account.json()['token']}"}
+    assert (await client.get("/api/v1/auth/me", headers=account_headers)).status_code == 200
+    assert (await client.post("/api/v1/auth/logout", headers=account_headers)).status_code == 200
+    assert (await client.get("/api/v1/auth/me", headers=account_headers)).status_code == 401
+    assert (await client.get("/api/v1/auth/status", headers=vault_headers)).json()["is_unlocked"]
+
+
+@pytest.mark.asyncio
 async def test_login_handles_whitespace_and_case_insensitive_identifiers(client, db_session, auth_token):
     import app.api.v1.auth as auth_api
 

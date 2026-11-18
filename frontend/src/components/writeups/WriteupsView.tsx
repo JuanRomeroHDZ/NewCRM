@@ -40,6 +40,7 @@ import { api, clearWriteupEditLease } from '../../lib/api';
 import { getWriteupEditClientId } from '../../lib/writeupEditLeaseClient';
 import { ApiError } from '../../lib/apiErrors';
 import { formatApiDateTime, parseApiDate } from '../../lib/dates';
+import { readWriteupWorkspace, rememberWriteupWorkspace, type WorkspaceMode } from '../../lib/writeupWorkspaceSession';
 import { deriveDraftKey, draftStorageKey, encryptDraft, listDraftCopies, readDraft, removeDraft, storeEncryptedDraft } from '../../lib/writeupDraftRecovery';
 import {
   InternalProject,
@@ -145,7 +146,6 @@ const SEVERITY_BAR_COLOR: Record<WriteupSeverity, string> = {
   informativa: '#64748b',
 };
 
-type WorkspaceMode = 'markdown' | 'whiteboard' | 'dual' | 'findings' | 'assets';
 type RecoveryDraft = {
   baseUpdatedAt: string; savedAt?: string; title: string; status: WriteupStatus; severity: WriteupSeverity;
   cvssScore: string; cvssVector: string; cweId: string; cveId: string; targetScope: string;
@@ -214,7 +214,7 @@ const recoveryDraftMatchesServer = (draft: RecoveryDraft, server: WriteupDetail)
   (draft.projectId || null) === (server.project_id ?? null);
 
 export const WriteupsView: React.FC = () => {
-  const { isUnlocked, draftRecoveryKey, openUnlockModal, showToast, confirm, prompt, systemLocale } = useVault();
+  const { isUnlocked, draftRecoveryKey, enableDraftRecovery, openUnlockModal, showToast, confirm, prompt, systemLocale } = useVault();
   const {
     selectedIface: c2Iface,
     gateway: c2Gateway,
@@ -230,10 +230,16 @@ export const WriteupsView: React.FC = () => {
     demoMode: c2DemoMode,
   } = useC2();
   const [items, setItems] = useState<WriteupSummary[]>([]);
+  const firstListedReportId = useRef<string | null>(null);
   const [devDataset, setDevDataset] = useState<WriteupDevDataset | null>(() => readDevDatasetFromUrl());
   const isDevFixtureMode = import.meta.env.DEV && devDataset !== null;
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<WriteupDetail | null>(null);
+  const hasLocalCopiesWithoutKey = useMemo(() => {
+    if (!detail?.id || draftRecoveryKey) return false;
+    try { return listDraftCopies(detail.id).length > 0; }
+    catch { return false; }
+  }, [detail?.id, draftRecoveryKey]);
   const [workbenchPanel, setWorkbenchPanel] = useState<{ tab: 'evidence' | 'progress' | 'snippets' | 'publish'; focusEvidenceId?: string | null } | null>(null);
   const [editLockState, setEditLockState] = useState<WriteupEditLockState>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
@@ -973,6 +979,23 @@ export const WriteupsView: React.FC = () => {
     }
   };
 
+  const unlockLocalCopy = async () => {
+    const password = await prompt({
+      title: 'Revisar copia local cifrada',
+      message: 'Introduce la contraseña de la bóveda para abrir las copias de este informe.',
+      inputType: 'password',
+      confirmLabel: 'Revisar',
+      required: true,
+      maxLength: 256,
+    });
+    if (!password) return;
+    try {
+      await enableDraftRecovery(password);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'No se pudo abrir la copia local.', 'error');
+    }
+  };
+
   const updateWriteupVersion = async (id: string, updatedAt?: string | null) => {
     let version = updatedAt || undefined;
     if (!version) {
@@ -1081,8 +1104,13 @@ export const WriteupsView: React.FC = () => {
       nextListOffset.current = page.items.length;
       setProspects(pros);
       setProjects(projs);
-      if (!devDataset && !selectedIdRef.current && page.items.length > 0) {
-        setSelectedId(page.items[0].id);
+      firstListedReportId.current = page.items[0]?.id ?? null;
+      if (!devDataset && !selectedIdRef.current) {
+        const reportId = readWriteupWorkspace()?.reportId ?? firstListedReportId.current;
+        if (reportId) {
+          selectedIdRef.current = reportId;
+          setSelectedId(reportId);
+        }
       }
     } catch (err) {
       if (version === listRequestVersion.current) {
@@ -1226,6 +1254,14 @@ export const WriteupsView: React.FC = () => {
       const data = await api.getWriteup(id);
       if (version !== detailRequestVersion.current) return;
       hydrateDraft(data);
+      const workspace = readWriteupWorkspace();
+      if (workspace?.reportId === id) {
+        workspaceModeManuallySelectedRef.current = true;
+        setMode(workspace.mode);
+        if (data.boards.some((board) => board.id === workspace.boardId)) {
+          setActiveBoardId(workspace.boardId);
+        }
+      }
       const leaseOwned = data.manual_locked
         ? (setEditLockState({ kind: 'manual' }), false)
         : await acquireEditLease(id);
@@ -1264,6 +1300,12 @@ export const WriteupsView: React.FC = () => {
       void preloadAssetUrls(data, version);
     } catch (err) {
       if (version === detailRequestVersion.current) {
+        if (err instanceof ApiError && err.status === 404 && readWriteupWorkspace()?.reportId === id) {
+          rememberWriteupWorkspace(null);
+          const fallbackId = firstListedReportId.current === id ? null : firstListedReportId.current;
+          selectedIdRef.current = fallbackId;
+          setSelectedId(fallbackId);
+        }
         setDetail(null);
         setRevisions([]);
         setDetailError(err instanceof Error ? err.message : 'No se pudo cargar el informe.');
@@ -1282,6 +1324,11 @@ export const WriteupsView: React.FC = () => {
       void loadDetail(selectedId);
     }
   }, [selectedId, isUnlocked, loadDetail]);
+
+  useEffect(() => {
+    if (!isUnlocked || isDevFixtureMode || !detail || detail.id !== selectedId) return;
+    rememberWriteupWorkspace({ reportId: detail.id, boardId: activeBoardId, mode });
+  }, [isUnlocked, isDevFixtureMode, detail, selectedId, activeBoardId, mode]);
 
   const persistDraftBeforeNavigation = async (nextAction: string) => {
     const pendingBoardCount = Object.keys(unsavedBoardIdsRef.current).length;
@@ -1767,10 +1814,11 @@ export const WriteupsView: React.FC = () => {
     let message = '';
     if (saveError) message = `No se pudo guardar: ${saveError}`;
     else if (saving) message = 'Guardando…';
+    else if (pending && !draftRecoveryKey) message = 'Cambios pendientes de guardar en el servidor';
     else if (pending) message = localDraftError ? 'Copia local no disponible' : localDraftSavedAt ? `Copia local ${localDraftSavedAt.toLocaleTimeString(systemLocale || 'es-MX', { hour: '2-digit', minute: '2-digit' })} · pendiente de sincronizar` : 'Guardando copia local cifrada…';
     else if (lastSavedAt) message = `Guardado a las ${lastSavedAt.toLocaleTimeString(systemLocale || 'es-MX', { hour: '2-digit', minute: '2-digit' })}`;
     window.dispatchEvent(new CustomEvent('writeup_saved_notice', { detail: { message, persistent: Boolean(saveError || saving || pending) } }));
-  }, [dirty, unsavedBoardIds, saving, saveError, localDraftError, localDraftSavedAt, lastSavedAt, systemLocale]);
+  }, [dirty, unsavedBoardIds, saving, saveError, localDraftError, localDraftSavedAt, lastSavedAt, systemLocale, draftRecoveryKey]);
 
   useEffect(() => {
     if (!dirty || !detail || !isUnlocked || isWriteupEditingBlocked) return;
@@ -1797,6 +1845,7 @@ export const WriteupsView: React.FC = () => {
     try {
       detailRequestVersion.current += 1;
       await api.deleteWriteup(detail.id, detail.updated_at);
+      if (readWriteupWorkspace()?.reportId === detail.id) rememberWriteupWorkspace(null);
       clearAssetUrlCache();
       setDetail(null);
       selectedIdRef.current = null;
@@ -2774,7 +2823,7 @@ export const WriteupsView: React.FC = () => {
                     onClick={() => void handleSaveWriteup(false)}
                     aria-label={saving ? 'Guardando informe' : dirty ? 'Guardar cambios del informe' : 'Informe guardado'}
                     className="ui-action-icon writeup-header-compact-button shrink-0"
-                    title={saving ? 'Guardando informe' : dirty ? 'Guardar cambios del informe' : 'Informe guardado'}
+                    title={saving ? 'Guardando informe' : dirty ? 'Guardar cambios del informe' : `Informe guardado · ${formatApiDateTime(detail.updated_at, systemLocale || 'es-MX')}`}
                   >
                     {dirty ? <Save className="h-4 w-4" aria-hidden="true" /> : <CheckCircle2 className="h-4 w-4" aria-hidden="true" />}
                   </button>
@@ -2855,6 +2904,15 @@ export const WriteupsView: React.FC = () => {
               {(saveError || localDraftError) && (
                 <div role="status" aria-live="polite" className="writeup-header-save-status">
                   {saveError ? `No se pudo guardar: ${saveError}` : 'Copia local no disponible; vuelve a la pizarra para reintentar'}
+                </div>
+              )}
+              {hasLocalCopiesWithoutKey && !dirty && !saving && Object.keys(unsavedBoardIds).length === 0 && (
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-obsidian-border text-xs text-obsidian-muted">
+                  <span>Hay una copia local cifrada de este informe.</span>
+                  {/* [Acción secundaria] Solicita la contraseña para abrir la copia cifrada. */}
+                  <button type="button" onClick={unlockLocalCopy} className="ui-nav-action">
+                    Revisar copia local
+                  </button>
                 </div>
               )}
               </div>

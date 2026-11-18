@@ -197,7 +197,6 @@ services:
       - ./RUNBOOK.md:/source/deployment/RUNBOOK.md:ro
       - ./PRODUCT.md:/source/deployment/PRODUCT.md:ro
       - ./SEGURIDAD.md:/source/deployment/SEGURIDAD.md:ro
-      - ./Recomendations.md:/source/deployment/Recomendations.md:ro
       - ./docs:/source/deployment/docs:ro
     logging:
       options:

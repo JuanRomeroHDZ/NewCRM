@@ -90,18 +90,18 @@ export const PromptDialog: React.FC<PromptDialogProps> = ({
 
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const trimmed = value.trim();
-    if (required && !trimmed) {
+    const answer = inputType === 'password' ? value : value.trim();
+    if (required && !answer) {
       setError('Este campo no puede quedar vacío.');
       inputRef.current?.focus();
       return;
     }
-    if (trimmed.length > safeMaxLength) {
+    if (answer.length > safeMaxLength) {
       setError(`Usa ${safeMaxLength} caracteres o menos.`);
       inputRef.current?.focus();
       return;
     }
-    onSubmit(trimmed);
+    onSubmit(answer);
   };
 
   return (

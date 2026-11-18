@@ -1,10 +1,36 @@
 import { fileURLToPath } from 'node:url';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { defineConfig, loadEnv } from 'vite';
+import { defineConfig, loadEnv, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 
 const projectRoot = fileURLToPath(new URL('..', import.meta.url));
+
+function reactPlugins(proxiedHmr: boolean): Plugin[] {
+  const plugins = react();
+  if (!proxiedHmr) return plugins;
+
+  // React Refresh normally injects an inline script that Nginx's CSP blocks.
+  // Serve that same preamble as a same-origin module before the app entry.
+  const refresh = plugins.find((plugin) => plugin.name === 'vite:react-refresh');
+  if (!refresh?.transformIndexHtml) throw new Error('React Refresh HTML hook not found.');
+  const preamblePath = '/@lessso/react-refresh-preamble.js';
+  refresh.transformIndexHtml = () => [{
+    tag: 'script',
+    attrs: { type: 'module', src: preamblePath },
+    injectTo: 'head-prepend',
+  }];
+
+  return [...plugins, {
+    name: 'lessso:external-react-refresh-preamble',
+    resolveId(id) {
+      if (id === preamblePath) return id;
+    },
+    load(id) {
+      if (id === preamblePath) return react.preambleCode.replace('__BASE__', '/');
+    },
+  }];
+}
 
 export default defineConfig(({ command, mode }) => {
   const env = loadEnv(mode, projectRoot, 'VITE_');
@@ -51,7 +77,7 @@ export default defineConfig(({ command, mode }) => {
 
   return {
     envDir: projectRoot,
-    plugins: [react()],
+    plugins: reactPlugins(proxiedHmr),
     server: {
       port: Number.isInteger(devPort) ? devPort : undefined,
       host: devHost || undefined,

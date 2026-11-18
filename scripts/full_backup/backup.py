@@ -45,7 +45,6 @@ ALLOWED_DEPLOYMENT_FILES = frozenset(
         "RUNBOOK.md",
         "PRODUCT.md",
         "SEGURIDAD.md",
-        "Recomendations.md",
         "pytest.ini",
         "backend/Dockerfile",
         "backend/alembic.ini",
@@ -90,7 +89,6 @@ REQUIRED_DEPLOYMENT_PATHS = (
     "pytest.ini",
     "PRODUCT.md",
     "SEGURIDAD.md",
-    "Recomendations.md",
     "docs/auditoria-secretos.md",
 )
 EXCLUDED_DIRECTORY_NAMES = frozenset(
@@ -587,7 +585,7 @@ def run_schedule() -> None:
             time.sleep(5 * 60)
             continue
         delay = seconds_until_next_run(utc_now())
-        print(f"Próxima captura diaria en {int(delay)} segundos (02:00 UTC).")
+        print(f"Próxima captura diaria en {int(delay)} segundos (02:00 UTC).", flush=True)
         time.sleep(delay)
 
 

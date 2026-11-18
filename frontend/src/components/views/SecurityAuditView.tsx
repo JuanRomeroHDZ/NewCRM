@@ -458,10 +458,7 @@ export const SecurityAuditView: React.FC = () => {
                 Sin coincidencias en llaves API para "{searchQuery}".
               </div>
             ) : (
-              <div className="py-2 text-xs text-emerald-400 flex items-center gap-2">
-                <CheckCircle2 size={16} className="shrink-0" aria-hidden="true" />
-                <span>Ninguna llave API está vencida ni por vencer pronto.</span>
-              </div>
+              <p className="py-2 text-xs text-obsidian-muted">No hay alertas de vencimiento de llaves API.</p>
             )}
           </div>
         </div>
@@ -516,8 +513,8 @@ export const SecurityAuditView: React.FC = () => {
                 Sin coincidencias en contraseñas antiguas para "{searchQuery}".
               </div>
             ) : (
-              <div className="py-2 text-xs text-emerald-400 flex items-center gap-2">
-                <CheckCircle2 size={16} className="shrink-0" aria-hidden="true" />
+              <div className={`flex items-center gap-2 py-2 text-xs ${checkedPasswords === 0 ? 'text-obsidian-muted' : 'text-emerald-400'}`}>
+                {checkedPasswords > 0 && <CheckCircle2 size={16} className="shrink-0" aria-hidden="true" />}
                 <span>{checkedPasswords === 0 ? 'No hay contraseñas para revisar.' : 'No se encontraron contraseñas pendientes de cambio.'}</span>
               </div>
             )}
@@ -592,8 +589,8 @@ export const SecurityAuditView: React.FC = () => {
             Sin coincidencias en contraseñas repetidas para "{searchQuery}".
           </div>
         ) : (
-          <div className="flex items-center gap-2 py-2 text-xs text-emerald-400">
-            <CheckCircle2 size={16} className="shrink-0" aria-hidden="true" />
+          <div className={`flex items-center gap-2 py-2 text-xs ${checkedPasswords === 0 ? 'text-obsidian-muted' : 'text-emerald-400'}`}>
+            {checkedPasswords > 0 && <CheckCircle2 size={16} className="shrink-0" aria-hidden="true" />}
             <span>{checkedPasswords === 0 ? 'No hay contraseñas para revisar.' : 'No se encontraron contraseñas repetidas.'}</span>
           </div>
         )}
@@ -637,8 +634,8 @@ export const SecurityAuditView: React.FC = () => {
                 Sin coincidencias en contraseñas débiles para "{searchQuery}".
               </div>
             ) : (
-              <div className="py-2 text-xs text-emerald-400 flex items-center gap-2">
-                <CheckCircle2 size={16} className="shrink-0" aria-hidden="true" />
+              <div className={`flex items-center gap-2 py-2 text-xs ${checkedPasswords === 0 ? 'text-obsidian-muted' : 'text-emerald-400'}`}>
+                {checkedPasswords > 0 && <CheckCircle2 size={16} className="shrink-0" aria-hidden="true" />}
                 <span>{checkedPasswords === 0 ? 'No hay contraseñas para revisar.' : 'No se encontraron contraseñas fáciles de adivinar.'}</span>
               </div>
             )}
@@ -686,8 +683,8 @@ export const SecurityAuditView: React.FC = () => {
                 Sin coincidencias en correos sin 2FA para "{searchQuery}".
               </div>
             ) : (
-              <div className="py-2 text-xs text-emerald-400 flex items-center gap-2">
-                <CheckCircle2 size={16} className="shrink-0" aria-hidden="true" />
+              <div className={`flex items-center gap-2 py-2 text-xs ${checkedEmails === 0 ? 'text-obsidian-muted' : 'text-emerald-400'}`}>
+                {checkedEmails > 0 && <CheckCircle2 size={16} className="shrink-0" aria-hidden="true" />}
                 <span>{checkedEmails === 0 ? 'No hay correos principales para revisar.' : 'Todos tus correos principales tienen verificación en 2 pasos.'}</span>
               </div>
             )}

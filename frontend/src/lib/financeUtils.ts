@@ -1,3 +1,4 @@
+import { formatLocalDate, parseCalendarDate } from './dates';
 import type { PlatformAccount, DomainRenewal, ClientIncome, OneTimeExpense } from '../types';
 
 export interface CriticalRenewalItem {
@@ -177,13 +178,10 @@ export function evaluateBudgetCap(
 }
 
 function calculateDaysUntil(dateStr?: string): number {
-  if (!dateStr) return 999;
-  const target = new Date(dateStr);
-  if (isNaN(target.getTime())) return 999;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  target.setHours(0, 0, 0, 0);
-  return Math.round((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+  const target = parseCalendarDate(dateStr);
+  const today = parseCalendarDate(formatLocalDate());
+  if (!target || !today) return 999;
+  return (target.getTime() - today.getTime()) / 86_400_000;
 }
 
 function toMonthlyCost(amount: number, cycle?: string): number {
@@ -287,13 +285,8 @@ export function computeFinancialExecutiveSummary(
         categoryTotals[cat] = (categoryTotals[cat] || 0) + normalizedMonthly;
         categoryCounts[cat] = (categoryCounts[cat] || 0) + 1;
 
-        let dayOfMonth = 1;
-        if (renewalTarget) {
-          const d = new Date(renewalTarget);
-          if (!isNaN(d.getTime())) {
-            dayOfMonth = d.getDate();
-          }
-        }
+        const renewalDate = parseCalendarDate(renewalTarget);
+        const dayOfMonth = renewalDate?.getUTCDate() ?? 1;
         let weekIndex = 0;
         if (dayOfMonth <= 7) weekIndex = 0;
         else if (dayOfMonth <= 14) weekIndex = 1;
@@ -303,14 +296,8 @@ export function computeFinancialExecutiveSummary(
 
         const cycle = (p.billing_cycle || 'monthly').toLowerCase();
         if (cycle === 'yearly' || cycle === 'annual') {
-          let renMonth = 0;
-          if (renewalTarget) {
-            const d = new Date(renewalTarget);
-            if (!isNaN(d.getTime())) {
-              renMonth = d.getMonth();
-            }
-          }
-          monthTotalsMXN[renMonth] += costMXN;
+          const renewalMonth = renewalDate?.getUTCMonth() ?? 0;
+          monthTotalsMXN[renewalMonth] += costMXN;
         } else {
           for (let m = 0; m < 12; m++) {
             monthTotalsMXN[m] += normalizedMonthly;

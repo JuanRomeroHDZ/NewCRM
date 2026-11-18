@@ -77,6 +77,44 @@ async def test_activity_and_trash_restore_preserve_existing_record(client, db_se
 
 
 @pytest.mark.asyncio
+async def test_recurring_expense_reopens_and_restores_with_card_link(client, db_session, auth_token):
+    headers = await _authorized_headers(db_session, auth_token, "owner", "restore_finance_owner")
+    payment = await client.post("/api/v1/payments", headers=headers, json={
+        "issuer": "Banco ficticio", "alias": "Tarjeta de prueba", "last_four": "1234",
+    })
+    assert payment.status_code == 200
+    payment_id = payment.json()["id"]
+    endpoint = "/api/v1/finances/expenses"
+    created = await client.post(endpoint, headers=headers, json={
+        "concept": "Servicio mensual ficticio", "amount": 12.5, "currency": "USD",
+        "expense_date": "2026-11-20", "recurrence_cycle": "monthly",
+        "payment_method_id": payment_id,
+    })
+    assert created.status_code == 200
+    expense_id = created.json()["id"]
+
+    async def assert_expense_fields():
+        response = await client.get(endpoint, headers=headers)
+        assert response.status_code == 200
+        item = next(row for row in response.json() if row["id"] == expense_id)
+        assert item["payment_method_id"] == payment_id
+        assert item["recurrence_cycle"] == "monthly"
+        assert item["currency"] == "USD"
+        assert float(item["amount"]) == 12.5
+        assert item["expense_date"] == "2026-11-20"
+
+    await assert_expense_fields()
+    assert (await client.delete(f"{endpoint}/{expense_id}", headers=headers)).status_code == 200
+    assert all(row["id"] != expense_id for row in (await client.get(endpoint, headers=headers)).json())
+    trash = await client.get("/api/v1/trash", headers=headers)
+    assert trash.status_code == 200
+    item = next(row for row in trash.json() if row["id"] == expense_id)
+    assert item["type"] == "expense"
+    assert (await client.post(f"/api/v1/trash/restore/expense/{expense_id}", headers=headers)).status_code == 200
+    await assert_expense_fields()
+
+
+@pytest.mark.asyncio
 async def test_activity_history_filters_and_paginates_on_server(client, auth_token):
     headers = {"X-Vault-Token": auth_token}
     for name in ("Prospecto Alfa", "Prospecto Beta", "Prospecto Gamma"):
