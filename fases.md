@@ -1,32 +1,5 @@
 Revisé lo que ya existe en **Informes de seguridad**. Hay ocho formatos de exportación, vista para cliente, borradores cifrados, historial y un panel de correlaciones. **La oportunidad más grande es mejorar la calidad de la entrega y la confianza en lo que se guarda, se comparte y se recupera.** No modifiqué nada. [Formatos de exportación](/home/juanromero/Documents/Proyectos/NewCRM/frontend/src/components/writeups/WriteupExportModal.tsx) · [Panel de correlaciones](/home/juanromero/Documents/Proyectos/NewCRM/frontend/src/components/writeups/WriteupCorrelationsPanel.tsx)
 
-## Mejorar
-
-Funciones existentes que pueden resultar más útiles en el trabajo diario.
-
-| # | Propuesta | Para qué sirve |
-|---|---|---|
-| 1 | **Tipografía de PDF y Word** | Definir estilos para títulos, texto, tablas, código y notas al pie. La letra que funciona en pantalla no siempre funciona en un documento. |
-| 2 | **Paginación de PDF** | Mantener cada encabezado junto a su primer párrafo y cada imagen junto a su pie. Repetir encabezados de tablas largas. |
-| 3 | **Portada editorial** | Dar una jerarquía clara a título, cliente, fecha, versión y confidencialidad. Dejar en blanco los campos opcionales que no se usen. |
-| 4 | **Vista previa de entrega** | Mostrar si el documento incluirá portada, índice, evidencias y anexos antes de generarlo. |
-| 5 | **Selección de formato** | Presentar primero las opciones habituales de entrega y edición. Agrupar los formatos de intercambio técnico sin quitarlos. |
-| 6 | **Correlaciones explicables** | Mostrar el identificador o activo que causó cada coincidencia y abrir el informe relacionado en su contexto. |
-| 7 | **Jerarquía de coincidencias** | Distinguir un identificador técnico exacto de compartir cliente o proyecto. Ambas relaciones ayudan, pero tienen distinto valor. |
-| 8 | **Resumen ejecutivo** | Dar prioridad a impacto, alcance, acciones recomendadas y asuntos pendientes de validación. |
-| 9 | **Lectura de hallazgos** | Ordenar los detalles como impacto, evidencia, recomendación y estado para que el lector encuentre rápido lo que necesita hacer. |
-| 10 | **Gestión de evidencias** | Encontrarlas por nombre o hallazgo relacionado y distinguir imágenes, diagramas y otros archivos. |
-| 11 | **Legibilidad de capturas** | Facilitar ampliar imágenes en pantalla y exportarlas a un tamaño que permita leerlas. |
-| 12 | **Exportación de pizarras** | Ajustar el encuadre al contenido y conservar etiquetas legibles, sobre todo en diagramas anchos. |
-| 13 | **Navegación por el índice** | Hacer más fácil saber en qué sección estás y saltar de una sección a otra en informes largos. |
-| 14 | **Comparación de revisiones** | Dar prioridad a los bloques con cambios y permitir ir al cambio siguiente sin recorrer todo el informe. |
-| 15 | **Historial de versiones** | Distinguir autoguardados, hitos y versiones entregadas. Así es más fácil encontrar la copia que importa. |
-| 16 | **Búsqueda de informes** | Mostrar por qué coincidió un resultado y permitir combinar búsqueda con estado o proyecto. |
-| 17 | **Recuperación de borradores** | Mostrar la fecha de la copia, la del servidor y qué partes se recuperarían antes de aplicarla. |
-| 18 | **Estado del guardado** | Hacer fácil distinguir guardado en servidor, copia local, cambios pendientes y conflicto. El texto debe estar disponible sin depender del ratón. |
-| 19 | **Herramientas a ancho reducido** | Mantener al alcance las acciones más usadas y el acceso al resto. Comprobar también que el foco de teclado lleve el control a la parte visible de la barra. |
-| 20 | **Edición de documentos largos** | Conservar posición y ancho de lectura al alternar entre edición y vista previa, especialmente cuando se consulta una evidencia. |
-
 ## Corregir
 
 Aquí distingo **límites observados en el código o en pruebas previas** de **casos por reproducir**. Los segundos solo ameritan cambios si fallan.

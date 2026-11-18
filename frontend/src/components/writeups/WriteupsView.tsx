@@ -91,6 +91,11 @@ const SEVERITY_BADGE: Record<WriteupSeverity, string> = {
 const SEVERITY_LABEL: Record<WriteupSeverity, string> = {
   critica: 'Crítica', alta: 'Alta', media: 'Media', baja: 'Baja', informativa: 'Info',
 };
+const REVISION_TYPE_LABEL: Record<WriteupRevision['change_type'], string> = {
+  initial: 'Inicial', autosave: 'Autoguardado', manual: 'Guardado manual', milestone: 'Hito',
+  restore: 'Restauración', edit: 'Edición', evidence: 'Evidencia', board: 'Pizarra', citation: 'Cita',
+};
+
 const STATUS_LABEL: Record<WriteupStatus, string> = {
   borrador: 'Borrador', en_revision: 'En revisión', finalizado: 'Finalizado', entregado: 'Entregado',
 };
@@ -257,9 +262,12 @@ export const WriteupsView: React.FC = () => {
   const reportListManuallyToggledRef = useRef(false);
   const [showMetadata, setShowMetadata] = useState(false);
   const [showCorrelations, setShowCorrelations] = useState(false);
+  const [relatedContext, setRelatedContext] = useState<{ id: string; origin: string; reasons: string[] } | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   const [severityFilter, setSeverityFilter] = useState<string>('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [projectFilter, setProjectFilter] = useState('');
   const [loadingList, setLoadingList] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
@@ -320,6 +328,8 @@ export const WriteupsView: React.FC = () => {
 
   const listWriteupPage = useCallback(async (filters: {
     severity?: string;
+    status?: string;
+    project_id?: string;
     q?: string;
     limit: number;
     offset: number;
@@ -332,6 +342,7 @@ export const WriteupsView: React.FC = () => {
   }, [devDataset]);
   const [showExportModal, setShowExportModal] = useState(false);
   const [lightboxAsset, setLightboxAsset] = useState<WriteupAsset | null>(null);
+  const [expandedEvidenceImage, setExpandedEvidenceImage] = useState<string | null>(null);
   const [diffRevision, setDiffRevision] = useState<WriteupRevision | null>(null);
   const [showRevisionHistory, setShowRevisionHistory] = useState(false);
   const [revisionSelectionExplicit, setRevisionSelectionExplicit] = useState(false);
@@ -350,6 +361,8 @@ export const WriteupsView: React.FC = () => {
   const [revisionLoading, setRevisionLoading] = useState(false);
   const [revisionEnd, setRevisionEnd] = useState(false);
   const [diffPage, setDiffPage] = useState(0);
+  const [diffChange, setDiffChange] = useState<number | null>(null);
+  const diffViewportRef = useRef<HTMLDivElement>(null);
   const revisionCursor = useRef<number | null>(null);
   const revisionRequestVersion = useRef(0);
   const revisionTree = useMemo(() => {
@@ -365,7 +378,7 @@ export const WriteupsView: React.FC = () => {
     return [...groups.entries()];
   }, [revisions, systemLocale]);
   const revisionFilterCount = [revisionSearch.trim(), revisionType, revisionAuthor, revisionAfter, revisionBefore].filter(Boolean).length;
-  useEffect(() => { setDiffPage(0); }, [diffRevision?.id]);
+  useEffect(() => { setDiffPage(0); setDiffChange(null); }, [diffRevision?.id]);
   useEffect(() => {
     revisionRequestVersion.current += 1;
     revisionCursor.current = null;
@@ -617,6 +630,24 @@ export const WriteupsView: React.FC = () => {
   const [markdown, setMarkdown] = useState('');
   const [workbench, setWorkbench] = useState<WriteupWorkbench>(EMPTY_WRITEUP_WORKBENCH);
   const [revisionDiff, setRevisionDiff] = useState<DiffLine[]>([]);
+  const diffBlocks = useMemo(() => revisionDiff.flatMap((line, index) =>
+    line.kind !== 'same' && (index === 0 || revisionDiff[index - 1].kind === 'same') ? [index] : [],
+  ), [revisionDiff]);
+
+  const jumpToRevisionChange = (target: number) => {
+    const index = diffBlocks[target];
+    setDiffChange(target);
+    setDiffPage(Math.floor(index / 300));
+  };
+
+  useEffect(() => {
+    if (diffChange === null) return;
+    const index = diffBlocks[diffChange];
+    if (Math.floor(index / 300) === diffPage) {
+      diffViewportRef.current?.querySelector(`[data-diff-line="${index}"]`)?.scrollIntoView({ block: 'center' });
+    }
+  }, [diffBlocks, diffChange, diffPage]);
+
   const [diffLoading, setDiffLoading] = useState(false);
   const [diffError, setDiffError] = useState('');
   const [diffAttempt, setDiffAttempt] = useState(0);
@@ -629,6 +660,7 @@ export const WriteupsView: React.FC = () => {
     }
     setRevisionDiff([]);
     setDiffPage(0);
+    setDiffChange(null);
     setDiffLoading(true);
     setDiffError('');
     let worker: Worker | undefined;
@@ -1087,6 +1119,8 @@ export const WriteupsView: React.FC = () => {
       const pageRequest = listWriteupPage({
           q: debouncedSearchQuery.trim() || undefined,
           severity: severityFilter || undefined,
+          status: statusFilter || undefined,
+          project_id: projectFilter || undefined,
           limit: 50,
           offset: 0,
         });
@@ -1119,7 +1153,7 @@ export const WriteupsView: React.FC = () => {
     } finally {
       if (version === listRequestVersion.current) setLoadingList(false);
     }
-  }, [isUnlocked, debouncedSearchQuery, severityFilter, devDataset, listWriteupPage]);
+  }, [isUnlocked, debouncedSearchQuery, severityFilter, statusFilter, projectFilter, devDataset, listWriteupPage]);
 
   const handleLoadMore = async () => {
     if (!isUnlocked || loadingMore || !hasMore) return;
@@ -1130,6 +1164,8 @@ export const WriteupsView: React.FC = () => {
       const page = await listWriteupPage({
         q: debouncedSearchQuery.trim() || undefined,
         severity: severityFilter || undefined,
+        status: statusFilter || undefined,
+        project_id: projectFilter || undefined,
         limit: 50,
         offset: nextListOffset.current,
       });
@@ -1410,7 +1446,7 @@ export const WriteupsView: React.FC = () => {
     return true;
   };
 
-  const handleSelectWriteup = async (id: string) => {
+  const handleSelectWriteup = async (id: string, context?: { origin: string; reasons: string[] }) => {
     if (id === selectedIdRef.current) {
       if (typeof window !== 'undefined' && window.innerWidth < 1280) setShowList(false);
       return;
@@ -1423,6 +1459,7 @@ export const WriteupsView: React.FC = () => {
       if (previousId) await releaseEditLease(previousId);
       detailRequestVersion.current += 1;
       clearAssetUrlCache();
+      setRelatedContext(context ? { id, ...context } : null);
       selectedIdRef.current = id;
       setSelectedId(id);
       setDetail(null);
@@ -1809,16 +1846,19 @@ export const WriteupsView: React.FC = () => {
     return () => window.clearTimeout(delay);
   }, [dirty, detail?.id, isUnlocked, isWriteupEditingBlocked, editVersion]);
 
-  useEffect(() => {
-    const pending = dirty || Object.keys(unsavedBoardIds).length > 0;
+  const pendingWriteupSave = dirty || Object.keys(unsavedBoardIds).length > 0;
+  const saveStatusMessage = (() => {
+    const pending = pendingWriteupSave;
+    if (saveConflict) return 'Conflicto con el servidor · revisa los cambios antes de guardar';
     let message = '';
     if (saveError) message = `No se pudo guardar: ${saveError}`;
     else if (saving) message = 'Guardando…';
     else if (pending && !draftRecoveryKey) message = 'Cambios pendientes de guardar en el servidor';
-    else if (pending) message = localDraftError ? 'Copia local no disponible' : localDraftSavedAt ? `Copia local ${localDraftSavedAt.toLocaleTimeString(systemLocale || 'es-MX', { hour: '2-digit', minute: '2-digit' })} · pendiente de sincronizar` : 'Guardando copia local cifrada…';
-    else if (lastSavedAt) message = `Guardado a las ${lastSavedAt.toLocaleTimeString(systemLocale || 'es-MX', { hour: '2-digit', minute: '2-digit' })}`;
-    window.dispatchEvent(new CustomEvent('writeup_saved_notice', { detail: { message, persistent: Boolean(saveError || saving || pending) } }));
-  }, [dirty, unsavedBoardIds, saving, saveError, localDraftError, localDraftSavedAt, lastSavedAt, systemLocale, draftRecoveryKey]);
+    else if (localDraftError) message = 'Copia local no disponible';
+    else if (pending) message = localDraftSavedAt ? `Copia local ${localDraftSavedAt.toLocaleTimeString(systemLocale || 'es-MX', { hour: '2-digit', minute: '2-digit' })} · pendiente de sincronizar` : 'Guardando copia local cifrada…';
+    else if (lastSavedAt) message = `Guardado en el servidor a las ${lastSavedAt.toLocaleTimeString(systemLocale || 'es-MX', { hour: '2-digit', minute: '2-digit' })}`;
+    return message || (detail ? 'Guardado en el servidor' : '');
+  })();
 
   useEffect(() => {
     if (!dirty || !detail || !isUnlocked || isWriteupEditingBlocked) return;
@@ -2519,6 +2559,16 @@ export const WriteupsView: React.FC = () => {
               <option value="informativa">Informativa</option>
             </select>
             </div>
+            <div className="grid grid-cols-2 gap-1">
+              <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} aria-label="Filtrar informes por estado" className="min-h-11 min-w-0 text-xs">
+                <option value="">Estados</option>
+                {Object.entries(STATUS_LABEL).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              </select>
+              <select value={projectFilter} onChange={(event) => setProjectFilter(event.target.value)} aria-label="Filtrar informes por proyecto" className="min-h-11 min-w-0 text-xs">
+                <option value="">Proyectos</option>
+                {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
+              </select>
+            </div>
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto px-0">
@@ -2537,12 +2587,18 @@ export const WriteupsView: React.FC = () => {
               </div>
             ) : items.length === 0 ? (
               <div className="space-y-2 border-b border-obsidian-border p-4 text-center text-xs text-obsidian-muted">
-                <p>{isDevFixtureMode ? 'Esta vista de prueba no contiene informes.' : 'No hay informes guardados todavía.'}</p>
-                {!isDevFixtureMode && <p className="text-[11px] text-obsidian-muted">Crea un informe o importa datos desde Red y Lab (C2).</p>}
+                <p>{(debouncedSearchQuery || severityFilter || statusFilter || projectFilter) ? 'No hay informes con estos filtros.' : isDevFixtureMode ? 'Esta vista de prueba no contiene informes.' : 'No hay informes guardados todavía.'}</p>
+                {!isDevFixtureMode && !debouncedSearchQuery && !severityFilter && !statusFilter && !projectFilter && <p className="text-[11px] text-obsidian-muted">Crea un informe o importa datos desde Red y Lab (C2).</p>}
               </div>
             ) : (
               items.map((item) => {
                 const selected = selectedId === item.id;
+                const query = debouncedSearchQuery.trim().toLowerCase();
+                const matches = query ? [
+                  ['Título', item.title], ['Alcance', item.target_scope], ['CVE', item.cve_id],
+                  ['CWE', item.cwe_id], ['Etiqueta', item.tags.filter(tag => tag.toLowerCase().includes(query)).join(', ')],
+                ].filter(([, value]) => value?.toLowerCase().includes(query)) : [];
+                const matchDescription = matches.map(([label, value]) => label === 'Título' || label === 'Alcance' ? label.toLowerCase() : value).join(' · ');
                 const rowContent = (
                     <span className="block">
                     <span className="mb-1 flex items-center justify-between gap-1">
@@ -2555,6 +2611,9 @@ export const WriteupsView: React.FC = () => {
                     <span className="mt-1 block line-clamp-2 break-words text-xs text-obsidian-muted" title={item.target_scope || 'Alcance no indicado'}>
                       {item.target_scope || 'Alcance no indicado'}
                     </span>
+                    {matches.length > 0 && <span className="mt-1 block break-words text-[11px] text-obsidian-muted">
+                      Coincide en {matchDescription}
+                    </span>}
                     <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-obsidian-muted tabular-nums">
                       <span>{formatWriteupCount(item.boards_count, 'pizarra', 'pizarras', systemLocale || 'es-MX')}</span>
                       <span aria-hidden="true">·</span>
@@ -2569,7 +2628,7 @@ export const WriteupsView: React.FC = () => {
                   );
                 // [Navegación] La fila abre el informe y anuncia el destino activo.
                 const rowClassName = `w-full border-b border-obsidian-border px-3 py-3 text-left transition-colors ${selected ? 'bg-obsidian-surface text-white' : 'text-obsidian-text'}`;
-                const accessibleLabel = `${item.title}, severidad ${SEVERITY_LABEL[item.severity] || item.severity}, estado ${STATUS_LABEL[item.status] || item.status}, alcance ${item.target_scope || 'no indicado'}`;
+                const accessibleLabel = `${item.title}, severidad ${SEVERITY_LABEL[item.severity] || item.severity}, estado ${STATUS_LABEL[item.status] || item.status}, alcance ${item.target_scope || 'no indicado'}${matchDescription ? `, coincide en ${matchDescription}` : ''}`;
                 return isDevFixtureMode ? (
                   <article key={item.id} aria-label={accessibleLabel} className={rowClassName}>
                     {rowContent}
@@ -2901,11 +2960,9 @@ export const WriteupsView: React.FC = () => {
                   </details>
                 </div>
               </div>
-              {(saveError || localDraftError) && (
-                <div role="status" aria-live="polite" className="writeup-header-save-status">
-                  {saveError ? `No se pudo guardar: ${saveError}` : 'Copia local no disponible; vuelve a la pizarra para reintentar'}
-                </div>
-              )}
+              <div role="status" className="border-t border-obsidian-border py-1 text-xs text-obsidian-muted">
+                {saveStatusMessage}
+              </div>
               {hasLocalCopiesWithoutKey && !dirty && !saving && Object.keys(unsavedBoardIds).length === 0 && (
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-obsidian-border text-xs text-obsidian-muted">
                   <span>Hay una copia local cifrada de este informe.</span>
@@ -3067,6 +3124,10 @@ export const WriteupsView: React.FC = () => {
               </div>
             ) : null}
 
+            {relatedContext?.id === detail.id && <div className="flex items-center justify-between gap-2 border-b border-obsidian-border px-3 py-1 text-xs text-obsidian-muted">
+              <p className="min-w-0 break-words"><strong>Relacionado con {relatedContext.origin}</strong> · {relatedContext.reasons.join(' · ')}</p>
+              <button type="button" aria-label="Cerrar contexto de correlación" onClick={() => setRelatedContext(null)} className="ui-action-icon shrink-0"><X className="h-4 w-4" /></button>
+            </div>}
             <div id="writeup-correlations-panel" hidden={!showCorrelations}>
               <WriteupCorrelationsPanel
                 correlations={reportCorrelations}
@@ -3074,7 +3135,7 @@ export const WriteupsView: React.FC = () => {
                 totalCount={total}
                 hasMore={hasMore}
                 loadingMore={loadingMore}
-                onOpenReport={(reportId) => void handleSelectWriteup(reportId)}
+                onOpenReport={(reportId, reasons) => void handleSelectWriteup(reportId, { origin: title, reasons })}
                 onLoadMore={() => void handleLoadMore()}
               />
             </div>
@@ -3229,7 +3290,14 @@ export const WriteupsView: React.FC = () => {
                   </div>
 
                   <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-3.5 space-y-2">
-                    <label htmlFor="writeup-executive-summary" className="block text-xs font-semibold text-slate-300">Resumen ejecutivo</label>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <label htmlFor="writeup-executive-summary" className="text-xs font-semibold text-obsidian-text">Resumen ejecutivo</label>
+                      {!execSummary.trim() && <button type="button" className="ui-action-secondary" onClick={() => {
+                        setExecSummary('Impacto\n\nAlcance\n\nAcciones recomendadas\n\nPendiente de validar\n');
+                        markDirty();
+                      }}>Insertar estructura</button>}
+                    </div>
+                    <p id="writeup-executive-summary-guide" className="text-xs text-obsidian-muted">Empieza por el impacto. Indica qué se revisó, qué acciones recomiendas y qué falta validar.</p>
                     <textarea
                       id="writeup-executive-summary"
                       rows={3}
@@ -3239,7 +3307,8 @@ export const WriteupsView: React.FC = () => {
                         setExecSummary(e.target.value);
                         markDirty();
                       }}
-                      placeholder="Resumen del proyecto y sus conclusiones principales…"
+                      aria-describedby="writeup-executive-summary-guide"
+                      placeholder={'Impacto\nAlcance\nAcciones recomendadas\nPendiente de validar'}
                       className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-xs text-slate-100"
                     />
                   </div>
@@ -3332,22 +3401,6 @@ export const WriteupsView: React.FC = () => {
                             <option value="baja">Baja</option>
                             <option value="informativa">Informativa</option>
                           </select>
-                          <select
-                            aria-label={`Estado del hallazgo ${f.id || idx + 1}`}
-                            value={f.status}
-                            onChange={(e) => {
-                              const next = [...findings];
-                              next[idx] = { ...f, status: e.target.value as WriteupStructuredFinding['status'] };
-                              setFindings(next);
-                              markDirty();
-                            }}
-                            className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-100"
-                          >
-                            <option value="abierta">Abierta</option>
-                            <option value="mitigada">Mitigada</option>
-                            <option value="riesgo_aceptado">Riesgo aceptado</option>
-                            <option value="falso_positivo">Falso positivo</option>
-                          </select>
                           <div className="flex gap-1">
                             <input
                               type="number"
@@ -3405,6 +3458,23 @@ export const WriteupsView: React.FC = () => {
                           </div>
                         </div>
 
+                        <label className="grid gap-1 text-obsidian-muted">
+                          Impacto
+                          <textarea
+                            rows={2}
+                            aria-label={`Impacto del hallazgo ${f.id || idx + 1}`}
+                            value={f.summary}
+                            maxLength={4000}
+                            onChange={(e) => {
+                              const next = [...findings];
+                              next[idx] = { ...f, summary: e.target.value };
+                              setFindings(next);
+                              markDirty();
+                            }}
+                            placeholder="Impacto y resumen técnico"
+                            className="bg-slate-900 border border-slate-700 rounded p-2 text-slate-100"
+                          />
+                        </label>
                         <div className="space-y-1">
                           <span className="text-slate-300">Evidencias vinculadas</span>
                           {evidenceForFinding(workbench, f.id).length > 0 && <div className="flex flex-wrap gap-1.5 py-1">{evidenceForFinding(workbench, f.id).map((evidence) => <button key={evidence.id} type="button" onClick={() => setWorkbenchPanel({ tab: 'evidence', focusEvidenceId: evidence.id })} className="ui-action-secondary"><ClipboardList className="h-3.5 w-3.5" />{evidence.title || 'Evidencia sin título'}</button>)}</div>}
@@ -3416,10 +3486,48 @@ export const WriteupsView: React.FC = () => {
                                 next[idx] = { ...f, evidence_asset_ids: event.target.checked ? [...ids, asset.id] : ids.filter(id => id !== asset.id) };
                                 setFindings(next); markDirty();
                               }} />
-                              <span className="min-w-0 truncate">{asset.caption || asset.filename}</span>
+                              <span className="min-w-0 break-words">{asset.caption || asset.filename}</span>
                               <button type="button" onClick={() => setLightboxAsset(asset)} className="ui-action-secondary">Ver</button>
                             </label>
                           ))}
+                        </div>
+                        <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+                          <label className="grid gap-1 text-obsidian-muted">
+                            Recomendación
+                            <textarea
+                            rows={2}
+                            aria-label={`Remediación recomendada del hallazgo ${f.id || idx + 1}`}
+                            value={f.remediation}
+                            maxLength={4000}
+                            onChange={(e) => {
+                              const next = [...findings];
+                              next[idx] = { ...f, remediation: e.target.value };
+                              setFindings(next);
+                              markDirty();
+                            }}
+                            placeholder="Remediación recomendada…"
+                            className="bg-slate-900 border border-slate-700 rounded p-2 text-slate-100"
+                          />
+                          </label>
+                          <label className="grid content-start gap-1 text-obsidian-muted">
+                            Estado
+                            <select
+                            aria-label={`Estado del hallazgo ${f.id || idx + 1}`}
+                            value={f.status}
+                            onChange={(e) => {
+                              const next = [...findings];
+                              next[idx] = { ...f, status: e.target.value as WriteupStructuredFinding['status'] };
+                              setFindings(next);
+                              markDirty();
+                            }}
+                            className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-100"
+                          >
+                            <option value="abierta">Abierta</option>
+                            <option value="mitigada">Mitigada</option>
+                            <option value="riesgo_aceptado">Riesgo aceptado</option>
+                            <option value="falso_positivo">Falso positivo</option>
+                          </select>
+                          </label>
                         </div>
                         {/* OWASP / CWE / MITRE ATT&CK Preset Bar + Affected Target */}
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -3544,36 +3652,7 @@ export const WriteupsView: React.FC = () => {
                           </div>
                         )}
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                          <textarea
-                            rows={2}
-                            aria-label={`Resumen técnico del hallazgo ${f.id || idx + 1}`}
-                            value={f.summary}
-                            maxLength={4000}
-                            onChange={(e) => {
-                              const next = [...findings];
-                              next[idx] = { ...f, summary: e.target.value };
-                              setFindings(next);
-                              markDirty();
-                            }}
-                            placeholder="Resumen técnico ({{redact:...}})"
-                            className="bg-slate-900 border border-slate-700 rounded p-2 text-slate-100"
-                          />
-                          <textarea
-                            rows={2}
-                            aria-label={`Remediación recomendada del hallazgo ${f.id || idx + 1}`}
-                            value={f.remediation}
-                            maxLength={4000}
-                            onChange={(e) => {
-                              const next = [...findings];
-                              next[idx] = { ...f, remediation: e.target.value };
-                              setFindings(next);
-                              markDirty();
-                            }}
-                            placeholder="Remediación recomendada…"
-                            className="bg-slate-900 border border-slate-700 rounded p-2 text-slate-100"
-                          />
-                        </div>
+
                       </div>
                     ))}
                   </div>
@@ -3770,7 +3849,8 @@ export const WriteupsView: React.FC = () => {
                             <div key={rev.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5 text-xs">
                               <div className="min-w-0">
                                 <div className="font-medium text-slate-200">
-                                  v{rev.revision_number} · {rev.change_note || 'Revisión'}
+                                  v{rev.revision_number} · {REVISION_TYPE_LABEL[rev.change_type]}
+                        {rev.change_note && <span className="block font-normal text-obsidian-muted">{rev.change_note}</span>}
                                 </div>
                                 <div className="break-all font-mono text-[10px] text-slate-400">
                                   {formatApiDateTime(rev.created_at, systemLocale || 'es-MX')} · {rev.content_hash.slice(0, 12)}
@@ -3895,7 +3975,15 @@ export const WriteupsView: React.FC = () => {
                 lightboxAsset.mime_type.toLowerCase().startsWith('video/') ? (
                   <video src={assetUrls[lightboxAsset.id]} controls autoPlay loop muted className="max-h-[60vh] rounded-lg border border-slate-800" />
                 ) : (
-                  <img src={assetUrls[lightboxAsset.id]} alt={lightboxAsset.filename} className="max-h-[60vh] object-contain rounded-lg border border-slate-800" />
+                  <div className="min-w-0 w-full">
+                    {/* [Control especializado] Alterna entre encuadre y píxeles originales. */}
+                    <button type="button" aria-pressed={expandedEvidenceImage === lightboxAsset.id} onClick={() => setExpandedEvidenceImage(current => current === lightboxAsset.id ? null : lightboxAsset.id)} className="ui-action-toggle mb-2">
+                      {expandedEvidenceImage === lightboxAsset.id ? 'Ajustar a la ventana' : 'Ver tamaño original'}
+                    </button>
+                    <div className="max-h-[60vh] overflow-auto">
+                      <img src={assetUrls[lightboxAsset.id]} alt={lightboxAsset.caption || lightboxAsset.filename} className={expandedEvidenceImage === lightboxAsset.id ? 'max-w-none' : 'mx-auto max-h-[56vh] object-contain'} />
+                    </div>
+                  </div>
                 )
               ) : failedAssetIds[lightboxAsset.id] ? (
                 <p className="text-xs text-rose-300">No se pudo abrir esta evidencia.</p>
@@ -3956,6 +4044,18 @@ export const WriteupsView: React.FC = () => {
               {recoveryCandidates.map((candidate, index) => {
                 const stale = candidate.draft.baseUpdatedAt !== detail.updated_at;
                 const savedAt = candidate.draft.savedAt;
+                const restoredSections = [
+                  candidate.draft.markdown !== (detail.markdown_content || '') && 'Markdown',
+                  (candidate.draft.title !== detail.title || candidate.draft.status !== detail.status || candidate.draft.severity !== detail.severity ||
+                    candidate.draft.cvssScore !== (detail.cvss_score == null ? '' : String(detail.cvss_score)) ||
+                    candidate.draft.cvssVector !== (detail.cvss_vector || '') || candidate.draft.cweId !== (detail.cwe_id || '') ||
+                    candidate.draft.cveId !== (detail.cve_id || '') || candidate.draft.targetScope !== (detail.target_scope || '') ||
+                    candidate.draft.prospectId !== (detail.prospect_id || '') || candidate.draft.projectId !== (detail.project_id || '')) && 'datos del informe',
+                  candidate.draft.executiveSummary !== (detail.executive_summary || '') && 'resumen ejecutivo',
+                  JSON.stringify(candidate.draft.findings) !== JSON.stringify(detail.findings || []) && 'hallazgos',
+                  JSON.stringify(candidate.draft.workbench || EMPTY_WRITEUP_WORKBENCH) !== JSON.stringify(detail.workbench || EMPTY_WRITEUP_WORKBENCH) && 'evidencias y mesa de trabajo',
+                  candidate.draft.boardDrafts?.length && 'pizarras',
+                ].filter(Boolean);
                 const preview = candidate.draft.markdown.replace(/\s+/g, ' ').trim();
                 return (
                   <article key={candidate.storageKey} className="rounded-lg border border-slate-700 bg-slate-900/80 p-4">
@@ -3964,8 +4064,10 @@ export const WriteupsView: React.FC = () => {
                         <h4 className="truncate text-sm font-semibold">{candidate.draft.title || `Copia ${index + 1}`}</h4>
                         <p className="mt-1 text-xs text-slate-400">
                           {savedAt ? `Guardada ${formatApiDateTime(savedAt, systemLocale || 'es-MX')}` : 'Fecha de copia desconocida'}
-                          {' · '}{candidate.legacy ? 'Formato anterior' : 'Esta pestaña'}
+                          {' · '}{candidate.legacy ? 'Formato anterior' : 'Este navegador'}
                         </p>
+                        <p className="mt-1 text-xs text-obsidian-muted">Servidor: {formatApiDateTime(detail.updated_at, systemLocale || 'es-MX')}</p>
+                        <p className="mt-1 text-xs text-obsidian-muted">Contenido de la copia: {restoredSections.join(', ') || 'datos del informe'}</p>
                         {!!candidate.draft.boardDrafts?.length && <p className="mt-2 text-xs text-indigo-200">{candidate.draft.boardDrafts.length} pizarra(s) pendiente(s): {candidate.draft.boardDrafts.map(board => board.title).join(', ')}</p>}
                         {stale && <p className="mt-2 flex items-center gap-1 text-xs text-amber-200"><AlertTriangle className="h-3.5 w-3.5" />El informe del servidor cambió; habrá que comparar antes de guardar.</p>}
                         <p className="mt-2 line-clamp-2 break-words text-xs text-slate-300">{preview.slice(0, 240) || 'El borrador no contiene texto Markdown.'}</p>
@@ -4077,7 +4179,8 @@ export const WriteupsView: React.FC = () => {
               </div>
             </div>
             {diffRevision && <div className="flex flex-wrap gap-2 px-4 py-2 border-b border-slate-800">
-              <span className="mr-auto self-center text-xs text-slate-400">v{diffRevision.revision_number} · {diffRevision.change_note || 'Revisión'} · {formatApiDateTime(diffRevision.created_at, systemLocale || 'es-MX')}</span>
+              <span className="mr-auto self-center text-xs text-slate-400">v{diffRevision.revision_number} · {REVISION_TYPE_LABEL[diffRevision.change_type]} · {formatApiDateTime(diffRevision.created_at, systemLocale || 'es-MX')}
+                {diffRevision.snapshot?.fields?.status === 'entregado' && ' · Estado al guardar: Entregado'}</span>
               {/* [Estado seleccionable] Alterna entre diferencias y documento renderizado. */}
               <button type="button" onClick={() => setRevisionView('diff')} aria-pressed={revisionView === 'diff'} className="ui-action-toggle">Cambios</button>
               <button type="button" onClick={() => setRevisionView('preview')} aria-pressed={revisionView === 'preview'} className="ui-action-toggle">Vista previa</button>
@@ -4093,7 +4196,8 @@ export const WriteupsView: React.FC = () => {
                       </label>
                       <label className="text-[11px] text-slate-300">Tipo
                         <select value={revisionType} onChange={event => setRevisionType(event.target.value as WriteupRevision['change_type'] | '')} className="mt-1 min-h-10 w-full rounded bg-slate-950 px-2 text-xs text-white">
-                          <option value="">Todos</option><option value="initial">Inicial</option><option value="autosave">Autoguardado</option><option value="manual">Manual</option><option value="milestone">Importante</option><option value="restore">Restauración</option><option value="edit">Edición</option><option value="evidence">Evidencia</option><option value="board">Pizarra</option><option value="citation">Cita</option>
+                          <option value="">Todos</option>
+                          {Object.entries(REVISION_TYPE_LABEL).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                         </select>
                       </label>
                       <label className="text-[11px] text-slate-300">Autor
@@ -4110,13 +4214,15 @@ export const WriteupsView: React.FC = () => {
                   </details>
                 </form>
                 <p className="mt-3 text-xs font-semibold text-slate-300">Versiones ({revisions.length})</p>
+                {detail.status === 'entregado' && <p className="mt-1 text-xs text-obsidian-muted">Estado del informe: Entregado</p>}
                 {/* [Estado seleccionable] Elegir una versión activa la comparación del historial. */}
                 {revisionTree.map(([key, group], index) => <details key={key} open={index === 0} className="mt-2">
                   <summary className="ui-action-secondary w-full cursor-pointer list-none justify-between rounded px-2 text-xs font-medium [&::-webkit-details-marker]:hidden">{group.label} <span className="text-obsidian-muted">({group.revisions.length})</span></summary>
                   <div className="mt-1 divide-y divide-slate-800">
                     {group.revisions.map(rev => <button key={rev.id} type="button" onClick={() => void selectRevision(rev)} aria-pressed={rev.id === diffRevision?.id} className="ui-action-toggle w-full justify-start px-2 py-2 text-left text-xs">
                       <span className="min-w-0 break-words">
-                        <span className="block font-medium">v{rev.revision_number} · {rev.change_note || 'Revisión'}</span>
+                        <span className="block font-medium">v{rev.revision_number} · {REVISION_TYPE_LABEL[rev.change_type]}
+                        {rev.change_note && <span className="block font-normal text-obsidian-muted">{rev.change_note}</span>}</span>
                         <span className="mt-1 block text-slate-400">{rev.created_by_name || 'Sistema'} · {formatApiDateTime(rev.created_at, systemLocale || 'es-MX')}</span>
                       </span>
                     </button>)}
@@ -4124,6 +4230,15 @@ export const WriteupsView: React.FC = () => {
                 </details>)}
                 {!revisionLoading && revisions.length === 0 && <p className="mt-3 text-xs text-slate-400">No hay versiones con estos filtros.</p>}
                 {revisions.length > 0 && !revisionEnd && <button type="button" onClick={() => void loadMoreRevisions()} disabled={revisionLoading} className="ui-action-secondary w-full mt-2">{revisionLoading ? 'Cargando…' : 'Cargar versiones anteriores'}</button>}
+                {detail.export_logs.length > 0 && <details className="mt-3 border-t border-obsidian-border pt-2">
+                  <summary className="ui-action-secondary w-full cursor-pointer text-xs">Archivos generados ({detail.export_logs.length})</summary>
+                  <ul className="mt-1 divide-y divide-obsidian-border text-xs text-obsidian-muted">
+                    {detail.export_logs.map(log => <li key={log.id} className="py-2">
+                      {log.export_format.toUpperCase()} · {log.redacted_for_client ? 'Copia para cliente' : 'Copia interna'}
+                      <span className="block">{formatApiDateTime(log.created_at, systemLocale || 'es-MX')}</span>
+                    </li>)}
+                  </ul>
+                </details>}
               </nav>
               {!diffRevision ? <div className="flex flex-1 items-center justify-center p-8 text-center text-sm text-slate-400">Selecciona una versión para ver los cambios.</div> : revisionDetailLoading ? <div role="status" className="flex flex-1 items-center justify-center p-8 text-sm text-slate-300">Cargando la versión completa…</div> : revisionView === 'preview' ? <div className="flex-1 overflow-auto p-4">
                 {diffRevision.snapshot ? <div className="mb-6 space-y-0 text-sm text-slate-200">
@@ -4165,13 +4280,20 @@ export const WriteupsView: React.FC = () => {
                     </figure>)}</div>
                   </section>}
                 </div> : <p className="mb-4 rounded border border-amber-800/60 bg-amber-950/30 p-3 text-sm text-amber-200">Esta revisión antigua solo conserva el Markdown. Las versiones creadas ahora también incluyen los datos, hallazgos, pizarras, citas y evidencias.</p>}
-                <MarkdownRichPreview markdown={diffRevision.markdown_content || ''} redactPreview={false} boards={diffRevision.snapshot?.boards ?? detail.boards} assets={diffRevision.snapshot?.assets ?? detail.assets} assetObjectUrls={assetUrls} /></div> : <div className="flex-1 overflow-auto p-3 font-mono text-xs space-y-0.5">
+                <MarkdownRichPreview markdown={diffRevision.markdown_content || ''} redactPreview={false} boards={diffRevision.snapshot?.boards ?? detail.boards} assets={diffRevision.snapshot?.assets ?? detail.assets} assetObjectUrls={assetUrls} /></div> : <div className="flex min-h-0 flex-1 flex-col">
+              {diffBlocks.length > 0 && <div className="flex flex-wrap items-center gap-2 border-b border-obsidian-border px-3 py-1 text-xs">
+                <button type="button" disabled={diffChange === null || diffChange === 0} onClick={() => jumpToRevisionChange((diffChange ?? 0) - 1)} className="ui-action-secondary">Cambio anterior</button>
+                <button type="button" disabled={diffChange === diffBlocks.length - 1} onClick={() => jumpToRevisionChange((diffChange ?? -1) + 1)} className="ui-action-secondary">{diffChange === null ? 'Primer cambio' : 'Siguiente cambio'}</button>
+                <span role="status" className="text-obsidian-muted">{diffChange === null ? `${diffBlocks.length} bloques con cambios` : `Cambio ${diffChange + 1} de ${diffBlocks.length}`}</span>
+              </div>}
+              <div ref={diffViewportRef} className="min-h-0 flex-1 space-y-0.5 overflow-auto p-3 font-mono text-xs">
               {changedRevisionSections.length > 0 && <p className="mb-3 rounded bg-amber-950/50 p-2 font-sans text-amber-200">También cambiaron: {changedRevisionSections.join(', ')}. Abre Vista previa para consultar la versión guardada.</p>}
               {diffLoading && <p role="status" className="py-3 font-sans text-slate-300">Calculando cambios…</p>}
               {diffError && <div role="alert" className="py-3 font-sans text-rose-300">{diffError} <button type="button" onClick={() => setDiffAttempt(value => value + 1)} className="ui-action-secondary">Reintentar</button></div>}
               {revisionDiff.slice(diffPage * 300, (diffPage + 1) * 300).map((ln, i) => (
                 <div
-                  key={i}
+                  key={diffPage * 300 + i}
+                  data-diff-line={diffPage * 300 + i}
                   className={`px-2 py-0.5 rounded whitespace-pre-wrap break-all ${
                     ln.kind === 'added'
                       ? 'bg-emerald-950/60 text-emerald-300'
@@ -4186,7 +4308,8 @@ export const WriteupsView: React.FC = () => {
                   {ln.text || ' '}
                 </div>
               ))}
-              {revisionDiff.length > 300 && <div className="flex items-center gap-3 py-3 font-sans text-slate-200"><button type="button" disabled={diffPage === 0} onClick={() => setDiffPage(page => page - 1)} className="ui-action-secondary">Anterior</button><span>Bloque {diffPage + 1} de {Math.ceil(revisionDiff.length / 300)}</span><button type="button" disabled={(diffPage + 1) * 300 >= revisionDiff.length} onClick={() => setDiffPage(page => page + 1)} className="ui-action-secondary">Siguiente</button></div>}
+              {revisionDiff.length > 300 && <div className="flex items-center gap-3 py-3 font-sans text-slate-200"><button type="button" disabled={diffPage === 0} onClick={() => { setDiffChange(null); setDiffPage(page => page - 1); }} className="ui-action-secondary">Anterior</button><span>Bloque {diffPage + 1} de {Math.ceil(revisionDiff.length / 300)}</span><button type="button" disabled={(diffPage + 1) * 300 >= revisionDiff.length} onClick={() => { setDiffChange(null); setDiffPage(page => page + 1); }} className="ui-action-secondary">Siguiente</button></div>}
+              </div>
               </div>}
             </div>
           </div>

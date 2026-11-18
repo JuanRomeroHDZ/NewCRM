@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   Anchor,
   Binary,
@@ -159,18 +159,38 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
   const [kitFeedback, setKitFeedback] = useState('');
   const [splitView, setSplitView] = useState<'split' | 'edit' | 'preview'>('edit');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const previewRef = useRef<HTMLDivElement>(null);
+  const readingPosition = useRef<{ edit?: number; preview?: number }>({});
+  const [caretLine, setCaretLine] = useState(1);
+  const [previewHeadingIndex, setPreviewHeadingIndex] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const workspaceRef = useRef<HTMLDivElement>(null);
   const [sideBySideAvailable, setSideBySideAvailable] = useState(false);
   const editorSessionRestoredRef = useRef(false);
 
+  const rememberScroll = (pane: 'edit' | 'preview', element: HTMLElement) => {
+    const range = element.scrollHeight - element.clientHeight;
+    readingPosition.current[pane] = range > 0 ? element.scrollTop / range : undefined;
+  };
+
   const captureEditorSession = (textarea: HTMLTextAreaElement) => {
+    rememberScroll('edit', textarea);
     onEditorSessionChange?.({
       selectionStart: textarea.selectionStart,
       selectionEnd: textarea.selectionEnd,
       scrollTop: textarea.scrollTop,
     });
   };
+
+  useLayoutEffect(() => {
+    const positions = readingPosition.current;
+    const panes = { edit: textareaRef.current, preview: previewRef.current };
+    for (const pane of ['edit', 'preview'] as const) {
+      const element = panes[pane];
+      const fraction = positions[pane] ?? positions[pane === 'edit' ? 'preview' : 'edit'];
+      if (element && fraction !== undefined) element.scrollTop = fraction * (element.scrollHeight - element.clientHeight);
+    }
+  }, [splitView, sideBySideAvailable]);
 
   useEffect(() => {
     const textarea = textareaRef.current;
@@ -370,12 +390,31 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
   const docMetrics = useMemo(() => computeWriteupMetrics(markdown), [markdown]);
   const outlineItems = useMemo(() => extractMarkdownOutline(markdown), [markdown]);
   const outlineObjects = useMemo(() => extractMarkdownObjects(markdown), [markdown]);
+  const activeHeadingLine = splitView === 'preview' ? outlineItems[previewHeadingIndex]?.line :
+    [...outlineItems].reverse().find(heading => heading.line <= caretLine)?.line;
+  const handlePreviewScroll = (element: HTMLDivElement) => {
+    rememberScroll('preview', element);
+    if (activeTray !== 'outline') return;
+    const top = element.getBoundingClientRect().top + 32;
+    const headings = Array.from(element.querySelectorAll('h1,h2,h3,h4,h5,h6'));
+    const next = headings.findIndex(heading => heading.getBoundingClientRect().top > top);
+    setPreviewHeadingIndex(next < 0 ? Math.max(0, headings.length - 1) : Math.max(0, next - 1));
+  };
+  useEffect(() => {
+    if (activeTray === 'outline' && splitView === 'preview' && previewRef.current) handlePreviewScroll(previewRef.current);
+  }, [activeTray, splitView]);
   const showGroup = (group: Exclude<ToolGroupFilter, 'all'>) => toolFilter === 'all' || toolFilter === group;
   const toggleTray = (tray: InlineTray) => setActiveTray((prev) => (prev === tray ? 'none' : tray));
 
   const jumpToLine = (lineNum: number) => {
+    if (splitView === 'preview') {
+      const headingIndex = outlineItems.findIndex(heading => heading.line === lineNum);
+      const heading = previewRef.current?.querySelectorAll('h1,h2,h3,h4,h5,h6')[headingIndex];
+      heading?.scrollIntoView({ block: 'start' });
+      if (heading) setPreviewHeadingIndex(headingIndex);
+      return;
+    }
     const ta = textareaRef.current;
-    if (splitView === 'preview') setSplitView('edit');
     if (!ta) return;
     const lines = markdown.split('\n');
     const idx = Math.max(0, Math.min(lines.length - 1, lineNum - 1));
@@ -384,6 +423,7 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
     requestAnimationFrame(() => {
       ta.focus();
       ta.setSelectionRange(charPos, charPos + (lines[idx]?.length || 0));
+      setCaretLine(idx + 1);
       ta.scrollTop = Math.max(0, (idx / Math.max(1, lines.length)) * ta.scrollHeight - 60);
     });
   };
@@ -481,7 +521,14 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
   return (
     <div onKeyDownCapture={handleWorkspaceKeyDown} className="writeup-markdown-editor writeup-editor-container flex min-w-0 max-w-full flex-col h-full min-h-[300px] bg-obsidian-surface border border-obsidian-border rounded-xl overflow-visible">
       {/* Keep view controls reachable while the editing tools use a scrollable row. */}
-      <div className="relative z-20 flex min-w-0 flex-nowrap items-center gap-1 overflow-x-auto border-b border-obsidian-border bg-obsidian-panel/95 px-2 py-1" onScroll={(event) => event.currentTarget.querySelectorAll('details[open]').forEach((menu) => menu.removeAttribute('open'))}>
+      <div className="relative z-20 flex min-w-0 flex-nowrap items-center gap-1 overflow-x-auto border-b border-obsidian-border bg-obsidian-panel/95 px-2 py-1"
+        onFocusCapture={(event) => {
+          if (!(event.target instanceof HTMLElement) || event.target.closest('[data-writeup-toolbar-popover]')) return;
+          const bounds = event.currentTarget.getBoundingClientRect();
+          const focus = event.target.getBoundingClientRect();
+          if (focus.left < bounds.left || focus.right > bounds.right) event.currentTarget.scrollBy({ left: focus.left < bounds.left ? focus.left - bounds.left - 8 : focus.right - bounds.right + 8 });
+        }}
+        onScroll={(event) => event.currentTarget.querySelectorAll('details[open]').forEach((menu) => menu.removeAttribute('open'))}>
         <fieldset disabled={readOnly} className="contents">
         {splitView !== 'preview' && <label className="relative inline-flex shrink-0 items-center">
             <span className="sr-only">Categoría de herramientas</span>
@@ -740,7 +787,7 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
         </div>}
         </fieldset>
         <div className="ml-auto flex shrink-0 items-center gap-1">
-          <button type="button" onClick={() => { if (splitView === 'preview') setSplitView('edit'); toggleTray('outline'); }} aria-label="Índice del informe" aria-expanded={activeTray === 'outline' && splitView !== 'preview'} title="Índice del informe" aria-pressed={activeTray === 'outline' && splitView !== 'preview'} className="ui-action-toggle"><ListTree className="h-4 w-4" aria-hidden="true" /></button>
+          <button type="button" onClick={() => toggleTray('outline')} aria-label="Índice del informe" aria-expanded={activeTray === 'outline'} title="Índice del informe" aria-pressed={activeTray === 'outline'} className="ui-action-toggle"><ListTree className="h-4 w-4" aria-hidden="true" /></button>
           <button
             type="button"
             onClick={() => setRedactPreview((v) => !v)}
@@ -764,7 +811,7 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
               <button
                 key={value}
                 type="button"
-                onClick={() => setSplitView(value)}
+                onClick={() => { if (value === 'preview') setOutlineKind('headings'); setSplitView(value); }}
                 aria-pressed={splitView === value}
                 aria-label={`Vista del informe: ${label}`}
                 title={label}
@@ -928,7 +975,7 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
 
       </>}
       </fieldset>
-      {splitView !== 'preview' && activeTray === 'outline' && (
+      {activeTray === 'outline' && (
         <div className="px-3 py-2.5 bg-obsidian-panel border-b border-obsidian-border space-y-2 text-xs max-h-56 overflow-y-auto" aria-label="Índice interno del informe">
           <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-obsidian-muted">
             <span className="font-semibold text-obsidian-text">Índice del informe</span>
@@ -941,9 +988,34 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
             </div>
           </div>
           <div role="group" aria-label="Tipo de índice" className="flex flex-wrap gap-1">
-            {([['headings', `Secciones (${outlineItems.length})`], ['table', `Tablas (${outlineObjects.filter((item) => item.kind === 'table').length})`], ['image', `Imágenes (${outlineObjects.filter((item) => item.kind === 'image').length})`]] as const).map(([value, label]) => <button key={value} type="button" aria-pressed={outlineKind === value} onClick={() => setOutlineKind(value)} className="ui-action-toggle px-2 text-xs">{label}</button>)}
+            {([['headings', `Secciones (${outlineItems.length})`], ['table', `Tablas (${outlineObjects.filter((item) => item.kind === 'table').length})`], ['image', `Imágenes (${outlineObjects.filter((item) => item.kind === 'image').length})`]] as const).filter(([kind]) => splitView !== 'preview' || kind === 'headings').map(([value, label]) => <button key={value} type="button" aria-pressed={outlineKind === value} onClick={() => setOutlineKind(value)} className="ui-action-toggle px-2 text-xs">{label}</button>)}
           </div>
-          {outlineKind === 'headings' ? (outlineItems.length ? <ul>{outlineItems.map((h, i) => <li key={`${h.line}-${i}`} style={{ paddingLeft: `${(h.level - 1) * 12}px` }}><button type="button" onClick={() => jumpToLine(h.line)} className="ui-menu-item w-full text-left"><span className="shrink-0 font-mono text-obsidian-muted">H{h.level}</span><span className="min-w-0 flex-1 truncate">{h.text}</span><span className="shrink-0 font-mono text-obsidian-muted">L{h.line}</span></button></li>)}</ul> : <p className="text-obsidian-muted">Agrega encabezados con # para navegar el informe.</p>) : (outlineObjects.some((item) => item.kind === outlineKind) ? <ul>{outlineObjects.filter((item) => item.kind === outlineKind).map((item, i) => <li key={`${item.line}-${i}`}><button type="button" onClick={() => jumpToLine(item.line)} className="ui-menu-item w-full text-left"><span className="min-w-0 flex-1 truncate">{item.text}</span><span className="shrink-0 font-mono text-obsidian-muted">L{item.line}</span></button></li>)}</ul> : <p className="text-obsidian-muted">No se encontraron {outlineKind === 'table' ? 'tablas' : 'imágenes'} en el Markdown.</p>)}
+          {outlineKind === 'headings' ? (
+            outlineItems.length ? <ul>
+              {outlineItems.map((heading, index) => {
+                const current = activeHeadingLine === heading.line;
+                const label = redactPreview
+                  ? heading.text.replace(/\{\{redact:.*?\}\}|\[\[redact:.*?\]\]/gi, '[Censurado]')
+                  : heading.text;
+                return <li key={`${heading.line}-${index}`} style={{ paddingLeft: `${(heading.level - 1) * 12}px` }}>
+                  <button type="button" onClick={() => jumpToLine(heading.line)} aria-current={current ? 'location' : undefined} className={`ui-menu-item w-full text-left ${current ? 'bg-obsidian-surface font-semibold' : ''}`}>
+                    <span className="shrink-0 font-mono text-obsidian-muted">H{heading.level}</span>
+                    <span className="min-w-0 flex-1 truncate">{label}</span>
+                    <span className="shrink-0 font-mono text-obsidian-muted">L{heading.line}</span>
+                  </button>
+                </li>;
+              })}
+            </ul> : <p className="text-obsidian-muted">Agrega encabezados con # para navegar el informe.</p>
+          ) : (
+            outlineObjects.some(item => item.kind === outlineKind) ? <ul>
+              {outlineObjects.filter(item => item.kind === outlineKind).map((item, index) => <li key={`${item.line}-${index}`}>
+                <button type="button" onClick={() => jumpToLine(item.line)} className="ui-menu-item w-full text-left">
+                  <span className="min-w-0 flex-1 truncate">{item.text}</span>
+                  <span className="shrink-0 font-mono text-obsidian-muted">L{item.line}</span>
+                </button>
+              </li>)}
+            </ul> : <p className="text-obsidian-muted">No se encontraron {outlineKind === 'table' ? 'tablas' : 'imágenes'} en el Markdown.</p>
+          )}
         </div>
       )}
 
@@ -1194,14 +1266,17 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
               onKeyDown={handleKeyDown}
               onPaste={handlePaste}
               onDrop={handleDrop}
-              onSelect={(event) => captureEditorSession(event.currentTarget)}
+              onSelect={(event) => {
+                captureEditorSession(event.currentTarget);
+                setCaretLine(event.currentTarget.value.slice(0, event.currentTarget.selectionStart).split('\n').length);
+              }}
               onScroll={(event) => captureEditorSession(event.currentTarget)}
               onBlur={(event) => captureEditorSession(event.currentTarget)}
               aria-label="Contenido Markdown del informe"
               lang="es"
               spellCheck={false}
               placeholder="Escribe el informe. Pega imágenes con Ctrl+V; Ctrl+S guarda; Ctrl+B/I/K aplica formato."
-            className={`flex-1 w-full min-h-[280px] bg-obsidian-surface text-obsidian-text font-mono text-base sm:text-sm leading-6 p-3.5 sm:p-4 resize-none focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-obsidian-accent ${readOnly ? 'cursor-text' : ''}`}
+            className={`mx-auto flex-1 w-full max-w-[52rem] min-h-[280px] bg-obsidian-surface text-obsidian-text font-mono text-base sm:text-sm leading-6 p-3.5 sm:p-4 resize-none focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-obsidian-accent ${readOnly ? 'cursor-text' : ''}`}
             />
             {assets.some((asset) => asset.mime_type.startsWith('image/') && markdown.includes(`asset://${asset.id}`) && assetObjectUrls[asset.id]) && (
               <div className="flex max-h-32 gap-3 overflow-auto border-t border-obsidian-border bg-obsidian-panel/60 p-2" aria-label="Imágenes incluidas en el informe">
@@ -1226,7 +1301,8 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
         )}
 
         {splitView !== 'edit' && (
-          <div className="min-w-0 max-w-full overflow-y-auto min-h-[360px] p-4 sm:p-5 bg-obsidian-panel/30">
+          <div ref={previewRef} onScroll={(event) => handlePreviewScroll(event.currentTarget)} className="min-w-0 max-w-full overflow-y-auto min-h-[360px] bg-obsidian-panel/30">
+            <div className="mx-auto max-w-[52rem] p-4 sm:p-5">
             <MarkdownRichPreview
               markdown={markdown}
               redactPreview={redactPreview}
@@ -1235,6 +1311,7 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
               assetObjectUrls={assetObjectUrls}
               onInspectAsset={onInspectAsset}
             />
+            </div>
           </div>
         )}
       </div>

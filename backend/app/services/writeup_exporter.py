@@ -6,6 +6,7 @@ import hashlib
 import html as html_lib
 import io
 import json
+import math
 import re
 import shutil
 import subprocess
@@ -114,6 +115,8 @@ class ExportBundleContext:
     organization_name: str | None = None
     font_size_pt: int = 11
     rendered_diagrams: dict[str, str] = field(default_factory=dict)
+    client_name: str | None = None
+    version_at: datetime | None = None
 
 
 def _diagram_sha256(source: str) -> str:
@@ -191,6 +194,61 @@ def _asset_to_data_uri(asset: dict[str, Any]) -> str:
     raw = decrypt_asset_bytes(asset["encrypted_blob"])
     b64 = base64.b64encode(raw).decode("ascii")
     return f"data:{asset['mime_type']};base64,{b64}"
+
+
+def frame_legacy_board_snapshot(board: dict[str, Any], citations: list[dict[str, Any]]) -> str | None:
+    """Fit snapshots generated before the canvas exporter framed their contents."""
+    svg = board.get("svg_snapshot")
+    if not svg:
+        return svg
+
+    legacy_root = re.match(r'(<svg xmlns="http://www.w3.org/2000/svg") viewBox="0 0 \d+ \d+" width="\d+" height="\d+">', svg)
+    legacy_background = '<rect width="100%" height="100%" fill="#080A0A" rx="12"/>'
+    if not legacy_root or legacy_background not in svg:
+        return svg
+    try:
+        scene = json.loads(board.get("scene_json") or "{}")
+        if not isinstance(scene, dict):
+            return svg
+        elements = scene.get("elements") or []
+        positions = scene.get("citationPositions") or {}
+        bounds = []
+
+        def point(x: float, y: float) -> None:
+            if math.isfinite(x) and math.isfinite(y):
+                bounds.append((x, y))
+
+        for element in elements:
+            x, y = element["x"], element["y"]
+            point(x, y)
+            label_width = len(str(element.get("text") or element.get("assetId") or "")) * 10
+            box_width = max(element.get("w", 0), 24)
+            if element.get("type") in ("text", "image"):
+                box_width = max(box_width, label_width + 96)
+            point(x + box_width, y + max(element.get("h", 0), 24))
+            for px, py in element.get("points") or []:
+                point(px, py)
+            if element.get("type") == "arrow":
+                x2, y2 = element.get("x2", x), element.get("y2", y)
+                half = label_width / 2
+                point(x2, y2)
+                point((x + x2) / 2 - half, (y + y2) / 2 - 80)
+                point((x + x2) / 2 + half, (y + y2) / 2)
+        for index, citation in enumerate(citations):
+            position = positions.get(citation["id"]) or {"x": 840, "y": 36 + index * 105}
+            x, y = position["x"], position["y"]
+            point(x, y)
+            point(x + 310, y + 86)
+    except (ValueError, TypeError, AttributeError, KeyError, OverflowError):
+        return svg
+    if not bounds:
+        return svg
+    xs, ys = zip(*bounds)
+    left, top = math.floor(min(xs)) - 32, math.floor(min(ys)) - 32
+    width, height = math.ceil(max(xs)) - left + 32, math.ceil(max(ys)) - top + 32
+    root = f'{legacy_root[1]} viewBox="{left} {top} {width} {height}" width="{width}" height="{height}">'
+    background = f'<rect x="{left}" y="{top}" width="{width}" height="{height}" fill="#080A0A" rx="12"/>'
+    return root + svg[legacy_root.end():].replace(legacy_background, background, 1)
 
 
 def _board_to_svg_data_uri(board: dict[str, Any]) -> str:
@@ -767,6 +825,18 @@ def _build_citations_html(ctx: ExportBundleContext) -> str:
     )
 
 
+def _cover_details(ctx: ExportBundleContext) -> list[tuple[str, str]]:
+    version_at = ctx.version_at
+    if version_at is not None and version_at.tzinfo is not None:
+        version_at = version_at.astimezone(timezone.utc)
+    details = [
+        ("Cliente", apply_redaction_markers(ctx.client_name or "", ctx.redact_for_client)),
+        ("Alcance", apply_redaction_markers(ctx.target_scope or "", ctx.redact_for_client)),
+        ("Versión", version_at.strftime("%d/%m/%Y · %H:%M UTC") if version_at else ""),
+    ]
+    return [(label, value) for label, value in details if value.strip()]
+
+
 def build_standalone_html_document(
     ctx: ExportBundleContext,
     *,
@@ -807,13 +877,17 @@ def build_standalone_html_document(
     target_scope = html_lib.escape(apply_redaction_markers(ctx.target_scope or "No especificado", ctx.redact_for_client))
     font_size_pt = max(8, min(18, int(ctx.font_size_pt or 11)))
     org_name = html_lib.escape(ctx.organization_name or settings.WRITEUP_ORGANIZATION_NAME)
+    cover_details = "".join(
+        f"<p><strong>{label}:</strong> {html_lib.escape(value)}</p>"
+        for label, value in _cover_details(ctx)
+    )
     cover_html = f"""
   <section class="cover" aria-label="Portada del informe">
     <header class="letterhead"><span>{org_name}</span>{watermark_block}</header>
     <div class="cover-content">
       <p class="cover-subtitle">INFORME DE SEGURIDAD</p>
       <h1>{html_lib.escape(ctx.title)}</h1>
-      <p>Alcance: {target_scope}</p>
+      {cover_details}
     </div>
     <footer class="cover-footer">{redacted_badge}<br>Generado: {generated_at} · Estado: {html_lib.escape(ctx.status)} · Severidad: {html_lib.escape(ctx.severity.upper())}</footer>
   </section>"""
@@ -876,7 +950,11 @@ def build_standalone_html_document(
   .mode-pill {{ margin-left: 12px; color: #555; }}
   .meta-grid {{ display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px 16px; padding: 0 0 14px; border-bottom: 1px solid #bbb; font-size: .9em; overflow-wrap: anywhere; }}
   .scope-meta {{ grid-column: span 3; }}
-  .section-box {{ margin: 28px 0; }}
+  .section-box {{ margin: 24pt 0; }}
+  .report-preamble .section-box p {{ white-space: pre-wrap; }}
+  .cover-content p:not(.cover-subtitle) {{ margin: 4pt 0; font: 11pt "Liberation Sans", sans-serif; }}
+  body :is(h1, h2, h3, h4, h5, h6, caption) {{ break-after: avoid; }}
+  p, li {{ orphans: 3; widows: 3; }}
   a {{ color: #075c4c; text-decoration-thickness: 1px; text-underline-offset: 3px; }}
   .toc {{ margin: 0; padding: 0; font: .92em/1.7 "Liberation Sans", sans-serif; }}
   .toc ul {{ margin: 0; padding-left: 1.25em; }}
@@ -889,7 +967,7 @@ def build_standalone_html_document(
   .markdown-body h4 {{ font-size: 1.15em; margin: 1.1em 0 .35em; break-after: avoid; }}
   .markdown-body h5 {{ font-size: 1.05em; margin: 1em 0 .3em; break-after: avoid; }}
   .markdown-body h6 {{ font-size: .95em; margin: 1em 0 .3em; break-after: avoid; }}
-  .meta-table, table {{ width: 100%; table-layout: fixed; border-collapse: collapse; margin: 14px 0; font-size: .82em; }}
+  .meta-table, table {{ width: 100%; table-layout: fixed; border-collapse: collapse; margin: 14px 0; font-size: .88em; }}
   th, td {{ border-bottom: 1px solid #bbb; padding: 6px 5px; text-align: left; vertical-align: top; overflow-wrap: anywhere; word-break: break-word; }}
   th {{ border-top: 1px solid #555; border-bottom: 1px solid #555; font-weight: 700; }}
   caption {{ caption-side: top; text-align: left; font-weight: 400; padding: 0 0 7px; color: #3f4650; font-size: .9em; line-height: 1.45; }}
@@ -900,12 +978,13 @@ def build_standalone_html_document(
   tr, figure {{ break-inside: avoid; }}
   pre {{ background: #f4f4f4; border: 1px solid #ccc; color: #171717; padding: 10px; overflow-x: auto; font-size: 9pt; white-space: pre-wrap; overflow-wrap: anywhere; }}
   code, kbd {{ font-family: "DejaVu Sans Mono", monospace; font-size: .9em; }}
-  pre code {{ padding: 0; }}
+  pre code {{ padding: 0; font-size: inherit; }}
   details {{ border-bottom: 1px solid #ccc; padding: 8px 0; margin: 10px 0; }}
   summary {{ cursor: pointer; font-weight: 700; }}
   blockquote {{ border-left: 2px solid #777; margin: 12px 0; padding: 0 14px; color: #444; }}
   img, video {{ max-width: 100%; height: auto; margin: 10px auto; display: block; }}
-  figcaption {{ color: #555; font-size: 9pt; text-align: center; }}
+  figure {{ margin: 14pt 0; }}
+  figcaption {{ color: #4b5563; font: 9pt/1.45 "Liberation Sans", sans-serif; text-align: center; }}
   .stale {{ color: #7c2d12; font-size: 9pt; font-weight: 700; }}
   .writeup-label {{ display: inline-block; font-family: "Liberation Sans", sans-serif; font-weight: 700; padding: .1em .45em; border: 1px solid currentColor; border-radius: 3px; }}
   .writeup-label-jade {{ color: #075c4c; }}
@@ -916,7 +995,7 @@ def build_standalone_html_document(
   .writeup-label-pequena {{ font-size: .8em; }}
   .writeup-label-normal {{ font-size: .95em; }}
   .writeup-label-grande {{ font-size: 1.15em; }}
-  @media print {{ body {{ padding: 0; }} .cover {{ min-height: 220mm; }} a {{ color: inherit; }} .document-index-page {{ break-after: page; page-break-after: always; }} }}
+  @media print {{ body {{ padding: 0; }} figure img {{ max-height: 190mm; object-fit: contain; }} .cover {{ min-height: 220mm; }} a {{ color: inherit; }} .document-index-page {{ break-after: page; page-break-after: always; }} }}
 </style>
 </head>
 <body>
@@ -1196,9 +1275,16 @@ def _build_pdf_artifact(ctx: ExportBundleContext) -> tuple[bytes, str, str]:
 def _add_png_picture(document: Any, png_bytes: bytes, caption: str | None = None) -> Any:
     buf = io.BytesIO(png_bytes)
     buf.seek(0)
-    document.add_picture(buf, width=Inches(5.8))
+    section = document.sections[-1]
+    max_width = section.page_width - section.left_margin - section.right_margin
+    max_height = section.page_height - section.top_margin - section.bottom_margin - Inches(1)
+    with PILImage.open(buf) as image:
+        width, height = image.size
+    buf.seek(0)
+    document.add_picture(buf, width=min(max_width, int(max_height * width / height)))
     picture_paragraph = document.paragraphs[-1]
     if caption:
+        picture_paragraph.paragraph_format.keep_with_next = True
         _add_docx_caption_text(document, caption)
     return picture_paragraph
 
@@ -1334,10 +1420,11 @@ def _append_docx_table(
     if not normalized:
         return
     if caption:
-        _add_docx_caption_text(document, caption)
+        _add_docx_caption_text(document, caption).paragraph_format.keep_with_next = True
     columns = max(len(row) for row in normalized)
     table = document.add_table(rows=len(normalized), cols=columns)
     table.style = "Table Grid"
+    table.rows[0]._tr.get_or_add_trPr().append(docx.oxml.OxmlElement("w:tblHeader"))
     for row_index, row in enumerate(normalized):
         for column_index in range(columns):
             cell = table.cell(row_index, column_index)
@@ -1347,7 +1434,7 @@ def _append_docx_table(
                     run.bold = True
             for paragraph in cell.paragraphs:
                 for run in paragraph.runs:
-                    run.font.size = Pt(max(7, round(font_size_pt * 0.8, 1)))
+                    run.font.size = Pt(max(7, round(font_size_pt * 0.88, 1)))
     if bookmark:
         _add_docx_bookmark(table.cell(0, 0).paragraphs[0], bookmark[0], bookmark[1])
 
@@ -1385,6 +1472,7 @@ def _build_docx_artifact(ctx: ExportBundleContext) -> tuple[bytes, str, str]:
     normal.font.name = "Liberation Serif"
     normal.font.size = Pt(font_size_pt)
     normal.paragraph_format.space_after = Pt(6)
+    normal.paragraph_format.line_spacing = 1.35
     heading_scales = (1.75, 1.5, 1.3, 1.15, 1.05, 0.95)
     for heading_level, scale in enumerate(heading_scales, start=1):
         style_name = f"Heading {heading_level}"
@@ -1392,8 +1480,13 @@ def _build_docx_artifact(ctx: ExportBundleContext) -> tuple[bytes, str, str]:
         style.font.name = "Liberation Serif"
         style.font.size = Pt(round(font_size_pt * scale, 1))
         style.font.bold = True
+        style.paragraph_format.keep_with_next = True
         style.font.color.rgb = RGBColor(23, 23, 23)
-    document.styles["Title"].font.name = "Liberation Serif"
+    title_style = document.styles["Title"]
+    title_style.font.name = "Liberation Serif"
+    title_style.font.size = Pt(30)
+    title_style.font.color.rgb = RGBColor(23, 23, 23)
+    title_style.paragraph_format.keep_with_next = True
     letterhead = document.add_paragraph()
     brand = letterhead.add_run(ctx.organization_name or settings.WRITEUP_ORGANIZATION_NAME)
     brand.font.name = "Liberation Sans"
@@ -1414,7 +1507,10 @@ def _build_docx_artifact(ctx: ExportBundleContext) -> tuple[bytes, str, str]:
     label_run.font.size = Pt(10)
     label_run.font.color.rgb = RGBColor(7, 92, 76)
     document.add_heading(ctx.title, level=0)
-    document.add_paragraph("Alcance: " + apply_redaction_markers(ctx.target_scope or "No especificado", ctx.redact_for_client))
+    for field_name, field_value in _cover_details(ctx):
+        paragraph = document.add_paragraph()
+        paragraph.add_run(f"{field_name}: ").bold = True
+        paragraph.add_run(field_value)
     cover_footer = document.add_paragraph()
     cover_footer.paragraph_format.space_before = Pt(120)
     cover_footer.add_run("Modo cliente (censurado)" if ctx.redact_for_client else "Reporte técnico interno")
@@ -1830,15 +1926,16 @@ def _build_docx_artifact(ctx: ExportBundleContext) -> tuple[bytes, str, str]:
 
     if ctx.findings:
         document.add_heading("Matriz de Hallazgos", level=1)
-        f_table = document.add_table(rows=len(ctx.findings) + 1, cols=4)
-        f_table.style = "Table Grid"
-        for col_idx, col_name in enumerate(["ID", "Hallazgo", "Severidad", "CVSS"]):
-            f_table.cell(0, col_idx).text = col_name
-        for r_idx, item in enumerate(ctx.findings, start=1):
-            f_table.cell(r_idx, 0).text = str(item.get("id", ""))
-            f_table.cell(r_idx, 1).text = str(item.get("title", ""))
-            f_table.cell(r_idx, 2).text = str(item.get("severity", "")).upper()
-            f_table.cell(r_idx, 3).text = str(item.get("cvss_score") if item.get("cvss_score") is not None else "-")
+        finding_rows = [["ID", "Hallazgo", "Severidad", "CVSS", "Estado"]]
+        for item in ctx.findings:
+            finding_rows.append([
+                str(item.get("id", "")),
+                apply_redaction_markers(str(item.get("title", "")), ctx.redact_for_client),
+                str(item.get("severity", "")).upper(),
+                str(item.get("cvss_score") if item.get("cvss_score") is not None else "-"),
+                str(item.get("status", "")).replace("_", " ").capitalize(),
+            ])
+        _append_docx_table(document, finding_rows, font_size_pt=font_size_pt)
 
     if ctx.citations:
         document.add_heading("Citaciones Pizarra ↔ Documento", level=1)

@@ -103,6 +103,9 @@ export const WriteupExportModal: React.FC<WriteupExportModalProps> = ({ writeup,
     [writeup.markdown_content]
   );
   const supportsDocumentIndexes = ['pdf', 'docx', 'html', 'md', 'md_zip'].includes(selectedFormat);
+  const hasCover = ['pdf', 'docx', 'html'].includes(selectedFormat);
+  const isPackaged = selectedFormat === 'md_zip';
+  const includesLinkedMedia = hasCover || isPackaged;
   const supportsTypography = ['pdf', 'docx', 'html'].includes(selectedFormat);
   const publicationReview = useMemo(() => reviewPublication(writeup), [writeup]);
 
@@ -160,7 +163,7 @@ export const WriteupExportModal: React.FC<WriteupExportModalProps> = ({ writeup,
             <p id={descriptionId} className="mt-1 text-xs text-obsidian-muted">El archivo se genera en esta computadora y no se envía a servicios externos.</p>
           </div>
           {/* [Icono] Cierra el diálogo sin exportar. */}
-          <button ref={firstFormatRef} type="button" onClick={requestClose} disabled={exporting} aria-label="Cerrar ventana de exportación" className="ui-action-icon shrink-0">
+          <button type="button" onClick={requestClose} disabled={exporting} aria-label="Cerrar ventana de exportación" className="ui-action-icon shrink-0">
             <X className="w-4 h-4" aria-hidden="true" />
           </button>
         </div>
@@ -178,32 +181,47 @@ export const WriteupExportModal: React.FC<WriteupExportModalProps> = ({ writeup,
             </ul>
             <p className="mt-2 text-obsidian-muted">La búsqueda es orientativa: revisa el contenido y las imágenes manualmente antes de compartir.</p>
           </section>
-          {/* [Estado seleccionable] El formato activo se anuncia con aria-pressed. */}
-          <div className="grid grid-cols-1 min-[360px]:grid-cols-2 sm:grid-cols-4 gap-2.5">
-            {EXPORT_OPTIONS.map((opt) => {
-              const Icon = opt.icon;
-              const active = selectedFormat === opt.format;
-              return (
-                <button
-                  key={opt.format}
-                  type="button"
-                  onClick={() => { setSelectedFormat(opt.format); setLastSha(null); setErrorMsg(null); }}
-                  disabled={exporting}
-                  aria-pressed={active}
-                  className="ui-action-toggle min-w-0 w-full flex-col items-stretch gap-0 p-3 text-left"
-                >
-                  <div className="flex items-center justify-between mb-1.5">
-                    <Icon className={`w-4 h-4 ${active ? 'text-obsidian-accent' : 'text-obsidian-muted'}`} aria-hidden="true" />
-                    <span className="text-[10px] font-mono text-obsidian-muted">{opt.ext}</span>
-                  </div>
-                  <div className="text-xs font-semibold">{opt.label}</div>
-                  <div className="text-[11px] text-obsidian-muted mt-0.5 leading-snug">{opt.desc}</div>
-                </button>
-              );
-            })}
-          </div>
+          {/* [Estado seleccionable] Separa los documentos de los datos para intercambio. */}
+          {[
+            { label: 'Documentos', formats: EXPORT_OPTIONS.slice(0, 5) },
+            { label: 'Intercambio de datos', formats: EXPORT_OPTIONS.slice(5) },
+          ].map(({ label, formats }) => (
+            <section key={label} aria-label={label}>
+              <h3 className="mb-1 text-xs font-semibold text-obsidian-text">{label}</h3>
+              <div className="grid gap-x-4 sm:grid-cols-2">
+                {formats.map((opt) => {
+                  const Icon = opt.icon;
+                  return (
+                    <button key={opt.format} type="button"
+                      ref={opt.format === 'pdf' ? firstFormatRef : undefined}
+                      onClick={() => { setSelectedFormat(opt.format); setLastSha(null); setErrorMsg(null); }}
+                      disabled={exporting} aria-pressed={selectedFormat === opt.format}
+                      className="ui-action-toggle min-w-0 w-full justify-start px-2 py-2 text-left"
+                    >
+                      <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+                      <span className="min-w-0 flex-1">
+                        <span className="block font-medium">{opt.label}</span>
+                        <span className="block text-xs font-normal text-obsidian-muted">{opt.desc}</span>
+                      </span>
+                      <span className="shrink-0 font-mono text-xs text-obsidian-muted">{opt.ext}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+          ))}
 
-          <div className="grid grid-cols-1 gap-3 border-t border-obsidian-border py-4 sm:grid-cols-2">
+          <section aria-label="Contenido de la entrega" className="border-y border-obsidian-border py-3">
+            <h3 className="mb-2 text-xs font-semibold text-obsidian-text">Contenido de la entrega</h3>
+            <dl className="grid gap-x-6 gap-y-2 text-xs text-obsidian-muted sm:grid-cols-2">
+              <div><dt className="text-obsidian-text">Destino</dt><dd>{redactForClient ? 'Copia para cliente' : 'Uso interno'}</dd></div>
+              <div><dt className="text-obsidian-text">Portada</dt><dd>{hasCover ? 'Incluida' : 'No aplica'}</dd></div>
+              <div><dt className="text-obsidian-text">Índices solicitados</dt><dd>{supportsDocumentIndexes ? [includeToc && 'Contenido', includeFigures && 'Figuras', includeTables && 'Tablas'].filter(Boolean).join(', ') || 'Ninguno' : 'No aplican'}</dd></div>
+              <div><dt className="text-obsidian-text">Evidencias y anexos</dt><dd>{isPackaged ? 'El ZIP empaqueta los adjuntos y las pizarras del informe.' : includesLinkedMedia ? 'Se incorporan las figuras referenciadas compatibles con el formato.' : 'El formato no incorpora archivos adjuntos.'}</dd></div>
+            </dl>
+          </section>
+
+          <div className="grid grid-cols-1 gap-3 pb-4 sm:grid-cols-2">
             {supportsTypography && <label className="flex items-center gap-2 text-xs text-obsidian-text">
               Tamaño del texto
               <select value={fontSizePt} onChange={(event) => setFontSizePt(Number(event.target.value))} className="min-h-[44px] rounded-md border border-obsidian-borderLight bg-obsidian-surface px-2 text-white">

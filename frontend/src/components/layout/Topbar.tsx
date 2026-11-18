@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { useVault } from '../../context/VaultContext';
 import { InfoTooltip } from '../common/InfoTooltip';
@@ -12,19 +12,6 @@ interface TopbarProps {
 export const Topbar: React.FC<TopbarProps> = ({ onMenuClick, menuTriggerRef, isMenuOpen }) => {
   const { activeSection, activeScope, setActiveScope } = useVault();
   const isC2Section = activeSection.startsWith('c2_');
-  const [saveNotice, setSaveNotice] = useState('');
-  useEffect(() => {
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const onSaved = (event: Event) => {
-      const notice = (event as CustomEvent<{ message: string; persistent?: boolean }>).detail;
-      setSaveNotice(notice.message);
-      if (timer) clearTimeout(timer);
-      if (!notice.persistent) timer = setTimeout(() => setSaveNotice(''), 5000);
-    };
-    window.addEventListener('writeup_saved_notice', onSaved);
-    return () => { window.removeEventListener('writeup_saved_notice', onSaved); if (timer) clearTimeout(timer); };
-  }, []);
-
   const sectionTitles: Record<string, { title: string; compactTitle: string; tooltip?: string }> = {
     dashboard: { title: 'Resumen General', compactTitle: 'Inicio', tooltip: 'Vista rápida de tus correos principales, seguridad, prospectos, gastos e ingresos reales.' },
     help: { title: 'Guía y primeros pasos', compactTitle: 'Guía' },
@@ -110,7 +97,6 @@ export const Topbar: React.FC<TopbarProps> = ({ onMenuClick, menuTriggerRef, isM
         )}
       </div>
 
-      {activeSection === 'writeups' && saveNotice && <span role="status" className="min-w-0 max-w-full break-words text-xs text-emerald-300">{saveNotice}</span>}
       {!isC2Section && (
         <label className="relative shrink-0">
           <span className="sr-only">Filtrar información por ámbito</span>

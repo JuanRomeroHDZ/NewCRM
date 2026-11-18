@@ -5,6 +5,7 @@ import unicodedata
 import base64
 import zlib
 from datetime import datetime
+from typing import Any
 from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import HTTPException, status
@@ -21,7 +22,7 @@ from app.models.writeups import (
 )
 from app.security.crypto import decrypt_note, encrypt_note
 from app.services.workshop_sanitizer import sanitize_svg_content
-from app.services.writeup_exporter import ExportBundleContext
+from app.services.writeup_exporter import ExportBundleContext, frame_legacy_board_snapshot
 from app.services.writeup_workspace import format_evidence_sections
 
 
@@ -374,9 +375,18 @@ async def build_export_context(
         }
         for a in assets_rows
     }
-    boards_by_id = {b["id"]: b for b in detail["boards"]}
     board_titles = {b["id"]: b["title"] for b in detail["boards"]}
     citations = [{**c, "board_title": board_titles.get(c["board_id"], "Pizarra")} for c in detail["citations"]]
+    citations_by_board: dict[str, list[dict[str, Any]]] = {}
+    for citation in citations:
+        citations_by_board.setdefault(citation["board_id"], []).append(citation)
+    boards_by_id = {
+        board["id"]: {
+            **board,
+            "svg_snapshot": frame_legacy_board_snapshot(board, citations_by_board.get(board["id"], [])),
+        }
+        for board in detail["boards"]
+    }
     sanitized_diagrams: dict[str, str] = {}
     if rendered_diagrams:
         for key, raw_svg in rendered_diagrams.items():
@@ -387,6 +397,9 @@ async def build_export_context(
     from app.services.config_service import get_runtime_config
     runtime_cfg = await get_runtime_config(db)
     writeup_defaults = runtime_cfg.get("writeup_defaults") or {}
+
+    client = await db.get(Prospect, writeup.prospect_id) if writeup.prospect_id else None
+    client_name = client.company_name if client and not client.is_deleted else None
 
     return ExportBundleContext(
         writeup_id=writeup.id,
@@ -424,6 +437,8 @@ async def build_export_context(
         watermark_text=watermark_text or writeup_defaults.get("watermark_default"),
         organization_name=writeup_defaults.get("organization_name"),
         rendered_diagrams=sanitized_diagrams,
+        client_name=client_name,
+        version_at=writeup.updated_at,
     )
 
 

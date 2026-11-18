@@ -158,14 +158,6 @@
   flex: 0 0 1px;
   background: #334155;
 }
-.writeup-header-save-status:empty { display: none; }
-.writeup-header-save-status:not(:empty) {
-  flex: 1 1 100%;
-  max-width: 34rem;
-  color: #fda4af;
-  font-size: 0.75rem;
-  overflow-wrap: anywhere;
-}
 .writeup-header-stale-count {
   display: inline-flex;
   min-height: 32px;
@@ -209,12 +201,6 @@
   height: 16px;
   flex: 0 0 16px;
   stroke-width: 1.8;
-}
-.writeup-header-save-status {
-  max-width: min(34rem, 100%);
-  color: #fda4af;
-  font-size: 0.75rem;
-  overflow-wrap: anywhere;
 }
 .writeup-markdown-editor [role="region"][aria-label^="Herramientas de edición"] button,
 .writeup-markdown-editor [role="region"][aria-label^="Todas las herramientas"] button {

@@ -136,11 +136,13 @@ const getDataset = (dataset: WriteupDevDataset): WriteupSummary[] => {
 
 export const getWriteupDevPage = (
   dataset: WriteupDevDataset,
-  { limit, offset, q, severity }: { limit: number; offset: number; q?: string; severity?: string },
+  { limit, offset, q, severity, status, project_id }: { limit: number; offset: number; q?: string; severity?: string; status?: string; project_id?: string },
 ): WriteupDevPage => {
   const query = q?.trim().toLocaleLowerCase('es-MX') || '';
   const filtered = getDataset(dataset).filter((item) => {
     if (severity && item.severity !== severity) return false;
+    if (status && item.status !== status) return false;
+    if (project_id && item.project_id !== project_id) return false;
     if (!query) return true;
     return [item.title, item.target_scope, item.cwe_id, item.cve_id, ...item.tags]
       .some((value) => value?.toLocaleLowerCase('es-MX').includes(query));

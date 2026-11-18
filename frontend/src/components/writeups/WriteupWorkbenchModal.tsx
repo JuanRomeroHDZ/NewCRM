@@ -54,6 +54,24 @@ export const WriteupWorkbenchModal: React.FC<WriteupWorkbenchModalProps> = ({
   focusEvidenceId, onChange, onInsertSnippet, onNavigateFinding, onInspectAsset, onClose,
 }) => {
   const [tab, setTab] = useState<WorkbenchTab>(initialTab);
+  const [evidenceSearch, setEvidenceSearch] = useState('');
+  const [evidenceType, setEvidenceType] = useState('');
+  const evidenceQuery = evidenceSearch.trim().toLowerCase();
+  const visibleEvidence = value.evidence.map((item, index) => ({ item, index })).filter(({ item }) => {
+    const linkedAssets = assets.filter(asset => item.asset_ids.includes(asset.id));
+    const linkedFindings = findings.filter(finding => item.finding_ids.includes(finding.id));
+    const names = [item.title, ...item.finding_ids, ...linkedFindings.map(finding => finding.title),
+      ...linkedAssets.flatMap(asset => [asset.filename, asset.caption || ''])];
+    const includesDiagram = evidenceType === 'diagram' && /(?:board:\/\/|```mermaid\b)/i.test(item.result);
+    const matchesType = evidenceType === '' || includesDiagram || linkedAssets.some(asset => {
+      const mime = asset.mime_type.toLowerCase();
+      if (evidenceType === 'diagram') return mime === 'image/svg+xml';
+      if (evidenceType === 'image') return mime.startsWith('image/') && mime !== 'image/svg+xml';
+      return !mime.startsWith('image/');
+    });
+    return matchesType && (!evidenceQuery || names.some(name => name.toLowerCase().includes(evidenceQuery)));
+  });
+
   const [snippets, setSnippets] = useState<WriteupSnippet[]>([]);
   const [snippetsLoading, setSnippetsLoading] = useState(false);
   const [snippetError, setSnippetError] = useState('');
@@ -81,7 +99,11 @@ export const WriteupWorkbenchModal: React.FC<WriteupWorkbenchModalProps> = ({
   }, [writeup.id]);
 
   useEffect(() => {
-    if (focusEvidenceId) setTab('evidence');
+    if (focusEvidenceId) {
+      setTab('evidence');
+      setEvidenceSearch('');
+      setEvidenceType('');
+    }
   }, [focusEvidenceId]);
 
   useEffect(() => {
@@ -101,6 +123,8 @@ export const WriteupWorkbenchModal: React.FC<WriteupWorkbenchModalProps> = ({
   });
   const addEvidence = () => {
     if (value.evidence.length >= 200) return;
+    setEvidenceSearch('');
+    setEvidenceType('');
     updateWorkbench({ ...value, evidence: [createEvidence(), ...value.evidence] });
   };
   const addMachine = () => {
@@ -177,7 +201,17 @@ export const WriteupWorkbenchModal: React.FC<WriteupWorkbenchModalProps> = ({
           {tab === 'evidence' && <div className="space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2"><div><h3 className="text-sm font-semibold text-white">Bloques de evidencia</h3><p className="mt-0.5 text-xs text-obsidian-muted">Guarda el contexto reproducible junto con cada salida o captura.</p></div><button type="button" disabled={readOnly || value.evidence.length >= 200} onClick={addEvidence} className="ui-action-primary"><Plus className="h-4 w-4" />Añadir evidencia</button></div>
             {value.evidence.length === 0 && <p className={panelClass + ' text-sm text-obsidian-muted'}>Todavía no hay bloques. Cada uno puede guardar objetivo, fecha, comando, resultado, capturas y hallazgos relacionados.</p>}
-            {value.evidence.map((item, index) => <article id={`workbench-evidence-${item.id}`} key={item.id} className={`${panelClass} space-y-3 ${focusEvidenceId === item.id ? 'border-obsidian-accent' : ''}`}>
+            {value.evidence.length > 0 && <>
+              <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+                {/* [Menú y selector] Filtra por nombre, hallazgo o tipo de archivo asociado. */}
+                <input type="search" aria-label="Buscar evidencias por nombre o hallazgo" placeholder="Buscar por nombre o hallazgo…" value={evidenceSearch} onChange={event => setEvidenceSearch(event.target.value)} className={fieldClass} />
+                <select aria-label="Tipo de archivo de evidencia" value={evidenceType} onChange={event => setEvidenceType(event.target.value)} className={fieldClass}>
+                  <option value="">Todos los tipos</option><option value="image">Imágenes</option><option value="diagram">Diagramas</option><option value="other">Otros archivos</option>
+                </select>
+              </div>
+              {visibleEvidence.length === 0 && <p role="status" className="text-sm text-obsidian-muted">No hay evidencias con estos filtros.</p>}
+            </>}
+            {visibleEvidence.map(({ item, index }) => <article id={`workbench-evidence-${item.id}`} key={item.id} className={`${panelClass} space-y-3 ${focusEvidenceId === item.id ? 'border-obsidian-accent' : ''}`}>
               <div className="flex items-start gap-2"><span className="mt-2 font-mono text-[10px] text-obsidian-muted/70">E{String(index + 1).padStart(2, '0')}</span><div className="grid min-w-0 flex-1 grid-cols-1 gap-2 sm:grid-cols-2"><label className="sm:col-span-2"><span className="mb-1 block text-[11px] text-obsidian-muted">Título</span><input disabled={readOnly} className={fieldClass} maxLength={200} value={item.title} placeholder="Enumeración de puertos" onChange={(event) => patchEvidence(item.id, { title: event.target.value })} /></label><label><span className="mb-1 block text-[11px] text-obsidian-muted">Objetivo</span><input disabled={readOnly} className={fieldClass} maxLength={255} value={item.target} placeholder="IP, dominio o máquina" onChange={(event) => patchEvidence(item.id, { target: event.target.value })} /></label><label><span className="mb-1 block text-[11px] text-obsidian-muted">Fecha y hora</span><input disabled={readOnly} type="datetime-local" className={fieldClass} value={toLocalDateTimeInput(item.captured_at)} onChange={(event) => patchEvidence(item.id, { captured_at: event.target.value ? new Date(event.target.value).toISOString() : null })} /></label><label><span className="mb-1 block text-[11px] text-obsidian-muted">Comando</span><textarea disabled={readOnly} className={`${fieldClass} min-h-20 font-mono`} maxLength={6000} value={item.command} placeholder="nmap -sV {{ip}}" onChange={(event) => patchEvidence(item.id, { command: event.target.value })} /></label><label><span className="mb-1 block text-[11px] text-obsidian-muted">Resultado</span><textarea disabled={readOnly} className={`${fieldClass} min-h-20 font-mono`} maxLength={20000} value={item.result} placeholder="Puertos y servicios encontrados" onChange={(event) => patchEvidence(item.id, { result: event.target.value })} /></label></div><button type="button" disabled={readOnly} onClick={() => updateWorkbench({ ...value, evidence: value.evidence.filter((evidence) => evidence.id !== item.id) })} aria-label="Eliminar evidencia" title="Eliminar evidencia" className={dangerIconButtonClass}><Trash2 className="h-4 w-4" /></button></div>
               <div className="grid grid-cols-1 gap-3 border-t border-obsidian-border pt-3 sm:grid-cols-2">
                 <fieldset disabled={readOnly} className="space-y-1.5"><legend className="mb-1 text-[11px] font-medium text-obsidian-muted">Censurar en exportación para cliente</legend>{([['redact_target', 'Objetivo'], ['redact_command', 'Comando'], ['redact_result', 'Resultado']] as const).map(([key, label]) => <label key={key} className="flex items-center gap-2 text-xs text-obsidian-muted"><input type="checkbox" checked={item[key]} onChange={(event) => patchEvidence(item.id, { [key]: event.target.checked })} />{label}</label>)}</fieldset>
