@@ -14,6 +14,7 @@ from app.models import (
     PasswordHistory, PaymentMethod, PlatformAccount, Prospect, SecureResource, UserSettings,
     Writeup, WriteupAsset, WriteupBoard, WriteupCitation, WriteupRevision, WriteupSnippet,
 )
+from app.models.reports import ReportDocumentAsset
 from app.security.crypto import (
     BYTES_ENC_PREFIX,
     NOTE_ENC_PREFIX,
@@ -45,7 +46,7 @@ NOTE_FIELDS = {
     WriteupRevision: ("encrypted_markdown", "encrypted_snapshot"),
     WriteupSnippet: ("encrypted_template",),
 }
-MODELS = tuple(dict.fromkeys((*SECRET_FIELDS, *NOTE_FIELDS, WriteupAsset)))
+MODELS = tuple(dict.fromkeys((*SECRET_FIELDS, *NOTE_FIELDS, WriteupAsset, ReportDocumentAsset)))
 
 
 def _decrypt_verified(value: str, old_key: bytes) -> str:
@@ -124,7 +125,7 @@ async def rekey_vault(db: AsyncSession, old_key: bytes, new_key: bytes) -> None:
                 setattr(row, field, _rekey_secret(getattr(row, field), old_key, new_key))
             for field in NOTE_FIELDS.get(model, ()):
                 setattr(row, field, _rekey_note(getattr(row, field), old_key, new_key))
-            if model is WriteupAsset:
+            if model in (WriteupAsset, ReportDocumentAsset):
                 row.encrypted_blob = _rekey_blob(row.encrypted_blob, old_key, new_key)
             if model is EmailAccount:
                 row.encrypted_backup_codes = _rekey_items(row.encrypted_backup_codes, "code", old_key, new_key, flagged=True)

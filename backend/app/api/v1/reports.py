@@ -1,5 +1,7 @@
+import json
+import ipaddress
 import re
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, File, HTTPException, Request, Response, UploadFile, status
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.concurrency import run_in_threadpool
@@ -7,7 +9,7 @@ from starlette.concurrency import run_in_threadpool
 from app.database import get_db
 from app.models import utc_now
 from app.models.core import User
-from app.models.reports import ReportCanvas, ReportDocument
+from app.models.reports import ReportCanvas, ReportDocument, ReportDocumentAsset
 from app.schemas.reports import (
     ReportCanvasCreate,
     ReportCanvasDetailOut,
@@ -17,17 +19,24 @@ from app.schemas.reports import (
     ReportDocumentDetailOut,
     ReportDocumentSummaryOut,
     ReportDocumentUpdate,
+    ReportDocumentAssetOut,
+    ReportRecoveryCiphertextOut,
+    ReportRecoveryCiphertextRequest,
+    ReportRecoveryEncryptRequest,
+    ReportRecoverySourceOut,
     TypstCompileRequest,
     TypstCompileResponse,
 )
-from app.security.crypto import decrypt_note, encrypt_note
+from app.security.crypto import decrypt_bytes, decrypt_note, encrypt_note
 from app.security.tokens import require_vault_unlocked
+from app.config import settings
 from app.services.core_auth import get_current_user_from_token
 from app.services.typst_compiler import (
     DEFAULT_TYPST_TEMPLATE,
     compile_typst_source,
     get_typst_status,
 )
+from app.services.writeup_media import optimize_and_encrypt_image
 
 router = APIRouter(prefix="/reports", tags=["reports"], dependencies=[Depends(require_vault_unlocked)])
 
@@ -87,6 +96,7 @@ def _canvas_summary(canvas: ReportCanvas) -> ReportCanvasSummaryOut:
         id=canvas.id,
         title=canvas.title,
         element_count=canvas.element_count,
+        has_svg_snapshot=bool(canvas.encrypted_svg_snapshot),
         linked_document_id=canvas.linked_document_id,
         prospect_id=canvas.prospect_id,
         project_id=canvas.project_id,
@@ -102,6 +112,7 @@ def _canvas_detail(canvas: ReportCanvas) -> ReportCanvasDetailOut:
         id=canvas.id,
         title=canvas.title,
         element_count=canvas.element_count,
+        has_svg_snapshot=bool(canvas.encrypted_svg_snapshot),
         scene_json=scene_json or "{}",
         linked_document_id=canvas.linked_document_id,
         prospect_id=canvas.prospect_id,
@@ -204,6 +215,171 @@ async def create_document(
     return _doc_detail(doc)
 
 
+def _document_asset_out(asset: ReportDocumentAsset) -> dict:
+    return {
+        "id": asset.id,
+        "document_id": asset.document_id,
+        "filename": asset.filename,
+        "mime_type": asset.mime_type,
+        "original_size_bytes": asset.original_size_bytes,
+        "optimized_size_bytes": asset.optimized_size_bytes,
+        "width": asset.width,
+        "height": asset.height,
+        "sha256": asset.sha256,
+        "exif_stripped": asset.exif_stripped,
+        "created_at": asset.created_at,
+    }
+
+
+async def _get_document_or_404(db: AsyncSession, doc_id: str) -> ReportDocument:
+    document = (
+        await db.execute(
+            select(ReportDocument).where(
+                ReportDocument.id == doc_id,
+                ReportDocument.is_deleted == False,  # noqa: E712
+            )
+        )
+    ).scalar_one_or_none()
+    if not document:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Documento no encontrado.")
+    return document
+
+
+@router.post(
+    "/documents/{doc_id}/assets",
+    response_model=ReportDocumentAssetOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def upload_document_asset(
+    doc_id: str,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    _user: User | None = Depends(require_report_access),
+):
+    await _get_document_or_404(db, doc_id)
+    raw_bytes = await file.read(settings.WRITEUP_MAX_IMAGE_BYTES + 1)
+    if len(raw_bytes) > settings.WRITEUP_MAX_IMAGE_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"La imagen excede el límite configurado de {settings.WRITEUP_MAX_IMAGE_BYTES} bytes.",
+        )
+    optimized = optimize_and_encrypt_image(raw_bytes, file.filename)
+    asset = ReportDocumentAsset(
+        document_id=doc_id,
+        filename=optimized.filename,
+        mime_type=optimized.mime_type,
+        original_size_bytes=optimized.original_size_bytes,
+        optimized_size_bytes=optimized.optimized_size_bytes,
+        width=optimized.width,
+        height=optimized.height,
+        sha256=optimized.sha256,
+        exif_stripped=True,
+        encrypted_blob=optimized.encrypted_blob,
+    )
+    db.add(asset)
+    await db.commit()
+    await db.refresh(asset)
+    return _document_asset_out(asset)
+
+
+@router.get("/documents/{doc_id}/assets/{asset_id}")
+async def get_document_asset(
+    doc_id: str,
+    asset_id: str,
+    db: AsyncSession = Depends(get_db),
+    _user: User | None = Depends(require_report_access),
+):
+    await _get_document_or_404(db, doc_id)
+    asset = (
+        await db.execute(
+            select(ReportDocumentAsset).where(
+                ReportDocumentAsset.document_id == doc_id,
+                ReportDocumentAsset.id == asset_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if not asset:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Imagen no encontrada.")
+    try:
+        raw_bytes = decrypt_bytes(asset.encrypted_blob)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="No se pudo descifrar la imagen.",
+        ) from exc
+    return Response(
+        content=raw_bytes,
+        media_type=asset.mime_type,
+        headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"},
+    )
+
+
+@router.post(
+    "/documents/{doc_id}/recovery/encrypt",
+    response_model=ReportRecoveryCiphertextOut,
+)
+async def encrypt_document_recovery(
+    doc_id: str,
+    payload: ReportRecoveryEncryptRequest,
+    db: AsyncSession = Depends(get_db),
+    _user: User | None = Depends(require_report_access),
+):
+    await _get_document_or_404(db, doc_id)
+    # Encrypt a non-empty envelope so empty documents can also be recovered.
+    envelope = json.dumps(
+        {
+            "version": 2,
+            "title": payload.title,
+            "status": payload.status,
+            "prospect_id": payload.prospect_id,
+            "project_id": payload.project_id,
+            "source": payload.source,
+        },
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+    ciphertext = encrypt_note(envelope)
+    if not ciphertext:
+        raise HTTPException(status_code=500, detail="No se pudo cifrar la copia local.")
+    return {"ciphertext": ciphertext}
+
+
+@router.post(
+    "/documents/{doc_id}/recovery/decrypt",
+    response_model=ReportRecoverySourceOut,
+)
+async def decrypt_document_recovery(
+    doc_id: str,
+    payload: ReportRecoveryCiphertextRequest,
+    db: AsyncSession = Depends(get_db),
+    _user: User | None = Depends(require_report_access),
+):
+    await _get_document_or_404(db, doc_id)
+    if not payload.ciphertext.startswith("enc:v1:"):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="La copia local no es válida.")
+    decrypted = decrypt_note(payload.ciphertext)
+    if not decrypted:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="No se pudo abrir la copia local con la clave actual de la bóveda.",
+        )
+    try:
+        envelope = json.loads(decrypted)
+    except (TypeError, json.JSONDecodeError) as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="La copia local está dañada.") from exc
+    source = envelope.get("source") if isinstance(envelope, dict) else None
+    if not isinstance(source, str):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="La copia local está dañada.")
+    return {
+        "version": envelope.get("version") if envelope.get("version") in {1, 2} else 1,
+        "source": source,
+        "title": envelope.get("title") if isinstance(envelope.get("title"), str) else None,
+        "status": envelope.get("status") if envelope.get("status") in {"borrador", "en_revision", "finalizado", "entregado"} else None,
+        "prospect_id": envelope.get("prospect_id") if isinstance(envelope.get("prospect_id"), str) else None,
+        "project_id": envelope.get("project_id") if isinstance(envelope.get("project_id"), str) else None,
+    }
+
+
 CANVAS_REF_RE = re.compile(r"canvas://([A-Za-z0-9-]+)(?:\.svg)?")
 
 
@@ -233,6 +409,13 @@ async def _resolve_canvas_assets(source: str, db: AsyncSession) -> tuple[str, di
             extra_files[filename] = svg_text.encode("utf-8")
             id_to_filename[row.id] = filename
 
+    missing = [canvas_id for canvas_id in canvas_ids if canvas_id not in id_to_filename]
+    if missing:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Guarda el lienzo en Lienzos antes de insertarlo en el informe.",
+        )
+
     def _replace(match: re.Match[str]) -> str:
         cid = match.group(1)
         return id_to_filename.get(cid, match.group(0))
@@ -241,13 +424,119 @@ async def _resolve_canvas_assets(source: str, db: AsyncSession) -> tuple[str, di
     return resolved_source, extra_files
 
 
+ASSET_REF_RE = re.compile(r"asset://([A-Za-z0-9-]+)(?:\.[A-Za-z0-9]+)?")
+REDACT_MARKER_RE = re.compile(r"\{\{redact:([\s\S]*?)\}\}", re.IGNORECASE)
+IPV4_REDACT_RE = re.compile(
+    r"\b(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)\b"
+)
+IPV6_CANDIDATE_RE = re.compile(r"(?<![0-9A-Fa-f:])(?:[0-9A-Fa-f]{0,4}:){2,7}[0-9A-Fa-f]{0,4}(?![0-9A-Fa-f:])")
+SECRET_FIELD_REDACT_RE = re.compile(
+    r"(?i)(\b(?:password|passwd|secret|client[_-]?secret|api[_-]?key|access[_-]?token|refresh[_-]?token|token)\s*[:=]\s*)([\"'])([^\"'\r\n]*)(\2)"
+)
+SECRET_FIELD_BARE_REDACT_RE = re.compile(
+    r"(?i)(\b(?:password|passwd|secret|client[_-]?secret|api[_-]?key|access[_-]?token|refresh[_-]?token|token)\s*[:=]\s*)([^\s,;&\"'\]\)\}]+)"
+)
+AUTH_HEADER_REDACT_RE = re.compile(
+    r"(?i)(\bauthorization\s*:\s*(?:basic|bearer)\s+)([^\s\"']+)"
+)
+
+
+def prepare_typst_source(source: str, redact_for_client: bool = False) -> str:
+    """Unwrap editor markers for preview, or replace them and common secrets for client exports."""
+    if not source:
+        return ""
+
+    source = REDACT_MARKER_RE.sub(
+        lambda match: "[CENSURADO]" if redact_for_client else match.group(1),
+        source,
+    )
+    if not redact_for_client:
+        return source
+
+    source = AUTH_HEADER_REDACT_RE.sub(r"\1[CENSURADO]", source)
+    source = SECRET_FIELD_REDACT_RE.sub(r"\1\2[CENSURADO]\4", source)
+    source = SECRET_FIELD_BARE_REDACT_RE.sub(r"\1[CENSURADO]", source)
+    source = IPV4_REDACT_RE.sub("[IP CENSURADA]", source)
+
+    def redact_ipv6(match: re.Match[str]) -> str:
+        try:
+            ipaddress.IPv6Address(match.group(0))
+        except ipaddress.AddressValueError:
+            return match.group(0)
+        return "[IP CENSURADA]"
+
+    return IPV6_CANDIDATE_RE.sub(redact_ipv6, source)
+
+
+async def _resolve_document_assets(
+    document_id: str | None, source: str, db: AsyncSession
+) -> tuple[str, dict[str, bytes]]:
+    """Materialize encrypted asset:// references as temporary Typst input files."""
+    asset_ids = sorted(set(ASSET_REF_RE.findall(source)))
+    if not asset_ids:
+        return source, {}
+    if not document_id:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="La vista previa necesita el documento al que pertenecen sus imágenes.",
+        )
+    await _get_document_or_404(db, document_id)
+
+    rows = (
+        await db.execute(
+            select(ReportDocumentAsset).where(
+                ReportDocumentAsset.document_id == document_id,
+                ReportDocumentAsset.id.in_(asset_ids),
+            )
+        )
+    ).scalars().all()
+    by_id = {row.id: row for row in rows}
+    missing = [asset_id for asset_id in asset_ids if asset_id not in by_id]
+    if missing:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No se encontró una imagen asociada a este documento.",
+        )
+
+    extra_files: dict[str, bytes] = {}
+    id_to_filename: dict[str, str] = {}
+    for row in rows:
+        suffix = row.filename.rsplit(".", 1)[-1].lower() if "." in row.filename else ""
+        if suffix not in {"png", "jpg", "jpeg", "webp", "gif"}:
+            suffix = "png"
+        filename = f"report_asset_{row.id}.{suffix}"
+        try:
+            extra_files[filename] = decrypt_bytes(row.encrypted_blob)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="No se pudo descifrar una imagen del documento.",
+            ) from exc
+        id_to_filename[row.id] = filename
+
+    resolved_source = ASSET_REF_RE.sub(
+        lambda match: id_to_filename.get(match.group(1), match.group(0)),
+        source,
+    )
+    return resolved_source, extra_files
+
+
+async def _resolve_typst_assets(
+    document_id: str | None, source: str, db: AsyncSession
+) -> tuple[str, dict[str, bytes]]:
+    source, canvas_files = await _resolve_canvas_assets(source, db)
+    source, document_files = await _resolve_document_assets(document_id, source, db)
+    return source, {**canvas_files, **document_files}
+
+
 @router.post("/documents/compile", response_model=TypstCompileResponse)
 async def compile_document_preview(
     payload: TypstCompileRequest,
     db: AsyncSession = Depends(get_db),
     _user: User | None = Depends(require_report_access),
 ):
-    resolved_source, extra_files = await _resolve_canvas_assets(payload.source, db)
+    source = prepare_typst_source(payload.source)
+    resolved_source, extra_files = await _resolve_typst_assets(payload.document_id, source, db)
     result = await run_in_threadpool(compile_typst_source, resolved_source, "svg", extra_files)
     return TypstCompileResponse(
         ok=result.ok,
@@ -358,11 +647,11 @@ async def export_document_pdf(
         if payload is not None
         else (decrypt_note(doc.encrypted_source) if doc.encrypted_source else "")
     )
-    resolved_source, extra_files = await _resolve_canvas_assets(source or "", db)
+    resolved_source, extra_files = await _resolve_typst_assets(doc_id, prepare_typst_source(source or ""), db)
     result = await run_in_threadpool(compile_typst_source, resolved_source, "pdf", extra_files)
     if not result.ok or not result.pdf_bytes:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=result.error or "No se pudo compilar el PDF.",
         )
 
@@ -378,13 +667,19 @@ async def export_document_pdf(
 async def export_document_format(
     doc_id: str,
     format: str = "pdf",
+    redact_for_client: bool = False,
     payload: TypstCompileRequest | None = None,
     db: AsyncSession = Depends(get_db),
     _user: User | None = Depends(require_report_access),
 ):
     fmt = format.lower().strip()
     if fmt not in {"pdf", "html", "typ"}:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Formato no soportado (usa pdf, html o typ).")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Formato no soportado (usa pdf, html o typ).")
+    if redact_for_client and fmt == "typ":
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="La censura para cliente solo está disponible al exportar PDF o HTML.",
+        )
 
     doc = (
         await db.execute(
@@ -406,16 +701,20 @@ async def export_document_format(
 
     if fmt == "typ":
         return Response(
-            content=(source or "").encode("utf-8"),
+            content=prepare_typst_source(source or "").encode("utf-8"),
             media_type="text/plain; charset=utf-8",
             headers={"Content-Disposition": f'attachment; filename="{base_name}.typ"'},
         )
 
-    resolved_source, extra_files = await _resolve_canvas_assets(source or "", db)
+    resolved_source, extra_files = await _resolve_typst_assets(
+        doc_id,
+        prepare_typst_source(source or "", redact_for_client=redact_for_client),
+        db,
+    )
     result = await run_in_threadpool(compile_typst_source, resolved_source, fmt, extra_files)
     if not result.ok or not result.pdf_bytes:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=result.error or f"No se pudo compilar el archivo {fmt.upper()}.",
         )
 

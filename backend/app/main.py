@@ -16,7 +16,7 @@ from app.models import (
 )
 from app.security.crypto import encrypt_note, NOTE_ENC_PREFIX
 from app.seed_data import seed_initial_demo_data
-from app.models.reports import ReportDocument, ReportCanvas
+from app.models.reports import ReportDocument, ReportCanvas, ReportDocumentAsset
 from app.api.v1 import (
     auth, emails, platforms, payments, passwords,
     graph, trash, exchange, settings as settings_api, health,

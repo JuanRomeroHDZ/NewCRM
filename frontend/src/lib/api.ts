@@ -8,6 +8,8 @@ import {
   WriteupRevision, WriteupRevisionAuthor, WriteupExportOptions, WriteupStructuredFinding, WriteupStatus, WriteupSeverity,
   WriteupSnippet, WriteupWorkbench, RuntimeConfig, SecurityAuditResponse,
   ReportDocumentSummary, ReportDocumentDetail, ReportDocumentStatus,
+  ReportDocumentAsset, ReportRecoveryCiphertextResponse, ReportRecoverySourceResponse,
+  ReportRecoveryDraftPayload,
   TypstStatusResponse, TypstCompileResponse,
   ReportCanvasSummary, ReportCanvasDetail, ReportCorrelationsResponse, ReportOverview
 } from '../types';
@@ -947,20 +949,48 @@ export const api = {
     }),
   deleteReportDocument: (docId: string) =>
     request<void>(`/reports/documents/${docId}`, { method: 'DELETE' }),
-  compileTypstPreview: (source: string) =>
+  compileTypstPreview: (source: string, documentId?: string) =>
     request<TypstCompileResponse>('/reports/documents/compile', {
       method: 'POST',
-      body: JSON.stringify({ source }),
+      body: JSON.stringify({ source, document_id: documentId ?? null }),
     }),
   exportReportDocumentPdf: (docId: string, source?: string) =>
     requestBlobResponse(`/reports/documents/${docId}/pdf`, {
       method: 'POST',
       body: source !== undefined ? JSON.stringify({ source }) : undefined,
     }),
-  exportReportDocument: (docId: string, format: 'pdf' | 'html' | 'typ', source?: string) =>
-    requestBlobResponse(`/reports/documents/${docId}/export?format=${format}`, {
+  exportReportDocument: (docId: string, format: 'pdf' | 'html' | 'typ', source?: string, redactForClient = false) => {
+    const params = new URLSearchParams({ format });
+    if (redactForClient) params.set('redact_for_client', 'true');
+    return requestBlobResponse(`/reports/documents/${docId}/export?${params.toString()}`, {
       method: 'POST',
       body: source !== undefined ? JSON.stringify({ source }) : undefined,
+    });
+  },
+  uploadReportDocumentAsset: async (docId: string, file: File): Promise<ReportDocumentAsset> => {
+    const form = new FormData();
+    form.append('file', file);
+    const endpoint = `/reports/documents/${docId}/assets`;
+    const headers = buildAuthHeaders(undefined, false);
+    const response = await fetchApiResponse(`${API_BASE}${endpoint}`, {
+      method: 'POST',
+      headers,
+      body: form,
+    });
+    if (!response.ok) {
+      await handleApiErrorResponse(endpoint, response, headers);
+    }
+    return readApiJson<ReportDocumentAsset>(response);
+  },
+  encryptReportRecovery: (docId: string, draft: ReportRecoveryDraftPayload) =>
+    request<ReportRecoveryCiphertextResponse>(`/reports/documents/${docId}/recovery/encrypt`, {
+      method: 'POST',
+      body: JSON.stringify(draft),
+    }),
+  decryptReportRecovery: (docId: string, ciphertext: string) =>
+    request<ReportRecoverySourceResponse>(`/reports/documents/${docId}/recovery/decrypt`, {
+      method: 'POST',
+      body: JSON.stringify({ ciphertext }),
     }),
   getReportDocumentCorrelations: (docId: string) =>
     request<ReportCorrelationsResponse>(`/reports/documents/${docId}/correlations`),

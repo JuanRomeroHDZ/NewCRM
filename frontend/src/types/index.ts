@@ -859,6 +859,41 @@ export interface ReportDocumentDetail extends ReportDocumentSummary {
   source: string;
 }
 
+export interface ReportDocumentAsset {
+  id: string;
+  document_id: string;
+  filename: string;
+  mime_type: string;
+  original_size_bytes: number;
+  optimized_size_bytes: number;
+  width: number;
+  height: number;
+  sha256: string;
+  exif_stripped: boolean;
+  created_at: string;
+}
+
+export interface ReportRecoveryCiphertextResponse {
+  ciphertext: string;
+}
+
+export interface ReportRecoveryDraftPayload {
+  title: string;
+  status: ReportDocumentStatus;
+  prospect_id: string | null;
+  project_id: string | null;
+  source: string;
+}
+
+export interface ReportRecoverySourceResponse {
+  version?: number | null;
+  source: string;
+  title?: string | null;
+  status?: ReportDocumentStatus | null;
+  prospect_id?: string | null;
+  project_id?: string | null;
+}
+
 export interface TypstStatusResponse {
   available: boolean;
   version: string | null;
@@ -876,6 +911,7 @@ export interface ReportCanvasSummary {
   id: string;
   title: string;
   element_count: number;
+  has_svg_snapshot: boolean;
   linked_document_id?: string | null;
   prospect_id?: string | null;
   project_id?: string | null;

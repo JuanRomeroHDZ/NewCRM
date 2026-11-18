@@ -1,27 +1,47 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
+  Bold,
   CheckCircle2,
   Code,
   Columns2,
   Download,
   Eye,
+  EyeOff,
   FileCode2,
   FileText,
   GitCompare,
   Heading2,
+  History,
+  ImagePlus,
+  Italic,
+  Link,
   List,
+  ListChecks,
+  ListOrdered,
   Lock,
+  MessageSquarePlus,
   PanelLeftClose,
   PanelLeftOpen,
   Plus,
+  Quote,
+  Redo2,
   RefreshCw,
   Save,
   Search,
   SeparatorHorizontal,
+  SpellCheck,
+  Sparkles,
+  Strikethrough,
+  Subscript,
+  Superscript,
   Table,
   Trash2,
+  Underline,
+  Undo2,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
+import DOMPurify from 'dompurify';
 import { api } from '../../lib/api';
 import { ApiError } from '../../lib/apiErrors';
 import { formatApiDateTime } from '../../lib/dates';
@@ -37,8 +57,44 @@ import {
   TypstStatusResponse,
 } from '../../types';
 import { EmptyState } from '../common/EmptyState';
+import { TypstCodeEditor, TypstCodeEditorHandle } from './TypstCodeEditor';
+import { TYPST_QUICK_SNIPPETS } from './typstSnippets';
+import { getTypstDocumentTemplate, TYPST_DOCUMENT_TEMPLATES } from './typstTemplates';
+import {
+  deleteTypstRecoverySnapshots,
+  fromReportRecoveryResponse,
+  listTypstRecoverySnapshots,
+  saveTypstRecoverySnapshot,
+  serializeTypstRecoveryDraft,
+  toReportRecoveryPayload,
+  TypstRecoveryDraft,
+  TypstRecoverySnapshot,
+} from './typstRecovery';
 
 type DocumentPaneMode = 'split' | 'edit' | 'preview';
+type RecoveryStatus = 'idle' | 'saving' | 'saved' | 'error';
+
+interface ToolbarButtonProps {
+  label: string;
+  icon: LucideIcon;
+  onClick: () => void;
+  pressed?: boolean;
+  disabled?: boolean;
+}
+
+const ToolbarButton: React.FC<ToolbarButtonProps> = ({ label, icon: Icon, onClick, pressed, disabled }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    aria-label={label}
+    aria-pressed={pressed}
+    title={label}
+    disabled={disabled}
+    className="ui-action-icon h-11 w-11 shrink-0"
+  >
+    <Icon className="h-4 w-4" aria-hidden="true" />
+  </button>
+);
 
 const STATUS_LABELS: Record<ReportDocumentStatus, string> = {
   borrador: 'Borrador',
@@ -47,8 +103,27 @@ const STATUS_LABELS: Record<ReportDocumentStatus, string> = {
   entregado: 'Entregado',
 };
 
+const toTypstRecoveryDraft = (
+  values: { titleDraft: string; statusDraft: ReportDocumentStatus; prospectIdDraft: string; projectIdDraft: string; sourceDraft: string },
+  fallbackTitle: string,
+): TypstRecoveryDraft => ({
+  title: values.titleDraft.trim() || fallbackTitle,
+  status: values.statusDraft,
+  prospectId: values.prospectIdDraft,
+  projectId: values.projectIdDraft,
+  source: values.sourceDraft,
+});
+
+const savedTypstRecoveryDraft = (document: ReportDocumentDetail): TypstRecoveryDraft => ({
+  title: document.title,
+  status: document.status,
+  prospectId: document.prospect_id || '',
+  projectId: document.project_id || '',
+  source: document.source,
+});
+
 export const ReportsDocumentsView: React.FC = () => {
-  const { isUnlocked, openUnlockModal, setActiveSection, showToast, confirm, prompt } = useVault();
+  const { isUnlocked, openUnlockModal, setActiveSection, showToast, confirm } = useVault();
 
   const [documents, setDocuments] = useState<ReportDocumentSummary[]>([]);
   const [canvases, setCanvases] = useState<ReportCanvasSummary[]>([]);
@@ -63,9 +138,21 @@ export const ReportsDocumentsView: React.FC = () => {
   const [projectIdDraft, setProjectIdDraft] = useState<string>('');
   const [sourceDraft, setSourceDraft] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [isCreateFormOpen, setIsCreateFormOpen] = useState(false);
+  const [newDocumentTitle, setNewDocumentTitle] = useState('Nuevo informe');
+  const [newDocumentTemplateId, setNewDocumentTemplateId] = useState('technical');
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [paneMode, setPaneMode] = useState<DocumentPaneMode>('split');
+  const [redactForClient, setRedactForClient] = useState(false);
+  const [quickSnippetId, setQuickSnippetId] = useState('');
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [imageUploadError, setImageUploadError] = useState<string | null>(null);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [recoverySnapshots, setRecoverySnapshots] = useState<TypstRecoverySnapshot[]>([]);
+  const [recoveryStatus, setRecoveryStatus] = useState<RecoveryStatus>('idle');
+  const [recoverySavedAt, setRecoverySavedAt] = useState<number | null>(null);
+  const [recoveryError, setRecoveryError] = useState<string | null>(null);
 
   const [isLoadingList, setIsLoadingList] = useState(true);
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
@@ -83,6 +170,17 @@ export const ReportsDocumentsView: React.FC = () => {
   const [compileError, setCompileError] = useState<string | null>(null);
 
   const compileRequestSeq = useRef(0);
+  const recoveryRequestSeq = useRef(0);
+  const lastRecoveryDraftRef = useRef<string | null>(null);
+  const editorRef = useRef<TypstCodeEditorHandle | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const savingDocumentIdsRef = useRef(new Set<string>());
+  const selectedIdRef = useRef(selectedId);
+  const activeDocIdRef = useRef(activeDoc?.id ?? null);
+  const draftValuesRef = useRef({ titleDraft, statusDraft, prospectIdDraft, projectIdDraft, sourceDraft });
+  selectedIdRef.current = selectedId;
+  activeDocIdRef.current = activeDoc?.id ?? null;
+  draftValuesRef.current = { titleDraft, statusDraft, prospectIdDraft, projectIdDraft, sourceDraft };
 
   useEffect(() => {
     if (!isUnlocked) {
@@ -145,11 +243,11 @@ export const ReportsDocumentsView: React.FC = () => {
     [confirm, hasUnsavedChanges, selectedId]
   );
 
-  const runCompile = useCallback(async (source: string) => {
+  const runCompile = useCallback(async (source: string, documentId?: string) => {
     const seq = ++compileRequestSeq.current;
     setIsCompiling(true);
     try {
-      const res = await api.compileTypstPreview(source);
+      const res = await api.compileTypstPreview(source, documentId);
       if (seq !== compileRequestSeq.current) return;
       if (res.ok) {
         setPreviewPages(res.pages);
@@ -184,6 +282,7 @@ export const ReportsDocumentsView: React.FC = () => {
     let cancelled = false;
     setIsLoadingDetail(true);
     setErrorMessage(null);
+    setCorrelations(null);
     api
       .getReportDocument(selectedId)
       .then((detail) => {
@@ -195,8 +294,10 @@ export const ReportsDocumentsView: React.FC = () => {
         setProjectIdDraft(detail.project_id || '');
         setSourceDraft(detail.source);
         setHasUnsavedChanges(false);
-        void runCompile(detail.source);
-        api.getReportDocumentCorrelations(detail.id).then(setCorrelations).catch(() => setCorrelations(null));
+        void runCompile(detail.source, detail.id);
+        api.getReportDocumentCorrelations(detail.id)
+          .then((result) => { if (!cancelled) setCorrelations(result); })
+          .catch(() => { if (!cancelled) setCorrelations(null); });
       })
       .catch((err) => {
         if (cancelled) return;
@@ -214,26 +315,35 @@ export const ReportsDocumentsView: React.FC = () => {
   useEffect(() => {
     if (!activeDoc || isLoadingDetail || paneMode === 'edit') return;
     const timer = window.setTimeout(() => {
-      void runCompile(sourceDraft);
+      void runCompile(sourceDraft, activeDoc.id);
     }, 450);
     return () => window.clearTimeout(timer);
   }, [sourceDraft, activeDoc, isLoadingDetail, paneMode, runCompile]);
 
   const handleCreateDocument = async () => {
-    const entered = await prompt({
-      title: 'Nuevo documento Typst',
-      message: 'Asigna un título para identificar este informe o documento.',
-      placeholder: 'Ej. Informe de evaluación Q4',
-      defaultValue: 'Nuevo informe',
-      confirmLabel: 'Crear documento',
-    });
-    if (!entered || !entered.trim()) return;
+    const cleanTitle = newDocumentTitle.trim();
+    if (!cleanTitle) return;
+    if (hasUnsavedChanges) {
+      const saveFirst = await confirm({
+        title: 'Guardar antes de crear',
+        message: 'El nuevo documento se abrirá al crearlo. Guarda primero el borrador actual para conservar todos sus cambios.',
+        confirmLabel: 'Guardar y crear',
+        tone: 'warning',
+      });
+      if (!saveFirst) return;
+      const saved = await handleSaveDocument();
+      if (!saved) return;
+    }
+    const template = getTypstDocumentTemplate(newDocumentTemplateId);
 
     try {
       const created = await api.createReportDocument({
-        title: entered.trim(),
+        title: cleanTitle,
         status: 'borrador',
+        source: template.source,
       });
+      setIsCreateFormOpen(false);
+      setNewDocumentTitle('Nuevo informe');
       showToast('Documento creado.', 'success');
       await loadDocuments(created.id);
     } catch (err) {
@@ -242,23 +352,28 @@ export const ReportsDocumentsView: React.FC = () => {
   };
 
   const handleSaveDocument = useCallback(async () => {
-    if (!activeDoc) return;
+    if (!activeDoc) return false;
+    const targetDocumentId = activeDoc.id;
+    if (savingDocumentIdsRef.current.has(targetDocumentId)) return false;
+    savingDocumentIdsRef.current.add(targetDocumentId);
     const cleanTitle = titleDraft.trim() || activeDoc.title;
+    const draftAtStart = {
+      title: cleanTitle,
+      status: statusDraft,
+      prospectId: prospectIdDraft,
+      projectId: projectIdDraft,
+      source: sourceDraft,
+    };
     setIsSaving(true);
     setErrorMessage(null);
     try {
-      const updated = await api.updateReportDocument(activeDoc.id, {
+      const updated = await api.updateReportDocument(targetDocumentId, {
         title: cleanTitle,
         status: statusDraft,
         source: sourceDraft,
         prospect_id: prospectIdDraft || null,
         project_id: projectIdDraft || null,
       });
-      setActiveDoc(updated);
-      setTitleDraft(updated.title);
-      setStatusDraft(updated.status);
-      setProspectIdDraft(updated.prospect_id || '');
-      setProjectIdDraft(updated.project_id || '');
       setDocuments((prev) =>
         prev.map((item) =>
           item.id === updated.id
@@ -273,14 +388,38 @@ export const ReportsDocumentsView: React.FC = () => {
             : item
         )
       );
-      setHasUnsavedChanges(false);
-      showToast('Documento guardado.', 'success');
-      api.getReportDocumentCorrelations(updated.id).then(setCorrelations).catch(() => {});
+      if (selectedIdRef.current === targetDocumentId && activeDocIdRef.current === targetDocumentId) {
+        setActiveDoc(updated);
+        const currentDraft = draftValuesRef.current;
+        const draftUnchanged = currentDraft.titleDraft.trim() === draftAtStart.title
+          && currentDraft.statusDraft === draftAtStart.status
+          && currentDraft.prospectIdDraft === draftAtStart.prospectId
+          && currentDraft.projectIdDraft === draftAtStart.projectId
+          && currentDraft.sourceDraft === draftAtStart.source;
+        if (draftUnchanged) {
+          setTitleDraft(updated.title);
+          setStatusDraft(updated.status);
+          setProspectIdDraft(updated.prospect_id || '');
+          setProjectIdDraft(updated.project_id || '');
+        }
+        setHasUnsavedChanges(!draftUnchanged);
+      }
+      showToast(`Documento guardado: ${updated.title}`, 'success');
+      api.getReportDocumentCorrelations(updated.id)
+        .then((result) => {
+          if (selectedIdRef.current === targetDocumentId && activeDocIdRef.current === targetDocumentId) {
+            setCorrelations(result);
+          }
+        })
+        .catch(() => {});
+      return true;
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : 'No se pudo guardar el documento.';
       setErrorMessage(msg);
       showToast(msg, 'error');
+      return false;
     } finally {
+      savingDocumentIdsRef.current.delete(targetDocumentId);
       setIsSaving(false);
     }
   }, [activeDoc, projectIdDraft, prospectIdDraft, showToast, sourceDraft, statusDraft, titleDraft]);
@@ -302,7 +441,12 @@ export const ReportsDocumentsView: React.FC = () => {
     if (!activeDoc) return;
     setIsExportingPdf(true);
     try {
-      const { blob, filename } = await api.exportReportDocument(activeDoc.id, exportFormat, sourceDraft);
+      const { blob, filename } = await api.exportReportDocument(
+        activeDoc.id,
+        exportFormat,
+        sourceDraft,
+        redactForClient && exportFormat !== 'typ',
+      );
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement('a');
       anchor.href = url;
@@ -310,7 +454,7 @@ export const ReportsDocumentsView: React.FC = () => {
       document.body.appendChild(anchor);
       anchor.click();
       anchor.remove();
-      URL.revokeObjectURL(url);
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
       showToast(`Archivo exportado: ${anchor.download}`, 'success');
     } catch (err) {
       showToast(err instanceof ApiError ? err.message : `No se pudo exportar en ${exportFormat.toUpperCase()}.`, 'error');
@@ -320,9 +464,10 @@ export const ReportsDocumentsView: React.FC = () => {
   };
 
   const handleDeleteDocument = async (doc: ReportDocumentSummary) => {
+    const deletesUnsavedDraft = selectedId === doc.id && hasUnsavedChanges;
     const accepted = await confirm({
       title: 'Eliminar documento',
-      message: `¿Seguro que deseas eliminar "${doc.title}"?`,
+      message: `¿Seguro que deseas eliminar "${doc.title}"? También se borrará su historial local cifrado${deletesUnsavedDraft ? ' y se perderán los cambios pendientes' : ''}.`,
       confirmLabel: 'Eliminar',
       tone: 'danger',
     });
@@ -330,7 +475,13 @@ export const ReportsDocumentsView: React.FC = () => {
 
     try {
       await api.deleteReportDocument(doc.id);
-      showToast('Documento eliminado.', 'info');
+      const localHistoryDeleted = await deleteTypstRecoverySnapshots(doc.id).then(() => true).catch(() => false);
+      showToast(
+        localHistoryDeleted
+          ? 'Documento eliminado y su historial local cifrado borrado.'
+          : 'Documento eliminado, pero no se pudo borrar el historial local cifrado.',
+        localHistoryDeleted ? 'info' : 'error',
+      );
       const remaining = documents.filter((item) => item.id !== doc.id);
       setDocuments(remaining);
       if (selectedId === doc.id) {
@@ -341,32 +492,237 @@ export const ReportsDocumentsView: React.FC = () => {
     }
   };
 
-  const editorTextareaRef = useRef<HTMLTextAreaElement | null>(null);
-
   const insertSnippet = useCallback((snippet: string) => {
-    const textarea = editorTextareaRef.current;
-    if (!textarea) {
+    const editor = editorRef.current;
+    if (!editor) {
       setSourceDraft((prev) => `${prev}${prev.endsWith('\n') || prev === '' ? '' : '\n'}${snippet}`);
       setHasUnsavedChanges(true);
       return;
     }
-    const start = textarea.selectionStart ?? sourceDraft.length;
-    const end = textarea.selectionEnd ?? sourceDraft.length;
-    const next = sourceDraft.slice(0, start) + snippet + sourceDraft.slice(end);
-    setSourceDraft(next);
-    setHasUnsavedChanges(true);
-    requestAnimationFrame(() => {
-      textarea.focus();
-      const cursor = start + snippet.length;
-      textarea.setSelectionRange(cursor, cursor);
+    editor.insert(snippet);
+  }, []);
+
+  const handleImageFiles = useCallback(async (files: File[]) => {
+    if (!activeDoc || files.length === 0) return;
+    const targetDocumentId = activeDoc.id;
+    const supportedTypes = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif']);
+    const images = files.filter((file) => supportedTypes.has(file.type));
+    if (images.length === 0) {
+      setImageUploadError('Selecciona una imagen PNG, JPEG, WebP o GIF.');
+      return;
+    }
+    const unsupportedCount = files.length - images.length;
+    setIsUploadingImage(true);
+    setImageUploadError(null);
+    try {
+      let insertedCount = 0;
+      let savedToPreviousDocument = false;
+      for (const file of images) {
+        const asset = await api.uploadReportDocumentAsset(targetDocumentId, file);
+        if (selectedIdRef.current !== targetDocumentId || activeDocIdRef.current !== targetDocumentId) {
+          savedToPreviousDocument = true;
+          break;
+        }
+        const caption = asset.filename
+          .replace(/\.[^.]+$/, '')
+          .replace(/[\[\]\r\n]/g, ' ')
+          .trim() || 'Captura de evidencia';
+        insertSnippet(
+          `\n#figure(\n  image("asset://${asset.id}", width: 90%),\n  caption: [${caption}],\n)\n`,
+        );
+        insertedCount += 1;
+      }
+      if (savedToPreviousDocument) {
+        showToast('La imagen subida se guardó en el documento anterior y no se insertó en el documento abierto.', 'info');
+      } else if (insertedCount > 0) {
+        const unsupportedNotice = unsupportedCount > 0 ? ` Se omitieron ${unsupportedCount} archivos no compatibles.` : '';
+        showToast(
+          `${insertedCount === 1 ? 'Imagen cifrada e insertada.' : `${insertedCount} imágenes cifradas e insertadas.`}${unsupportedNotice}`,
+          unsupportedCount > 0 ? 'info' : 'success',
+        );
+      }
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'No se pudo subir la imagen.';
+      setImageUploadError(message);
+      showToast(message, 'error');
+    } finally {
+      setIsUploadingImage(false);
+    }
+  }, [activeDoc, insertSnippet, showToast]);
+
+  const handleRestoreRecovery = useCallback(async (snapshot: TypstRecoverySnapshot) => {
+    if (!activeDoc) return;
+    const targetDocumentId = activeDoc.id;
+    const draftBeforeConfirm = serializeTypstRecoveryDraft(
+      toTypstRecoveryDraft(draftValuesRef.current, activeDoc.title),
+    );
+    const accepted = await confirm({
+      title: 'Restaurar copia local',
+      message: 'Se reemplazará el borrador abierto. El documento guardado no cambia hasta que pulses Guardar.',
+      confirmLabel: 'Restaurar borrador',
+      tone: 'warning',
     });
-  }, [sourceDraft]);
+    if (!accepted || selectedIdRef.current !== targetDocumentId || activeDocIdRef.current !== targetDocumentId) return;
+    try {
+      const response = await api.decryptReportRecovery(targetDocumentId, snapshot.ciphertext);
+      const currentDraft = serializeTypstRecoveryDraft(
+        toTypstRecoveryDraft(draftValuesRef.current, activeDoc.title),
+      );
+      if (
+        selectedIdRef.current !== targetDocumentId
+        || activeDocIdRef.current !== targetDocumentId
+        || currentDraft !== draftBeforeConfirm
+      ) return;
+      const serverDraft = savedTypstRecoveryDraft(activeDoc);
+      const recoveredDraft = fromReportRecoveryResponse(response, serverDraft);
+      setTitleDraft(recoveredDraft.title);
+      setStatusDraft(recoveredDraft.status);
+      setProspectIdDraft(recoveredDraft.prospectId);
+      setProjectIdDraft(recoveredDraft.projectId);
+      setSourceDraft(recoveredDraft.source);
+      setHasUnsavedChanges(
+        serializeTypstRecoveryDraft(recoveredDraft) !== serializeTypstRecoveryDraft(serverDraft),
+      );
+      lastRecoveryDraftRef.current = serializeTypstRecoveryDraft(recoveredDraft);
+      setIsHistoryOpen(false);
+      showToast('Copia local cargada en el borrador.', 'info');
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'No se pudo abrir la copia con la clave actual de la bóveda.';
+      setRecoveryError(message);
+      setRecoveryStatus('error');
+    }
+  }, [activeDoc, confirm, showToast]);
+
+  const handleOpenCanvases = async () => {
+    if (hasUnsavedChanges) {
+      const saveFirst = await confirm({
+        title: 'Guardar antes de abrir Lienzos',
+        message: 'La lista de Lienzos abrirá otra sección. Guarda el documento actual para conservar sus cambios.',
+        confirmLabel: 'Guardar y abrir Lienzos',
+        tone: 'warning',
+      });
+      if (!saveFirst) return;
+      const saved = await handleSaveDocument();
+      if (!saved) return;
+    }
+    setActiveSection('reports_canvases');
+  };
+
+  useEffect(() => {
+    if (!activeDoc || isLoadingDetail) {
+      setRecoverySnapshots([]);
+      setRecoverySavedAt(null);
+      if (!isLoadingDetail) setRecoveryStatus('idle');
+      return;
+    }
+    let cancelled = false;
+    const serverDraft = savedTypstRecoveryDraft(activeDoc);
+    const serverDraftSerialized = serializeTypstRecoveryDraft(serverDraft);
+    lastRecoveryDraftRef.current = serverDraftSerialized;
+    setRecoveryError(null);
+    setRecoverySnapshots([]);
+    setRecoverySavedAt(null);
+    setRecoveryStatus('idle');
+    listTypstRecoverySnapshots(activeDoc.id)
+      .then(async (snapshots) => {
+        if (cancelled) return;
+        setRecoverySnapshots(snapshots);
+        const latest = snapshots[0];
+        if (!latest) return;
+        setRecoverySavedAt(latest.createdAt);
+        setRecoveryStatus('saved');
+        const serverUpdatedAt = new Date(activeDoc.updated_at).getTime();
+        if (latest.createdAt <= serverUpdatedAt) return;
+        try {
+          const response = await api.decryptReportRecovery(activeDoc.id, latest.ciphertext);
+          if (cancelled) return;
+          const recoveredDraft = fromReportRecoveryResponse(response, serverDraft);
+          if (serializeTypstRecoveryDraft(recoveredDraft) === serverDraftSerialized) return;
+          const draftBeforePrompt = serializeTypstRecoveryDraft(
+            toTypstRecoveryDraft(draftValuesRef.current, activeDoc.title),
+          );
+          const restore = await confirm({
+            title: 'Hay una copia local más reciente',
+            message: 'Se encontró un borrador cifrado con cambios que no están en el servidor. ¿Cargarlo en el editor? El documento guardado no cambia hasta que pulses Guardar.',
+            confirmLabel: 'Cargar copia local',
+            tone: 'warning',
+          });
+          const currentDraft = serializeTypstRecoveryDraft(
+            toTypstRecoveryDraft(draftValuesRef.current, activeDoc.title),
+          );
+          if (!cancelled && restore && currentDraft === draftBeforePrompt) {
+            setTitleDraft(recoveredDraft.title);
+            setStatusDraft(recoveredDraft.status);
+            setProspectIdDraft(recoveredDraft.prospectId);
+            setProjectIdDraft(recoveredDraft.projectId);
+            setSourceDraft(recoveredDraft.source);
+            setHasUnsavedChanges(true);
+            lastRecoveryDraftRef.current = serializeTypstRecoveryDraft(recoveredDraft);
+          }
+        } catch (err) {
+          if (cancelled) return;
+          const message = err instanceof ApiError ? err.message : 'La copia local no se pudo abrir con la clave actual de la bóveda.';
+          setRecoveryError(message);
+          setRecoveryStatus('error');
+        }
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setRecoveryError(err instanceof Error ? err.message : 'No se pudo leer el historial local.');
+        setRecoveryStatus('error');
+      });
+    return () => { cancelled = true; };
+  }, [activeDoc, confirm, isLoadingDetail]);
+
+  useEffect(() => {
+    if (!activeDoc || isLoadingDetail || !hasUnsavedChanges) return;
+    const recoveryDraft = toTypstRecoveryDraft(
+      { titleDraft, statusDraft, prospectIdDraft, projectIdDraft, sourceDraft },
+      activeDoc.title,
+    );
+    const serializedDraft = serializeTypstRecoveryDraft(recoveryDraft);
+    if (serializedDraft === lastRecoveryDraftRef.current) return;
+    const sequence = ++recoveryRequestSeq.current;
+    const requestedAt = Date.now();
+    const timer = window.setTimeout(async () => {
+      setRecoveryStatus('saving');
+      setRecoveryError(null);
+      try {
+        const { ciphertext } = await api.encryptReportRecovery(activeDoc.id, toReportRecoveryPayload(recoveryDraft));
+        if (sequence !== recoveryRequestSeq.current) return;
+        const snapshots = await saveTypstRecoverySnapshot(activeDoc.id, ciphertext, requestedAt);
+        if (sequence !== recoveryRequestSeq.current) return;
+        lastRecoveryDraftRef.current = serializedDraft;
+        setRecoverySnapshots(snapshots);
+        setRecoverySavedAt(requestedAt);
+        setRecoveryStatus('saved');
+      } catch (err) {
+        if (sequence !== recoveryRequestSeq.current) return;
+        setRecoveryError(err instanceof ApiError ? err.message : err instanceof Error ? err.message : 'No se pudo guardar la copia cifrada.');
+        setRecoveryStatus('error');
+      }
+    }, 1200);
+    return () => {
+      window.clearTimeout(timer);
+      if (recoveryRequestSeq.current === sequence) recoveryRequestSeq.current += 1;
+    };
+  }, [activeDoc, hasUnsavedChanges, isLoadingDetail, projectIdDraft, prospectIdDraft, sourceDraft, statusDraft, titleDraft]);
 
   const filteredDocuments = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     if (!query) return documents;
     return documents.filter((item) => item.title.toLowerCase().includes(query));
   }, [documents, searchQuery]);
+
+  const canvasesWithSnapshots = useMemo(
+    () => canvases.filter((canvas) => canvas.has_svg_snapshot),
+    [canvases],
+  );
+
+  const sanitizedPreviewPages = useMemo(
+    () => previewPages.map((markup) => DOMPurify.sanitize(markup, { USE_PROFILES: { svg: true, svgFilters: true } })),
+    [previewPages],
+  );
 
   if (!isUnlocked) {
     return (
@@ -384,7 +740,7 @@ export const ReportsDocumentsView: React.FC = () => {
   }
 
   return (
-    <div className="flex flex-col lg:flex-row h-[calc(100vh-5.5rem)] min-h-[540px] min-w-0 gap-4">
+    <div className="flex h-[calc(100dvh-5.5rem)] min-h-[420px] min-w-0 flex-col gap-4 lg:min-h-[540px] lg:flex-row">
       {isSidebarOpen && (
         <aside className="flex w-full lg:w-72 max-h-60 lg:max-h-none shrink-0 flex-col rounded-xl border border-obsidian-border bg-obsidian-panel min-h-0">
           <div className="flex items-center justify-between gap-2 border-b border-obsidian-border px-4 py-3">
@@ -395,11 +751,13 @@ export const ReportsDocumentsView: React.FC = () => {
             {/* [Acción principal] Crea un nuevo documento Typst. */}
             <button
               type="button"
-              onClick={handleCreateDocument}
+              onClick={() => setIsCreateFormOpen((open) => !open)}
+              aria-expanded={isCreateFormOpen}
+              aria-controls="create-report-document-form"
               className="ui-action-primary !px-3 text-xs"
             >
-              <Plus className="h-4 w-4" />
-              <span>Nuevo</span>
+              <Plus className={`h-4 w-4 ${isCreateFormOpen ? 'rotate-45' : ''}`} />
+              <span>{isCreateFormOpen ? 'Cerrar' : 'Nuevo'}</span>
             </button>
           </div>
 
@@ -419,6 +777,46 @@ export const ReportsDocumentsView: React.FC = () => {
               />
             </div>
           </div>
+
+          {isCreateFormOpen && (
+            <form
+              id="create-report-document-form"
+              onSubmit={(event) => { event.preventDefault(); void handleCreateDocument(); }}
+              className="space-y-3 border-b border-obsidian-border p-3"
+            >
+              <div className="space-y-1.5">
+                <label htmlFor="new-report-title" className="block text-xs font-medium text-obsidian-muted">Título</label>
+                <input
+                  id="new-report-title"
+                  value={newDocumentTitle}
+                  onChange={(event) => setNewDocumentTitle(event.target.value)}
+                  maxLength={200}
+                  required
+                  className="min-h-11 w-full rounded-lg border border-obsidian-border bg-obsidian-surface px-3 text-sm text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label htmlFor="new-report-template" className="block text-xs font-medium text-obsidian-muted">Plantilla</label>
+                <select
+                  id="new-report-template"
+                  value={newDocumentTemplateId}
+                  onChange={(event) => setNewDocumentTemplateId(event.target.value)}
+                  className="h-11 w-full rounded-lg border border-obsidian-border bg-obsidian-surface px-3 text-sm text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent"
+                >
+                  {TYPST_DOCUMENT_TEMPLATES.map((template) => (
+                    <option key={template.id} value={template.id}>{template.label}</option>
+                  ))}
+                </select>
+                <p className="text-xs text-obsidian-muted">
+                  {getTypstDocumentTemplate(newDocumentTemplateId).description}
+                </p>
+              </div>
+              <div className="flex justify-end gap-2">
+                <button type="button" onClick={() => setIsCreateFormOpen(false)} className="ui-action-secondary">Cancelar</button>
+                <button type="submit" className="ui-action-primary">Crear documento</button>
+              </div>
+            </form>
+          )}
 
           <div className="flex-1 overflow-y-auto divide-y divide-obsidian-border">
             {isLoadingList ? (
@@ -518,6 +916,7 @@ export const ReportsDocumentsView: React.FC = () => {
                   type="button"
                   onClick={() => setPaneMode('edit')}
                   aria-pressed={paneMode === 'edit'}
+                  aria-label="Mostrar solo código"
                   className={`ui-action-toggle !px-2.5 text-xs ${paneMode === 'edit' ? 'bg-obsidian-panel text-white' : ''}`}
                 >
                   <FileCode2 className="h-4 w-4" />
@@ -527,6 +926,7 @@ export const ReportsDocumentsView: React.FC = () => {
                   type="button"
                   onClick={() => setPaneMode('split')}
                   aria-pressed={paneMode === 'split'}
+                  aria-label="Mostrar código y vista previa"
                   className={`ui-action-toggle !px-2.5 text-xs ${paneMode === 'split' ? 'bg-obsidian-panel text-white' : ''}`}
                 >
                   <Columns2 className="h-4 w-4" />
@@ -536,6 +936,7 @@ export const ReportsDocumentsView: React.FC = () => {
                   type="button"
                   onClick={() => setPaneMode('preview')}
                   aria-pressed={paneMode === 'preview'}
+                  aria-label="Mostrar solo vista previa"
                   className={`ui-action-toggle !px-2.5 text-xs ${paneMode === 'preview' ? 'bg-obsidian-panel text-white' : ''}`}
                 >
                   <Eye className="h-4 w-4" />
@@ -569,6 +970,19 @@ export const ReportsDocumentsView: React.FC = () => {
                 <option value="html">HTML</option>
                 <option value="typ">Typst (.typ)</option>
               </select>
+
+              {exportFormat !== 'typ' && (
+                <label className="flex min-h-11 items-center gap-2 rounded-lg px-2 text-xs text-obsidian-muted hover:bg-obsidian-surface">
+                  <input
+                    type="checkbox"
+                    checked={redactForClient}
+                    onChange={(event) => setRedactForClient(event.target.checked)}
+                    className="h-4 w-4 rounded border-obsidian-border bg-obsidian-surface accent-obsidian-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent"
+                  />
+                  <EyeOff className="h-4 w-4 shrink-0" aria-hidden="true" />
+                  <span>Copia para cliente</span>
+                </label>
+              )}
 
               {/* [Acción secundaria] Exporta el documento en el formato elegido. */}
               <button
@@ -687,6 +1101,70 @@ export const ReportsDocumentsView: React.FC = () => {
           </div>
         )}
 
+        {activeDoc && (
+          <div className="border-b border-obsidian-border px-4 py-2">
+            <div className="flex min-h-11 flex-wrap items-center justify-between gap-2" role="status" aria-live="polite">
+              <span className="text-xs text-obsidian-muted">
+                {recoveryStatus === 'saving'
+                  ? 'Cifrando copia local…'
+                  : recoveryStatus === 'saved' && recoverySavedAt
+                    ? `Copia local cifrada · ${formatApiDateTime(new Date(recoverySavedAt).toISOString())}`
+                    : recoveryStatus === 'error'
+                      ? 'No se pudo guardar o abrir la copia local cifrada.'
+                      : 'El borrador se recupera con la clave actual de la bóveda.'}
+              </span>
+              <button
+                type="button"
+                onClick={() => setIsHistoryOpen((open) => !open)}
+                aria-expanded={isHistoryOpen}
+                aria-controls="typst-recovery-history"
+                className="ui-action-secondary min-h-11 !px-3 text-xs"
+              >
+                <History className="h-4 w-4" aria-hidden="true" />
+                <span>Historial local ({recoverySnapshots.length})</span>
+              </button>
+            </div>
+            {(recoveryError || (redactForClient && exportFormat !== 'typ')) && (
+              <div className="flex flex-wrap gap-x-5 gap-y-1 pb-1 text-xs">
+                {recoveryError && <p role="alert" className="text-obsidian-errorText">{recoveryError}</p>}
+                {redactForClient && exportFormat !== 'typ' && (
+                  <p className="text-obsidian-muted">
+                    Se censuran IPs IPv4, patrones comunes de credenciales y marcadores {'{{redact:...}}'}. Revisa las capturas antes de compartir.
+                  </p>
+                )}
+              </div>
+            )}
+            {isHistoryOpen && (
+              <div id="typst-recovery-history" className="border-t border-obsidian-border py-2">
+                <p className="mb-2 text-xs text-obsidian-muted">
+                  Las copias guardan solo texto cifrado. Para restaurarlas necesitas la misma clave de bóveda.
+                </p>
+                {recoverySnapshots.length === 0 ? (
+                  <p className="py-2 text-sm text-obsidian-muted">Todavía no hay copias locales de este documento.</p>
+                ) : (
+                  <ul className="divide-y divide-obsidian-border">
+                    {recoverySnapshots.map((snapshot) => (
+                      <li key={snapshot.id} className="flex min-h-12 items-center justify-between gap-3 py-1.5">
+                        <time dateTime={new Date(snapshot.createdAt).toISOString()} className="text-sm text-obsidian-muted">
+                          {formatApiDateTime(new Date(snapshot.createdAt).toISOString())}
+                        </time>
+                        <button
+                          type="button"
+                          onClick={() => void handleRestoreRecovery(snapshot)}
+                          className="ui-action-secondary min-h-11 !px-3 text-xs"
+                          aria-label={`Restaurar copia del ${formatApiDateTime(new Date(snapshot.createdAt).toISOString())}`}
+                        >
+                          Restaurar
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
         {errorMessage && (
           <div role="alert" className="border-b border-obsidian-border bg-obsidian-dangerBg px-4 py-2 text-xs text-obsidian-errorText">
             {errorMessage}
@@ -701,7 +1179,7 @@ export const ReportsDocumentsView: React.FC = () => {
                 title="Sin documentos seleccionados"
                 description="Crea un documento con Typst para redactar informes técnicos con vista previa en vivo y exportación PDF."
                 actionLabel="Nuevo documento"
-                onAction={() => void handleCreateDocument()}
+                onAction={() => { setIsSidebarOpen(true); setIsCreateFormOpen(true); }}
               />
             </div>
           ) : isLoadingDetail || !activeDoc ? (
@@ -712,111 +1190,133 @@ export const ReportsDocumentsView: React.FC = () => {
             <div className="flex flex-1 flex-col md:flex-row min-h-0 min-w-0 divide-y md:divide-y-0 md:divide-x divide-obsidian-border">
               {paneMode !== 'preview' && (
                 <div className="flex min-w-0 flex-1 flex-col bg-obsidian-bg">
-                  <div className="flex items-center justify-between gap-2 border-b border-obsidian-border px-3 py-1.5 text-xs text-obsidian-muted overflow-x-auto">
-                    <div className="flex items-center gap-1" role="toolbar" aria-label="Inserción rápida Typst">
-                      <button
-                        type="button"
-                        onClick={() => insertSnippet('\n== Sección\n\n')}
-                        title="Insertar sección"
-                        aria-label="Insertar sección"
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-transparent text-obsidian-muted hover:bg-obsidian-surface hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent"
-                      >
-                        <Heading2 className="h-4 w-4" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => insertSnippet('\n- Elemento 1\n- Elemento 2\n')}
-                        title="Insertar lista"
-                        aria-label="Insertar lista"
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-transparent text-obsidian-muted hover:bg-obsidian-surface hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent"
-                      >
-                        <List className="h-4 w-4" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          insertSnippet(
-                            '\n#table(\n  columns: (auto, 1fr),\n  inset: 8pt,\n  [*Campo*], [*Valor*],\n  [Dato], [Detalle],\n)\n'
-                          )
-                        }
-                        title="Insertar tabla"
-                        aria-label="Insertar tabla"
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-transparent text-obsidian-muted hover:bg-obsidian-surface hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent"
-                      >
-                        <Table className="h-4 w-4" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => insertSnippet('\n```bash\n# comando o salida\n```\n')}
-                        title="Insertar bloque de código"
-                        aria-label="Insertar bloque de código"
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-transparent text-obsidian-muted hover:bg-obsidian-surface hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent"
-                      >
-                        <Code className="h-4 w-4" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => insertSnippet('\n#pagebreak()\n')}
-                        title="Insertar salto de página"
-                        aria-label="Insertar salto de página"
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-transparent text-obsidian-muted hover:bg-obsidian-surface hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent"
-                      >
-                        <SeparatorHorizontal className="h-4 w-4" />
-                      </button>
-                      {canvases.length > 0 ? (
-                        <select
-                          aria-label="Insertar lienzo"
-                          value=""
-                          onChange={(e) => {
-                            const cid = e.target.value;
-                            if (!cid) return;
-                            const chosen = canvases.find((c) => c.id === cid);
-                            const caption = chosen ? chosen.title.replace(/[[\]]/g, '') : 'Diagrama';
-                            insertSnippet(`\n#figure(\n  image("canvas://${cid}", width: 95%),\n  caption: [${caption}],\n)\n`);
-                          }}
-                          className="ml-1 h-8 max-w-[170px] rounded-md border border-obsidian-border bg-obsidian-surface px-2 text-xs text-white focus:border-obsidian-accent focus:outline-none"
-                        >
-                          <option value="">Insertar lienzo…</option>
-                          {canvases.map((c) => (
-                            <option key={c.id} value={c.id}>
-                              {c.linked_document_id === activeDoc?.id ? `${c.title} (vinculado)` : c.title}
-                            </option>
-                          ))}
-                        </select>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => setActiveSection('reports_canvases')}
-                          className="ml-1 rounded-md px-2 py-1 text-xs text-obsidian-muted hover:bg-obsidian-surface hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent"
-                        >
-                          Crear lienzo
-                        </button>
-                      )}
+                  <div className="flex min-w-0 items-center gap-2 border-b border-obsidian-border px-2 py-1.5 text-xs text-obsidian-muted">
+                    <div className="min-w-0 flex-1 overflow-x-auto" role="toolbar" aria-label="Herramientas de edición Typst">
+                      <div className="flex w-max items-center gap-2 py-0.5">
+                        <span className="shrink-0 px-2 text-xs text-obsidian-muted">Documentos · Typst</span>
+                        <span aria-hidden="true" className="h-7 w-px shrink-0 bg-obsidian-border" />
+                        <div className="flex items-center gap-1" role="group" aria-label="Formato de texto">
+                          <ToolbarButton label="Negrita" icon={Bold} onClick={() => editorRef.current?.wrapSelection('*', '*')} />
+                          <ToolbarButton label="Cursiva" icon={Italic} onClick={() => editorRef.current?.wrapSelection('_', '_')} />
+                          <ToolbarButton label="Tachado" icon={Strikethrough} onClick={() => editorRef.current?.wrapSelection('#strike[', ']')} />
+                          <ToolbarButton label="Subrayado" icon={Underline} onClick={() => editorRef.current?.wrapSelection('#underline[', ']')} />
+                          <ToolbarButton label="Superíndice" icon={Superscript} onClick={() => editorRef.current?.wrapSelection('#super[', ']')} />
+                          <ToolbarButton label="Subíndice" icon={Subscript} onClick={() => editorRef.current?.wrapSelection('#sub[', ']')} />
+                          <ToolbarButton label="Código en línea" icon={Code} onClick={() => editorRef.current?.wrapSelection('`', '`')} />
+                        </div>
+                        <span aria-hidden="true" className="h-7 w-px shrink-0 bg-obsidian-border" />
+                        <div className="flex items-center gap-1" role="group" aria-label="Bloques y estructura">
+                          <ToolbarButton label="Sección" icon={Heading2} onClick={() => insertSnippet('\n== Título de sección\n\n')} />
+                          <ToolbarButton label="Lista con viñetas" icon={List} onClick={() => insertSnippet('\n- Primer elemento\n- Segundo elemento\n')} />
+                          <ToolbarButton label="Lista numerada" icon={ListOrdered} onClick={() => insertSnippet('\n+ Primer paso\n+ Segundo paso\n')} />
+                          <ToolbarButton label="Lista de tareas" icon={ListChecks} onClick={() => insertSnippet('\n- [ ] Tarea pendiente\n- [x] Tarea completada\n')} />
+                          <ToolbarButton label="Cita" icon={Quote} onClick={() => editorRef.current?.wrapSelection('#quote[', ']')} />
+                          <ToolbarButton label="Bloque de código" icon={Code} onClick={() => insertSnippet('\n```text\nCódigo o salida\n```\n')} />
+                          <ToolbarButton label="Tabla" icon={Table} onClick={() => insertSnippet('\n#table(\n  columns: (1fr, 1fr),\n  [Campo], [Detalle],\n  [Dato], [Descripción],\n)\n')} />
+                          <ToolbarButton label="Salto de página" icon={SeparatorHorizontal} onClick={() => insertSnippet('\n#pagebreak()\n')} />
+                        </div>
+                        <span aria-hidden="true" className="h-7 w-px shrink-0 bg-obsidian-border" />
+                        <div className="flex items-center gap-1" role="group" aria-label="Enlaces, imágenes y lienzos">
+                          <ToolbarButton label="Insertar enlace" icon={Link} onClick={() => editorRef.current?.wrapSelection('#link("https://example.com")[', ']')} />
+                          <ToolbarButton label={isUploadingImage ? 'Subiendo imagen' : 'Insertar imagen o captura'} icon={ImagePlus} disabled={isUploadingImage} onClick={() => fileInputRef.current?.click()} />
+                          {canvasesWithSnapshots.length > 0 && (
+                            <select
+                              aria-label="Insertar lienzo"
+                              value=""
+                              onChange={(event) => {
+                                const canvasId = event.target.value;
+                                if (!canvasId) return;
+                                const canvas = canvasesWithSnapshots.find((item) => item.id === canvasId);
+                                const caption = canvas?.title.replace(/[\[\]\r\n]/g, ' ').trim() || 'Diagrama';
+                                insertSnippet(`\n#figure(\n  image("canvas://${canvasId}", width: 95%),\n  caption: [${caption}],\n)\n`);
+                              }}
+                              className="h-11 max-w-[190px] rounded-lg border border-obsidian-border bg-obsidian-surface px-2 text-xs text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent"
+                            >
+                              <option value="">Insertar lienzo…</option>
+                              {canvasesWithSnapshots.map((canvas) => (
+                                <option key={canvas.id} value={canvas.id}>
+                                  {canvas.linked_document_id === activeDoc.id ? `${canvas.title} (vinculado)` : canvas.title}
+                                </option>
+                              ))}
+                            </select>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => void handleOpenCanvases()}
+                            className="ui-action-secondary min-h-11 shrink-0 !px-3 text-xs"
+                          >
+                            {canvasesWithSnapshots.length > 0 || canvases.length > 0 ? 'Abrir lienzos' : 'Crear lienzo'}
+                          </button>
+                        </div>
+                        <span aria-hidden="true" className="h-7 w-px shrink-0 bg-obsidian-border" />
+                        <div className="flex items-center gap-1" role="group" aria-label="Historial y revisión">
+                          <ToolbarButton label="Deshacer" icon={Undo2} onClick={() => editorRef.current?.undo()} />
+                          <ToolbarButton label="Rehacer" icon={Redo2} onClick={() => editorRef.current?.redo()} />
+                          <ToolbarButton label="Buscar en el documento" icon={Search} onClick={() => editorRef.current?.openSearch()} />
+                          <ToolbarButton label="Comprobar sintaxis Typst" icon={SpellCheck} disabled={isCompiling} onClick={() => void runCompile(sourceDraft, activeDoc.id)} />
+                        </div>
+                        <span aria-hidden="true" className="h-7 w-px shrink-0 bg-obsidian-border" />
+                        <div className="flex items-center gap-1" role="group" aria-label="Notas y censura">
+                          <ToolbarButton label="Insertar nota" icon={MessageSquarePlus} onClick={() => insertSnippet('\n// Nota: ')} />
+                          <ToolbarButton label="Marcar selección para censura" icon={EyeOff} onClick={() => editorRef.current?.wrapSelection('{{redact:', '}}', 'dato_sensible')} />
+                        </div>
+                        <span aria-hidden="true" className="h-7 w-px shrink-0 bg-obsidian-border" />
+                        <div className="flex items-center gap-2" role="group" aria-label="Snippets rápidos">
+                          <Sparkles className="ml-1 h-4 w-4 shrink-0 text-obsidian-muted" aria-hidden="true" />
+                          <select
+                            aria-label="Insertar snippet rápido"
+                            value={quickSnippetId}
+                            onChange={(event) => {
+                              const snippet = TYPST_QUICK_SNIPPETS.find((item) => item.id === event.target.value);
+                              if (snippet) insertSnippet(snippet.snippet);
+                              setQuickSnippetId('');
+                            }}
+                            className="h-11 max-w-[190px] rounded-lg border border-obsidian-border bg-obsidian-surface px-2 text-xs text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent"
+                          >
+                            <option value="">Snippets rápidos…</option>
+                            {TYPST_QUICK_SNIPPETS.map((snippet) => <option key={snippet.id} value={snippet.id}>{snippet.label}</option>)}
+                          </select>
+                        </div>
+                      </div>
                     </div>
                     <button
                       type="button"
-                      onClick={() => void runCompile(sourceDraft)}
+                      onClick={() => void runCompile(sourceDraft, activeDoc.id)}
                       disabled={isCompiling}
-                      className="inline-flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-obsidian-muted hover:bg-obsidian-surface hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent"
+                      className="ui-action-secondary min-h-11 shrink-0 !px-3 text-xs"
                     >
-                      <RefreshCw className={`h-3.5 w-3.5 ${isCompiling ? 'animate-spin' : ''}`} />
+                      <RefreshCw className={`h-4 w-4 ${isCompiling ? 'animate-spin' : ''}`} aria-hidden="true" />
                       <span>{isCompiling ? 'Compilando…' : 'Compilar'}</span>
                     </button>
                   </div>
-                  <label htmlFor="typst-source-editor" className="sr-only">
-                    Código fuente Typst
-                  </label>
-                  <textarea
-                    ref={editorTextareaRef}
-                    id="typst-source-editor"
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp,image/gif"
+                    multiple
+                    tabIndex={-1}
+                    aria-label="Seleccionar capturas para insertar"
+                    className="sr-only"
+                    onChange={(event) => {
+                      const files = Array.from(event.currentTarget.files ?? []);
+                      event.currentTarget.value = '';
+                      void handleImageFiles(files);
+                    }}
+                  />
+                  {(imageUploadError || isUploadingImage) && (
+                    <div className="border-b border-obsidian-border px-4 py-2 text-xs" role={imageUploadError ? 'alert' : 'status'} aria-live="polite">
+                      {imageUploadError || 'Cifrando y preparando imagen…'}
+                    </div>
+                  )}
+                  <TypstCodeEditor
+                    ref={editorRef}
                     value={sourceDraft}
-                    onChange={(e) => {
-                      setSourceDraft(e.target.value);
+                    label="Código fuente Typst"
+                    onChange={(value) => {
+                      setSourceDraft(value);
                       setHasUnsavedChanges(true);
                     }}
-                    spellCheck={false}
-                    className="flex-1 w-full resize-none bg-obsidian-bg p-4 font-mono text-sm leading-6 text-white placeholder:text-obsidian-muted focus:outline-none"
-                    placeholder="Escribe código Typst aquí…"
+                    onPasteImages={handleImageFiles}
                   />
                 </div>
               )}
@@ -842,11 +1342,12 @@ export const ReportsDocumentsView: React.FC = () => {
                         {isCompiling ? 'Compilando vista previa…' : 'Sin páginas renderizadas.'}
                       </div>
                     ) : (
-                      previewPages.map((svgMarkup, idx) => (
+                      sanitizedPreviewPages.map((svgMarkup, idx) => (
                         <div
                           key={idx}
-                          className="mx-auto w-full max-w-[820px] overflow-hidden rounded-lg border border-obsidian-border bg-white shadow-obsidian [&>svg]:block [&>svg]:h-auto [&>svg]:w-full"
+                          role="img"
                           aria-label={`Página ${idx + 1}`}
+                          className="mx-auto w-full max-w-[820px] overflow-hidden rounded-lg border border-obsidian-border bg-white [&>svg]:block [&>svg]:h-auto [&>svg]:w-full"
                           dangerouslySetInnerHTML={{ __html: svgMarkup }}
                         />
                       ))

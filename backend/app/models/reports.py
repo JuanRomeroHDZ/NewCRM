@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, LargeBinary, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 from app.database import Base
 from app.models import gen_uuid, utc_now
@@ -25,6 +25,27 @@ class ReportDocument(Base):
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, onupdate=utc_now)
+
+
+class ReportDocumentAsset(Base):
+    """Encrypted, metadata-stripped image evidence belonging to one Typst document."""
+
+    __tablename__ = "report_document_assets"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=gen_uuid)
+    document_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("report_documents.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    filename: Mapped[str] = mapped_column(String(180), nullable=False)
+    mime_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    original_size_bytes: Mapped[int] = mapped_column(Integer, default=0)
+    optimized_size_bytes: Mapped[int] = mapped_column(Integer, default=0)
+    width: Mapped[int] = mapped_column(Integer, default=0)
+    height: Mapped[int] = mapped_column(Integer, default=0)
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    exif_stripped: Mapped[bool] = mapped_column(Boolean, default=True)
+    encrypted_blob: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
 
 
 class ReportCanvas(Base):
