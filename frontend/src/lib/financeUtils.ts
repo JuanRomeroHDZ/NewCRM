@@ -471,41 +471,69 @@ export function computeRealProfitAndRenewalsSummary(
   );
 
   let monthIncomeMXN = 0;
+  let recurringAnnualIncomeMXN = 0;
+  let oneTimeYearIncomeMXN = 0;
   let pendingToCollectMXN = 0;
   let recurringRetainersMonthlyMXN = 0;
+  const currentDate = new Date();
+  const currentMonth = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
+  const currentYear = String(currentDate.getFullYear());
 
   filteredIncomes.forEach((inc: any) => {
     const raw = Number(inc.amount) || 0;
     const inMXN = inc.currency === 'USD' ? raw * usdRate : raw;
     const status = (inc.status || '').toLowerCase();
+    const isRecurring = Boolean(inc.is_recurring) || inc.category === 'iguala_mensual';
+    const receivedDate = String(inc.received_date || '');
 
-    if (status === 'paid') {
-      monthIncomeMXN += inMXN;
-      if (inc.category === 'retainer' || inc.is_recurring) {
+    if (status === 'cobrado') {
+      if (isRecurring) {
         recurringRetainersMonthlyMXN += inMXN;
+        if (receivedDate.startsWith(currentMonth)) monthIncomeMXN += inMXN;
+        recurringAnnualIncomeMXN += inMXN * 12;
+      } else {
+        if (receivedDate.startsWith(currentMonth)) monthIncomeMXN += inMXN;
+        if (receivedDate.startsWith(currentYear)) oneTimeYearIncomeMXN += inMXN;
       }
-    } else if (status === 'pending') {
+    } else if (status === 'pendiente') {
       pendingToCollectMXN += inMXN;
     }
   });
 
   const weekIncomeMXN = monthIncomeMXN / 4.33;
-  const yearIncomeMXN = monthIncomeMXN * 12;
+  const yearIncomeMXN = recurringAnnualIncomeMXN + oneTimeYearIncomeMXN;
   const monthIncomeUSD = monthIncomeMXN / usdRate;
   const weekIncomeUSD = weekIncomeMXN / usdRate;
   const yearIncomeUSD = yearIncomeMXN / usdRate;
   const pendingToCollectUSD = pendingToCollectMXN / usdRate;
 
   let variableMonthExpenseMXN = 0;
+  let recurringMonthlyExpenseMXN = 0;
+  let oneTimeYearExpenseMXN = 0;
   filteredExpenses.forEach((exp: any) => {
     const raw = Number(exp.amount) || 0;
     const inMXN = exp.currency === 'USD' ? raw * usdRate : raw;
-    variableMonthExpenseMXN += inMXN;
+    if (exp.recurrence_cycle) {
+      const cycle = String(exp.recurrence_cycle).toLowerCase();
+      const monthlyEquivalent = cycle === 'weekly'
+        ? inMXN * 52 / 12
+        : cycle === 'quarterly'
+          ? inMXN / 3
+          : cycle === 'yearly' || cycle === 'annual'
+            ? inMXN / 12
+            : inMXN;
+      recurringMonthlyExpenseMXN += monthlyEquivalent;
+    } else {
+      const date = String(exp.expense_date || '');
+      if (date.startsWith(currentMonth)) variableMonthExpenseMXN += inMXN;
+      if (date.startsWith(currentYear)) oneTimeYearExpenseMXN += inMXN;
+    }
   });
 
+  variableMonthExpenseMXN += recurringMonthlyExpenseMXN;
   const variableMonthExpenseUSD = variableMonthExpenseMXN / usdRate;
   const variableWeekExpenseMXN = variableMonthExpenseMXN / 4.33;
-  const variableYearExpenseMXN = variableMonthExpenseMXN * 12;
+  const variableYearExpenseMXN = recurringMonthlyExpenseMXN * 12 + oneTimeYearExpenseMXN;
   const variableYearExpenseUSD = variableYearExpenseMXN / usdRate;
 
   const fixedMonthlyExpenseMXN = fin?.monthlyMXN || 0;
@@ -514,9 +542,9 @@ export function computeRealProfitAndRenewalsSummary(
 
   const totalMonthlyExpenseMXN = fixedMonthlyExpenseMXN + variableMonthExpenseMXN;
   const totalMonthlyExpenseUSD = totalMonthlyExpenseMXN / usdRate;
-  const totalWeeklyExpenseMXN = totalMonthlyExpenseMXN / 4.33;
+  const totalWeeklyExpenseMXN = fixedWeeklyExpenseMXN + variableWeekExpenseMXN;
   const totalWeeklyExpenseUSD = totalWeeklyExpenseMXN / usdRate;
-  const totalYearlyExpenseMXN = totalMonthlyExpenseMXN * 12;
+  const totalYearlyExpenseMXN = fixedYearlyExpenseMXN + variableYearExpenseMXN;
   const totalYearlyExpenseUSD = totalYearlyExpenseMXN / usdRate;
 
   const netMonthMXN = monthIncomeMXN - totalMonthlyExpenseMXN;

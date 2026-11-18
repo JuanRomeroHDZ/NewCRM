@@ -1,0 +1,35 @@
+services:
+  proxy:
+    environment:
+      FRONTEND_UPSTREAM: frontend:5173
+
+  backend:
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--reload-dir", "/app/app"]
+    volumes:
+      - ./backend/app:/app/app:ro
+
+  frontend:
+    build:
+      target: dev
+    command: ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "5173", "--strictPort"]
+    environment:
+      VITE_API_PROXY_TARGET: http://backend:8000
+      VITE_DEV_HOST: 0.0.0.0
+      VITE_DEV_PORT: "5173"
+      VITE_DEV_HMR: "true"
+      VITE_DEV_HMR_HOST: "${HOST_BIND_IP:-127.0.0.1}"
+      VITE_DEV_HMR_CLIENT_PORT: "${HTTPS_PORT:-8443}"
+    volumes:
+      - ./frontend/src:/app/src
+      - ./frontend/public:/app/public
+      - ./frontend/index.html:/app/index.html
+      - ./frontend/vite.config.ts:/app/vite.config.ts
+      - ./frontend/tailwind.config.js:/app/tailwind.config.js
+      - ./frontend/postcss.config.js:/app/postcss.config.js
+      - ./frontend/tsconfig.json:/app/tsconfig.json
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:5173/ >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s

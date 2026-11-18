@@ -478,7 +478,7 @@ export const ProspectModal: React.FC = () => {
           {/* BLOQUE 1: Datos del Prospecto y Página Demo */}
           <div className="space-y-3 border-t border-obsidian-border pt-4">
             <div className="flex items-center gap-1.5">
-              <Globe size={12} className="text-indigo-400" />
+              <Globe size={16} className="text-obsidian-muted" aria-hidden="true" />
               <span className="text-xs font-semibold text-obsidian-text">
                 1. Datos del Prospecto y Página Demo
               </span>
@@ -570,7 +570,7 @@ export const ProspectModal: React.FC = () => {
 
               <div>
                 <label htmlFor="prospect-maps" className="text-obsidian-muted flex items-center gap-1.5 mb-1">
-                  <MapPin size={12} className="text-amber-400" />
+                  <MapPin size={16} className="text-obsidian-muted" aria-hidden="true" />
                   <span>Enlace a Ubicación en Google Maps</span>
                 </label>
                 <input id="prospect-maps"
@@ -585,7 +585,7 @@ export const ProspectModal: React.FC = () => {
 
               <div>
                 <label htmlFor="prospect-social" className="text-obsidian-muted flex items-center gap-1.5 mb-1">
-                  <Share2 size={12} className="text-indigo-400" />
+                  <Share2 size={16} className="text-obsidian-muted" aria-hidden="true" />
                   <span>Redes Sociales o Sitio Web Actual</span>
                 </label>
                 <input id="prospect-social"
@@ -603,7 +603,7 @@ export const ProspectModal: React.FC = () => {
             <div className="pt-2 border-t border-obsidian-border/70 grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <div className="text-obsidian-text font-medium flex items-center gap-1 mb-1">
-                  <DollarSign size={12} className="text-emerald-400" />
+                  <DollarSign size={16} className="text-obsidian-muted" aria-hidden="true" />
                   <label htmlFor="prospect-value">Valor Estimado / Cotización</label>
                   <InfoTooltip content="Se suma a tus proyectos en negociación o cerrados en el Resumen Ejecutivo y en Suscripciones y Finanzas." />
                 </div>
@@ -663,7 +663,7 @@ export const ProspectModal: React.FC = () => {
           <div className="space-y-3 border-t border-obsidian-border pt-4">
             <div>
               <span className="flex items-center gap-1.5 text-xs font-semibold text-obsidian-text">
-                <Mail size={12} className="text-indigo-400" />
+                <Mail size={16} className="text-obsidian-muted" aria-hidden="true" />
                 <span>2. Correos de Contacto</span>
               </span>
             </div>
@@ -767,7 +767,7 @@ export const ProspectModal: React.FC = () => {
           <div className="space-y-3 border-t border-obsidian-border pt-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-1.5">
-                <Clock size={12} className="text-amber-400" />
+                <Clock size={16} className="text-obsidian-muted" aria-hidden="true" />
                 <span className="text-xs font-semibold text-obsidian-text">
                   3. Tiempo Límite de Respuesta y Seguimientos
                 </span>
@@ -881,7 +881,7 @@ export const ProspectModal: React.FC = () => {
           <div className="grid grid-cols-1 gap-3">
             <div className="space-y-2">
               <label className="text-obsidian-text font-medium flex items-center gap-1.5">
-                <Tag size={12} className="text-indigo-400" />
+                <Tag size={16} className="text-obsidian-muted" aria-hidden="true" />
                 <span>Etiquetas del Prospecto (Giro, Prioridad, Ciudad)</span>
               </label>
               <div className="flex gap-2">

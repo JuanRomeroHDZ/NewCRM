@@ -97,7 +97,7 @@ export const FinancialExecutiveSummary: React.FC<FinancialExecutiveSummaryProps>
           />
         </div>
         <div className="flex flex-wrap items-center gap-2 text-xs font-mono text-obsidian-muted">
-          <span>Suscripciones activas: <strong className={fin.activeCount > 0 ? 'text-emerald-400' : 'text-obsidian-muted'}>{fin.activeCount}</strong></span>
+          <span>Suscripciones activas: <strong className="text-obsidian-text">{fin.activeCount}</strong></span>
           <span>•</span>
           <span>En prueba gratis: <strong className={fin.freeTrialCount > 0 ? 'text-amber-300' : 'text-obsidian-muted'}>{fin.freeTrialCount}</strong></span>
           <span>•</span>
@@ -164,7 +164,7 @@ export const FinancialExecutiveSummary: React.FC<FinancialExecutiveSummaryProps>
           {/* Ganancia Neta Anual */}
           <div className="min-w-0 space-y-1 border-b border-obsidian-border pb-3 sm:border-b-0 sm:pb-0 sm:even:border-l sm:even:pl-3 2xl:border-l 2xl:pl-3">
             <div className="flex items-center justify-between gap-1 text-xs text-obsidian-muted uppercase font-semibold">
-              <span className="truncate">Ganancia Neta (Año Actual)</span>
+              <span className="truncate">Ganancia neta · proyección anual</span>
               <span className="font-mono">Año</span>
             </div>
             <div className={`text-base font-bold font-mono truncate ${getNetTextClass(realProfit.netYearMXN)}`}>
@@ -172,7 +172,7 @@ export const FinancialExecutiveSummary: React.FC<FinancialExecutiveSummaryProps>
               {formatAmount(Math.abs(isProfitBase ? realProfit.netYearMXN : realProfit.netYearUSD))} {profitCurrencyView}
             </div>
             <div className="text-xs font-mono text-obsidian-muted truncate">
-              Cobrado: ${formatAmount(isProfitBase ? realProfit.yearIncomeMXN : realProfit.yearIncomeUSD)} • Gasto: ${formatAmount(isProfitBase ? realProfit.totalYearlyExpenseMXN : realProfit.totalYearlyExpenseUSD)}
+              Ingresos estimados: ${formatAmount(isProfitBase ? realProfit.yearIncomeMXN : realProfit.yearIncomeUSD)} • Gastos: ${formatAmount(isProfitBase ? realProfit.totalYearlyExpenseMXN : realProfit.totalYearlyExpenseUSD)}
             </div>
           </div>
 
@@ -555,7 +555,7 @@ export const FinancialExecutiveSummary: React.FC<FinancialExecutiveSummaryProps>
 
               <div className="w-full h-2.5 rounded-full bg-obsidian-surface overflow-hidden">
                 <div
-                  className={`h-full transition-all duration-500 ${
+                  className={`h-full ${
                     budgetCapEval.level === 'critical'
                       ? 'bg-rose-500'
                       : budgetCapEval.level === 'warning'
@@ -659,7 +659,7 @@ export const FinancialExecutiveSummary: React.FC<FinancialExecutiveSummaryProps>
       <div className="pt-3 border-t border-obsidian-border/60 flex flex-wrap items-center justify-between gap-3 text-xs text-obsidian-muted">
         <div className="flex flex-wrap items-center gap-3">
           <span>
-            Suscripciones: <strong className={fin.paidActiveCount > 0 ? 'text-emerald-400' : 'text-obsidian-muted'}>{fin.paidActiveCount} Activas de Pago</strong>
+            Suscripciones: <strong className="text-obsidian-text">{fin.paidActiveCount} Activas de Pago</strong>
           </span>
           <span>•</span>
           <span>

@@ -440,7 +440,7 @@ export const MapCaptureView: React.FC = () => {
             maxLength={64}
             required
             placeholder={sectors[0]?.label ? `Ej. ${sectors[0].label}` : 'Giro comercial'}
-            className="mt-1 min-h-[44px] w-full rounded-lg border border-obsidian-border bg-obsidian-bg px-3 text-sm text-white placeholder:text-obsidian-muted focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+            className="mt-1 min-h-11 w-full rounded-lg border border-obsidian-border bg-obsidian-bg px-3 text-sm text-white placeholder:text-obsidian-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent"
           />
           {sectors.length > 0 && (
             <datalist id={sectorDatalistId}>
@@ -460,7 +460,7 @@ export const MapCaptureView: React.FC = () => {
               setSearchError('');
             }}
             disabled={!zones.length || loading}
-            className="mt-1 min-h-[44px] w-full rounded-lg border border-obsidian-border bg-obsidian-bg px-3 text-sm text-white focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+            className="mt-1 min-h-11 w-full rounded-lg border border-obsidian-border bg-obsidian-bg px-3 text-sm text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent"
           >
             {zones.map((zone) => (
               <option key={zone.slug} value={zone.slug}>
@@ -481,7 +481,7 @@ export const MapCaptureView: React.FC = () => {
             disabled={loading}
             maxLength={64}
             placeholder="Especialidad o palabra clave"
-            className="mt-1 min-h-[44px] w-full rounded-lg border border-obsidian-border bg-obsidian-bg px-3 text-sm text-white placeholder:text-obsidian-muted focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+            className="mt-1 min-h-11 w-full rounded-lg border border-obsidian-border bg-obsidian-bg px-3 text-sm text-white placeholder:text-obsidian-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent"
           />
         </label>
         <div className="flex min-w-0 flex-wrap gap-2 sm:col-span-2 xl:col-span-1">

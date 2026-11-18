@@ -186,7 +186,7 @@ export const MitmPanel: React.FC = () => {
         <button
           type="button"
           onClick={() => setActiveSection('c2_sniff')}
-          className="ui-nav-action"
+          className="ui-action-secondary"
         >
           <Activity size={16} className="text-obsidian-muted" aria-hidden="true" />
           <span>{t('nav.sniff')}</span>
@@ -195,7 +195,7 @@ export const MitmPanel: React.FC = () => {
         <button
           type="button"
           onClick={() => setActiveSection('c2_dns')}
-          className="ui-nav-action"
+          className="ui-action-secondary"
         >
           <Route size={16} className="text-obsidian-muted" aria-hidden="true" />
           <span>{t('nav.dns')}</span>
@@ -204,7 +204,7 @@ export const MitmPanel: React.FC = () => {
         <button
           type="button"
           onClick={() => setActiveSection('c2_creds')}
-          className="ui-nav-action"
+          className="ui-action-secondary"
         >
           <KeyRound size={16} className="text-obsidian-muted" aria-hidden="true" />
           <span>{t('nav.creds')}</span>

@@ -278,7 +278,7 @@ export const SecurityAuditView: React.FC = () => {
                   strokeDasharray="251.2"
                   strokeDashoffset={251.2 - (251.2 * score) / 100}
                   strokeLinecap="round"
-                  className={`stroke-current transition-all duration-1000 ease-out motion-reduce:transition-none ${scoreTone}`}
+                  className={`stroke-current ${scoreTone}`}
                 />
               )}
             </svg>

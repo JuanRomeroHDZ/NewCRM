@@ -45,8 +45,6 @@ Keep labels, helper text, and values at their existing hierarchy. Prefer readabl
 
 These rules come from the user's requested Notion/Obsidian-like direction: “no me gusta que metas tarjetas en tarjetas y esas tarjetas en otra tarjeta”, “no utiliza 1000 colores”, and color freedom for nodes and diagram elements. They apply across Inicio, Prospección, Correo y servicios, Finanzas, Seguridad, Red y Lab, Actividad, Papelera y Ajustes.
 
-<!-- 2026-11-17: “no me gusta que metas tarjetas en tarjetas y esas tarjetas en otra tarjeta es horrible, más cuando utilizas muchos colores”; “no utiliza 1000 colores”. -->
-
 ## Overview pages and navigation
 
 - **Each main navigation group opens its own read-only overview.** Give standard module overviews one clear route into the primary work area; keep the detailed sections in the nested navigation tree.
@@ -64,12 +62,17 @@ These rules follow the user's request to “ver el resumen de tooooodos los apar
 
 ## Selects and dropdowns
 
-- **Native selects share the same control surface, border, radius, typography, focus treatment, and option colors through the global select rules in `index.css`.** Put decorative arrows in a positioned wrapper so they stay aligned with the control.
+- **Native selects share the same control surface, border, radius, typography, focus treatment, option colors, and CSS chevron through the global select rules in `index.css`.** Do not add a second per-control arrow. Native option-popup hover can still depend on the operating system.
 - **Action menus use the same neutral surface, border, row height, icon size, hover color, and focus color.** Keep disclosure panels distinct when they reveal forms or longer content.
 
 This follows the user's request to standardize “todos los desplegables” and the repeated reports of different borders and hover colors.
 
 ## Markdown and diagram editing
+
+- Las barras del editor y la pizarra son una sola fila compacta; si el ancho no alcanza, sus herramientas deben seguir disponibles mediante desplazamiento horizontal o un menú accesible, sin recortar controles. Agrupa funciones con separadores discretos.
+- En barras de herramientas, los botones de icono usan el mismo tamaño, iconos Lucide de 16 px y fondo transparente en reposo. El hover es neutral; un estado seleccionado usa una superficie neutral visible y `aria-pressed`. Crear o guardar desde una barra no lleva color permanente.
+- Los menús muestran opciones como filas neutrales uniformes: el borde no debe hacer que una opción parezca seleccionada. Etiqueta las acciones y distingue el estado real mediante texto y atributos accesibles.
+- Los controles compactos del editor pueden reducir su altura visual frente a formularios generales, conservando objetivos utilizables y foco visible. No reduzcas tipografía hasta hacerla ilegible.
 
 - **Preview styling preserves the source Markdown, heading order, anchors, and authored content.** Add clarity with restrained display styling while keeping the rendered document faithful to `.md`.
 - **Diagram nodes, labels, and icons stay centered as one group.** Truncate long visible labels with an ellipsis and retain the full label in an accessible title; include a no-custom-color choice for diagram elements.
@@ -81,7 +84,7 @@ These rules follow the user's request to keep the preview “tal cual en .md”,
 
 - Add a clear `focus-visible` indicator to every keyboard-operable control.
 - Use shared components such as `ConfirmDialog`, `EmptyState`, and `InlineErrorNotice` when they fit the interaction.
-- Make loading, empty, error, success, disabled, and permission-limited states explicit. State changes and validation errors should be announced accessibly.
+- Make loading, empty, error, success, disabled, and permission-limited states explicit. State changes and validation errors should be announced accessibly. Startup may show a spinner only while React mounts; after 12 seconds or a script failure, replace it with a retry state instead of leaving an endless loading screen.
 - Confirm actions that change host identity, credentials, financial records, or other consequential state. Explain the target and likely impact in the confirmation.
 - Keep the action that changes state visually distinct from generating, previewing, or editing values.
 

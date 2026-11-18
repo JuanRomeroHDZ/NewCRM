@@ -7,17 +7,30 @@
     <title>LESSSO</title>
     <meta name="description" content="Sistema personal con Bóveda, Finanzas, CRM de prospectos y ventas, Comunicaciones, Agenda y Taller" />
     <style>
-      .startup-screen{min-height:100dvh;display:grid;place-items:center;background:#080b16;color:#a9b1c5;font:500 14px system-ui,sans-serif}
+      .startup-screen{box-sizing:border-box;min-height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:24px;background:#080a0a;color:#b3b9bc;font:500 14px Poppins,system-ui,sans-serif;text-align:center}
       .startup-message{display:flex;align-items:center;gap:12px}
-      .startup-spinner{width:12px;height:12px;border:2px solid #31364a;border-top-color:#a98242;border-radius:50%;animation:startup-spin .8s linear infinite}
+      .startup-spinner{width:12px;height:12px;border:2px solid #39413f;border-top-color:#0f766e;border-radius:50%;animation:startup-spin .8s linear infinite}
+      .startup-detail{max-width:32rem;margin:0;color:#b3b9bc;line-height:1.5}
+      .startup-retry{min-height:44px;padding:0 16px;border:1px solid #39413f;border-radius:8px;background:#171b1a;color:#f3f4f6;font:inherit;cursor:pointer;transition:background-color 120ms ease,border-color 120ms ease}
+      .startup-retry:hover{background:#252b29}
+      .startup-retry:focus-visible{outline:2px solid #0f766e;outline-offset:2px}
+      .startup-screen [hidden]{display:none!important}
       @keyframes startup-spin{to{transform:rotate(360deg)}}
       @media(prefers-reduced-motion:reduce){.startup-spinner{animation:none}}
     </style>
   </head>
   <body class="bg-obsidian-bg text-obsidian-text font-sans antialiased selection:bg-obsidian-accent/30 selection:text-obsidian-bg min-h-screen">
     <div id="root">
-      <main class="startup-screen" role="status"><div class="startup-message"><span class="startup-spinner" aria-hidden="true"></span><span>Abriendo LESSSO…</span></div></main>
+      <main class="startup-screen" data-startup-screen role="status" aria-live="polite">
+        <div class="startup-message">
+          <span class="startup-spinner" data-startup-spinner aria-hidden="true"></span>
+          <span data-startup-title>Abriendo LESSSO…</span>
+        </div>
+        <p class="startup-detail" data-startup-detail hidden></p>
+        <button class="startup-retry" data-startup-retry type="button" hidden>Volver a intentar</button>
+      </main>
     </div>
+    <script src="/startup.js" defer></script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

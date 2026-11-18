@@ -20,6 +20,7 @@ import markdown as md_lib
 import nh3
 from PIL import Image as PILImage
 from weasyprint import HTML as WeasyHTML
+from weasyprint.urls import URLFetcher, URLFetcherResponse
 from app.config import settings
 from app.services.workshop_sanitizer import sanitize_formula_injection, sanitize_svg_content
 from app.services.writeup_media import decrypt_asset_bytes
@@ -164,17 +165,26 @@ def apply_redaction_markers(text: str, redact_for_client: bool) -> str:
     return REDACT_PATTERN.sub(_replace, text)
 
 
-def _ssrf_safe_url_fetcher(url: str, timeout: int = 10, ssl_context: Any = None) -> dict[str, Any]:
-    """Blocks all external network or local filesystem fetches during PDF rendering."""
-    if url.startswith("data:"):
+class _SSRFURLFetcher(URLFetcher):
+    """Allow embedded report assets and block network or filesystem fetches."""
+
+    def __init__(self) -> None:
+        super().__init__(allowed_protocols={"data"}, fail_on_errors=False)
+
+    def fetch(self, url: str, headers: dict[str, str] | None = None) -> URLFetcherResponse:
+        if not url.startswith("data:"):
+            raise ValueError(f"Recurso externo bloqueado por protección SSRF: {url[:80]}")
+
         header, _, encoded = url[5:].partition(",")
         mime_type = header.split(";")[0] or "application/octet-stream"
         if ";base64" in header:
             data = base64.b64decode(encoded)
         else:
             data = encoded.encode("utf-8")
-        return {"string": data, "mime_type": mime_type}
-    raise ValueError(f"Recurso externo bloqueado por protección SSRF: {url[:80]}")
+        return URLFetcherResponse(url, body=data, headers={"Content-Type": mime_type})
+
+
+_ssrf_safe_url_fetcher = _SSRFURLFetcher()
 
 
 def _asset_to_data_uri(asset: dict[str, Any]) -> str:

@@ -16,10 +16,13 @@ El CRM funciona por sí solo y no inicia C2. C2 es un servicio opcional, indepen
 Desde la carpeta `NewCRM`, ejecuta `./lessso` con tu usuario habitual, sin `sudo`.
 
 - **Abrir CRM** enciende el CRM y lo deja disponible al salir del menú.
+- **Abrir CRM en desarrollo (recarga automática)** inicia Vite y recarga la interfaz al guardar archivos; el backend también se recarga al modificar `backend/app`. Mantiene la misma dirección HTTPS. Úsalo mientras trabajas en el código; el modo **Abrir CRM** conserva el frontend de producción.
 - **Abrir CRM temporal** muestra la dirección para el navegador. Pulsa Intro o Ctrl+C en la terminal para terminar.
 - **Abrir CRM con C2 de demostración** inicia los dos juntos. Pulsa Ctrl+C en la terminal para terminar.
 - **Abrir CRM y activar C2 real** inicia el CRM y solicita autorización con `sudo` en la terminal. Pulsa Ctrl+C para detener C2.
 - **Administrar servicios** permite detener el CRM, consultar su estado, preparar C2 y elegir los puertos HTTP y HTTPS.
+
+Para cambiar entre desarrollo y producción después de iniciar, abre `./lessso` y elige la opción correspondiente. La recarga automática queda activa mientras corre el modo de desarrollo; no hace falta volver a abrir el menú por cada cambio.
 
 Las sesiones temporales detienen los servicios del CRM que encendieron. Si el CRM ya estaba activo, sigue abierto. Cerrar la pestaña del navegador no detiene los servicios. Detenerlos conserva los datos.
 

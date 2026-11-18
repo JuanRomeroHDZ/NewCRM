@@ -36,7 +36,7 @@ const AuditDetails: React.FC<AuditDetailsProps> = ({ text, entityType, entity, i
       <p className={`whitespace-pre-wrap break-words ${value ? '' : 'text-white/40'}`}>{preview}</p>
       <details className="group mt-1.5">
         {/* [Acción secundaria] Expande el registro para mostrar datos completos. */}
-        <summary data-caret="manual" className="ui-action-secondary cursor-pointer list-none text-[11px] [&::-webkit-details-marker]:hidden">
+        <summary data-caret="manual" aria-label={timestamp ? `Detalles del evento del ${timestamp}` : 'Detalles del evento'} className="ui-action-secondary cursor-pointer list-none text-[11px] [&::-webkit-details-marker]:hidden">
           <span className="group-open:hidden">Ver más</span>
           <span className="hidden group-open:inline">Ver menos</span>
           <ChevronDown size={16} className="shrink-0 text-obsidian-muted transition-transform group-open:rotate-180" aria-hidden="true" />
@@ -470,6 +470,7 @@ export const AuditLogsView: React.FC = () => {
                               type="button"
                               aria-expanded={isExpanded}
                               aria-controls={`audit-detail-${log.id}`}
+                              aria-label={`${isExpanded ? 'Ocultar' : 'Mostrar'} detalles del evento del ${timestamp}`}
                               onClick={() => setExpandedLogIds((current) => {
                                 const next = new Set(current);
                                 if (next.has(log.id)) next.delete(log.id);
@@ -488,7 +489,7 @@ export const AuditLogsView: React.FC = () => {
                             <td colSpan={6} className="border-t border-obsidian-border px-3 py-3 xl:px-4">
                               <div className="grid min-w-0 gap-3 md:grid-cols-[minmax(0,1.5fr)_minmax(14rem,1fr)]">
                                 <div className="min-w-0">
-                                  <h3 className="text-[10px] font-semibold uppercase tracking-wide text-obsidian-muted">Detalle de la actividad</h3>
+                                  <h3 className="text-xs font-semibold text-obsidian-muted">Detalle de la actividad</h3>
                                   <p className="mt-1 whitespace-pre-wrap break-words text-xs text-white/80">{details || 'Este registro no incluye una descripción adicional.'}</p>
                                 </div>
                                 <dl className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 border-t border-obsidian-border pt-2 text-[11px] text-obsidian-muted md:border-l md:border-t-0 md:pl-3 md:pt-0">
@@ -513,7 +514,7 @@ export const AuditLogsView: React.FC = () => {
 
       {/* [Navegación] Paginación del historial, sin modificar registros. */}
       {total > PAGE_SIZE && !loadError && (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-obsidian-border bg-obsidian-panel px-4 py-3 text-xs text-obsidian-muted">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-obsidian-border py-3 text-xs text-obsidian-muted">
           <span>
             Mostrando {startItem}–{endItem} de {total} registros
           </span>

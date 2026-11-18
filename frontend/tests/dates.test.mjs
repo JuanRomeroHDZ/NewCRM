@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { build } from 'esbuild';
 
 const compiled = await build({ entryPoints: ['src/lib/dates.ts'], bundle: true, format: 'esm', platform: 'node', write: false });
-const { parseApiDate, formatApiDateTime } = await import(`data:text/javascript;base64,${Buffer.from(compiled.outputFiles[0].contents).toString('base64')}`);
+const { parseApiDate, formatApiDateTime, formatLocalDate } = await import(`data:text/javascript;base64,${Buffer.from(compiled.outputFiles[0].contents).toString('base64')}`);
 
 test('API dates without a zone are UTC and explicit offsets are preserved', () => {
   assert.equal(parseApiDate('2026-11-15T06:27:00').toISOString(), '2026-11-15T06:27:00.000Z');
@@ -18,4 +18,15 @@ test('API dates without a zone are UTC and explicit offsets are preserved', () =
     else process.env.TZ = originalTimezone;
   }
   assert.equal(formatApiDateTime('invalid'), 'Fecha no disponible');
+});
+
+test('date-only form defaults follow the local day even when UTC is already tomorrow', () => {
+  const originalTimezone = process.env.TZ;
+  process.env.TZ = 'America/Tijuana';
+  try {
+    assert.equal(formatLocalDate(new Date('2026-11-18T01:30:00Z')), '2026-11-17');
+  } finally {
+    if (originalTimezone === undefined) delete process.env.TZ;
+    else process.env.TZ = originalTimezone;
+  }
 });

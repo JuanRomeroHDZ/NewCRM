@@ -128,14 +128,6 @@ export const WifiPanel: React.FC = () => {
       await refreshWifiIfaces();
     });
 
-  const handleKillServices = () =>
-    void runAction('kill', async () => {
-      const res = await c2Api.killWifiInterferers();
-      const msg = res.message || t('wifi.stoppedSvcs', { list: (res.stopped || []).join(', ') });
-      addLog('wifi', msg);
-      showToast(msg, 'info');
-    });
-
   const handleRestoreServices = () =>
     void runAction('restore', async () => {
       const res = await c2Api.restoreWifiServices();
@@ -348,15 +340,6 @@ export const WifiPanel: React.FC = () => {
             </button>
             <button
               type="button"
-              onClick={handleKillServices}
-              disabled={busyAction !== null}
-              className="ui-action-secondary"
-            >
-              <span>{t('wifi.kill')}</span>
-              {/* [Acción secundaria] Abre o ajusta la operación actual. */}
-            </button>
-            <button
-              type="button"
               onClick={handleRestoreServices}
               disabled={busyAction !== null}
               className="ui-action-secondary"
@@ -432,14 +415,16 @@ export const WifiPanel: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => selectWifiApForDeauth(ap.bssid, ap.channel)}
-                          className="ui-action-danger"
+                          aria-label={t('wifi.prepareDeauthFor', { target: ap.ssid || ap.bssid })}
+                          className="ui-action-secondary"
                         >
                           Deauth
-                          {/* [Acción destructiva] Detiene o revierte la operación. */}
+                          {/* [Acción secundaria] Prepara el destino; no inicia la operación. */}
                         </button>
                         <button
                           type="button"
                           onClick={() => selectWifiApForPmkid(ap.bssid, ap.channel, ap.ssid)}
+                          aria-label={t('wifi.preparePmkidFor', { target: ap.ssid || ap.bssid })}
                           className="ui-action-secondary"
                         >
                           PMKID

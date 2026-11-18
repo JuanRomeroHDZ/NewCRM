@@ -458,7 +458,7 @@ export const SettingsView: React.FC = () => {
                   id="budget-cap-currency"
                   value={budgetCapCurrency}
                   onChange={(e) => setBudgetCapCurrency(e.target.value)}
-                  className="w-20 min-h-11 shrink-0 px-2 py-2 rounded-lg bg-obsidian-bg border border-obsidian-border text-white font-semibold sm:w-28 sm:px-3"
+                  className="w-24 min-h-11 shrink-0 px-2 py-2 rounded-lg bg-obsidian-bg border border-obsidian-border text-white font-semibold sm:w-28 sm:px-3"
                 >
                   {currencySelectOptions.map((code) => (
                     <option key={code} value={code}>
@@ -562,18 +562,18 @@ export const SettingsView: React.FC = () => {
       </section>
 
       {/* Backup & Import/Export Section */}
-      <div id="settings-backup" tabIndex={-1} style={{ outline: activeSection === 'settings_backup' ? '2px solid var(--brand-accent, #0F766E)' : undefined, outlineOffset: '2px' }} className="grid scroll-mt-4 grid-cols-1 gap-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent md:grid-cols-2">
+      <div id="settings-backup" tabIndex={-1} style={{ outline: activeSection === 'settings_backup' ? '2px solid var(--brand-accent, #0F766E)' : undefined, outlineOffset: '2px' }} className="scroll-mt-4 divide-y divide-obsidian-border border-y border-obsidian-border focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent">
         {/* Import */}
-        <div className="flex min-w-0 flex-col justify-between gap-3 rounded-xl border border-obsidian-border bg-obsidian-panel p-3 sm:p-6">
-          <div className="flex items-center gap-2">
+        <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 py-4">
+          <div className="flex min-w-0 items-center gap-2">
             <Upload size={18} className="text-obsidian-muted flex-shrink-0" aria-hidden="true" />
-            <h3 className="text-sm font-bold text-white truncate">Importar Contraseñas</h3>
+            <h3 className="min-w-0 text-sm font-semibold text-white">Importar contraseñas</h3>
             <InfoTooltip content="Importa tus cuentas desde Bitwarden, 1Password, Google Chrome o archivos CSV/JSON." />
           </div>
           <button
             type="button"
             onClick={openImportModal}
-            className="ui-action-secondary w-full"
+            className="ui-action-secondary"
           >
             <Upload size={16} aria-hidden="true" />
             <span>Importar</span>
@@ -581,16 +581,16 @@ export const SettingsView: React.FC = () => {
         </div>
 
         {/* Export */}
-        <div className="flex min-w-0 flex-col justify-between gap-3 rounded-xl border border-obsidian-border bg-obsidian-panel p-3 sm:p-6">
-          <div className="flex items-center gap-2">
+        <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 py-4">
+          <div className="flex min-w-0 items-center gap-2">
             <Download size={18} className="text-obsidian-muted flex-shrink-0" aria-hidden="true" />
-            <h3 className="text-sm font-bold text-white truncate">Descargar Respaldo Encriptado</h3>
+            <h3 className="min-w-0 text-sm font-semibold text-white">Descargar respaldo encriptado</h3>
             <InfoTooltip content="Descarga un archivo JSON con el respaldo encriptado de tus correos, cuentas y métodos de pago." />
           </div>
           <button
             type="button"
             onClick={handleExportVault}
-            className="ui-action-secondary w-full"
+            className="ui-action-secondary"
           >
             <Download size={16} aria-hidden="true" />
             <span>Descargar respaldo</span>

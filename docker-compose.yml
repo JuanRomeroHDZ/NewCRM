@@ -10,7 +10,8 @@ services:
       - "${HOST_BIND_IP:-127.0.0.1}:${HTTPS_PORT:-8443}:443"
     environment:
       HTTPS_PORT_SUFFIX: ":${HTTPS_PORT:-8443}"
-      NGINX_ENVSUBST_FILTER: "HTTPS_PORT_SUFFIX"
+      FRONTEND_UPSTREAM: frontend:80
+      NGINX_ENVSUBST_FILTER: "HTTPS_PORT_SUFFIX|FRONTEND_UPSTREAM"
     volumes:
       - ./nginx/certs:/etc/nginx/certs:ro
     networks:
@@ -169,6 +170,7 @@ services:
       - vault_media:/source/vault_media:ro
       - full_backup_data:/var/backups/full
       - ./docker-compose.yml:/source/deployment/docker-compose.yml:ro
+      - ./docker-compose.dev.yml:/source/deployment/docker-compose.dev.yml:ro
       - ./nginx:/source/deployment/nginx:ro
       - ./scripts:/source/deployment/scripts:ro
       - ./backend/app:/source/deployment/backend/app:ro

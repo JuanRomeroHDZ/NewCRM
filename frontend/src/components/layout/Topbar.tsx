@@ -1,7 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { 
-  Menu, X, ChevronDown
-} from 'lucide-react';
+import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { useVault } from '../../context/VaultContext';
 import { InfoTooltip } from '../common/InfoTooltip';
 
@@ -99,7 +97,7 @@ export const Topbar: React.FC<TopbarProps> = ({ onMenuClick, menuTriggerRef, isM
           className="ui-action-icon h-11 w-11 shrink-0 lg:hidden"
           aria-label={isMenuOpen ? 'Cerrar menú de navegación' : 'Abrir menú de navegación'}
         >
-          {isMenuOpen ? <X size={16} aria-hidden="true" /> : <Menu size={16} aria-hidden="true" />}
+          {isMenuOpen ? <PanelLeftClose size={16} aria-hidden="true" /> : <PanelLeftOpen size={16} aria-hidden="true" />}
         </button>
         <h1 className="min-w-0 truncate text-sm font-semibold text-white sm:text-base" title={currentInfo.title}>
           <span className="topbar-title-full">{currentInfo.title}</span>
@@ -123,7 +121,6 @@ export const Topbar: React.FC<TopbarProps> = ({ onMenuClick, menuTriggerRef, isM
           >
             {scopeOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
           </select>
-          <ChevronDown size={14} aria-hidden="true" className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-obsidian-muted" />
         </label>
       )}
 

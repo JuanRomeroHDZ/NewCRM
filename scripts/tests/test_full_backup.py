@@ -215,6 +215,7 @@ class FullBackupUnitTests(unittest.TestCase):
         self.assertIn("./backend/tests:/source/deployment/backend/tests:ro", bind_mounts)
         self.assertIn("./frontend/tests:/source/deployment/frontend/tests:ro", bind_mounts)
         self.assertIn("./.env.example:/source/deployment/.env.example:ro", bind_mounts)
+        self.assertIn("./docker-compose.dev.yml:/source/deployment/docker-compose.dev.yml:ro", bind_mounts)
         self.assertIn("./docs:/source/deployment/docs:ro", bind_mounts)
 
     def test_capture_retries_and_discards_snapshot_when_source_changes_during_db_dump(self):
@@ -382,6 +383,7 @@ class RestoreVerificationUnitTests(unittest.TestCase):
             self._make_archive(archive_path, archive_members)
             names = restore_test.validate_and_extract_media_config(archive_path, extracted)
             self.assertIn("deployment/docker-compose.yml", names)
+            self.assertIn("deployment/docker-compose.dev.yml", names)
             self.assertIn("deployment/.env.example", names)
             self.assertIn("deployment/docs/auditoria-secretos.md", names)
             self.assertIn("deployment/backend/tests/test_writeups.py", names)

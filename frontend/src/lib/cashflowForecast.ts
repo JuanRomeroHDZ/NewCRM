@@ -10,6 +10,9 @@ export interface ForecastEvent {
   direction: 'inflow' | 'outflow';
   kind: ForecastKind;
   estimated: boolean;
+  sourceId?: string | null;
+  platformId?: string | null;
+  paymentMethodId?: string | null;
 }
 
 export interface CashflowForecast {
@@ -57,6 +60,7 @@ function nextCycle(date: Date, cycle: string, anchorDay = date.getUTCDate(), anc
   if (normalized === 'daily') return new Date(date.getTime() + DAY_MS);
   if (normalized === 'weekly') return new Date(date.getTime() + 7 * DAY_MS);
   if (normalized === 'monthly') return addMonthOffset(date, 1, anchorDay);
+  if (normalized === 'quarterly') return addMonthOffset(date, 3, anchorDay);
   if (normalized === 'yearly' || normalized === 'annual') {
     return addYearOffset(date, 1, anchorDay, anchorMonth);
   }
@@ -69,10 +73,12 @@ function firstOnOrAfter(date: Date, today: Date, cycle: string): Date {
   const daysBehind = Math.ceil((today.getTime() - date.getTime()) / DAY_MS);
   if (normalized === 'daily') return new Date(date.getTime() + daysBehind * DAY_MS);
   if (normalized === 'weekly') return new Date(date.getTime() + Math.ceil(daysBehind / 7) * 7 * DAY_MS);
-  if (normalized === 'monthly') {
-    const monthOffset = Math.max(0, (today.getUTCFullYear() - date.getUTCFullYear()) * 12 + today.getUTCMonth() - date.getUTCMonth());
+  if (normalized === 'monthly' || normalized === 'quarterly') {
+    const interval = normalized === 'quarterly' ? 3 : 1;
+    const monthsBehind = Math.max(0, (today.getUTCFullYear() - date.getUTCFullYear()) * 12 + today.getUTCMonth() - date.getUTCMonth());
+    const monthOffset = Math.floor(monthsBehind / interval) * interval;
     let occurrence = addMonthOffset(date, monthOffset, date.getUTCDate());
-    if (occurrence < today) occurrence = addMonthOffset(date, monthOffset + 1, date.getUTCDate());
+    if (occurrence < today) occurrence = addMonthOffset(date, monthOffset + interval, date.getUTCDate());
     return occurrence;
   }
   if (normalized === 'yearly' || normalized === 'annual') {
@@ -118,7 +124,18 @@ export function projectCashflow90Days(
   let undatedRecurringCount = 0;
   let sequence = 0;
 
-  const addEvent = (date: Date, title: string, amount: number, currency: string, kind: ForecastKind, direction: 'inflow' | 'outflow', estimated: boolean) => {
+  const addEvent = (
+    date: Date,
+    title: string,
+    amount: number,
+    currency: string,
+    kind: ForecastKind,
+    direction: 'inflow' | 'outflow',
+    estimated: boolean,
+    sourceId?: string | null,
+    platformId?: string | null,
+    paymentMethodId?: string | null,
+  ) => {
     if (date < today || date > end) return;
     const amountMXN = amountToMXN(amount, currency, usdRate);
     if (amountMXN === null) {
@@ -126,7 +143,7 @@ export function projectCashflow90Days(
       return;
     }
     if (amountMXN <= 0) return;
-    events.push({ id: `${kind}-${sequence++}`, date: toDateString(date), title, amountMXN, direction, kind, estimated });
+    events.push({ id: `${kind}-${sequence++}`, date: toDateString(date), title, amountMXN, direction, kind, estimated, sourceId, platformId, paymentMethodId });
   };
 
   platforms.forEach((platform) => {
@@ -145,7 +162,18 @@ export function projectCashflow90Days(
     const anchorMonth = dueDate.getUTCMonth();
     for (let i = 0; i < 370 && occurrence <= end; i += 1) {
       if (occurrence >= today) {
-        addEvent(occurrence, platform.subscription_status === 'free_trial' ? `${platform.name} · termina la prueba` : platform.name, amount, platform.currency, 'subscription', 'outflow', occurrence > dueDate);
+        addEvent(
+          occurrence,
+          platform.subscription_status === 'free_trial' ? `${platform.name} · termina la prueba` : platform.name,
+          amount,
+          platform.currency,
+          'subscription',
+          'outflow',
+          occurrence > dueDate,
+          platform.id,
+          platform.id,
+          platform.payment_method_id,
+        );
       }
       const next = nextCycle(occurrence, platform.billing_cycle, anchorDay, anchorMonth);
       if (!next || next <= occurrence) break;
@@ -192,7 +220,26 @@ export function projectCashflow90Days(
   expenses.forEach((expense) => {
     if (expense.is_deleted || !inScope(expense.scope, activeScope)) return;
     const date = parseDate(expense.expense_date);
-    if (date && date >= today) addEvent(date, expense.concept, Number(expense.amount) || 0, expense.currency, 'expense', 'outflow', false);
+    if (!date) {
+      if (expense.recurrence_cycle) undatedRecurringCount += 1;
+      return;
+    }
+    const amount = Number(expense.amount) || 0;
+    if (!expense.recurrence_cycle) {
+      if (date >= today) addEvent(date, expense.concept, amount, expense.currency, 'expense', 'outflow', false, expense.id, expense.platform_id, expense.payment_method_id);
+      return;
+    }
+
+    const cycle = expense.recurrence_cycle;
+    let occurrence = firstOnOrAfter(date, today, cycle);
+    const anchorDay = date.getUTCDate();
+    const anchorMonth = date.getUTCMonth();
+    for (let i = 0; i < 370 && occurrence <= end; i += 1) {
+      addEvent(occurrence, expense.concept, amount, expense.currency, 'expense', 'outflow', occurrence > date, expense.id, expense.platform_id, expense.payment_method_id);
+      const next = nextCycle(occurrence, cycle, anchorDay, anchorMonth);
+      if (!next || next <= occurrence) break;
+      occurrence = next;
+    }
   });
 
   events.sort((a, b) => a.date.localeCompare(b.date) || a.title.localeCompare(b.title));

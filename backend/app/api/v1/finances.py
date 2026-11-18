@@ -12,6 +12,8 @@ from app.models import (
     InternalProject,
     SecureResource,
     EmailAccount,
+    PaymentMethod,
+    PlatformAccount,
 )
 from app.schemas import (
     ClientIncomeCreate, ClientIncomeUpdate, ClientIncomeResponse,
@@ -162,7 +164,10 @@ def _build_expense_response(row: OneTimeExpense) -> OneTimeExpenseResponse:
         business_share_percent=_business_share(row),
         ownership_type=row.ownership_type or "own",
         vendor=row.vendor,
+        platform_id=row.platform_id,
+        payment_method_id=row.payment_method_id,
         payment_method_label=row.payment_method_label,
+        recurrence_cycle=row.recurrence_cycle,
         prospect_id=row.prospect_id,
         project_id=row.project_id,
         notes=decrypt_note(row.notes) if row.notes else None,
@@ -675,6 +680,19 @@ async def create_expense(payload: OneTimeExpenseCreate, db: AsyncSession = Depen
     if not payload.concept.strip():
         raise HTTPException(status_code=400, detail="El concepto del gasto único es obligatorio.")
 
+    payment_method = None
+    if payload.payment_method_id:
+        payment_method = await db.get(PaymentMethod, payload.payment_method_id)
+        if not payment_method or payment_method.is_deleted:
+            raise HTTPException(status_code=404, detail="El método de pago seleccionado ya no está disponible.")
+    platform = None
+    if payload.platform_id:
+        platform = await db.get(PlatformAccount, payload.platform_id)
+        if not platform or platform.is_deleted:
+            raise HTTPException(status_code=404, detail="El servicio seleccionado ya no está disponible.")
+    if payload.recurrence_cycle not in {None, "weekly", "monthly", "quarterly", "yearly"}:
+        raise HTTPException(status_code=422, detail="La periodicidad del gasto no es válida.")
+
     now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
     item = OneTimeExpense(
         concept=payload.concept.strip(),
@@ -686,7 +704,14 @@ async def create_expense(payload: OneTimeExpenseCreate, db: AsyncSession = Depen
         business_share_percent=max(0.0, min(100.0, float(payload.business_share_percent if payload.business_share_percent is not None else 100.0))),
         ownership_type=payload.ownership_type or "own",
         vendor=payload.vendor.strip() if payload.vendor else None,
-        payment_method_label=payload.payment_method_label.strip() if payload.payment_method_label else None,
+        platform_id=platform.id if platform else None,
+        payment_method_id=payment_method.id if payment_method else None,
+        payment_method_label=(
+            f"{payment_method.alias} (*{payment_method.last_four})"
+            if payment_method
+            else payload.payment_method_label.strip() if payload.payment_method_label else None
+        ),
+        recurrence_cycle=payload.recurrence_cycle or None,
         prospect_id=payload.prospect_id or None,
         project_id=payload.project_id or None,
         notes=encrypt_note(payload.notes) if payload.notes else None,
@@ -732,8 +757,26 @@ async def update_expense(expense_id: str, payload: OneTimeExpenseUpdate, db: Asy
         item.ownership_type = payload.ownership_type
     if payload.vendor is not None:
         item.vendor = payload.vendor.strip() if payload.vendor else None
-    if payload.payment_method_label is not None:
+    if "platform_id" in payload.model_fields_set:
+        platform = await db.get(PlatformAccount, payload.platform_id) if payload.platform_id else None
+        if payload.platform_id and (not platform or platform.is_deleted):
+            raise HTTPException(status_code=404, detail="El servicio seleccionado ya no está disponible.")
+        item.platform_id = platform.id if platform else None
+    if "payment_method_id" in payload.model_fields_set:
+        payment_method = await db.get(PaymentMethod, payload.payment_method_id) if payload.payment_method_id else None
+        if payload.payment_method_id and (not payment_method or payment_method.is_deleted):
+            raise HTTPException(status_code=404, detail="El método de pago seleccionado ya no está disponible.")
+        item.payment_method_id = payment_method.id if payment_method else None
+        if payment_method:
+            item.payment_method_label = f"{payment_method.alias} (*{payment_method.last_four})"
+        else:
+            item.payment_method_label = payload.payment_method_label.strip() if payload.payment_method_label else None
+    elif payload.payment_method_label is not None:
         item.payment_method_label = payload.payment_method_label.strip() if payload.payment_method_label else None
+    if "recurrence_cycle" in payload.model_fields_set:
+        if payload.recurrence_cycle not in {None, "weekly", "monthly", "quarterly", "yearly"}:
+            raise HTTPException(status_code=422, detail="La periodicidad del gasto no es válida.")
+        item.recurrence_cycle = payload.recurrence_cycle or None
     if "prospect_id" in payload.model_fields_set:
         item.prospect_id = payload.prospect_id or None
     if "project_id" in payload.model_fields_set:

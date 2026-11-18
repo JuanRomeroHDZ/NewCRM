@@ -308,7 +308,7 @@ export const PlatformsView: React.FC = () => {
               onClick={() => setViewMode('grid')}
               className="ui-action-toggle"
             >
-              Tarjetas
+              Lista
             </button>
           </div>
           {isUnlocked && (
@@ -318,7 +318,7 @@ export const PlatformsView: React.FC = () => {
               className="ui-action-primary max-w-full shrink-0"
             >{/* [Acción principal] Inicia o confirma la tarea de este espacio. */}
               <Plus size={16} aria-hidden="true" />
-              <span>Nuevo servicio</span>
+              <span>Vincular servicio</span>
             </button>
           )}
         </div>
@@ -519,10 +519,10 @@ export const PlatformsView: React.FC = () => {
         </div>
       )}
 
-      {/* Grid view (always on <md, or when grid mode selected) */}
+      {/* [Navegación] Lista compacta para servicios con una sola superficie. */}
       {!loading && !error && filteredPlatforms.length > 0 && (
         <div
-          className={`grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 ${
+          className={`divide-y divide-obsidian-border border-y border-obsidian-border ${
             viewMode === 'table' ? 'md:hidden' : ''
           }`}
         >
@@ -543,7 +543,7 @@ export const PlatformsView: React.FC = () => {
             return (
               <article
                 key={p.id}
-                className="group min-w-0 space-y-2 overflow-hidden rounded-xl border border-obsidian-border bg-obsidian-panel p-4 transition-colors hover:border-obsidian-borderLight"
+                className="group flex min-w-0 flex-col gap-2 py-3"
               >
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <button
@@ -555,7 +555,7 @@ export const PlatformsView: React.FC = () => {
                     <PlatformIcon name={p.name} iconUrl={p.icon_url} size="sm" />
                     <div className="min-w-0 flex-1">
                       <h3
-                        className="truncate text-xs font-bold text-obsidian-text"
+                        className="truncate text-sm font-medium text-obsidian-text"
                         title={p.name}
                       >
                         {p.name}
@@ -602,9 +602,9 @@ export const PlatformsView: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="flex min-w-0 items-center justify-between gap-2 border-t border-obsidian-border/60 pt-2 text-[10px]">
+                <div className="flex min-w-0 items-center justify-between gap-2 text-xs">
                   <span className="truncate text-obsidian-muted">{scopeLabel}</span>
-                  <span className={`shrink-0 truncate font-medium ${p.subscription_status === 'free_trial' || p.subscription_status === 'paused' ? 'text-amber-300' : p.subscription_status === 'cancelled' ? 'text-rose-300' : 'text-obsidian-muted'}`}>
+                  <span className={`min-w-0 break-words text-right font-medium ${p.subscription_status === 'free_trial' || p.subscription_status === 'paused' ? 'text-amber-300' : p.subscription_status === 'cancelled' ? 'text-rose-300' : 'text-obsidian-muted'}`}>
                     {statusLabel}
                   </span>
                 </div>
@@ -638,14 +638,6 @@ export const PlatformsView: React.FC = () => {
                 Limpiar Filtros
               </button>
             )}
-            <button
-              type="button"
-              onClick={() => openPlatformModal()}
-              className="ui-action-primary"
-            >{/* [Acción principal] Inicia o confirma la tarea de este espacio. */}
-              <Plus size={16} aria-hidden="true" />
-              <span>Vincular plataforma</span>
-            </button>
           </div>
         </div>
       )}

@@ -19,6 +19,9 @@ import {
 import { computeCommercialPipelineSummary } from '../../lib/prospectUtils';
 import { INPUT_LIMITS, isValidCalendarDate } from '../../lib/validation';
 import { needsExchangeRateReview } from '../../lib/exchangeRateReview';
+import { formatLocalDate } from '../../lib/dates';
+import { projectCashflow90Days } from '../../lib/cashflowForecast';
+import type { ForecastEvent } from '../../lib/cashflowForecast';
 import { useDisplayCurrency } from '../../hooks/useDisplayCurrency';
 import { FinancialExecutiveSummary } from './subscriptions/FinancialExecutiveSummary';
 import { SubscriptionsLists } from './subscriptions/SubscriptionsLists';
@@ -97,7 +100,7 @@ export const SubscriptionsView: React.FC = () => {
   const [incAmount, setIncAmount] = useState('');
   const [incCurrency, setIncCurrency] = useState<string>(baseCurrency);
   const [incStatus, setIncStatus] = useState<IncomeStatus>('cobrado');
-  const [incDate, setIncDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [incDate, setIncDate] = useState(() => formatLocalDate());
   const [incMethod, setIncMethod] = useState('Transferencia SPEI');
   const [incRecurring, setIncRecurring] = useState(false);
   const [incScope, setIncScope] = useState<EntityScope>('business');
@@ -119,7 +122,7 @@ export const SubscriptionsView: React.FC = () => {
   const [renDate, setRenDate] = useState(() => {
     const d = new Date();
     d.setFullYear(d.getFullYear() + 1);
-    return d.toISOString().split('T')[0];
+    return formatLocalDate(d);
   });
   const [renCost, setRenCost] = useState('');
   const [renCurrency, setRenCurrency] = useState<string>(baseCurrency);
@@ -147,10 +150,12 @@ export const SubscriptionsView: React.FC = () => {
   const [expCategory, setExpCategory] = useState(EXPENSE_CATEGORIES[0]);
   const [expAmount, setExpAmount] = useState('');
   const [expCurrency, setExpCurrency] = useState<string>(baseCurrency);
-  const [expDate, setExpDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [expDate, setExpDate] = useState(() => formatLocalDate());
   const [expScope, setExpScope] = useState<EntityScope>('business');
   const [expPaymentMethodId, setExpPaymentMethodId] = useState('');
   const [expPaymentMethodLabel, setExpPaymentMethodLabel] = useState('');
+  const [expPlatformId, setExpPlatformId] = useState('');
+  const [expRecurrenceCycle, setExpRecurrenceCycle] = useState<'' | 'weekly' | 'monthly' | 'quarterly' | 'yearly'>('');
   const [expNotes, setExpNotes] = useState('');
   const [savingExpense, setSavingExpense] = useState(false);
 
@@ -413,7 +418,7 @@ export const SubscriptionsView: React.FC = () => {
     setIncAmount('');
     setIncCurrency(baseCurrency);
     setIncStatus('cobrado');
-    setIncDate(new Date().toISOString().split('T')[0]);
+    setIncDate(formatLocalDate());
     setIncMethod('Transferencia SPEI');
     setIncRecurring(false);
     setIncScope(defaultEntityScope);
@@ -432,7 +437,7 @@ export const SubscriptionsView: React.FC = () => {
     setIncAmount(String(inc.amount));
     setIncCurrency(inc.currency || baseCurrency);
     setIncStatus(inc.status || 'cobrado');
-    setIncDate(inc.received_date || new Date().toISOString().split('T')[0]);
+    setIncDate(inc.received_date || formatLocalDate());
     setIncMethod(inc.payment_method_label || 'Transferencia SPEI');
     setIncRecurring(Boolean(inc.is_recurring));
     setIncScope(inc.scope || 'business');
@@ -568,7 +573,7 @@ export const SubscriptionsView: React.FC = () => {
     setRenProvider('');
     const nextYr = new Date();
     nextYr.setFullYear(nextYr.getFullYear() + 1);
-    setRenDate(nextYr.toISOString().split('T')[0]);
+    setRenDate(formatLocalDate(nextYr));
     setRenCost('');
     setRenCurrency(baseCurrency);
     setRenCycle('yearly');
@@ -750,10 +755,12 @@ export const SubscriptionsView: React.FC = () => {
     setExpCategory(EXPENSE_CATEGORIES[0]);
     setExpAmount('');
     setExpCurrency(baseCurrency);
-    setExpDate(new Date().toISOString().split('T')[0]);
+    setExpDate(formatLocalDate());
     setExpScope(defaultEntityScope);
     setExpPaymentMethodId('');
     setExpPaymentMethodLabel('');
+    setExpPlatformId('');
+    setExpRecurrenceCycle('');
     setExpNotes('');
     setIsExpenseModalOpen(true);
   };
@@ -766,8 +773,10 @@ export const SubscriptionsView: React.FC = () => {
     setExpCurrency(exp.currency || baseCurrency);
     setExpDate(exp.expense_date);
     setExpScope(exp.scope || 'business');
-    setExpPaymentMethodId('');
+    setExpPaymentMethodId(exp.payment_method_id || '');
     setExpPaymentMethodLabel(exp.payment_method_label || '');
+    setExpPlatformId(exp.platform_id || '');
+    setExpRecurrenceCycle(exp.recurrence_cycle || '');
     setExpNotes(exp.notes || '');
     setIsExpenseModalOpen(true);
   };
@@ -796,20 +805,23 @@ export const SubscriptionsView: React.FC = () => {
         currency: expCurrency,
         expense_date: expDate,
         scope: expScope,
+        platform_id: expPlatformId || null,
+        payment_method_id: expPaymentMethodId || null,
         payment_method_label: expPaymentMethodLabel.trim() || null,
+        recurrence_cycle: expRecurrenceCycle || null,
         notes: expNotes.trim() || null,
       };
       if (editingExpense) {
         await api.updateExpense(editingExpense.id, payload);
-        showToast('Gasto único actualizado.', 'success');
+        showToast('Gasto actualizado.', 'success');
       } else {
         await api.createExpense(payload);
-        showToast('Gasto único registrado.', 'success');
+        showToast('Gasto registrado.', 'success');
       }
       setIsExpenseModalOpen(false);
       triggerDataReload();
     } catch (err: any) {
-      showToast(err.message || 'Error al guardar gasto único.', 'error');
+      showToast(err.message || 'Error al guardar el gasto.', 'error');
     } finally {
       setSavingExpense(false);
     }
@@ -817,8 +829,8 @@ export const SubscriptionsView: React.FC = () => {
 
   const handleDeleteExpense = async (exp: OneTimeExpense) => {
     const accepted = await confirm({
-      title: 'Enviar gasto único a papelera',
-      message: `¿Enviar el gasto único "${exp.concept}" a la papelera?`,
+      title: 'Enviar gasto a papelera',
+      message: `¿Enviar el gasto "${exp.concept}" a la papelera?`,
       confirmLabel: 'Enviar a papelera',
       cancelLabel: 'Cancelar',
       tone: 'danger',
@@ -826,7 +838,7 @@ export const SubscriptionsView: React.FC = () => {
     if (!accepted) return;
     try {
       await api.deleteExpense(exp.id);
-      showToast('Gasto único enviado a la papelera.', 'info');
+      showToast('Gasto enviado a la papelera.', 'info');
       triggerDataReload();
     } catch (err: any) {
       showToast(err.message, 'error');
@@ -860,18 +872,32 @@ export const SubscriptionsView: React.FC = () => {
     [prospects, fin.usdRate, fin.monthlyMXN]
   );
 
+  const filteredPlatforms = useMemo(() => platforms.filter((platform) => matchesScope(platform.scope)), [platforms, matchesScope]);
   const activeOrTrialPlatforms = useMemo(
-    () =>
-      platforms
-        .filter((p) => matchesScope(p.scope) && (p.subscription_status === 'active' || p.subscription_status === 'free_trial' || p.subscription_cost > 0))
-        .sort((a, b) => (a.next_billing_date || '9999').localeCompare(b.next_billing_date || '9999')),
-    [platforms, matchesScope]
+    () => filteredPlatforms
+      .filter((p) => p.subscription_status === 'active' || p.subscription_status === 'free_trial' || p.subscription_cost > 0)
+      .sort((a, b) => (a.next_billing_date || '9999').localeCompare(b.next_billing_date || '9999')),
+    [filteredPlatforms]
   );
-
   const filteredIncomes = useMemo(() => incomes.filter((i) => matchesScope(i.scope)), [incomes, matchesScope]);
   const filteredRenewals = useMemo(() => renewals.filter((r) => matchesScope(r.scope)), [renewals, matchesScope]);
   const filteredExpenses = useMemo(() => expenses.filter((e) => matchesScope(e.scope)), [expenses, matchesScope]);
   const filteredPaymentMethods = useMemo(() => paymentMethods.filter((p) => matchesScope(p.scope)), [paymentMethods, matchesScope]);
+  const cashflowForecast = useMemo(
+    () => projectCashflow90Days({
+      platforms: filteredPlatforms,
+      incomes: filteredIncomes,
+      renewals: filteredRenewals,
+      expenses: filteredExpenses,
+      usdRate: fin.usdRate,
+      activeScope: 'all',
+    }),
+    [filteredPlatforms, filteredIncomes, filteredRenewals, filteredExpenses, fin.usdRate]
+  );
+  const upcomingExpenseAndServiceEvents: ForecastEvent[] = useMemo(
+    () => cashflowForecast.events.filter((event) => event.direction === 'outflow' && event.kind !== 'renewal'),
+    [cashflowForecast.events]
+  );
   const financeListMode: 'all' | 'income' | 'services' | 'expenses' | 'cards' =
     activeSection === 'finance_income' ? 'income'
       : activeSection === 'finance_services' ? 'services'
@@ -907,7 +933,7 @@ export const SubscriptionsView: React.FC = () => {
       <div
         role="status"
         aria-label="Cargando finanzas"
-        className="mx-auto max-w-7xl min-w-0 space-y-5 p-3 sm:space-y-7 sm:p-8 animate-fadeIn"
+        className="mx-auto max-w-7xl min-w-0 space-y-5 p-4 sm:space-y-6 sm:p-6 animate-fadeIn"
       >
         <div className="h-12 w-full rounded-2xl border border-obsidian-border bg-obsidian-panel animate-pulse" />
         <div className="h-72 w-full rounded-2xl border border-obsidian-border bg-obsidian-panel animate-pulse" />
@@ -918,7 +944,7 @@ export const SubscriptionsView: React.FC = () => {
 
   if (loadError) {
     return (
-      <div className="mx-auto max-w-3xl p-4 sm:p-8 animate-fadeIn">
+      <div className="mx-auto max-w-3xl p-4 sm:p-6 animate-fadeIn">
         <EmptyState
           tone="error"
           icon={AlertTriangle}
@@ -940,15 +966,18 @@ export const SubscriptionsView: React.FC = () => {
     const dueSoon = filteredRenewals.filter((item) => item.days_remaining <= 30 && item.days_remaining >= 0).length;
     const financePanels = [
       { id: 'finance_income' as const, label: 'Ingresos y pagos', description: `${filteredIncomes.length} registros · pagos recibidos de clientes`, icon: Wallet },
-      { id: 'finance_services' as const, label: 'Servicios y vencimientos', description: `${filteredRenewals.length} renovaciones · ${dueSoon} próximas en 30 días`, icon: Server },
-      { id: 'finance_expenses' as const, label: 'Gastos', description: `${filteredExpenses.length} gastos únicos registrados`, icon: Receipt },
+      { id: 'finance_services' as const, label: 'Servicios y vencimientos', description: `${activeOrTrialPlatforms.length} servicios activos · ${filteredRenewals.length} renovaciones · ${dueSoon} en 30 días`, icon: Server },
+      { id: 'finance_expenses' as const, label: 'Gastos', description: `${filteredExpenses.length} gastos · ${filteredExpenses.filter((expense) => expense.recurrence_cycle).length} recurrentes · mes: ${overviewAmount(realProfit.variableMonthExpenseMXN)}`, icon: Receipt },
       { id: 'finance_cards' as const, label: 'Tarjetas y métodos', description: `${filteredPaymentMethods.length} métodos de pago guardados`, icon: CreditCard },
     ];
+    const next90OutflowMXN = upcomingExpenseAndServiceEvents.reduce((total, event) => total + event.amountMXN, 0);
     const financialMetrics = [
       { label: 'Ingresos del mes', value: overviewAmount(realProfit.monthIncomeMXN) },
       { label: 'Gastos mensuales', value: overviewAmount(realProfit.totalMonthlyExpenseMXN) },
-      { label: 'Resultado neto', value: `${realProfit.netMonthMXN < 0 ? '−' : ''}${overviewAmount(Math.abs(realProfit.netMonthMXN))}` },
-      { label: 'Vencimientos próximos', value: String(dueSoon) },
+      { label: 'Resultado neto del mes', value: `${realProfit.netMonthMXN < 0 ? '−' : ''}${overviewAmount(Math.abs(realProfit.netMonthMXN))}` },
+      { label: 'Proyección anual de ingresos', value: overviewAmount(realProfit.yearIncomeMXN) },
+      { label: 'Proyección anual de gastos', value: overviewAmount(realProfit.totalYearlyExpenseMXN) },
+      { label: 'Cargos de servicios y gastos · 90 días', value: overviewAmount(next90OutflowMXN) },
     ];
     return (
       <div className="mx-auto w-full max-w-5xl min-w-0 space-y-5 p-4 sm:p-6">
@@ -962,9 +991,9 @@ export const SubscriptionsView: React.FC = () => {
             ))}
           </div>
         </section>
-        <dl className="grid grid-cols-1 divide-y divide-obsidian-border sm:grid-cols-2 sm:divide-y-0">
+        <dl className="grid grid-cols-1 divide-y divide-obsidian-border sm:grid-cols-2 sm:divide-y-0 lg:grid-cols-3">
           {financialMetrics.map((metric, index) => (
-            <div key={metric.label} className={`py-3 first:pt-0 sm:py-4 ${index % 2 === 0 ? 'sm:pl-0 sm:pr-4' : 'sm:pl-4 sm:pr-0'} ${index % 2 === 0 && index + 1 < financialMetrics.length ? 'sm:border-r sm:border-obsidian-border' : ''} ${index > 1 ? 'sm:border-t sm:border-obsidian-border' : ''}`}>
+              <div key={metric.label} className={`py-3 first:pt-0 sm:py-4 lg:border-t lg:border-obsidian-border ${index % 2 === 0 ? 'sm:pl-0 sm:pr-4 lg:pl-0 lg:pr-4' : 'sm:pl-4 sm:pr-0 lg:px-4'} ${index % 3 === 2 ? 'lg:pl-4 lg:pr-0' : ''} ${index % 2 === 0 && index % 3 !== 2 ? 'sm:border-r sm:border-obsidian-border' : ''} ${index > 1 ? 'sm:border-t sm:border-obsidian-border' : ''}`}>
               <dt className="text-xs text-obsidian-muted">{metric.label}</dt>
               <dd className="mt-1 break-words font-mono text-lg font-semibold tabular-nums text-obsidian-text">{metric.value}</dd>
             </div>
@@ -987,7 +1016,7 @@ export const SubscriptionsView: React.FC = () => {
   }
 
   return (
-    <div className="mx-auto max-w-7xl min-w-0 space-y-5 p-3 sm:space-y-7 sm:p-8 animate-fadeIn">
+    <div className="mx-auto max-w-7xl min-w-0 space-y-5 p-4 sm:space-y-6 sm:p-6 animate-fadeIn">
       {partialDataWarning && (
         <div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-200">
           <span>{partialDataWarning}</span>
@@ -1016,7 +1045,7 @@ export const SubscriptionsView: React.FC = () => {
       {/* Header and Exchange Rate Controls */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-2 min-w-0">
-          <CreditCard className="text-indigo-400 flex-shrink-0" size={18} aria-hidden="true" />
+          <CreditCard className="text-obsidian-muted flex-shrink-0" size={18} aria-hidden="true" />
           <h2 className="text-base font-bold text-white tracking-tight truncate">
             {activeSection === 'finance_income' ? 'Ingresos y pagos'
               : activeSection === 'finance_services' ? 'Servicios y vencimientos'
@@ -1074,7 +1103,7 @@ export const SubscriptionsView: React.FC = () => {
                   aria-label="Editar tipo de cambio manualmente"
                   className="ui-action-icon"
                 >{/* [Icono] Acción identificada por su nombre accesible. */}
-                  <Edit2 size={12} aria-hidden="true" />
+                  <Edit2 size={16} aria-hidden="true" />
                 </button>
                 <button
                   type="button"
@@ -1082,9 +1111,9 @@ export const SubscriptionsView: React.FC = () => {
                   disabled={isSyncingRate}
                   title="Actualizar tipo de cambio desde internet"
                   aria-label="Actualizar tipo de cambio desde internet"
-                  className="ui-action-secondary"
+                  className="ui-action-icon"
                 >{/* [Acción secundaria] Ejecuta la operación de apoyo en este espacio. */}
-                  <RefreshCw size={12} className={isSyncingRate ? 'animate-spin text-indigo-400' : ''} aria-hidden="true" />
+                  <RefreshCw size={16} className={isSyncingRate ? 'animate-spin' : ''} aria-hidden="true" />
                 </button>
               </>
             )}
@@ -1126,8 +1155,8 @@ export const SubscriptionsView: React.FC = () => {
         filteredRenewals={filteredRenewals}
         filteredExpenses={filteredExpenses}
         filteredPaymentMethods={filteredPaymentMethods}
-        platforms={platforms}
-        activeOrTrialPlatforms={activeOrTrialPlatforms}
+        platforms={filteredPlatforms}
+        upcomingCashflowEvents={upcomingExpenseAndServiceEvents}
         billingHistory={billingHistory}
         realProfit={realProfit}
         profitCurrencyView={profitCurrencyView}
@@ -1158,6 +1187,7 @@ export const SubscriptionsView: React.FC = () => {
         supportedCurrencies={supportedCurrencies}
         prospects={prospects}
         paymentMethods={paymentMethods}
+        platforms={platforms}
         formatAmount={formatAmount}
         isIncomeModalOpen={isIncomeModalOpen}
         setIsIncomeModalOpen={setIsIncomeModalOpen}
@@ -1258,6 +1288,10 @@ export const SubscriptionsView: React.FC = () => {
         setExpPaymentMethodId={setExpPaymentMethodId}
         expPaymentMethodLabel={expPaymentMethodLabel}
         setExpPaymentMethodLabel={setExpPaymentMethodLabel}
+        expPlatformId={expPlatformId}
+        setExpPlatformId={setExpPlatformId}
+        expRecurrenceCycle={expRecurrenceCycle}
+        setExpRecurrenceCycle={setExpRecurrenceCycle}
         expNotes={expNotes}
         setExpNotes={setExpNotes}
         savingExpense={savingExpense}

@@ -369,7 +369,7 @@ export const PlatformModal: React.FC = () => {
             <Globe size={18} className="shrink-0 text-obsidian-muted" aria-hidden="true" />
             <div className="min-w-0">
               <h2 id="platform-modal-title" className="text-base font-bold text-white tracking-tight truncate">
-                {editingPlatformId ? 'Editar Plataforma o Servicio' : 'Agregar Plataforma o Servicio'}
+                {editingPlatformId ? 'Editar servicio vinculado' : 'Vincular servicio'}
               </h2>
             </div>
           </div>
@@ -683,7 +683,8 @@ export const PlatformModal: React.FC = () => {
               </span>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {/* [Menú y selector] Una cuadrícula de dos columnas da espacio a los valores. */}
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
                 <label htmlFor="platformmodal-field-9" className="text-obsidian-muted block mb-1">Estado del Plan</label>
                 <select id="platformmodal-field-9"
@@ -823,9 +824,9 @@ export const PlatformModal: React.FC = () => {
               </button>
             </div>
             {apiKeys.length > 0 && (
-              <div className="space-y-1 pt-1">
+              <div className="divide-y divide-obsidian-border border-t border-obsidian-border pt-1">
                 {apiKeys.map((ak, idx) => (
-                  <div key={idx} className="flex items-center justify-between gap-2 p-2 rounded-lg bg-obsidian-surface border border-obsidian-border text-xs">
+                  <div key={idx} className="flex min-w-0 items-center justify-between gap-2 py-1 text-xs">
                     <span className="font-medium text-white truncate">{ak.label}</span>
                     <div className="flex items-center gap-2 flex-shrink-0">
                       <span className="font-mono text-xs text-obsidian-muted">••••••••••••••••</span>
@@ -870,10 +871,10 @@ export const PlatformModal: React.FC = () => {
               </button>
             </div>
             {envVars.length > 0 && (
-              <div className="space-y-1 pt-1">
+              <div className="divide-y divide-obsidian-border border-t border-obsidian-border pt-1">
                 {envVars.map((ev, idx) => (
-                  <div key={idx} className="flex items-center justify-between gap-2 p-2 rounded-lg bg-obsidian-surface border border-obsidian-border text-xs">
-                    <span className="font-mono text-emerald-400 truncate">{ev.key}</span>
+                  <div key={idx} className="flex min-w-0 items-center justify-between gap-2 py-1 text-xs">
+                    <span className="min-w-0 truncate font-mono text-obsidian-text">{ev.key}</span>
                     <div className="flex items-center gap-2 flex-shrink-0">
                       <span className="font-mono text-obsidian-muted text-[11px]">••••••••</span>
                       <button type="button" onClick={() => setEnvVars(envVars.filter((_, i) => i !== idx))} aria-label={`Quitar variable ${ev.key}`} className="ui-action-icon ui-action-danger">

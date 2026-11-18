@@ -12,6 +12,9 @@ export default defineConfig(({ command, mode }) => {
   const devHost = env.VITE_DEV_HOST;
   const devPort = Number.parseInt(env.VITE_DEV_PORT, 10);
   const devHttps = command === 'serve' && env.VITE_DEV_HTTPS === 'true';
+  const proxiedHmr = command === 'serve' && env.VITE_DEV_HMR === 'true';
+  const hmrHost = env.VITE_DEV_HMR_HOST;
+  const hmrClientPort = Number.parseInt(env.VITE_DEV_HMR_CLIENT_PORT, 10);
   const https = devHttps
     ? {
         key: readFileSync(join(projectRoot, 'nginx/certs/local/server.key')),
@@ -41,6 +44,9 @@ export default defineConfig(({ command, mode }) => {
     if (!Number.isInteger(devPort) || devPort < 1 || devPort > 65535) {
       throw new Error('VITE_DEV_PORT must be a valid TCP port between 1 and 65535.');
     }
+    if (proxiedHmr && (!hmrHost || !Number.isInteger(hmrClientPort) || hmrClientPort < 1 || hmrClientPort > 65535)) {
+      throw new Error('Define VITE_DEV_HMR_HOST and a valid VITE_DEV_HMR_CLIENT_PORT when VITE_DEV_HMR is enabled.');
+    }
   }
 
   return {
@@ -51,6 +57,9 @@ export default defineConfig(({ command, mode }) => {
       host: devHost || undefined,
       https,
       proxy: apiProxy,
+      hmr: proxiedHmr
+        ? { protocol: 'wss', host: hmrHost, clientPort: hmrClientPort }
+        : undefined,
     },
     preview: {
       port: Number.isInteger(devPort) ? devPort : undefined,

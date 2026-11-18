@@ -201,7 +201,7 @@ export const ProspectsView: React.FC = () => {
                   onChange={(event) => setSearch(event.target.value)}
                   placeholder="Empresa, contacto, correo, teléfono o sitio web"
                   aria-label="Buscar prospectos por empresa, contacto, correo, teléfono o sitio web"
-                  className="min-h-11 w-full rounded-xl border border-obsidian-border bg-obsidian-bg pl-9 pr-3 text-sm text-white placeholder:text-obsidian-muted focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                  className="min-h-11 w-full rounded-lg border border-obsidian-border bg-obsidian-bg pl-9 pr-3 text-sm text-white placeholder:text-obsidian-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent"
                 />
               </span>
             </label>
@@ -210,7 +210,7 @@ export const ProspectsView: React.FC = () => {
               <select
                 value={status}
                 onChange={(event) => setStatus(event.target.value)}
-                className="mt-2 min-h-11 w-full rounded-xl border border-obsidian-border bg-obsidian-bg px-3 text-sm text-white focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                className="mt-2 min-h-11 w-full rounded-lg border border-obsidian-border bg-obsidian-bg px-3 text-sm text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent"
               >
                 <option value="todos">Todas las etapas</option>
                 {PROSPECT_STATUS_OPTIONS.map((option) => (

@@ -2,13 +2,15 @@
 
 ## Arrancar o reiniciar
 
-Desde la raíz de NewCRM, con `.env` configurado y los certificados creados:
+Desde la raíz de NewCRM, con tu usuario habitual:
 
 ```bash
-docker compose up -d
-docker compose ps
-docker compose logs --tail 80 backend
+./scripts/up.sh
+docker compose --env-file .env --env-file .env.runtime ps
+docker compose --env-file .env --env-file .env.runtime logs --tail 80 backend
 ```
+
+El arranque usa `.env.runtime` para conservar los puertos y la dirección elegidos. Para editar código con recarga automática, abre `./lessso` y selecciona **Abrir CRM en desarrollo (recarga automática)**; la dirección HTTPS no cambia. Para volver al frontend de producción, selecciona **Abrir CRM**.
 
 Para detener los servicios sin borrar los datos persistentes:
 

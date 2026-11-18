@@ -179,26 +179,6 @@
   font-size: 0.75rem;
   font-variant-numeric: tabular-nums;
 }
-.writeup-header-menu-item {
-  display: flex;
-  width: 100%;
-  min-height: 44px;
-  align-items: center;
-  gap: 8px;
-  border-radius: 6px;
-  padding: 8px;
-  color: #f3f4f6;
-  text-align: left;
-  font-size: 0.8125rem;
-  line-height: 1.25;
-  transition: background-color 140ms ease, color 140ms ease;
-}
-.writeup-header-menu-item:hover { background: #252b29; }
-.writeup-header-menu-item:focus-visible {
-  outline: 2px solid var(--brand-accent, #0f766e);
-  outline-offset: 2px;
-}
-.writeup-header-menu-item:disabled { cursor: not-allowed; opacity: 0.5; }
 .writeup-header-menu-danger { color: #fda4af; }
 .writeup-header-menu-danger:hover { background: rgb(76 5 25 / 0.35); color: #fecaca; }
 .writeup-header-pending-dot {
@@ -357,11 +337,8 @@
     padding-left: 0;
     padding-right: 0;
   }
-  .writeup-view-mode-label { width: 36px; }
-  .writeup-view-mode-select { width: 36px; padding-left: 0; padding-right: 0; color: transparent; font-size: 0; }
-  .writeup-view-mode-select option { color: #f1f5f9; font-size: 0.75rem; }
-  .writeup-view-mode-icon { display: block; }
-  .writeup-view-mode-chevron { display: none; }
+  .writeup-view-mode-button { width: 44px; min-width: 44px; justify-content: center; padding-left: 0; padding-right: 0; }
+  .writeup-view-mode-text { display: none; }
 }
 
 @container boardToolbar (max-width: 900px) {
@@ -923,11 +900,16 @@ details[open] > summary:not([data-caret="manual"]):not(.ui-action-icon):not(:has
   border-color: var(--brand-accent, #0f766e);
 }
 
-/* Native selects share one neutral control and popup palette across the app. */
+/* [Menú y selector] Native selects share one surface, arrow, and popup palette. */
 .brand-theme select:not([multiple]) {
+  appearance: none;
   color-scheme: dark;
   color: #ffffff;
   background-color: #171b1a;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23B3B9BC' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  background-size: 16px 16px;
   border: 1px solid #39413f;
   border-radius: 0.5rem;
   font-family: inherit;
@@ -935,6 +917,14 @@ details[open] > summary:not([data-caret="manual"]):not(.ui-action-icon):not(:has
   font-weight: 400;
   line-height: 1.25;
   min-height: 44px;
+  padding-inline-end: 2.5rem;
+}
+.brand-theme select:not([multiple]):focus-visible {
+  outline: 2px solid var(--brand-accent, #0f766e);
+  outline-offset: 2px;
+}
+[dir="rtl"] .brand-theme select:not([multiple]) {
+  background-position: left 0.75rem center;
 }
 .brand-theme select:not([multiple]):hover:not(:disabled) {
   background-color: #171b1a;
@@ -954,6 +944,11 @@ details[open] > summary:not([data-caret="manual"]):not(.ui-action-icon):not(:has
   color: #ffffff;
   background-color: color-mix(in srgb, var(--brand-accent, #0f766e) 38%, #101313);
 }
+
+/* [Menú y selector] Hide the browser disclosure marker when a custom caret is present. */
+summary[data-caret="manual"] { list-style: none; }
+summary[data-caret="manual"]::marker { content: ""; }
+summary[data-caret="manual"]::-webkit-details-marker { display: none; }
 
 /* Etiquetas semánticas para informes; la paleta está limitada a estos valores. */
 .writeup-label { display: inline-block; border: 1px solid currentColor; border-radius: 0.3rem; padding: 0.08em 0.5em; font-weight: 600; line-height: 1.4; }

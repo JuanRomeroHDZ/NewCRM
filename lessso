@@ -139,7 +139,7 @@ if [[ ! -t 0 ]]; then
   exit 0
 fi
 while true; do
-  printf '\nLESSSO\n\n1) Abrir CRM\n2) Abrir CRM con C2 de demostración\n3) Abrir CRM y activar C2 real\n4) Administrar servicios\n5) Abrir CRM temporal (se apaga al terminar)\n6) Elegir acceso local o de red e iniciar CRM\n0) Salir\n\n'
+  printf '\nLESSSO\n\n1) Abrir CRM\n2) Abrir CRM con C2 de demostración\n3) Abrir CRM y activar C2 real\n4) Administrar servicios\n5) Abrir CRM temporal (se apaga al terminar)\n6) Elegir acceso local o de red e iniciar CRM\n7) Abrir CRM en desarrollo (recarga automática)\n0) Salir\n\n'
   read -r -p 'Elige una opción: ' choice || exit 0
   case "$choice" in
     1|'') prepare_installation && ./scripts/up.sh || echo 'El CRM no pudo iniciarse.' ;;
@@ -158,6 +158,7 @@ while true; do
     4) service_menu || echo 'No se pudo completar la acción.' ;;
     5) prepare_installation && session || echo 'La sesión del CRM se cerró o no pudo iniciarse.' ;;
     6) prepare_installation && ./scripts/up.sh --choose-address || echo 'El CRM no pudo iniciarse.' ;;
+    7) prepare_installation && ./scripts/up.sh --development || echo 'El CRM no pudo iniciarse en modo desarrollo.' ;;
     0) exit 0 ;;
     *) echo 'Opción no válida.' ;;
   esac

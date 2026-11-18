@@ -262,7 +262,7 @@ export const OpsecPanel: React.FC = () => {
             disabled={busy}
             className="ui-action-danger"
           >
-            <RotateCcw size={14} aria-hidden="true" />
+            <RotateCcw size={16} aria-hidden="true" />
             <span>{t('opsec.restore')}</span>
             {/* [Acción destructiva] Detiene o revierte la operación. */}
           </button>
@@ -285,9 +285,10 @@ export const OpsecPanel: React.FC = () => {
 
         {busy && <p role="status" aria-live="polite" className="mt-3 text-xs font-medium text-amber-200">{t('opsec.busy')}</p>}
 
-        <div className="mt-4 grid grid-cols-1 gap-3 rounded-xl border border-obsidian-border bg-obsidian-surface p-4 sm:grid-cols-2 xl:grid-cols-5">
+        {/* [Estado] Los datos de identidad comparten la superficie de la sección. */}
+        <div className="mt-4 grid grid-cols-1 gap-4 border-t border-obsidian-border pt-4 sm:grid-cols-2 xl:grid-cols-5">
           <div className="flex min-w-0 flex-col gap-0.5">
-            <span className="text-[11px] font-medium uppercase tracking-wider text-obsidian-muted">
+            <span className="text-xs font-medium text-obsidian-muted">
               {t('opsec.activeInterface')}
             </span>
             <strong className="font-mono text-sm text-white break-all">
@@ -296,7 +297,7 @@ export const OpsecPanel: React.FC = () => {
           </div>
 
           <div className="flex min-w-0 flex-col gap-0.5">
-            <span className="text-[11px] font-medium uppercase tracking-wider text-obsidian-muted">
+            <span className="text-xs font-medium text-obsidian-muted">
               {t('opsec.host')}
             </span>
             <strong className="font-mono text-sm text-white break-all">
@@ -305,7 +306,7 @@ export const OpsecPanel: React.FC = () => {
           </div>
 
           <div className="flex flex-col gap-0.5">
-            <span className="text-[11px] font-medium uppercase tracking-wider text-obsidian-muted">
+            <span className="text-xs font-medium text-obsidian-muted">
               {t('opsec.mac')}
             </span>
             <strong className="font-mono text-sm text-white break-all">
@@ -314,7 +315,7 @@ export const OpsecPanel: React.FC = () => {
           </div>
 
           <div className="flex flex-col gap-0.5">
-            <span className="text-[11px] font-medium uppercase tracking-wider text-obsidian-muted">
+            <span className="text-xs font-medium text-obsidian-muted">
               {t('opsec.perm')}
             </span>
             <strong className="font-mono text-sm text-obsidian-muted">
@@ -323,7 +324,7 @@ export const OpsecPanel: React.FC = () => {
           </div>
 
           <div className="flex flex-col gap-1">
-            <span className="text-[11px] font-medium uppercase tracking-wider text-obsidian-muted">
+            <span className="text-xs font-medium text-obsidian-muted">
               {t('opsec.state')}
             </span>
             <div>
@@ -336,7 +337,7 @@ export const OpsecPanel: React.FC = () => {
                     : 'border-obsidian-border bg-obsidian-panel text-obsidian-muted'
                 }`}
               >
-                <Shield size={12} aria-hidden="true" />
+                <Shield size={16} aria-hidden="true" />
                 <span>{!opsecState ? t('opsec.identityUnknown') : isSpoofed ? t('opsec.covered') : t('opsec.real')}</span>
               </span>
             </div>
@@ -459,7 +460,7 @@ export const OpsecPanel: React.FC = () => {
                 disabled={busy}
                 className="ui-action-secondary"
               >
-                <RefreshCw size={13} aria-hidden="true" />
+                <RefreshCw size={16} aria-hidden="true" />
                 <span>{t('opsec.genMac')}</span>
                 {/* [Acción secundaria] Abre o ajusta la operación actual. */}
               </button>
@@ -469,14 +470,14 @@ export const OpsecPanel: React.FC = () => {
                 disabled={busy}
                 className="ui-action-secondary"
               >
-                <Sparkles size={13} aria-hidden="true" />
+                <Sparkles size={16} aria-hidden="true" />
                 <span>{t('opsec.genHost')}</span>
                 {/* [Acción secundaria] Abre o ajusta la operación actual. */}
               </button>
             </div>
           </div>
 
-            <p className="rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 text-xs leading-relaxed text-obsidian-muted">
+          <p className="border-t border-obsidian-border pt-3 text-xs leading-relaxed text-obsidian-muted">
             {t('opsec.networkHint')}
           </p>
 
@@ -486,14 +487,14 @@ export const OpsecPanel: React.FC = () => {
               disabled={busy || !canApplyIdentity}
               className="ui-action-primary"
             >
-              <Shield size={14} aria-hidden="true" />
+              <Shield size={16} aria-hidden="true" />
               <span>{t('opsec.apply')}</span>
               {/* [Acción principal] Inicia o confirma la operación. */}
             </button>
           </div>
 
           {/* [Estado seleccionable] Las opciones OPSEC avanzadas se abren bajo demanda. */}
-          <details className="rounded-lg border border-obsidian-border bg-obsidian-surface">
+          <details className="border-t border-obsidian-border pt-2">
             <summary className="ui-action-toggle w-full cursor-pointer justify-start px-3 text-[13px] font-medium">
               {t('opsec.advancedChanges')}
             </summary>

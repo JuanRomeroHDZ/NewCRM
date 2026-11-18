@@ -1,12 +1,24 @@
-# Recomendaciones para LESSSO
+# Pendientes de producción y validación
+
+Actualizado: 17 de noviembre de 2026. Este documento conserva solo trabajo o validación aún abiertos.
 
 ## Alcance
 
-Revisión del código de NewCRM y de la pantalla inicial de escritorio con la bóveda bloqueada. No se crearon cuentas ni se modificaron datos durante esta revisión. Los flujos autenticados, el uso con teclado completo, las pantallas móviles y las funciones con hardware real requieren validación adicional.
+Revisión de código, componentes compartidos, pruebas automatizadas y estado de los contenedores. El servicio local responde correctamente. No pude confirmar el render posterior a los cambios: Codex rechazó abrir el origen en el navegador tras la denegación de aprobación. El despliegue activo usa una CA privada y una IP de red local; no es una publicación pública.
 
-El detector de diseño de Impeccable no encontró patrones deterministas en los componentes de navegación y C2 revisados. Ese resultado no demuestra por sí solo que la interfaz cumpla accesibilidad o que todos los flujos funcionen.
+Los estados visuales, los flujos autenticados y las funciones con hardware real todavía necesitan validación en el entorno correspondiente.
 
 ## Prioridad 1 — resolver antes de confiar en el uso diario
+
+### 0. Configurar y ensayar el respaldo cifrado completo
+
+**Evidencia.** `BACKUP_AGE_RECIPIENT` no está configurado y el perfil `full-backup` no está activo. Hay informes y revisiones guardados en PostgreSQL.
+
+**Impacto.** La instalación no genera actualmente copias cifradas completas de forma programada y no hay una restauración reciente que demuestre que el respaldo se puede recuperar.
+
+**Recomendación.** Configurar una identidad age, activar el perfil de respaldo, verificar la ejecución y ensayar una restauración aislada antes de depender de la instalación para datos importantes.
+
+**Ubicación.** `docker-compose.yml`, `scripts/full_backup/`, `RUNBOOK.md`.
 
 ### 1. Hacer comprensible la activación de Red y Lab
 
@@ -92,7 +104,17 @@ El detector de diseño de Impeccable no encontró patrones deterministas en los 
 
 **Ubicación.** `frontend/src/components/writeups/mermaidExportHelper.ts`, `frontend/src/components/writeups/MarkdownRichPreview.tsx`.
 
-### 9. Revisar consultas periódicas de C2
+### 9. Resolver la alerta de la herramienta de desarrollo frontend
+
+**Evidencia.** `npm audit` informa 11 alertas altas en dependencias de desarrollo que llegan a `picomatch` 4.0.7. `npm audit --omit=dev` informa 0 vulnerabilidades en dependencias de producción. La auditoría de NPM no publica una versión corregida para esa alerta; forzar `npm audit fix --force` propone Tailwind 4, un cambio mayor.
+
+**Impacto.** La alerta afecta al entorno de compilación y recarga de desarrollo. No aparece en el conjunto de dependencias que se entrega al navegador en producción.
+
+**Recomendación.** Mantener Tailwind 3 hasta planificar y probar la migración visual; actualizar `picomatch` cuando exista una versión corregida compatible, o evaluar otra ruta de compilación con sus pruebas.
+
+**Ubicación.** `frontend/package.json`, `frontend/package-lock.json`.
+
+### 10. Revisar consultas periódicas de C2
 
 **Evidencia.** Después de entrar en C2 se consulta el servicio cada 10 segundos y el estado de módulos cada 3 segundos mientras está disponible.
 

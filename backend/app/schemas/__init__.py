@@ -715,6 +715,7 @@ class FinancialInputValidation(BaseModel):
         'provider', 'vendor', 'payment_method_label', 'notes', 'currency',
         'charged_currency', 'scope', 'ownership_type', 'status', 'income_status',
         'billing_cycle', 'paid_by', 'prospect_id', 'project_id', 'platform_id',
+        'payment_method_id', 'recurrence_cycle',
         check_fields=False,
     )
     @classmethod
@@ -728,6 +729,7 @@ class FinancialInputValidation(BaseModel):
             'charged_currency': 8, 'scope': 32, 'ownership_type': 32,
             'status': 32, 'income_status': 32, 'billing_cycle': 32, 'paid_by': 32,
             'prospect_id': 36, 'project_id': 36, 'platform_id': 36,
+            'payment_method_id': 36, 'recurrence_cycle': 32,
         }
         if len(value) > limits[info.field_name]:
             raise ValueError(f'El campo admite hasta {limits[info.field_name]} caracteres.')
@@ -874,7 +876,10 @@ class OneTimeExpenseBase(BaseModel):
     business_share_percent: float = 100.0
     ownership_type: str = "own"  # own, client, independent
     vendor: str | None = None
+    platform_id: str | None = None
+    payment_method_id: str | None = None
     payment_method_label: str | None = None
+    recurrence_cycle: str | None = None  # weekly, monthly, quarterly, yearly; null = one-time
     prospect_id: str | None = None
     project_id: str | None = None
     notes: str | None = None
@@ -892,7 +897,10 @@ class OneTimeExpenseUpdate(FinancialInputValidation):
     business_share_percent: float | None = None
     ownership_type: str | None = None
     vendor: str | None = None
+    platform_id: str | None = None
+    payment_method_id: str | None = None
     payment_method_label: str | None = None
+    recurrence_cycle: str | None = None
     prospect_id: str | None = None
     project_id: str | None = None
     notes: str | None = None

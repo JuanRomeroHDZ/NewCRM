@@ -463,7 +463,10 @@ export interface OneTimeExpense {
   business_share_percent: number;
   ownership_type: OwnershipType;
   vendor?: string | null;
+  platform_id?: string | null;
+  payment_method_id?: string | null;
   payment_method_label?: string | null;
+  recurrence_cycle?: 'weekly' | 'monthly' | 'quarterly' | 'yearly' | null;
   prospect_id?: string | null;
   project_id?: string | null;
   notes?: string | null;

@@ -320,7 +320,10 @@ class OneTimeExpense(Base):
     business_share_percent: Mapped[float] = mapped_column(Float, default=100.0)
     ownership_type: Mapped[str] = mapped_column(String(32), default="own")  # own, client, independent
     vendor: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    platform_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("platform_accounts.id"), nullable=True, index=True)
+    payment_method_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("payment_methods.id"), nullable=True, index=True)
     payment_method_label: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    recurrence_cycle: Mapped[str | None] = mapped_column(String(32), nullable=True)  # weekly, monthly, quarterly, yearly; null = one-time
     prospect_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("prospects.id"), nullable=True, index=True)
     project_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)  # Encrypted at rest with AES-256-GCM

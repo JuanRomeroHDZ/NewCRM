@@ -36,6 +36,7 @@ EXPECTED_DB_ENTRIES = (
 REQUIRED_ARCHIVE_PATHS = (
     "vault_media",
     "deployment/docker-compose.yml",
+    "deployment/docker-compose.dev.yml",
     "deployment/.env.example",
     "deployment/README.md",
     "deployment/RUNBOOK.md",
@@ -82,7 +83,7 @@ ALLOWED_DEPLOYMENT_DIRECTORIES = (
 )
 ALLOWED_DEPLOYMENT_FILES = frozenset(
     {
-        "docker-compose.yml", ".env.example", "README.md", "RUNBOOK.md",
+        "docker-compose.yml", "docker-compose.dev.yml", ".env.example", "README.md", "RUNBOOK.md",
         "PRODUCT.md", "SEGURIDAD.md", "Recomendations.md", "pytest.ini",
         "backend/Dockerfile", "backend/alembic.ini", "backend/requirements.txt",
         "backend/pytest.ini",

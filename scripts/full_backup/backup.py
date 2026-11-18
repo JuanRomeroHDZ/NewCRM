@@ -39,6 +39,7 @@ ALLOWED_DEPLOYMENT_DIRECTORIES = (
 ALLOWED_DEPLOYMENT_FILES = frozenset(
     {
         "docker-compose.yml",
+        "docker-compose.dev.yml",
         ".env.example",
         "README.md",
         "RUNBOOK.md",
@@ -64,6 +65,7 @@ REQUIRED_DEPLOYMENT_PATHS = (
     "README.md",
     "RUNBOOK.md",
     "docker-compose.yml",
+    "docker-compose.dev.yml",
     ".env.example",
     "backend/app/main.py",
     "backend/alembic.ini",

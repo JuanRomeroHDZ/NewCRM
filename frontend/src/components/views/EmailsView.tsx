@@ -233,7 +233,7 @@ export const EmailsView: React.FC = () => {
         />
       )}
 
-      {/* Emails Cards Grid */}
+      {/* [Navegación] Correos en una lista con divisores, sin tarjetas repetidas. */}
       {loading && filteredEmails.length > 0 && (
         <p role="status" className="rounded-lg border border-obsidian-border bg-obsidian-panel px-3 py-2 text-xs text-obsidian-muted">
           Actualizando. Se conserva la última lista cargada; puede no corresponder a la búsqueda actual.
@@ -250,14 +250,14 @@ export const EmailsView: React.FC = () => {
       )}
 
       {filteredEmails.length > 0 && (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div className="divide-y divide-obsidian-border border-y border-obsidian-border">
           {filteredEmails.map((email) => (
             <article
               key={email.id}
-              className="group flex min-w-0 flex-col justify-between gap-3 overflow-hidden rounded-xl border border-obsidian-border bg-obsidian-panel p-4 transition-colors hover:border-obsidian-borderLight sm:p-6"
+              className="group flex min-w-0 flex-col gap-3 py-4"
             >
               {/* Upper part */}
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <button
                     type="button"
@@ -387,18 +387,6 @@ export const EmailsView: React.FC = () => {
                 </div>
               </div>
 
-              {/* Bottom info footer */}
-              <div className="flex flex-wrap items-center justify-end gap-2 border-t border-obsidian-border/60 pt-3 text-[11px] text-obsidian-muted">
-
-                <button
-                  type="button"
-                  onClick={() => openInspector('email', email.id)}
-                  aria-label={`Abrir detalles de ${email.address}`}
-                  className="ui-nav-action flex-shrink-0 items-center gap-1"
-                >{/* [Navegación] Mantiene disponible esta acción en su contexto. */}
-                  <span>Ver detalles</span>
-                </button>
-              </div>
             </article>
           ))}
         </div>

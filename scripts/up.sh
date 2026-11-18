@@ -26,10 +26,12 @@ fi
 RUNTIME_FILE=".env.runtime"
 CHOOSE_PORTS=false
 CHOOSE_ADDRESS=false
-while [[ "${1:-}" == --choose-* ]]; do
+DEVELOPMENT_MODE=false
+while [[ "${1:-}" == --choose-* || "${1:-}" == --development ]]; do
   case "$1" in
     --choose-ports) CHOOSE_PORTS=true ;;
     --choose-address) CHOOSE_ADDRESS=true ;;
+    --development) DEVELOPMENT_MODE=true ;;
     *) echo "Opción desconocida: $1" >&2; exit 1 ;;
   esac
   shift
@@ -211,7 +213,11 @@ else
 fi
 export PORT HTTPS_PORT HOST_BIND_IP
 
-docker compose up -d --build --wait "$@"
+compose=(docker compose)
+if $DEVELOPMENT_MODE; then
+  compose+=(-f docker-compose.yml -f docker-compose.dev.yml)
+fi
+"${compose[@]}" up -d --build --wait "$@"
 if $CERT_RENEWED; then
   # Un proxy que ya estaba ejecutándose necesita recargar el certificado nuevo.
   docker compose restart proxy
@@ -223,6 +229,7 @@ PORT=${PORT}
 HTTPS_PORT=${HTTPS_PORT}
 HOST_BIND_IP=${HOST_BIND_IP}
 EOF
+chmod 600 "$RUNTIME_FILE"
 
 echo
 echo "LESSSO CRM listo:"

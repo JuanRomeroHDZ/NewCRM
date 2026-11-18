@@ -1,7 +1,7 @@
 import React from 'react';
 import {
   Wallet, Plus, Repeat, Edit3, Trash2, Server, RefreshCw,
-  Receipt, CreditCard, Calendar, Mail, History, CheckCircle2, ChevronDown
+  Receipt, CreditCard, Calendar, History, CheckCircle2, ChevronDown
 } from 'lucide-react';
 import {
   ClientIncome, DomainRenewal, OneTimeExpense, PaymentMethod,
@@ -11,6 +11,7 @@ import { InfoTooltip } from '../../common/InfoTooltip';
 import { SecretField } from '../../common/SecretField';
 import { PlatformIcon } from '../../common/PlatformIcon';
 import { RealProfitSummary } from '../../../lib/financeUtils';
+import type { ForecastEvent } from '../../../lib/cashflowForecast';
 import { SectionType } from '../../../context/VaultContext';
 
 export const INCOME_CATEGORIES: { value: IncomeCategory; label: string; badge: string }[] = [
@@ -35,7 +36,7 @@ interface SubscriptionsListsProps {
   filteredExpenses: OneTimeExpense[];
   filteredPaymentMethods: PaymentMethod[];
   platforms: PlatformAccount[];
-  activeOrTrialPlatforms: PlatformAccount[];
+  upcomingCashflowEvents: ForecastEvent[];
   billingHistory: BillingRecord[];
   realProfit: RealProfitSummary;
   profitCurrencyView: string;
@@ -69,7 +70,7 @@ export const SubscriptionsLists: React.FC<SubscriptionsListsProps> = ({
   filteredExpenses,
   filteredPaymentMethods,
   platforms,
-  activeOrTrialPlatforms,
+  upcomingCashflowEvents,
   billingHistory,
   realProfit,
   profitCurrencyView,
@@ -363,16 +364,16 @@ export const SubscriptionsLists: React.FC<SubscriptionsListsProps> = ({
       </section>
       </>}
 
-      {/* MÓDULO 3: GASTOS ÚNICOS Y COMPRAS VARIABLES (NO RECURRENTES) */}
+      {/* MÓDULO 3: GASTOS PUNTUALES Y RECURRENTES */}
       {showExpenses && (
       <div className="p-3 sm:p-4 rounded-xl bg-obsidian-panel border border-obsidian-border space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-obsidian-border/70">
           <div className="flex items-center gap-2 min-w-0">
             <Receipt size={18} className="text-obsidian-muted shrink-0" aria-hidden="true" />
             <h3 className="text-sm font-bold text-white tracking-tight truncate">
-              Gastos Únicos y Compras Variables ({filteredExpenses.length})
+              Gastos y cargos ({filteredExpenses.length})
             </h3>
-            <InfoTooltip content="Registra compras no recurrentes (hardware, laptops, licencias vitalicias, insumos, mobiliario) para deducirlas de tu ganancia neta real sin alterar tus suscripciones mensuales." />
+            <InfoTooltip content="Registra compras puntuales o cargos recurrentes personales y de negocio. Los recurrentes se proyectan en el calendario y en los resúmenes financieros." />
           </div>
           <button
             type="button"
@@ -380,15 +381,15 @@ export const SubscriptionsLists: React.FC<SubscriptionsListsProps> = ({
             className="ui-action-primary shrink-0"
           >{/* [Acción principal] Inicia o confirma la tarea de este espacio. */}
             <Plus size={16} aria-hidden="true" />
-            <span>Registrar gasto</span>
+              <span>Registrar gasto</span>
           </button>
           <div className="flex basis-full flex-wrap items-center gap-2">
             <span className="text-[11px] font-mono text-obsidian-muted">
-              Total este mes: <strong className="text-white">${formatAmount(isProfitBase ? realProfit.variableMonthExpenseMXN : realProfit.variableMonthExpenseUSD)} {profitCurrencyView}</strong>
+              Este mes (puntuales + recurrentes): <strong className="text-white">{!isProfitBase && usdRate <= 0 ? 'Sin tipo de cambio' : `$${formatAmount(isProfitBase ? realProfit.variableMonthExpenseMXN : realProfit.variableMonthExpenseUSD)} ${profitCurrencyView}`}</strong>
             </span>
             <span className="text-obsidian-muted">•</span>
             <span className="text-[11px] font-mono text-obsidian-muted">
-              Total del año: <strong className="text-white/80">${formatAmount(isProfitBase ? realProfit.variableYearExpenseMXN : realProfit.variableYearExpenseUSD)} {profitCurrencyView}</strong>
+              Estimado del año: <strong className="text-white/80">{!isProfitBase && usdRate <= 0 ? 'Sin tipo de cambio' : `$${formatAmount(isProfitBase ? realProfit.variableYearExpenseMXN : realProfit.variableYearExpenseUSD)} ${profitCurrencyView}`}</strong>
             </span>
           </div>
         </div>
@@ -422,6 +423,20 @@ export const SubscriptionsLists: React.FC<SubscriptionsListsProps> = ({
                     <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-obsidian-panel border border-obsidian-border text-obsidian-text capitalize">
                       {exp.scope === 'business' ? 'Empresa' : exp.scope === 'personal' ? 'Personal' : 'Compartido'}
                     </span>
+                    {exp.recurrence_cycle && (
+                      <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-obsidian-panel border border-obsidian-border text-obsidian-muted">
+                        {exp.recurrence_cycle === 'weekly' ? 'Semanal' : exp.recurrence_cycle === 'quarterly' ? 'Trimestral' : exp.recurrence_cycle === 'yearly' ? 'Anual' : 'Mensual'}
+                      </span>
+                    )}
+                    {exp.platform_id && (() => {
+                      const service = platforms.find((platform) => platform.id === exp.platform_id);
+                      return service ? (
+                        <span className="inline-flex min-w-0 items-center gap-1.5 text-[11px] text-obsidian-muted" title={`Servicio: ${service.name}`}>
+                          <PlatformIcon name={service.name} iconUrl={service.icon_url} size="sm" />
+                          <span className="max-w-40 truncate">{service.name}</span>
+                        </span>
+                      ) : null;
+                    })()}
                   </div>
 
                   {exp.notes && (
@@ -433,7 +448,7 @@ export const SubscriptionsLists: React.FC<SubscriptionsListsProps> = ({
 
                 <div className="pt-2 border-t border-obsidian-border/50 flex items-center justify-between gap-2 text-[10px] text-obsidian-muted font-mono">
                   <span className="truncate">
-                    {exp.expense_date} {exp.payment_method_label ? `• ${exp.payment_method_label}` : ''}
+                    {exp.recurrence_cycle ? `Desde ${exp.expense_date}` : exp.expense_date} {exp.payment_method_label ? `• ${exp.payment_method_label}` : ''}
                   </span>
                   <div className="flex items-center gap-1 shrink-0">
                     <button
@@ -462,7 +477,7 @@ export const SubscriptionsLists: React.FC<SubscriptionsListsProps> = ({
         ) : (
           <div className="py-6 text-center space-y-2 text-xs text-obsidian-muted">
             <p className="text-xs text-obsidian-muted">
-              No hay compras ni gastos únicos variables registrados (hardware, licencias vitalicias, insumos, etc.).
+              No hay gastos registrados para este ámbito.
             </p>
           </div>
         )}
@@ -487,6 +502,7 @@ export const SubscriptionsLists: React.FC<SubscriptionsListsProps> = ({
           <div className="divide-y divide-obsidian-border">
             {filteredPaymentMethods.map((pay) => {
               const linked = platforms.filter((p) => p.payment_method_id === pay.id);
+              const linkedExpenses = filteredExpenses.filter((expense) => expense.payment_method_id === pay.id);
 
               return (
                 <div
@@ -583,6 +599,38 @@ export const SubscriptionsLists: React.FC<SubscriptionsListsProps> = ({
                         </div>
                       )}
                     </div>
+
+                  <div className="mt-3 border-t border-obsidian-border pt-3">
+                    <span className="text-[10px] text-obsidian-muted font-semibold block mb-1.5">
+                      Gastos con esta tarjeta ({linkedExpenses.length})
+                    </span>
+                    <div className="divide-y divide-obsidian-border">
+                      {linkedExpenses.map((expense) => {
+                        const service = platforms.find((platform) => platform.id === expense.platform_id);
+                        return (
+                          <div key={expense.id} className="flex min-w-0 items-center justify-between gap-3 py-2 first:pt-0 last:pb-0">
+                            <div className="flex min-w-0 items-center gap-2">
+                              {service
+                                ? <PlatformIcon name={service.name} iconUrl={service.icon_url} size="sm" />
+                                : <Receipt size={16} className="shrink-0 text-obsidian-muted" aria-hidden="true" />}
+                              <div className="min-w-0">
+                                <span className="block truncate text-xs text-obsidian-text" title={expense.concept}>{expense.concept}</span>
+                                <span className="block truncate text-[10px] text-obsidian-muted">
+                                  {service ? service.name : expense.category} · {expense.recurrence_cycle === 'weekly' ? 'semanal' : expense.recurrence_cycle === 'quarterly' ? 'trimestral' : expense.recurrence_cycle === 'monthly' ? 'mensual' : expense.recurrence_cycle === 'yearly' ? 'anual' : 'puntual'}
+                                </span>
+                              </div>
+                            </div>
+                            <span className="shrink-0 font-mono text-xs text-obsidian-text">
+                              ${formatAmount(expense.amount)} {expense.currency}
+                            </span>
+                          </div>
+                        );
+                      })}
+                      {linkedExpenses.length === 0 && (
+                        <span className="text-[11px] text-obsidian-muted">Sin gastos vinculados.</span>
+                      )}
+                    </div>
+                  </div>
                   </div>
                 </div>
               );
@@ -596,79 +644,67 @@ export const SubscriptionsLists: React.FC<SubscriptionsListsProps> = ({
       </div>
       )}
 
-      {/* Next Renewals Timeline & Trial Alerts with Direct Principal Email Link */}
+      {/* Próximos cargos recurrentes y compras programadas */}
       {showServices && <>
       <div className="space-y-4 pt-4 border-t border-obsidian-border">
         <div className="flex items-center gap-2">
           <Calendar className="text-obsidian-muted w-[18px] h-[18px] flex-shrink-0" aria-hidden="true" />
           <h3 className="text-sm font-bold text-white tracking-tight truncate">
-            Calendario de Suscripciones y Pruebas Gratis ({activeOrTrialPlatforms.length})
+            Calendario de servicios y gastos · 90 días ({upcomingCashflowEvents.length})
           </h3>
-          <InfoTooltip content="Cuando llega la fecha de cobro de una suscripción activa, el sistema actualiza automáticamente la fecha al siguiente mes o año." />
+          <InfoTooltip content="Proyecta suscripciones activas, pruebas con fecha de fin y gastos recurrentes o puntuales. Los cargos de dominio y hosting se muestran en el monitor de renovaciones." />
         </div>
 
-        {activeOrTrialPlatforms.length > 0 ? (
+        {upcomingCashflowEvents.length > 0 ? (
           <div className="divide-y divide-obsidian-border">
-            {activeOrTrialPlatforms.map((p) => {
-              const isTrial = p.subscription_status === 'free_trial';
+            {upcomingCashflowEvents.map((event) => {
+              const service = event.platformId ? platforms.find((platform) => platform.id === event.platformId) : undefined;
+              const paymentMethod = event.paymentMethodId ? filteredPaymentMethods.find((payment) => payment.id === event.paymentMethodId) : undefined;
+              const displayAmount = isProfitBase ? event.amountMXN : usdRate > 0 ? event.amountMXN / usdRate : null;
+              const eventLabel = event.kind === 'subscription' ? 'Servicio' : 'Gasto';
+              const expense = event.kind === 'expense' ? filteredExpenses.find((item) => item.id === event.sourceId) : undefined;
+              const recurring = event.kind === 'subscription' || Boolean(expense?.recurrence_cycle);
               return (
                 <div
-                  key={p.id}
-                  className="space-y-3 py-3 first:pt-1 last:pb-1 group min-w-0"
+                  key={event.id}
+                  className="flex min-w-0 flex-wrap items-center justify-between gap-3 py-3 first:pt-1 last:pb-1"
                 >
-                  <button
-                    type="button"
-                    onClick={() => openInspector('platform', p.id)}
-                    className="ui-nav-action w-full items-center justify-between gap-2"
-                  >{/* [Navegación] Mantiene disponible esta acción en su contexto. */}
-                    <div className="flex items-center gap-3 min-w-0">
-                      <PlatformIcon name={p.name} iconUrl={p.icon_url} size="sm" />
-                      <div className="min-w-0">
-                        <span className="font-semibold text-white text-xs block transition-colors truncate" title={p.name}>
-                          {p.name}
-                        </span>
-                        <span className="text-[10px] text-obsidian-muted capitalize block truncate">
-                          Cobro: {p.billing_cycle === 'yearly' ? 'Anual' : p.billing_cycle === 'weekly' ? 'Semanal' : 'Mensual'}
-                        </span>
-                      </div>
-                    </div>
-
-                    <span className="font-mono text-xs font-bold text-obsidian-text flex-shrink-0">
-                      ${p.subscription_cost} {p.currency}
-                    </span>
-                  </button>
-
-                  {p.email_address && (
-                    <div className="flex items-center justify-between gap-2">
+                  <div className="flex min-w-0 items-center gap-3">
+                    {service ? (
                       <button
                         type="button"
-                        onClick={() => {
-                          if (p.email_id) openInspector('email', p.email_id);
-                        }}
-                        title={`Ver correo principal: ${p.email_address}`}
-                        className="ui-nav-action items-center gap-2 max-w-full min-w-0"
-                      >{/* [Navegación] Mantiene disponible esta acción en su contexto. */}
-                        <Mail size={16} className="text-obsidian-muted flex-shrink-0" aria-hidden="true" />
-                        <span className="truncate">{p.email_address}</span>
+                        onClick={() => openInspector('platform', service.id)}
+                        className="ui-action-icon shrink-0"
+                        aria-label={`Abrir servicio ${service.name}`}
+                        title={`Abrir servicio ${service.name}`}
+                      >{/* [Navegación] Abre el servicio relacionado con este cargo. */}
+                        <PlatformIcon name={service.name} iconUrl={service.icon_url} size="sm" />
                       </button>
-                    </div>
-                  )}
-
-                  <div className="flex items-center justify-between gap-2 text-[11px] pt-1 border-t border-obsidian-border/40">
-                    <span className="text-obsidian-muted flex items-center gap-1 font-mono truncate">
-                      <Calendar className="w-3 h-3 text-white/40 flex-shrink-0" aria-hidden="true" />
-                      <span className="truncate">{p.next_billing_date ? `Próximo cobro: ${p.next_billing_date}` : 'Sin fecha'}</span>
-                    </span>
-
-                    {isTrial ? (
-                      <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-500/10 text-amber-300 border border-amber-500/20 flex-shrink-0">
-                        Prueba Gratis
-                      </span>
+                    ) : expense?.platform_id ? (
+                      (() => {
+                        const expenseService = platforms.find((platform) => platform.id === expense.platform_id);
+                        return expenseService ? <PlatformIcon name={expenseService.name} iconUrl={expenseService.icon_url} size="sm" /> : <Receipt size={16} className="shrink-0 text-obsidian-muted" aria-hidden="true" />;
+                      })()
+                    ) : event.kind === 'expense' ? (
+                      <Receipt size={16} className="shrink-0 text-obsidian-muted" aria-hidden="true" />
                     ) : (
-                      <span className="text-white/40 text-[10px] truncate max-w-[120px]" title={p.payment_alias || 'Sin tarjeta'}>
-                        {p.payment_alias || 'Sin tarjeta'}
-                      </span>
+                      <Server size={16} className="shrink-0 text-obsidian-muted" aria-hidden="true" />
                     )}
+                    <div className="min-w-0">
+                      <span className="block truncate text-xs font-medium text-obsidian-text" title={event.title}>{event.title}</span>
+                      <span className="mt-0.5 block truncate text-[10px] text-obsidian-muted">
+                        {eventLabel}{service ? ` · ${service.name}` : ''}{paymentMethod ? ` · ${paymentMethod.alias}` : ''}{expense?.scope === 'personal' ? ' · Personal' : ''}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-3">
+                    <span className="text-[11px] text-obsidian-muted">
+                      {event.date.slice(8, 10)}/{event.date.slice(5, 7)}/{event.date.slice(0, 4)}
+                    </span>
+                    {recurring && <span className="text-[10px] text-obsidian-muted">Recurrente</span>}
+                    <span className="font-mono text-xs font-semibold text-obsidian-text">
+                      {displayAmount === null ? '—' : `$${formatAmount(displayAmount)}`} {profitCurrencyView}
+                    </span>
                   </div>
                 </div>
               );
@@ -676,7 +712,7 @@ export const SubscriptionsLists: React.FC<SubscriptionsListsProps> = ({
           </div>
         ) : (
           <div className="py-6 text-center text-xs text-obsidian-muted">
-            No hay suscripciones activas ni pruebas gratuitas registradas.
+            No hay cargos de servicios ni gastos próximos en este ámbito durante los siguientes 90 días.
           </div>
         )}
       </div>

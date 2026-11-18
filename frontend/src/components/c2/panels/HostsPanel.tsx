@@ -209,7 +209,7 @@ export const HostsPanel: React.FC = () => {
             return (
               <article
                 key={`card-${h.ip}-${h.mac}`}
-                className={`py-3 transition-colors ${isPinned ? 'bg-obsidian-accent/10 px-3' : 'px-4'}`}
+                className={`px-4 py-3 transition-colors ${isPinned ? 'bg-obsidian-surface' : ''}`}
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="font-mono text-sm font-semibold text-white">{h.ip}</span>
@@ -307,7 +307,7 @@ export const HostsPanel: React.FC = () => {
                   <tr
                     key={`${h.ip}-${h.mac}`}
                     className={`transition-colors hover:bg-obsidian-surface/50 ${
-                      isPinned ? 'bg-obsidian-accent/10' : ''
+                      isPinned ? 'bg-obsidian-surface' : ''
                     }`}
                   >
                     <td className="px-3 py-2.5 font-mono text-white whitespace-nowrap">{h.ip}</td>

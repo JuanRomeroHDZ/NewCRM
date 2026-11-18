@@ -5,7 +5,7 @@ import { useC2 } from '../../../context/C2Context';
 import { c2Api } from '../../../lib/c2Api';
 
 export const CredsPanel: React.FC = () => {
-  const { showToast } = useVault();
+  const { confirm, showToast } = useVault();
   const {
     lang,
     t,
@@ -75,6 +75,15 @@ export const CredsPanel: React.FC = () => {
   };
 
   const handleClear = async () => {
+    const accepted = await confirm({
+      title: lang === 'es' ? 'Limpiar credenciales capturadas' : 'Clear captured credentials',
+      message: lang === 'es'
+        ? 'Se eliminarán las credenciales del buffer de captura. Exporta lo que necesites antes de continuar.'
+        : 'Captured credentials will be removed from the buffer. Export anything you need before continuing.',
+      confirmLabel: lang === 'es' ? 'Limpiar buffer' : 'Clear buffer',
+      tone: 'danger',
+    });
+    if (!accepted) return;
     setClearing(true);
     try {
       await c2Api.clearCreds();
@@ -162,14 +171,14 @@ export const CredsPanel: React.FC = () => {
               <Download size={16} className="text-obsidian-muted" aria-hidden="true" />
             )}
             <span>{t('creds.export')}</span>
-            {/* [Acción secundaria] Abre o ajusta la operación actual. */}
+            {/* [Acción secundaria] Descarga las credenciales capturadas. */}
           </button>
 
           <button
             type="button"
             onClick={() => void handleClear()}
             disabled={clearing}
-            className="ui-action-secondary"
+            className="ui-action-danger"
           >
             {clearing ? (
               <Loader2 size={16} className="animate-spin" aria-hidden="true" />
@@ -177,7 +186,7 @@ export const CredsPanel: React.FC = () => {
               <Trash2 size={16} aria-hidden="true" />
             )}
             <span>{t('creds.clear')}</span>
-            {/* [Acción secundaria] Abre o ajusta la operación actual. */}
+            {/* [Acción destructiva] Limpia el buffer tras la confirmación. */}
           </button>
         </div>
       </div>

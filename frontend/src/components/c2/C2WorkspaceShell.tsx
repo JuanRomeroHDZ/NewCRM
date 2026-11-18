@@ -509,9 +509,9 @@ export const C2WorkspaceShell: React.FC = () => {
                 setMobileOpsOpen(false);
                 setActiveSection('c2_opsec');
               }}
-              className="ui-nav-action"
+              className="ui-action-secondary min-w-0"
             >
-              <Shield size={12} aria-hidden="true" />
+              <Shield size={16} aria-hidden="true" />
               <span className="max-w-[180px] truncate">{opsecHost} | {opsecMac}</span>
               {/* [Navegación] Abre la sección relacionada. */}
             </button>

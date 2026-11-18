@@ -2469,7 +2469,6 @@ export const WriteupsView: React.FC = () => {
               <option value="baja">Baja</option>
               <option value="informativa">Informativa</option>
             </select>
-            <ChevronDown aria-hidden="true" className="pointer-events-none absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 text-obsidian-muted" />
             </div>
           </div>
 
@@ -2663,7 +2662,6 @@ export const WriteupsView: React.FC = () => {
                     <option value="findings">Hallazgos ({findings.length})</option>
                     <option value="assets">Evidencias ({detail.assets.length})</option>
                   </select>
-                  <ChevronDown className="pointer-events-none absolute right-3 h-4 w-4 text-slate-400" aria-hidden="true" />
                 </label>
 
                 {(mode === 'dual' || mode === 'whiteboard') && (
@@ -2683,7 +2681,7 @@ export const WriteupsView: React.FC = () => {
                       disabled={isWriteupEditingBlocked}
                       onClick={handleCreateBoard}
                       aria-label="Crear una nueva pizarra"
-                  className="ui-action-primary writeup-header-compact-button shrink-0"
+                      className="ui-action-icon writeup-header-compact-button shrink-0"
                       title="Nueva pizarra"
                     >
                       <PanelsTopLeft className="h-4 w-4" aria-hidden="true" />
@@ -2772,13 +2770,13 @@ export const WriteupsView: React.FC = () => {
                   {/* [Acción principal] Guarda los cambios del informe. */}
                   <button
                     type="button"
-                    disabled={saving || isWriteupEditingBlocked}
+                    disabled={saving || isWriteupEditingBlocked || !dirty}
                     onClick={() => void handleSaveWriteup(false)}
                     aria-label={saving ? 'Guardando informe' : dirty ? 'Guardar cambios del informe' : 'Informe guardado'}
-                    className="ui-action-primary writeup-header-compact-button shrink-0"
+                    className="ui-action-icon writeup-header-compact-button shrink-0"
                     title={saving ? 'Guardando informe' : dirty ? 'Guardar cambios del informe' : 'Informe guardado'}
                   >
-                    <Save className="h-4 w-4" aria-hidden="true" />
+                    {dirty ? <Save className="h-4 w-4" aria-hidden="true" /> : <CheckCircle2 className="h-4 w-4" aria-hidden="true" />}
                   </button>
 
                   <button

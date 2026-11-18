@@ -2,13 +2,14 @@ import React, { useEffect, useId } from 'react';
 import { Wallet, Server, RefreshCw, Receipt, Check, X, ChevronDown } from 'lucide-react';
 import {
   ClientIncome, DomainRenewal, OneTimeExpense, Prospect, PaymentMethod,
-  IncomeCategory, IncomeStatus, RenewalServiceType, RenewalPaidBy, EntityScope,
+  PlatformAccount, IncomeCategory, IncomeStatus, RenewalServiceType, RenewalPaidBy, EntityScope,
   RuntimeCurrencyOption
 } from '../../../types';
 import { INPUT_LIMITS } from '../../../lib/validation';
 import { INCOME_CATEGORIES, RENEWAL_SERVICE_TYPES } from './SubscriptionsLists';
 import { useAuditedDialog } from '../../common/useAuditedDialog';
 import { InfoTooltip } from '../../common/InfoTooltip';
+import { PlatformIcon } from '../../common/PlatformIcon';
 
 export const EXPENSE_CATEGORIES = [
   'Hardware / Equipos',
@@ -24,6 +25,7 @@ interface SubscriptionsModalsProps {
   supportedCurrencies: RuntimeCurrencyOption[];
   prospects: Prospect[];
   paymentMethods: PaymentMethod[];
+  platforms: PlatformAccount[];
   formatAmount: (value: number | string | undefined | null, decimals?: number) => string;
 
   // Income modal
@@ -132,6 +134,10 @@ interface SubscriptionsModalsProps {
   setExpPaymentMethodId: (v: string) => void;
   expPaymentMethodLabel: string;
   setExpPaymentMethodLabel: (v: string) => void;
+  expPlatformId: string;
+  setExpPlatformId: (v: string) => void;
+  expRecurrenceCycle: '' | 'weekly' | 'monthly' | 'quarterly' | 'yearly';
+  setExpRecurrenceCycle: (v: '' | 'weekly' | 'monthly' | 'quarterly' | 'yearly') => void;
   expNotes: string;
   setExpNotes: (v: string) => void;
   savingExpense: boolean;
@@ -142,6 +148,7 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
   supportedCurrencies,
   prospects,
   paymentMethods,
+  platforms,
   formatAmount,
   isIncomeModalOpen,
   setIsIncomeModalOpen,
@@ -240,6 +247,10 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
   setExpPaymentMethodId,
   expPaymentMethodLabel,
   setExpPaymentMethodLabel,
+  expPlatformId,
+  setExpPlatformId,
+  expRecurrenceCycle,
+  setExpRecurrenceCycle,
   expNotes,
   setExpNotes,
   savingExpense,
@@ -1094,7 +1105,7 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                   <h3 id={expenseTitleId} className="text-sm font-bold text-white break-words">
                     {editingExpense ? 'Editar gasto' : 'Registrar gasto'}
                   </h3>
-                  <p className="text-[11px] text-obsidian-muted truncate">Compra no recurrente.</p>
+                  <p className="text-[11px] text-obsidian-muted">Gasto puntual o recurrente; aparece en los próximos cargos.</p>
                 </div>
               </div>
               <button
@@ -1159,7 +1170,7 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 <div>
                   <label htmlFor={`${uid}-exp-amount`} className="block text-obsidian-text font-medium mb-1">Monto *</label>
                   <input
@@ -1193,7 +1204,9 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                 </div>
 
                 <div>
-                  <label htmlFor={`${uid}-exp-date`} className="block text-obsidian-text font-medium mb-1">Fecha</label>
+                  <label htmlFor={`${uid}-exp-date`} className="block text-obsidian-text font-medium mb-1">
+                    {expRecurrenceCycle ? 'Primer cargo' : 'Fecha del gasto'}
+                  </label>
                   <input
                     id={`${uid}-exp-date`}
                     type="date"
@@ -1202,6 +1215,44 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                     onChange={(e) => setExpDate(e.target.value)}
                     className="w-full min-h-11 px-3 py-2 rounded-lg bg-obsidian-bg border border-obsidian-border text-white font-mono focus:outline-none focus:border-obsidian-accent"
                   />
+                </div>
+                <div>
+                  <label htmlFor={`${uid}-exp-cycle`} className="block text-obsidian-text font-medium mb-1">Periodicidad</label>
+                  <select
+                    id={`${uid}-exp-cycle`}
+                    value={expRecurrenceCycle}
+                    onChange={(e) => setExpRecurrenceCycle(e.target.value as '' | 'weekly' | 'monthly' | 'quarterly' | 'yearly')}
+                    className="w-full min-h-11 px-3 py-2 rounded-lg bg-obsidian-bg border border-obsidian-border text-white focus:outline-none focus:border-obsidian-accent"
+                  >
+                    <option value="">Una sola vez</option>
+                    <option value="weekly">Semanal</option>
+                    <option value="monthly">Mensual</option>
+                    <option value="quarterly">Trimestral</option>
+                    <option value="yearly">Anual</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label htmlFor={`${uid}-exp-platform`} className="block text-obsidian-text font-medium mb-1">
+                  Servicio vinculado <span className="font-normal text-obsidian-muted">(opcional)</span>
+                </label>
+                <div className="flex items-center gap-2">
+                  {(() => {
+                    const selected = platforms.find((platform) => platform.id === expPlatformId);
+                    return selected ? <PlatformIcon name={selected.name} iconUrl={selected.icon_url} size="sm" /> : null;
+                  })()}
+                  <select
+                    id={`${uid}-exp-platform`}
+                    value={expPlatformId}
+                    onChange={(e) => setExpPlatformId(e.target.value)}
+                    className="w-full min-h-11 px-3 py-2 rounded-lg bg-obsidian-bg border border-obsidian-border text-white focus:outline-none focus:border-obsidian-accent"
+                  >
+                    <option value="">Sin servicio vinculado</option>
+                    {platforms.map((platform) => (
+                      <option key={platform.id} value={platform.id}>{platform.name}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
@@ -1217,9 +1268,7 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                       const pid = e.target.value;
                       setExpPaymentMethodId(pid);
                       const found = paymentMethods.find((p) => p.id === pid);
-                      if (found) {
-                        setExpPaymentMethodLabel(`${found.alias} (*${found.last_four})`);
-                      }
+                      setExpPaymentMethodLabel(found ? `${found.alias} (*${found.last_four})` : '');
                     }}
                     className="w-full min-h-11 px-3 py-2 rounded-lg bg-obsidian-bg border border-obsidian-border text-white focus:outline-none focus:border-obsidian-accent"
                   >
@@ -1235,7 +1284,11 @@ export const SubscriptionsModals: React.FC<SubscriptionsModalsProps> = ({
                     type="text"
                     maxLength={INPUT_LIMITS.PAYMENT_ALIAS}
                     value={expPaymentMethodLabel}
-                    onChange={(e) => setExpPaymentMethodLabel(e.target.value)}
+                    readOnly={Boolean(expPaymentMethodId)}
+                    onChange={(e) => {
+                      setExpPaymentMethodId('');
+                      setExpPaymentMethodLabel(e.target.value);
+                    }}
                     aria-label="Etiqueta manual del medio de pago"
                     placeholder="O escribir: SPEI, Efectivo, BBVA..."
                     className="w-full min-h-11 px-3 py-2 rounded-lg bg-obsidian-bg border border-obsidian-border text-white focus:outline-none focus:border-obsidian-accent"

@@ -354,12 +354,13 @@ export const EmailModal: React.FC = () => {
           {/* Recovery & 2FA */}
           <div className="space-y-3 border-t border-obsidian-border pt-4">
             <div>
-              <span className="font-semibold text-white uppercase text-[10px] tracking-wider block">
+              <span className="block text-xs font-semibold text-obsidian-text">
                 Recuperación y verificación en dos pasos
               </span>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {/* [Menú y selector] Dos columnas permiten leer los valores seleccionados. */}
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
                 <label htmlFor="emailmodal-field-4" className="text-obsidian-muted block mb-1">Correo de Respaldo</label>
                 <select id="emailmodal-field-4"

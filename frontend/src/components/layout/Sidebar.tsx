@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import {
   LayoutDashboard, Mail, Globe, Key, Network, CreditCard, Trash2, Settings, UserRound,
-  Lock, Unlock, Search, ChevronLeft, ChevronRight, ChevronDown, Clock,
+  Lock, Unlock, Search, ChevronDown, Clock, PanelLeftClose, PanelLeftOpen,
   Shield, ShieldCheck, FileText, Rocket, MapPinned, Briefcase, X, BookOpen,
   Radar, Server, ScanSearch, ArrowLeftRight, Activity, Route, KeyRound,
   Code2, Radio, Waypoints, Wifi, Camera, UserCheck, RotateCcw,
@@ -374,7 +374,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onCloseMobile })
           <X size={16} aria-hidden="true" />
         </button>
         <button type="button" onClick={() => setCollapsed((value) => !value)} aria-expanded={!collapsed} className={`ui-action-icon hidden lg:inline-flex ${compact ? 'mx-auto shrink-0' : ''}`} title={collapsed ? 'Expandir menú' : 'Colapsar menú'} aria-label={collapsed ? 'Expandir menú' : 'Colapsar menú'}>
-          {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
+          {collapsed ? <PanelLeftOpen size={16} aria-hidden="true" /> : <PanelLeftClose size={16} aria-hidden="true" />}
         </button>
       </div>
 
