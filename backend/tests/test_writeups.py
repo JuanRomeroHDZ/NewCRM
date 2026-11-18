@@ -2,6 +2,8 @@ import hashlib
 import io
 import json
 import zipfile
+import docx
+from docx.enum.section import WD_SECTION_START
 from httpx import ASGITransport, AsyncClient
 from PIL import Image
 import pytest
@@ -580,10 +582,12 @@ async def test_writeup_board_xss_citations_and_multi_format_exports(client, auth
     )
     assert docx_res.status_code == 200
     assert docx_res.content[:2] == b"PK"
+    document = docx.Document(io.BytesIO(docx_res.content))
+    assert len(document.sections) == 2
+    assert document.sections[1].start_type == WD_SECTION_START.NEW_PAGE
     with zipfile.ZipFile(io.BytesIO(docx_res.content)) as document_zip:
         document_xml = document_zip.read("word/document.xml")
         assert b"INFORME DE SEGURIDAD" in document_xml
-        assert b'w:type="page"' in document_xml
         assert b"INTERNAL_JWT_XYZ" not in document_xml
 
     pdf_res = await client.post(

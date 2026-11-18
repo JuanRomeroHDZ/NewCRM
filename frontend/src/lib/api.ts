@@ -5,7 +5,7 @@ import {
   OneTimeExpense, InternalProject, SecureResource,
   CoreUser, CoreLoginResponse, CoreUserCreateResponse, TotpSetupResponse, CoreUserRole,
   WriteupSummary, WriteupOverview, WriteupDetail, WriteupBoard, WriteupCitation, WriteupAsset,
-  WriteupRevision, WriteupRevisionAuthor, WriteupExportFormat, WriteupStructuredFinding, WriteupStatus, WriteupSeverity,
+  WriteupRevision, WriteupRevisionAuthor, WriteupExportOptions, WriteupStructuredFinding, WriteupStatus, WriteupSeverity,
   WriteupSnippet, WriteupWorkbench, RuntimeConfig, SecurityAuditResponse
 } from '../types';
 import { ApiError, createHttpApiError, normalizeResponseReadError, normalizeTransportError } from './apiErrors';
@@ -895,21 +895,11 @@ export const api = {
       `/writeups/${writeupId}/preview?redact_for_client=${redactForClient ? 'true' : 'false'}`,
       { method: 'POST' }
     ),
-  exportWriteup: (
-    writeupId: string,
-    payload: {
-      format: WriteupExportFormat;
-      redact_for_client?: boolean;
-      include_watermark?: boolean;
-      include_toc?: boolean;
-      toc_depth?: number;
-      include_figure_index?: boolean;
-      include_table_index?: boolean;
-      font_size_pt?: number;
-      watermark_text?: string;
-      rendered_diagrams?: Record<string, string>;
-    }
-  ) => requestBlobResponse(`/writeups/${writeupId}/export`, { method: 'POST', body: JSON.stringify(payload) }),
+  previewWriteupExport: (writeupId: string, payload: WriteupExportOptions & { draft_markdown: string; draft_title: string }, signal: AbortSignal) =>
+    requestBlobResponse(`/writeups/${writeupId}/export/preview`, { method: 'POST', body: JSON.stringify(payload), signal })
+      .then(({ blob }) => blob.text()),
+  exportWriteup: (writeupId: string, payload: WriteupExportOptions) =>
+    requestBlobResponse(`/writeups/${writeupId}/export`, { method: 'POST', body: JSON.stringify(payload) }),
   cloneWriteup: (writeupId: string, title?: string) =>
     request<WriteupDetail>(`/writeups/${writeupId}/clone`, {
       method: 'POST',

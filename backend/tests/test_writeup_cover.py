@@ -5,6 +5,7 @@ import subprocess
 import zipfile
 
 import docx
+from docx.enum.section import WD_SECTION_START
 import pytest
 from PIL import Image, ImageDraw
 from weasyprint import HTML
@@ -33,16 +34,19 @@ def test_cover_precedes_body_and_docx_preserves_label_format():
     assert "Empresa &lt;prueba&gt;" in html
     assert "secreto" not in html
     assert html.index('aria-label="Portada del informe"') < html.index('<main class="markdown-body">')
-    assert len(HTML(string=html, url_fetcher=_ssrf_safe_url_fetcher).render().pages) == 4
+    pages = HTML(string=html, url_fetcher=_ssrf_safe_url_fetcher).render().pages
+    assert len(pages) == 3
+    assert "prueba" in pages[-1].anchors
 
     raw_docx, _, _ = _build_docx_artifact(ctx)
     document = docx.Document(io.BytesIO(raw_docx))
     label = next(run for paragraph in document.paragraphs for run in paragraph.runs if run.text == "Respuesta")
     assert str(label.font.color.rgb) == "075C4C"
     assert label.font.size.pt == 14
+    assert len(document.sections) == 2
+    assert document.sections[1].start_type == WD_SECTION_START.NEW_PAGE
     with zipfile.ZipFile(io.BytesIO(raw_docx)) as archive:
         xml = archive.read("word/document.xml")
-        assert b'w:type="page"' in xml
         assert b"secreto" not in xml
 
 

@@ -6,6 +6,7 @@ import re
 import secrets
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, Response, UploadFile, status
+from starlette.concurrency import run_in_threadpool
 from sqlalchemy import case, delete, desc, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import set_committed_value
@@ -34,6 +35,7 @@ from app.schemas.writeups import (
     WriteupCreate,
     WriteupDetailOut,
     WriteupExportRequest,
+    WriteupExportPreviewRequest,
     WriteupOverviewOut,
     WriteupEditLeaseAcquire,
     WriteupPreviewOut,
@@ -51,7 +53,7 @@ from app.middleware.request_limits import read_upload_limited
 from app.security.tokens import require_vault_unlocked
 from app.services.activity_service import record_event
 from app.services.core_auth import get_current_user_from_token
-from app.services.writeup_exporter import compile_writeup_export, render_sanitized_html_fragment
+from app.services.writeup_exporter import ExportBundleContext, build_standalone_html_document, compile_writeup_export, render_sanitized_html_fragment
 from app.services.writeup_media import (
     convert_video_bytes_to_gif,
     decrypt_asset_bytes,
@@ -1348,15 +1350,13 @@ async def preview_writeup_html(
     }
 
 
-@router.post("/{writeup_id}/export")
-async def export_writeup(
-    writeup_id: str,
+async def _export_context(
+    db: AsyncSession,
+    writeup: Writeup,
     payload: WriteupExportRequest,
-    db: AsyncSession = Depends(get_db),
-    current_user: User | None = Depends(require_writeup_access),
-):
-    writeup = await get_writeup_or_404(db, writeup_id)
-    ctx = await build_export_context(
+) -> ExportBundleContext:
+    preview = payload if isinstance(payload, WriteupExportPreviewRequest) else None
+    return await build_export_context(
         db,
         writeup,
         redact_for_client=payload.redact_for_client,
@@ -1368,8 +1368,43 @@ async def export_writeup(
         font_size_pt=payload.font_size_pt,
         watermark_text=payload.watermark_text,
         rendered_diagrams=payload.rendered_diagrams,
+        layout=payload.layout,
+        draft_markdown=preview.draft_markdown if preview else None,
+        draft_title=preview.draft_title if preview else None,
     )
-    artifact = compile_writeup_export(payload.format, ctx)
+
+
+@router.post("/{writeup_id}/export/preview")
+async def preview_writeup_export(
+    writeup_id: str,
+    payload: WriteupExportPreviewRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(require_writeup_access),
+):
+    writeup = await get_writeup_or_404(db, writeup_id)
+    ctx = await _export_context(db, writeup, payload)
+    return Response(
+        await run_in_threadpool(
+            build_standalone_html_document,
+            ctx,
+            embed_video=payload.format in {"html", "md_zip"},
+            paper_preview=payload.format in {"pdf", "docx"},
+        ),
+        media_type="text/html",
+        headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"},
+    )
+
+
+@router.post("/{writeup_id}/export")
+async def export_writeup(
+    writeup_id: str,
+    payload: WriteupExportRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(require_writeup_access),
+):
+    writeup = await get_writeup_or_404(db, writeup_id)
+    ctx = await _export_context(db, writeup, payload)
+    artifact = await run_in_threadpool(compile_writeup_export, payload.format, ctx)
     db.add(
         WriteupExportLog(
             writeup_id=writeup.id,

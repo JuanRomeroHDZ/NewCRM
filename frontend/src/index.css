@@ -1196,3 +1196,10 @@ details[open] > summary:is(.ui-action-toggle, .ui-action-secondary, .ui-action-i
   overflow-x: auto;
   text-align: center;
 }
+
+.toast-file-action {
+  width: fit-content;
+  max-width: 100%;
+  padding-inline: 0.5rem;
+  color: #fff;
+}

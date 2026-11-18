@@ -2442,7 +2442,7 @@ export const WriteupsView: React.FC = () => {
       run: () => viewExportFile(canOpen ? new Blob([blob], { type: viewType }) : blob, savedName, canOpen),
     };
     setLatestExport({ reportId: id, sha256, action });
-    showToast(destination ? `Archivo guardado · ${savedName}` : `Enviado a descargas · ${savedName}`, destination ? 'success' : 'info', action);
+    showToast(destination ? 'Archivo guardado' : 'Enviado a descargas', destination ? 'success' : 'info', { ...action, detail: savedName });
 
     // Refresh the export history without reopening or rehydrating the editor.
     void api.getWriteup(id).then(({ export_logs }) => {
@@ -2468,6 +2468,10 @@ export const WriteupsView: React.FC = () => {
     markDirty();
     showToast('Fragmento insertado al final del informe.', 'success');
   };
+
+  const reportCorrelations = useMemo(() => detail ? correlateWriteup(detail, items, {
+    cveId, cweId, targetScope, prospectId, projectId, findings,
+  }) : [], [detail, items, cveId, cweId, targetScope, prospectId, projectId, findings]);
 
   if (!isUnlocked) {
     return (
@@ -2497,9 +2501,7 @@ export const WriteupsView: React.FC = () => {
     cveId.trim() || null,
     targetScope.trim() ? targetScope.trim().slice(0, 24) : null,
   ].filter(Boolean);
-  const reportCorrelations = useMemo(() => detail ? correlateWriteup(detail, items, {
-    cveId, cweId, targetScope, prospectId, projectId, findings,
-  }) : [], [detail, items, cveId, cweId, targetScope, prospectId, projectId, findings]);
+
 
   return (
     <div className="writeups-view relative mx-2 box-border flex h-full min-h-[calc(100dvh-4.5rem)] w-auto min-w-0 max-w-full flex-col overflow-x-clip border border-obsidian-border p-2 lg:h-[calc(100dvh-4.5rem)] lg:min-h-0 lg:flex-row">
@@ -3919,7 +3921,7 @@ export const WriteupsView: React.FC = () => {
 
       {showExportModal && detail && (
                   <WriteupExportModal
-          writeup={{ ...detail, markdown_content: markdown, findings, workbench }}
+          writeup={{ ...detail, title, markdown_content: markdown, findings, workbench }}
           onClose={() => setShowExportModal(false)}
           onExport={handleExport}
         />

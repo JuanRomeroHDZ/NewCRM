@@ -15,14 +15,15 @@ import zipfile
 from typing import Any, Callable
 import docx
 from docx.enum.section import WD_SECTION_START
-from docx.enum.text import WD_TAB_ALIGNMENT, WD_TAB_LEADER
-from docx.shared import Inches, Pt, RGBColor
+from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_TAB_ALIGNMENT, WD_TAB_LEADER
+from docx.shared import Inches, Mm, Pt, RGBColor
 import markdown as md_lib
 import nh3
-from PIL import Image as PILImage
+from PIL import Image as PILImage, ImageColor
 from weasyprint import HTML as WeasyHTML
 from weasyprint.urls import URLFetcher, URLFetcherResponse
 from app.config import settings
+from app.schemas.writeups import WriteupExportLayout
 from app.services.workshop_sanitizer import sanitize_formula_injection, sanitize_svg_content
 from app.services.writeup_media import decrypt_asset_bytes
 
@@ -58,7 +59,8 @@ ALLOWED_HTML_ATTRS = {
     "table": {"id"},
     "ul": {"type"},
     "source": {"src", "type"},
-    "span": {"id", "class", "data-anchor"},
+    "span": {"id", "class", "data-anchor", "style"},
+    "mark": {"style"},
     "td": {"align", "colspan", "rowspan"},
     "th": {"align", "colspan", "rowspan"},
     "u": {"style"},
@@ -66,7 +68,36 @@ ALLOWED_HTML_ATTRS = {
 }
 
 
+_INLINE_COLOR = re.compile(r"(color|background-color)\s*:\s*(.{1,64})", re.I)
+_DOCX_COLORED_TEXT = re.compile(r'<(span|mark)\b[^>]*\bstyle\s*=\s*(["\'])(.*?)\2[^>]*>(.*?)</\1>', re.I | re.S)
+
+
+def _inline_colors(style: str) -> dict[str, str]:
+    colors = {}
+    for declaration in style.split(";"):
+        match = _INLINE_COLOR.fullmatch(declaration.strip())
+        if not match:
+            continue
+        name, value = match.groups()
+        try:
+            color = ImageColor.getrgb(value)
+        except ValueError:
+            continue
+        if len(color) == 3:
+            colors[name.lower()] = "#" + "".join(f"{channel:02x}" for channel in color)
+    return colors
+
+
+def _accent_ink(color: str) -> str:
+    rgb = (channel / 255 for channel in ImageColor.getrgb(color))
+    linear = [channel / 12.92 if channel <= 0.04045 else ((channel + 0.055) / 1.055) ** 2.4 for channel in rgb]
+    luminance = sum(channel * weight for channel, weight in zip(linear, (0.2126, 0.7152, 0.0722)))
+    return color if luminance <= 0.1833 else "#171717"
+
+
 def _safe_export_attribute(tag: str, attribute: str, value: str) -> str | None:
+    if tag in {"span", "mark"} and attribute == "style":
+        return "; ".join(f"{name}: {color}" for name, color in _inline_colors(value).items()) or None
     if attribute in {"colspan", "rowspan"}:
         return value if re.fullmatch(r"[1-9][0-9]?", value) else None
     if tag == "u" and attribute == "style":
@@ -122,6 +153,7 @@ class ExportBundleContext:
     rendered_diagrams: dict[str, str] = field(default_factory=dict)
     client_name: str | None = None
     version_at: datetime | None = None
+    layout: WriteupExportLayout = field(default_factory=WriteupExportLayout)
 
 
 def _diagram_sha256(source: str) -> str:
@@ -911,9 +943,11 @@ def build_standalone_html_document(
     embed_video: bool = True,
     pdf_section: str = "all",
     page_refs: dict[str, int] | None = None,
+    compiled_parts: tuple[list[str], str] | None = None,
+    paper_preview: bool = False,
 ) -> str:
     """Produces a zero-external-dependency HTML5 report document."""
-    index_pages, markdown_body = _compile_sanitized_html_parts(ctx, embed_video=embed_video, always_toc=True)
+    index_pages, markdown_body = compiled_parts if compiled_parts is not None else _compile_sanitized_html_parts(ctx, embed_video=embed_video, always_toc=True)
     indexes_html = "".join(index_pages)
     if pdf_section == "frontmatter" and page_refs:
         def add_page_ref(match: re.Match[str]) -> str:
@@ -944,6 +978,14 @@ def build_standalone_html_document(
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     font_size_pt = max(8, min(18, int(ctx.font_size_pt or 11)))
     org_name = html_lib.escape(ctx.organization_name or settings.WRITEUP_ORGANIZATION_NAME)
+    layout = ctx.layout
+    accent = layout.accent_color
+    accent_ink = _accent_ink(accent)
+    family = "Liberation Sans" if layout.font_family == "sans" else "Liberation Serif"
+    fallback = "sans-serif" if layout.font_family == "sans" else "serif"
+    heading_scale = layout.heading_scale / 100
+    indent = layout.heading_indent_mm
+    margin = layout.margin_mm
     cover_details = "".join(
         f"<p><strong>{label}:</strong> {html_lib.escape(value)}</p>"
         for label, value in _cover_details(ctx)
@@ -966,6 +1008,14 @@ def build_standalone_html_document(
     preamble_html = f'<section class="report-preamble">{meta_block}{exec_block}</section>' if meta_block or exec_block else ""
     report_html = f'<div class="report-content">{preamble_html}<main class="markdown-body">{markdown_body}</main>{_build_findings_html(ctx)}{_build_citations_html(ctx)}</div>'
 
+    if not layout.include_cover:
+        cover_html = ""
+        title_html = f'<header class="report-title"><h1>{html_lib.escape(ctx.title)}</h1>{watermark_block}</header>'
+        if indexes_html:
+            indexes_html = f'<div class="index-frontmatter">{title_html}{indexes_html}</div>'
+        else:
+            report_html = report_html.replace('<div class="report-content">', f'<div class="report-content">{title_html}', 1)
+
     if pdf_section == "frontmatter":
         document_body = cover_html + indexes_html
     elif pdf_section == "report":
@@ -983,14 +1033,16 @@ def build_standalone_html_document(
 <style>
   @page {{
     size: A4;
-    margin: 20mm 16mm 20mm 16mm;
+    margin: {margin}mm;
     @bottom-right {{ content: ""; font-size: 9pt; color: #64748b; }}
 
   }}
-  @page frontmatter {{ size: A4; margin: 20mm 16mm 20mm 16mm; @bottom-right {{ content: ""; }} }}
-  @page report-content {{ size: A4; margin: 20mm 16mm 20mm 16mm; @bottom-right {{ content: "Página " counter(page) " de " counter(pages); font-size: 9pt; color: #64748b; }} }}
-  body {{ font-family: "Liberation Serif", "DejaVu Serif", Georgia, serif; color: #171717; line-height: 1.55; max-width: 850px; margin: 0 auto; padding: 32px; background: white; font-size: {font_size_pt}pt; }}
-  .cover, .document-index-page {{ page: frontmatter; }}
+  @page frontmatter {{ size: A4; margin: {margin}mm; @bottom-right {{ content: ""; }} }}
+  @page report-content {{ size: A4; margin: {margin}mm; @bottom-right {{ content: "Página " counter(page) " de " counter(pages); font-size: 9pt; color: #64748b; }} }}
+  body {{ box-sizing: border-box; width: 100%; font-family: "{family}", {fallback}; color: #171717; line-height: {layout.line_spacing}; max-width: 210mm; margin: 0 auto; padding: min({margin}mm, 7vw); background: white; font-size: {font_size_pt}pt; overflow-wrap: anywhere; }}
+  body.paper-preview {{ padding: {margin}mm; }}
+  .report-title h1 {{ margin-top: 0; font-size: {round(2.1 * heading_scale, 3)}em; }}
+  .cover, .document-index-page, .index-frontmatter {{ page: frontmatter; }}
   .report-content {{ page: report-content; }}
   .cover {{ display: flex; flex-direction: column; break-after: page; }}
   .document-index-page {{ margin: 18pt 0; }}
@@ -1004,11 +1056,11 @@ def build_standalone_html_document(
   .index-page-number {{ width: 1%; padding-left: 10px; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }}
   .document-index-page a:not(.has-page-ref)::after {{ content: leader(".") target-counter(attr(href), page); }}
   .index-page-number {{ flex: 0 0 auto; color: #555; font-variant-numeric: tabular-nums; }}
-  .letterhead {{ display: flex; justify-content: space-between; gap: 16px; border-bottom: 2px solid #075c4c; padding-bottom: 12px; color: #075c4c; font: bold 10pt "Liberation Sans", sans-serif; overflow-wrap: anywhere; }}
+  .letterhead {{ display: flex; justify-content: space-between; gap: 16px; border-bottom: 2px solid {accent}; padding-bottom: 12px; color: {accent_ink}; font: bold 10pt "Liberation Sans", sans-serif; overflow-wrap: anywhere; }}
   .watermark {{ color: #555; font: 9pt "Liberation Sans", sans-serif; text-align: right; }}
   .cover-content {{ margin: auto 0; padding: 28px 0; }}
-  .cover h1 {{ margin: 0 0 16px; font-size: 30pt; line-height: 1.15; overflow-wrap: anywhere; }}
-  .cover-subtitle {{ color: #075c4c; font: bold 10pt "Liberation Sans", sans-serif; }}
+  .cover h1 {{ margin: 0 0 16px; font-size: {round(2.2 * heading_scale, 3)}em; line-height: 1.15; overflow-wrap: anywhere; }}
+  .cover-subtitle {{ color: {accent_ink}; font: bold 10pt "Liberation Sans", sans-serif; }}
   .cover-footer {{ border-top: 1px solid #b8c7c2; padding-top: 12px; color: #555; font: 9pt "Liberation Sans", sans-serif; }}
   .badge, .mode-pill {{ font: 9pt "Liberation Sans", sans-serif; font-weight: 700; letter-spacing: .02em; }}
   .mode-pill {{ margin-left: 12px; color: #555; }}
@@ -1020,18 +1072,18 @@ def build_standalone_html_document(
   .cover-content p:not(.cover-subtitle) {{ margin: 4pt 0; font: 11pt "Liberation Sans", sans-serif; }}
   body :is(h1, h2, h3, h4, h5, h6, caption) {{ break-after: avoid; }}
   p, li {{ orphans: 3; widows: 3; }}
-  a {{ color: #075c4c; text-decoration-thickness: 1px; text-underline-offset: 3px; }}
+  a {{ color: {accent_ink}; text-decoration-thickness: 1px; text-underline-offset: 3px; }}
   .toc {{ margin: 0; padding: 0; font: .9em/1.36 "Liberation Sans", sans-serif; }}
   .toc ul {{ margin: 0; padding-left: 1.25em; }}
   .toc > ul {{ padding-left: 1em; }}
   .toc a {{ text-decoration: none; }}
   .toc a:hover, .toc a:focus {{ text-decoration: underline; }}
-  .markdown-body h1 {{ font-size: 1.8em; line-height: 1.2; margin: 1.4em 0 .5em; break-after: avoid; }}
-  .markdown-body h2 {{ font-size: 1.55em; line-height: 1.25; margin: 1.35em 0 .45em; border-bottom: 1px solid #bbb; padding-bottom: 4px; break-after: avoid; }}
-  .markdown-body h3 {{ font-size: 1.3em; line-height: 1.3; margin: 1.2em 0 .4em; break-after: avoid; }}
-  .markdown-body h4 {{ font-size: 1.15em; margin: 1.1em 0 .35em; break-after: avoid; }}
-  .markdown-body h5 {{ font-size: 1.05em; margin: 1em 0 .3em; break-after: avoid; }}
-  .markdown-body h6 {{ font-size: .95em; margin: 1em 0 .3em; break-after: avoid; }}
+  .markdown-body h1 {{ font-size: {round(1.75 * heading_scale, 3)}em; line-height: 1.2; margin: 1.4em 0 .5em; break-after: avoid; }}
+  .markdown-body h2 {{ font-size: {round(1.5 * heading_scale, 3)}em; line-height: 1.25; margin: 1.35em 0 .45em; border-bottom: 1px solid {accent}; padding-bottom: 4px; break-after: avoid; }}
+  .markdown-body h3 {{ font-size: {round(1.28 * heading_scale, 3)}em; line-height: 1.3; margin: 1.2em 0 .4em; margin-left: {indent * 1}mm; break-after: avoid; }}
+  .markdown-body h4 {{ font-size: {round(1.14 * heading_scale, 3)}em; margin: 1.1em 0 .35em; margin-left: {indent * 2}mm; break-after: avoid; }}
+  .markdown-body h5 {{ font-size: {round(1.04 * heading_scale, 3)}em; margin: 1em 0 .3em; margin-left: {indent * 3}mm; break-after: avoid; }}
+  .markdown-body h6 {{ font-size: {round(0.97 * heading_scale, 3)}em; margin: 1em 0 .3em; margin-left: {indent * 3}mm; break-after: avoid; }}
   .meta-table, table {{ width: 100%; table-layout: fixed; border-collapse: collapse; margin: 14px 0; font-size: .88em; }}
   th, td {{ border-bottom: 1px solid #bbb; padding: 6px 5px; text-align: left; vertical-align: top; overflow-wrap: anywhere; }}
   th {{ border-top: 1px solid #555; border-bottom: 1px solid #555; font-weight: 700; }}
@@ -1049,6 +1101,10 @@ def build_standalone_html_document(
   blockquote {{ border-left: 2px solid #777; margin: 12px 0; padding: 0 14px; color: #444; }}
   img, video {{ max-width: 100%; height: auto; margin: 10px auto; display: block; }}
   figure {{ margin: 12pt 0; }}
+  figure img, figure video {{ max-width: {layout.figure_width_percent}%; }}
+  .markdown-body :is(h1, h2, h3, h4, h5, h6, p, li, pre, td, th) {{ overflow-wrap: anywhere; }}
+  td img, th img {{ max-width: 100%; }}
+  .markdown-body > :first-child {{ margin-top: 0; }}
   img.report-math-inline {{ display: inline; margin: 0; vertical-align: middle; }}
   img.report-math-block {{ margin: 6pt auto; max-height: 150mm; }}
   .report-equation {{ break-inside: avoid; }}
@@ -1064,10 +1120,10 @@ def build_standalone_html_document(
   .writeup-label-pequena {{ font-size: .8em; }}
   .writeup-label-normal {{ font-size: .95em; }}
   .writeup-label-grande {{ font-size: 1.15em; }}
-  @media print {{ body {{ padding: 0; }} figure img {{ max-height: 190mm; object-fit: contain; }} .cover {{ min-height: 220mm; }} a {{ color: inherit; }} }}
+  @media print {{ body {{ padding: 0; }} figure img {{ max-height: 190mm; object-fit: contain; }} .cover {{ min-height: 220mm; }} body.paper-preview {{ padding: 0; }} }}
 </style>
 </head>
-<body>
+<body{' class="paper-preview"' if paper_preview else ''}>
   {document_body}
 </body>
 </html>"""
@@ -1325,7 +1381,12 @@ def _build_html_artifact(ctx: ExportBundleContext) -> tuple[bytes, str, str]:
 
 
 def _build_pdf_artifact(ctx: ExportBundleContext) -> tuple[bytes, str, str]:
-    report_html = build_standalone_html_document(ctx, embed_video=False, pdf_section="report")
+    compiled = _compile_sanitized_html_parts(ctx, embed_video=False, always_toc=True)
+    if not compiled[0]:
+        html = build_standalone_html_document(ctx, embed_video=False, compiled_parts=compiled)
+        pdf = WeasyHTML(string=html, url_fetcher=_ssrf_safe_url_fetcher).write_pdf()
+        return pdf, "application/pdf", f"{ctx.slug}.pdf"
+    report_html = build_standalone_html_document(ctx, embed_video=False, pdf_section="report", compiled_parts=compiled)
     report_document = WeasyHTML(string=report_html, url_fetcher=_ssrf_safe_url_fetcher).render()
     page_refs = {
         anchor: page_number
@@ -1337,6 +1398,7 @@ def _build_pdf_artifact(ctx: ExportBundleContext) -> tuple[bytes, str, str]:
         embed_video=False,
         pdf_section="frontmatter",
         page_refs=page_refs,
+        compiled_parts=compiled,
     )
     frontmatter_document = WeasyHTML(string=frontmatter_html, url_fetcher=_ssrf_safe_url_fetcher).render()
     combined = frontmatter_document.copy([*frontmatter_document.pages, *report_document.pages])
@@ -1344,7 +1406,7 @@ def _build_pdf_artifact(ctx: ExportBundleContext) -> tuple[bytes, str, str]:
     return pdf_bytes, "application/pdf", f"{ctx.slug}.pdf"
 
 
-def _add_png_picture(document: Any, png_bytes: bytes, caption: str | None = None) -> Any:
+def _add_png_picture(document: Any, png_bytes: bytes, caption: str | None = None, *, width_scale: float = 1) -> Any:
     buf = io.BytesIO(png_bytes)
     buf.seek(0)
     section = document.sections[-1]
@@ -1353,11 +1415,12 @@ def _add_png_picture(document: Any, png_bytes: bytes, caption: str | None = None
     with PILImage.open(buf) as image:
         width, height = image.size
     buf.seek(0)
-    document.add_picture(buf, width=min(max_width, int(max_height * width / height)))
+    document.add_picture(buf, width=min(int(max_width * width_scale), int(max_height * width / height)))
     picture_paragraph = document.paragraphs[-1]
+    picture_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
     if caption:
         picture_paragraph.paragraph_format.keep_with_next = True
-        _add_docx_caption_text(document, caption)
+        _add_docx_caption_text(document, caption).alignment = WD_ALIGN_PARAGRAPH.CENTER
     return picture_paragraph
 
 
@@ -1377,7 +1440,7 @@ def _add_docx_caption_text(document: Any, caption: str) -> Any:
     return paragraph
 
 
-def _add_docx_label_runs(paragraph: Any, text: str, size: int) -> None:
+def _add_docx_label_runs(paragraph: Any, text: str, size: int, *, max_width_in: float = 5.8) -> None:
     """Format known labels while leaving code spans and other text intact."""
     underline_pattern = re.compile(r'<u\s+style="text-decoration-color:\s*(#[0-9a-fA-F]{6});\s*text-decoration-thickness:\s*1px;"\s*>(.*?)</u>', re.I | re.S)
     colors = {"jade": "075C4C", "rojo": "9B1C1C", "azul": "174D86", "dorado": "74510C", "neutro": "303030"}
@@ -1392,7 +1455,7 @@ def _add_docx_label_runs(paragraph: Any, text: str, size: int) -> None:
             result = _math_svg(expression, inline=True, size=size * 4 / 3)
             png = _svg_to_png_bytes(result[0], width=min(1320, math.ceil(result[1] * 3))) if result else None
             if result and png:
-                image = paragraph.add_run().add_picture(io.BytesIO(png), width=Inches(min(result[1] / 96, 6)))
+                image = paragraph.add_run().add_picture(io.BytesIO(png), width=Inches(min(result[1] / 96, max_width_in)))
                 image._inline.docPr.set("descr", expression)
             else:
                 paragraph.add_run(token[0])
@@ -1414,16 +1477,34 @@ def _add_docx_label_runs(paragraph: Any, text: str, size: int) -> None:
                 run.font.size = Pt(sizes[size])
             offset = match.end()
         add_math(segment[offset:])
+    def add_underlines(segment: str) -> None:
+        offset = 0
+        for match in underline_pattern.finditer(segment):
+            add_plain(segment[offset:match.start()])
+            run = paragraph.add_run(html_lib.unescape(match[2]))
+            underline = docx.oxml.OxmlElement("w:u")
+            underline.set(docx.oxml.ns.qn("w:val"), "single")
+            underline.set(docx.oxml.ns.qn("w:color"), match[1][1:].upper())
+            run._element.get_or_add_rPr().append(underline)
+            offset = match.end()
+        add_plain(segment[offset:])
+
+    code_ranges = [token.span() for token in _INLINE_MATH_OR_CODE.finditer(text) if token["code"]]
     offset = 0
-    for match in underline_pattern.finditer(text):
-        add_plain(text[offset:match.start()])
-        run = paragraph.add_run(html_lib.unescape(match.group(2)))
-        underline = docx.oxml.OxmlElement("w:u")
-        underline.set(docx.oxml.ns.qn("w:val"), "single")
-        underline.set(docx.oxml.ns.qn("w:color"), match.group(1)[1:].upper())
-        run._element.get_or_add_rPr().append(underline)
+    for match in _DOCX_COLORED_TEXT.finditer(text):
+        if any(start <= match.start() < end for start, end in code_ranges):
+            continue
+        add_underlines(text[offset:match.start()])
+        run = paragraph.add_run(_plain_html_text(match[4]))
+        colors = _inline_colors(match[3])
+        if "color" in colors:
+            run.font.color.rgb = RGBColor.from_string(colors["color"][1:].upper())
+        if "background-color" in colors:
+            shading = docx.oxml.OxmlElement("w:shd")
+            shading.set(docx.oxml.ns.qn("w:fill"), colors["background-color"][1:].upper())
+            run._element.get_or_add_rPr().append(shading)
         offset = match.end()
-    add_plain(text[offset:])
+    add_underlines(text[offset:])
 
 
 def _add_docx_bookmark(paragraph: Any, name: str, bookmark_id: int) -> None:
@@ -1436,13 +1517,13 @@ def _add_docx_bookmark(paragraph: Any, name: str, bookmark_id: int) -> None:
     paragraph._p.append(end)
 
 
-def _add_docx_internal_link(paragraph: Any, text: str, anchor: str) -> None:
+def _add_docx_internal_link(paragraph: Any, text: str, anchor: str, ink: RGBColor) -> None:
     hyperlink = docx.oxml.OxmlElement("w:hyperlink")
     hyperlink.set(docx.oxml.ns.qn("w:anchor"), anchor[:40])
     run = docx.oxml.OxmlElement("w:r")
     properties = docx.oxml.OxmlElement("w:rPr")
     color = docx.oxml.OxmlElement("w:color")
-    color.set(docx.oxml.ns.qn("w:val"), "075C4C")
+    color.set(docx.oxml.ns.qn("w:val"), str(ink))
     properties.append(color)
     underline = docx.oxml.OxmlElement("w:u")
     underline.set(docx.oxml.ns.qn("w:val"), "single")
@@ -1466,11 +1547,11 @@ def _add_docx_field(paragraph: Any, instruction: str, placeholder: str = "1") ->
     paragraph._p.append(field)
 
 
-def _add_docx_index_entry(paragraph: Any, label: str, anchor: str) -> None:
+def _add_docx_index_entry(paragraph: Any, label: str, anchor: str, width: int, ink: RGBColor) -> None:
     paragraph.paragraph_format.line_spacing = 1.1
     paragraph.paragraph_format.space_after = Pt(2)
-    paragraph.paragraph_format.tab_stops.add_tab_stop(Inches(6.4), WD_TAB_ALIGNMENT.RIGHT, WD_TAB_LEADER.DOTS)
-    _add_docx_internal_link(paragraph, label, anchor)
+    paragraph.paragraph_format.tab_stops.add_tab_stop(width, WD_TAB_ALIGNMENT.RIGHT, WD_TAB_LEADER.DOTS)
+    _add_docx_internal_link(paragraph, label, anchor, ink)
     paragraph.add_run("\t")
     _add_docx_field(paragraph, f"PAGEREF {anchor} \\h")
 
@@ -1521,8 +1602,9 @@ def _append_docx_table(
         for column_index in range(columns):
             cell = table.cell(row_index, column_index)
             value = row[column_index] if column_index < len(row) else ""
-            if _INLINE_MATH_OR_CODE.search(value):
-                _add_docx_label_runs(cell.paragraphs[0], value, font_size_pt)
+            if _INLINE_MATH_OR_CODE.search(value) or _DOCX_COLORED_TEXT.search(value):
+                cell_width = cell.width.inches if cell.width else 1
+                _add_docx_label_runs(cell.paragraphs[0], value, font_size_pt, max_width_in=max(0.1, cell_width - 0.18))
             else:
                 cell.text = value
             if row_index == 0:
@@ -1555,7 +1637,7 @@ def _append_docx_asset(document: Any, ctx: ExportBundleContext, asset_id: str, c
     with PILImage.open(io.BytesIO(raw_img)) as pil_img:
         png_buf = io.BytesIO()
         pil_img.save(png_buf, format="PNG")
-    paragraph = _add_png_picture(document, png_buf.getvalue(), caption or None)
+    paragraph = _add_png_picture(document, png_buf.getvalue(), caption or None, width_scale=ctx.layout.figure_width_percent / 100)
     if bookmark and paragraph is not None:
         _add_docx_bookmark(paragraph, bookmark[0], bookmark[1])
     return True
@@ -1563,65 +1645,90 @@ def _append_docx_asset(document: Any, ctx: ExportBundleContext, asset_id: str, c
 
 def _build_docx_artifact(ctx: ExportBundleContext) -> tuple[bytes, str, str]:
     document = docx.Document()
+    layout = ctx.layout
+    family = "Liberation Sans" if layout.font_family == "sans" else "Liberation Serif"
+    accent = RGBColor.from_string(_accent_ink(layout.accent_color)[1:].upper())
+    section = document.sections[0]
+    section.page_width = Mm(210)
+    section.page_height = Mm(297)
+    section.top_margin = section.bottom_margin = section.left_margin = section.right_margin = Mm(layout.margin_mm)
+    content_width = section.page_width - section.left_margin - section.right_margin
+
+    def add_picture(png: bytes, caption: str | None) -> Any:
+        return _add_png_picture(document, png, caption, width_scale=layout.figure_width_percent / 100)
+
+    def add_text_runs(paragraph: Any, text: str) -> None:
+        _add_docx_label_runs(paragraph, text, font_size_pt, max_width_in=content_width / Inches(1))
+
     font_size_pt = max(8, min(18, int(ctx.font_size_pt or 11)))
     normal = document.styles["Normal"]
-    normal.font.name = "Liberation Serif"
+    normal.font.name = family
     normal.font.size = Pt(font_size_pt)
     normal.paragraph_format.space_after = Pt(6)
-    normal.paragraph_format.line_spacing = 1.35
-    heading_scales = (1.75, 1.5, 1.3, 1.15, 1.05, 0.95)
+    normal.paragraph_format.line_spacing = layout.line_spacing
+    heading_scales = (1.75, 1.5, 1.28, 1.14, 1.04, 0.97)
     for heading_level, scale in enumerate(heading_scales, start=1):
         style_name = f"Heading {heading_level}"
         style = document.styles[style_name]
-        style.font.name = "Liberation Serif"
-        style.font.size = Pt(round(font_size_pt * scale, 1))
+        style.font.name = family
+        style.font.size = Pt(round(font_size_pt * scale * layout.heading_scale / 100, 1))
         style.font.bold = True
         style.paragraph_format.keep_with_next = True
-        style.font.color.rgb = RGBColor(23, 23, 23)
+        style.font.color.rgb = accent if heading_level == 2 else RGBColor(23, 23, 23)
+        style.paragraph_format.left_indent = Mm(min(3, max(0, heading_level - 2)) * layout.heading_indent_mm)
     title_style = document.styles["Title"]
-    title_style.font.name = "Liberation Serif"
-    title_style.font.size = Pt(30)
+    title_style.font.name = family
+    title_style.font.size = Pt(round(font_size_pt * 2.2 * layout.heading_scale / 100, 1))
     title_style.font.color.rgb = RGBColor(23, 23, 23)
     title_style.paragraph_format.keep_with_next = True
-    letterhead = document.add_paragraph()
-    brand = letterhead.add_run(ctx.organization_name or settings.WRITEUP_ORGANIZATION_NAME)
-    brand.font.name = "Liberation Sans"
-    brand.font.bold = True
-    brand.font.size = Pt(11)
-    brand.font.color.rgb = RGBColor(7, 92, 76)
-    if ctx.include_watermark:
-        classification = document.add_paragraph(ctx.watermark_text or settings.WRITEUP_WATERMARK_DEFAULT)
-        for run in classification.runs:
+    for style in [normal, title_style, *(document.styles[f"Heading {level}"] for level in range(1, 7))]:
+        fonts = style.element.rPr.rFonts
+        for attribute in ("asciiTheme", "hAnsiTheme", "eastAsiaTheme", "cstheme"):
+            fonts.attrib.pop(docx.oxml.ns.qn(f"w:{attribute}"), None)
+    title_properties = title_style.element.pPr
+    title_border = title_properties.find(docx.oxml.ns.qn("w:pBdr"))
+    if title_border is not None:
+        title_properties.remove(title_border)
+    if layout.include_cover:
+        letterhead = document.add_paragraph()
+        brand = letterhead.add_run(ctx.organization_name or settings.WRITEUP_ORGANIZATION_NAME)
+        brand.font.name = "Liberation Sans"
+        brand.font.bold = True
+        brand.font.size = Pt(11)
+        brand.font.color.rgb = accent
+        if ctx.include_watermark:
+            classification = document.add_paragraph(ctx.watermark_text or settings.WRITEUP_WATERMARK_DEFAULT)
+            for run in classification.runs:
+                run.font.size = Pt(9)
+                run.font.color.rgb = RGBColor(85, 85, 85)
+
+        label = document.add_paragraph()
+        label.paragraph_format.space_before = Pt(84)
+        label_run = label.add_run("INFORME DE SEGURIDAD")
+        label_run.font.name = "Liberation Sans"
+        label_run.font.bold = True
+        label_run.font.size = Pt(10)
+        label_run.font.color.rgb = accent
+        document.add_heading(ctx.title, level=0)
+        for field_name, field_value in _cover_details(ctx):
+            paragraph = document.add_paragraph()
+            paragraph.add_run(f"{field_name}: ").bold = True
+            paragraph.add_run(field_value)
+        cover_footer = document.add_paragraph()
+        cover_footer.paragraph_format.space_before = Pt(60)
+        cover_footer.add_run("Modo cliente (censurado)" if ctx.redact_for_client else "Reporte técnico interno")
+        cover_footer.add_run(f"\nGenerado: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')} · Estado: {ctx.status} · Severidad: {ctx.severity.upper()}")
+        for run in cover_footer.runs:
+            run.font.name = "Liberation Sans"
             run.font.size = Pt(9)
             run.font.color.rgb = RGBColor(85, 85, 85)
-
-    label = document.add_paragraph()
-    label.paragraph_format.space_before = Pt(84)
-    label_run = label.add_run("INFORME DE SEGURIDAD")
-    label_run.font.name = "Liberation Sans"
-    label_run.font.bold = True
-    label_run.font.size = Pt(10)
-    label_run.font.color.rgb = RGBColor(7, 92, 76)
-    document.add_heading(ctx.title, level=0)
-    for field_name, field_value in _cover_details(ctx):
-        paragraph = document.add_paragraph()
-        paragraph.add_run(f"{field_name}: ").bold = True
-        paragraph.add_run(field_value)
-    cover_footer = document.add_paragraph()
-    cover_footer.paragraph_format.space_before = Pt(60)
-    cover_footer.add_run("Modo cliente (censurado)" if ctx.redact_for_client else "Reporte técnico interno")
-    cover_footer.add_run(f"\nGenerado: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')} · Estado: {ctx.status} · Severidad: {ctx.severity.upper()}")
-    for run in cover_footer.runs:
-        run.font.name = "Liberation Sans"
-        run.font.size = Pt(9)
-        run.font.color.rgb = RGBColor(85, 85, 85)
     body_md = ANCHOR_PATTERN.sub("", apply_redaction_markers(ctx.markdown_content, ctx.redact_for_client))
     index_entries = _extract_document_index(body_md)
     word_anchor_by_position: dict[tuple[str, int], tuple[str, int]] = {}
     for bookmark_id, entry in enumerate(index_entries, start=1):
         word_anchor_by_position[(entry.kind, entry.offset)] = (f"lesssow{bookmark_id}", bookmark_id)
 
-    body_section = document.add_section(WD_SECTION_START.NEW_PAGE)
+    body_section = document.add_section(WD_SECTION_START.NEW_PAGE) if layout.include_cover else document.sections[0]
     page_numbering = docx.oxml.OxmlElement("w:pgNumType")
     page_numbering.set(docx.oxml.ns.qn("w:start"), "1")
     body_section._sectPr.append(page_numbering)
@@ -1630,10 +1737,16 @@ def _build_docx_artifact(ctx: ExportBundleContext) -> tuple[bytes, str, str]:
     footer.alignment = docx.enum.text.WD_ALIGN_PARAGRAPH.RIGHT
     footer.add_run("Página ")
     _add_docx_field(footer, "PAGE")
+    footer.add_run(" de ")
+    _add_docx_field(footer, "SECTIONPAGES" if layout.include_cover else "NUMPAGES")
     update_fields = docx.oxml.OxmlElement("w:updateFields")
     update_fields.set(docx.oxml.ns.qn("w:val"), "true")
     document.settings._element.append(update_fields)
 
+    if not layout.include_cover:
+        document.add_heading(ctx.title, level=0)
+        if ctx.include_watermark:
+            document.add_paragraph(ctx.watermark_text or settings.WRITEUP_WATERMARK_DEFAULT)
     if ctx.include_toc:
         headings = [entry for entry in index_entries if entry.kind == "heading" and entry.level <= ctx.toc_depth]
         if headings:
@@ -1642,7 +1755,7 @@ def _build_docx_artifact(ctx: ExportBundleContext) -> tuple[bytes, str, str]:
                 paragraph = document.add_paragraph()
                 paragraph.paragraph_format.left_indent = Inches(max(0, entry.level - 1) * 0.18)
                 anchor = word_anchor_by_position[(entry.kind, entry.offset)][0]
-                _add_docx_index_entry(paragraph, entry.label, anchor)
+                _add_docx_index_entry(paragraph, entry.label, anchor, content_width, accent)
     if ctx.include_figure_index:
         figures = [entry for entry in index_entries if entry.kind == "figure"]
         if figures:
@@ -1650,7 +1763,7 @@ def _build_docx_artifact(ctx: ExportBundleContext) -> tuple[bytes, str, str]:
             for number, entry in enumerate(figures, 1):
                 paragraph = document.add_paragraph()
                 anchor = word_anchor_by_position[(entry.kind, entry.offset)][0]
-                _add_docx_index_entry(paragraph, f"Figura {number}. {entry.label}", anchor)
+                _add_docx_index_entry(paragraph, f"Figura {number}. {entry.label}", anchor, content_width, accent)
     if ctx.include_table_index:
         tables = [entry for entry in index_entries if entry.kind == "table"]
         if tables:
@@ -1658,7 +1771,7 @@ def _build_docx_artifact(ctx: ExportBundleContext) -> tuple[bytes, str, str]:
             for number, entry in enumerate(tables, 1):
                 paragraph = document.add_paragraph()
                 anchor = word_anchor_by_position[(entry.kind, entry.offset)][0]
-                _add_docx_index_entry(paragraph, f"Tabla {number}. {entry.label}", anchor)
+                _add_docx_index_entry(paragraph, f"Tabla {number}. {entry.label}", anchor, content_width, accent)
 
     meta_rows = _report_metadata(ctx)
     if meta_rows:
@@ -1756,7 +1869,7 @@ def _build_docx_artifact(ctx: ExportBundleContext) -> tuple[bytes, str, str]:
                 after_diagram = trailing_caption_lines(index + 1) if code_lang == "mermaid" else index + 1
                 figure_caption = docx_object_caption("figure", figure_entry, "Diagrama Mermaid") if code_lang == "mermaid" else None
                 if diagram_png:
-                    paragraph = _add_png_picture(document, diagram_png, figure_caption)
+                    paragraph = add_picture(diagram_png, figure_caption)
                 else:
                     code_p = document.add_paragraph(raw_block)
                     if code_p.runs:
@@ -1795,8 +1908,8 @@ def _build_docx_artifact(ctx: ExportBundleContext) -> tuple[bytes, str, str]:
                 png = _svg_to_png_bytes(result[0], width=min(1600, math.ceil(result[1] * 3))) if result else None
                 if result and png:
                     paragraph = document.add_paragraph()
-                    paragraph.alignment = docx.enum.text.WD_ALIGN_PARAGRAPH.CENTER
-                    image = paragraph.add_run().add_picture(io.BytesIO(png), width=Inches(min(result[1] / 96, 6)))
+                    paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                    image = paragraph.add_run().add_picture(io.BytesIO(png), width=min(Inches(result[1] / 96), int(content_width * layout.figure_width_percent / 100)))
                     image._inline.docPr.set("descr", expression)
                 else:
                     document.add_paragraph(block[0])
@@ -1898,7 +2011,7 @@ def _build_docx_artifact(ctx: ExportBundleContext) -> tuple[bytes, str, str]:
                 level = len(heading_match.group(1))
                 heading_text = heading_match.group(2)
             paragraph = document.add_heading(level=min(level, 6))
-            _add_docx_label_runs(paragraph, heading_text, font_size_pt)
+            add_text_runs(paragraph, heading_text)
             bookmark = make_bookmark(take_entry("heading", line_number))
             if bookmark:
                 _add_docx_bookmark(paragraph, bookmark[0], bookmark[1])
@@ -1962,7 +2075,7 @@ def _build_docx_artifact(ctx: ExportBundleContext) -> tuple[bytes, str, str]:
             figure_caption = docx_object_caption("figure", entry, label)
             board_png = _svg_to_png_bytes((board or {}).get("svg_snapshot") or "") if board else None
             if board_png:
-                paragraph = _add_png_picture(document, board_png, figure_caption)
+                paragraph = add_picture(board_png, figure_caption)
             else:
                 paragraph = document.add_paragraph(f"[Diagrama de Pizarra adjunto: {label} (ver paquete HTML/ZIP/PDF para gráfico vectorial)]")
                 _add_docx_caption_text(document, figure_caption)
@@ -1989,7 +2102,7 @@ def _build_docx_artifact(ctx: ExportBundleContext) -> tuple[bytes, str, str]:
                     board = ctx.boards_by_id.get(board_id.group(1))
                     board_label = alt or (board or {}).get("title", "Diagrama")
                     board_png = _svg_to_png_bytes((board or {}).get("svg_snapshot") or "") if board else None
-                    paragraph = _add_png_picture(document, board_png, figure_caption) if board_png else document.add_paragraph(f"[Diagrama de Pizarra adjunto: {board_label}]")
+                    paragraph = add_picture(board_png, figure_caption) if board_png else document.add_paragraph(f"[Diagrama de Pizarra adjunto: {board_label}]")
                     if not board_png:
                         _add_docx_caption_text(document, figure_caption)
                     if bookmark:
@@ -2001,20 +2114,20 @@ def _build_docx_artifact(ctx: ExportBundleContext) -> tuple[bytes, str, str]:
                         _add_docx_bookmark(paragraph, bookmark[0], bookmark[1])
                 remainder = remainder.replace(image_match.group(0), "", 1)
             if remainder.strip():
-                _add_docx_label_runs(document.add_paragraph(), remainder.strip(), font_size_pt)
+                add_text_runs(document.add_paragraph(), remainder.strip())
             index = next_index
             continue
 
         if re.match(r"^[-*+]\s+\[[ xX]\]\s+", stripped):
             document.add_paragraph(("☑ " if stripped[3:4].lower() == "x" else "☐ ") + stripped[6:])
         elif stripped.startswith(("- ", "* ", "+ ")):
-            _add_docx_label_runs(document.add_paragraph(style="List Bullet"), stripped[2:], font_size_pt)
+            add_text_runs(document.add_paragraph(style="List Bullet"), stripped[2:])
         elif re.match(r"^\d+[.)]\s+", stripped):
-            _add_docx_label_runs(document.add_paragraph(style="List Number"), re.sub(r"^\d+[.)]\s+", "", stripped), font_size_pt)
+            add_text_runs(document.add_paragraph(style="List Number"), re.sub(r"^\d+[.)]\s+", "", stripped))
         elif stripped.startswith("> "):
-            _add_docx_label_runs(document.add_paragraph(), stripped[2:].strip(), font_size_pt)
+            add_text_runs(document.add_paragraph(), stripped[2:].strip())
         elif stripped:
-            _add_docx_label_runs(document.add_paragraph(), line, font_size_pt)
+            add_text_runs(document.add_paragraph(), line)
         index += 1
 
     if ctx.findings:

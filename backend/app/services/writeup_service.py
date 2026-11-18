@@ -22,6 +22,7 @@ from app.models.writeups import (
 )
 from app.security.crypto import decrypt_note, encrypt_note
 from app.services.workshop_sanitizer import sanitize_svg_content
+from app.schemas.writeups import WriteupExportLayout
 from app.services.writeup_exporter import ExportBundleContext, frame_legacy_board_snapshot
 from app.services.writeup_workspace import format_evidence_sections
 
@@ -363,6 +364,9 @@ async def build_export_context(
     font_size_pt: int = 11,
     watermark_text: str | None = None,
     rendered_diagrams: dict[str, str] | None = None,
+    layout: WriteupExportLayout | None = None,
+    draft_markdown: str | None = None,
+    draft_title: str | None = None,
 ) -> ExportBundleContext:
     detail = await build_writeup_detail_dict(db, writeup)
     assets_rows = (
@@ -403,7 +407,7 @@ async def build_export_context(
 
     return ExportBundleContext(
         writeup_id=writeup.id,
-        title=detail["title"],
+        title=draft_title or detail["title"],
         slug=detail["slug"],
         status=detail["status"],
         severity=detail["severity"],
@@ -415,7 +419,7 @@ async def build_export_context(
         tags=detail["tags"],
         executive_summary=detail["executive_summary"] or "",
         markdown_content="\n\n".join(part for part in (
-            detail["markdown_content"],
+            detail["markdown_content"] if draft_markdown is None else draft_markdown,
             format_evidence_sections(
                 detail["workbench"],
                 assets_by_id,
@@ -437,6 +441,7 @@ async def build_export_context(
         watermark_text=watermark_text or writeup_defaults.get("watermark_default"),
         organization_name=writeup_defaults.get("organization_name"),
         rendered_diagrams=sanitized_diagrams,
+        layout=layout or WriteupExportLayout(),
         client_name=client_name,
         version_at=writeup.updated_at,
     )

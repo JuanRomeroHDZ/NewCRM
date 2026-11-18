@@ -27,7 +27,7 @@ function parseSection(value: unknown): SectionType | undefined {
 
 export type InspectorEntityType = 'email' | 'platform' | 'payment' | 'prospect';
 
-type ToastAction = { label: string; run: () => void };
+type ToastAction = { label: string; run: () => void; detail?: string };
 
 interface Toast {
   id: string;

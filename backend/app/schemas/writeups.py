@@ -292,6 +292,17 @@ class WriteupExportLogOut(BaseModel):
     created_at: datetime
 
 
+class WriteupExportLayout(BaseModel):
+    font_family: Literal["serif", "sans"] = "serif"
+    heading_scale: int = Field(default=100, ge=75, le=125)
+    heading_indent_mm: int = Field(default=2, ge=0, le=6)
+    margin_mm: int = Field(default=20, ge=12, le=30)
+    line_spacing: float = Field(default=1.45, ge=1.15, le=1.7)
+    figure_width_percent: int = Field(default=90, ge=40, le=100)
+    accent_color: str = Field(default="#075C4C", pattern=r"^#[0-9A-Fa-f]{6}$")
+    include_cover: bool = True
+
+
 class WriteupExportRequest(BaseModel):
     format: ExportFormatType = "pdf"
     redact_for_client: bool = False
@@ -303,6 +314,7 @@ class WriteupExportRequest(BaseModel):
     font_size_pt: int = Field(default=11, ge=8, le=18)
     watermark_text: str | None = Field(default=None, max_length=120)
     rendered_diagrams: dict[str, str] = Field(default_factory=dict)
+    layout: WriteupExportLayout = Field(default_factory=WriteupExportLayout)
 
     @field_validator("rendered_diagrams")
     @classmethod
@@ -317,6 +329,11 @@ class WriteupExportRequest(BaseModel):
                 raise ValueError("Diagrama SVG excede el límite permitido.")
             cleaned[key.lower()] = svg
         return cleaned
+
+
+class WriteupExportPreviewRequest(WriteupExportRequest):
+    draft_markdown: str | None = Field(default=None, max_length=settings.WRITEUP_MAX_CONTENT_CHARS)
+    draft_title: str | None = Field(default=None, min_length=1, max_length=200)
 
 
 class WriteupCloneRequest(BaseModel):

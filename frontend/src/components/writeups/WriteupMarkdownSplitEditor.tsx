@@ -30,6 +30,8 @@ import {
   ShieldAlert,
   ShieldCheck,
   Sparkles,
+  Square,
+  SquareCheck,
   Strikethrough,
   Table,
   Tag,
@@ -621,10 +623,13 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
                 <div className="grid grid-cols-2 gap-1" role="group" aria-label="Tipos de lista">
                   {([
                     ['bullet', '•', 'Viñetas'], ['ordered', '1.', 'Numeración'],
-                    ['task', '☐', 'Tareas'], ['done', '☑', 'Tareas marcadas'],
+                    ['task', Square, 'Tareas'], ['done', SquareCheck, 'Tareas marcadas'],
                   ] as const).map(([style, marker, label]) => (
                     <button key={style} type="button" onClick={() => applyListStyle(style)} className="ui-menu-item justify-start text-left">
-                      <span className="w-4 shrink-0 text-center font-mono text-obsidian-muted" aria-hidden="true">{marker}</span>{label}
+                      <span className="w-4 shrink-0 text-center font-mono text-obsidian-muted" aria-hidden="true">
+                        {typeof marker === 'string' ? marker : React.createElement(marker, { className: 'h-4 w-4' })}
+                      </span>
+                      {label}
                     </button>
                   ))}
                 </div>

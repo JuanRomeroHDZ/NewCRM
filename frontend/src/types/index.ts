@@ -559,6 +559,32 @@ export type WriteupStatus = 'borrador' | 'en_revision' | 'finalizado' | 'entrega
 export type WriteupSeverity = 'informativa' | 'baja' | 'media' | 'alta' | 'critica';
 export type WriteupExportFormat = 'pdf' | 'docx' | 'html' | 'md_zip' | 'md' | 'sarif' | 'json' | 'csv';
 
+export interface WriteupExportLayout {
+  font_family: 'serif' | 'sans';
+  heading_scale: number;
+  heading_indent_mm: number;
+  margin_mm: number;
+  line_spacing: number;
+  figure_width_percent: number;
+  accent_color: string;
+  include_cover: boolean;
+}
+
+export interface WriteupExportOptions {
+  format: WriteupExportFormat;
+  redact_for_client?: boolean;
+  include_watermark?: boolean;
+  include_toc?: boolean;
+  toc_depth?: number;
+  include_figure_index?: boolean;
+  include_table_index?: boolean;
+  font_size_pt?: number;
+  watermark_text?: string;
+  rendered_diagrams?: Record<string, string>;
+  layout?: WriteupExportLayout;
+}
+
+
 export interface WriteupStructuredFinding {
   id: string;
   title: string;
