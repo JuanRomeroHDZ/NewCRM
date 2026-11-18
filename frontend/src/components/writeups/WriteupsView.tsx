@@ -49,7 +49,6 @@ import {
   WriteupBoard,
   WriteupCitation,
   WriteupDetail,
-  WriteupExportFormat,
   WriteupRevision,
   WriteupRevisionAuthor,
   WriteupSeverity,
@@ -91,6 +90,23 @@ const SEVERITY_BADGE: Record<WriteupSeverity, string> = {
 const SEVERITY_LABEL: Record<WriteupSeverity, string> = {
   critica: 'Crítica', alta: 'Alta', media: 'Media', baja: 'Baja', informativa: 'Info',
 };
+// [Acción secundaria] Abre la copia exportada que el navegador puede mostrar.
+const viewExportFile = (blob: Blob, filename: string, openInTab: boolean) => {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  if (openInTab) {
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+  } else {
+    link.download = filename;
+  }
+  document.body.append(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), openInTab ? 60_000 : 1000);
+};
+
 const REVISION_TYPE_LABEL: Record<WriteupRevision['change_type'], string> = {
   initial: 'Inicial', autosave: 'Autoguardado', manual: 'Guardado manual', milestone: 'Hito',
   restore: 'Restauración', edit: 'Edición', evidence: 'Evidencia', board: 'Pizarra', citation: 'Cita',
@@ -341,6 +357,7 @@ export const WriteupsView: React.FC = () => {
     return api.listWriteupsPage(filters);
   }, [devDataset]);
   const [showExportModal, setShowExportModal] = useState(false);
+  const [latestExport, setLatestExport] = useState<{ reportId: string; sha256?: string; action: { label: string; run: () => void } } | null>(null);
   const [lightboxAsset, setLightboxAsset] = useState<WriteupAsset | null>(null);
   const [expandedEvidenceImage, setExpandedEvidenceImage] = useState<string | null>(null);
   const [diffRevision, setDiffRevision] = useState<WriteupRevision | null>(null);
@@ -861,6 +878,7 @@ export const WriteupsView: React.FC = () => {
     setTotal(0);
     setHasMore(false);
     setShowExportModal(false);
+    setLatestExport(null);
     setWorkbenchPanel(null);
     setLightboxAsset(null);
     setDiffRevision(null);
@@ -1004,8 +1022,10 @@ export const WriteupsView: React.FC = () => {
         return [...byKey.values()].sort((a, b) => (b.draft.savedAt || '').localeCompare(a.draft.savedAt || ''));
       });
       setNewRecoveryCopyAvailable(false);
-      if (discovered.length) setShowRecovery(true);
-      else showToast('No se encontraron otras copias locales recuperables.', 'info');
+      if (discovered.length) {
+        closeRevisionHistory();
+        setShowRecovery(true);
+      } else showToast('No se encontraron otras copias locales recuperables.', 'info');
     } catch {
       showToast('No se pudieron revisar las copias locales. Se conservaron sin cambios.', 'warning');
     }
@@ -1023,6 +1043,7 @@ export const WriteupsView: React.FC = () => {
     if (!password) return;
     try {
       await enableDraftRecovery(password);
+      closeRevisionHistory();
     } catch (error) {
       showToast(error instanceof Error ? error.message : 'No se pudo abrir la copia local.', 'error');
     }
@@ -1857,8 +1878,10 @@ export const WriteupsView: React.FC = () => {
     else if (localDraftError) message = 'Copia local no disponible';
     else if (pending) message = localDraftSavedAt ? `Copia local ${localDraftSavedAt.toLocaleTimeString(systemLocale || 'es-MX', { hour: '2-digit', minute: '2-digit' })} · pendiente de sincronizar` : 'Guardando copia local cifrada…';
     else if (lastSavedAt) message = `Guardado en el servidor a las ${lastSavedAt.toLocaleTimeString(systemLocale || 'es-MX', { hour: '2-digit', minute: '2-digit' })}`;
-    return message || (detail ? 'Guardado en el servidor' : '');
+    return message;
   })();
+
+  const showSaveStatus = Boolean(saveStatusMessage && (saveConflict || saveError || saving || pendingWriteupSave || localDraftError));
 
   useEffect(() => {
     if (!dirty || !detail || !isUnlocked || isWriteupEditingBlocked) return;
@@ -2392,30 +2415,39 @@ export const WriteupsView: React.FC = () => {
     }
   };
 
-  const handleExport = async (opts: {
-    format: WriteupExportFormat;
-    redact_for_client: boolean;
-    include_watermark: boolean;
-    include_toc: boolean;
-    toc_depth?: number;
-    include_figure_index?: boolean;
-    include_table_index?: boolean;
-    font_size_pt?: number;
-    watermark_text?: string;
-    rendered_diagrams?: Record<string, string>;
-  }) => {
-    if (!detail) return undefined;
-    if (dirty && !(await handleSaveWriteup(false))) return undefined;
-    const { blob, filename, sha256 } = await api.exportWriteup(detail.id, opts);
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    link.click();
-    URL.revokeObjectURL(url);
-    await loadDetail(detail.id);
-    showToast(`Exportado: ${filename}`, 'success');
-    return sha256;
+  const handleExport = async (opts: Parameters<typeof api.exportWriteup>[1], destination?: FileSystemFileHandle) => {
+    if (!detail) throw new Error('Vuelve a abrir el informe para exportarlo.');
+    if (dirty && !(await handleSaveWriteup(false))) throw new Error('No se guardaron los cambios del informe. Revisa el guardado antes de exportar.');
+    const id = detail.id;
+    const { blob, filename, sha256 } = await api.exportWriteup(id, opts);
+    if (blob.size === 0) throw new Error('El servidor devolvió un archivo vacío. Vuelve a intentar la exportación.');
+    if (destination) {
+      const stream = await destination.createWritable();
+      try {
+        await stream.write(blob);
+        await stream.close();
+      } catch (error) {
+        await stream.abort().catch(() => undefined);
+        throw error;
+      }
+    } else {
+      viewExportFile(blob, filename, false);
+    }
+
+    const savedName = destination?.name || filename;
+    const canOpen = opts.format !== 'docx' && opts.format !== 'md_zip';
+    const viewType = opts.format === 'pdf' || opts.format === 'html' ? blob.type : 'text/plain;charset=utf-8';
+    const action = {
+      label: canOpen ? 'Abrir archivo' : 'Descargar otra vez',
+      run: () => viewExportFile(canOpen ? new Blob([blob], { type: viewType }) : blob, savedName, canOpen),
+    };
+    setLatestExport({ reportId: id, sha256, action });
+    showToast(destination ? `Archivo guardado · ${savedName}` : `Enviado a descargas · ${savedName}`, destination ? 'success' : 'info', action);
+
+    // Refresh the export history without reopening or rehydrating the editor.
+    void api.getWriteup(id).then(({ export_logs }) => {
+      setDetail(current => current?.id === id ? { ...current, export_logs } : current);
+    }).catch(() => undefined);
   };
 
   const navigateToFindingFromWorkbench = (findingId: string) => {
@@ -2483,34 +2515,26 @@ export const WriteupsView: React.FC = () => {
 
       {/* Collapsible / Drawer Writeups List */}
       {showList && (
-        <aside aria-label="Lista de informes" className="fixed inset-y-0 left-0 z-40 flex w-80 max-w-[85vw] shrink-0 flex-col overflow-hidden border-r border-obsidian-border bg-obsidian-panel shadow-2xl lg:static lg:z-auto lg:w-64 lg:shadow-none xl:w-72">
+        <aside id="writeup-report-list" aria-label="Lista de informes"
+          onKeyDown={(event) => {
+            if (event.key === 'Escape' && !event.defaultPrevented) {
+              event.preventDefault();
+              handleManualReportListChange(false);
+              document.getElementById('writeup-list-toggle')?.focus();
+            }
+          }}
+          className="fixed inset-y-0 left-0 z-40 flex w-80 max-w-[85vw] shrink-0 flex-col overflow-hidden border-r border-obsidian-border bg-obsidian-panel shadow-2xl lg:static lg:z-auto lg:w-64 lg:shadow-none xl:w-72">
           <div className="space-y-2 border-b border-obsidian-border p-3">
             <div className="flex items-center justify-between gap-2">
               <h2 className="flex items-center gap-2 text-sm font-semibold text-obsidian-text">
                 <BookOpen className="h-4 w-4 text-obsidian-muted" aria-hidden="true" />
                 Informes <span className="font-mono text-xs text-obsidian-muted tabular-nums">({new Intl.NumberFormat(systemLocale || 'es-MX').format(total)})</span>
               </h2>
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={handleCreateWriteup}
-                  disabled={creatingWriteup || isDevFixtureMode}
-                  className="ui-action-primary"
-                >
-                  {/* [Acción principal] Crea un informe nuevo. */}
-                  <Plus className="w-3.5 h-3.5" aria-hidden="true" />
-                  {creatingWriteup ? 'Creando…' : 'Nuevo'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleManualReportListChange(false)}
-                  className="ui-action-icon"
-                  aria-label="Cerrar panel"
-                >
-                  {/* [Icono] Oculta la lista de informes. */}
-                  <X className="w-4 h-4" aria-hidden="true" />
-                </button>
-              </div>
+              {/* [Acción principal] Crea un informe nuevo. */}
+              <button type="button" onClick={handleCreateWriteup} disabled={creatingWriteup || isDevFixtureMode} className="ui-action-primary shrink-0">
+                <Plus className="h-4 w-4" aria-hidden="true" />
+                {creatingWriteup ? 'Creando…' : 'Nuevo'}
+              </button>
             </div>
 
             {import.meta.env.DEV && !detail && (
@@ -2544,27 +2568,20 @@ export const WriteupsView: React.FC = () => {
               />
             </div>
 
-            <div className="relative">
-            <select
-              value={severityFilter}
-              onChange={(e) => setSeverityFilter(e.target.value)}
-              aria-label="Filtrar informes por severidad"
-              className="min-h-[44px] w-full appearance-none rounded-lg border border-obsidian-border bg-obsidian-bg py-1.5 pl-2 pr-8 text-xs text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-accent"
-            >
-              <option value="">Todas las severidades</option>
-              <option value="critica">Crítica</option>
-              <option value="alta">Alta</option>
-              <option value="media">Media</option>
-              <option value="baja">Baja</option>
-              <option value="informativa">Informativa</option>
-            </select>
-            </div>
-            <div className="grid grid-cols-2 gap-1">
-              <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} aria-label="Filtrar informes por estado" className="min-h-11 min-w-0 text-xs">
+            <div className="grid grid-cols-2 gap-2">
+              <select value={severityFilter} onChange={(event) => setSeverityFilter(event.target.value)} aria-label="Filtrar informes por severidad" className="writeup-list-filter col-span-2">
+                <option value="">Todas las severidades</option>
+                <option value="critica">Crítica</option>
+                <option value="alta">Alta</option>
+                <option value="media">Media</option>
+                <option value="baja">Baja</option>
+                <option value="informativa">Informativa</option>
+              </select>
+              <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} aria-label="Filtrar informes por estado" className="writeup-list-filter">
                 <option value="">Estados</option>
                 {Object.entries(STATUS_LABEL).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
               </select>
-              <select value={projectFilter} onChange={(event) => setProjectFilter(event.target.value)} aria-label="Filtrar informes por proyecto" className="min-h-11 min-w-0 text-xs">
+              <select value={projectFilter} onChange={(event) => setProjectFilter(event.target.value)} aria-label="Filtrar informes por proyecto" className="writeup-list-filter">
                 <option value="">Proyectos</option>
                 {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
               </select>
@@ -2600,7 +2617,7 @@ export const WriteupsView: React.FC = () => {
                 ].filter(([, value]) => value?.toLowerCase().includes(query)) : [];
                 const matchDescription = matches.map(([label, value]) => label === 'Título' || label === 'Alcance' ? label.toLowerCase() : value).join(' · ');
                 const rowContent = (
-                    <span className="block">
+                    <span className="block w-full min-w-0">
                     <span className="mb-1 flex items-center justify-between gap-1">
                       <span className="min-w-0 truncate text-[11px] font-medium text-obsidian-muted">{STATUS_LABEL[item.status] || item.status}</span>
                       <span className={`shrink-0 rounded-sm border border-obsidian-border bg-obsidian-surface px-1.5 py-0.5 text-[10px] font-semibold ${SEVERITY_BADGE[item.severity] || SEVERITY_BADGE.media}`}>
@@ -2627,7 +2644,7 @@ export const WriteupsView: React.FC = () => {
                     </span>
                   );
                 // [Navegación] La fila abre el informe y anuncia el destino activo.
-                const rowClassName = `w-full border-b border-obsidian-border px-3 py-3 text-left transition-colors ${selected ? 'bg-obsidian-surface text-white' : 'text-obsidian-text'}`;
+                const rowClassName = "writeup-list-row w-full text-left";
                 const accessibleLabel = `${item.title}, severidad ${SEVERITY_LABEL[item.severity] || item.severity}, estado ${STATUS_LABEL[item.status] || item.status}, alcance ${item.target_scope || 'no indicado'}${matchDescription ? `, coincide en ${matchDescription}` : ''}`;
                 return isDevFixtureMode ? (
                   <article key={item.id} aria-label={accessibleLabel} className={rowClassName}>
@@ -2640,7 +2657,7 @@ export const WriteupsView: React.FC = () => {
                     onClick={() => handleSelectWriteup(item.id)}
                     aria-current={selected ? 'page' : undefined}
                     aria-label={accessibleLabel}
-                    className="ui-nav-action w-full justify-start border-b border-obsidian-border px-3 py-3 text-left focus-visible:ring-inset"
+                    className={`ui-nav-action ${rowClassName}`}
                   >
                     {rowContent}
                   </button>
@@ -2737,7 +2754,10 @@ export const WriteupsView: React.FC = () => {
                 <div className="writeup-header-identity-row">
                 <button
                   type="button"
+                  id="writeup-list-toggle"
                   onClick={() => handleManualReportListChange()}
+                  aria-controls={showList ? 'writeup-report-list' : undefined}
+                  aria-expanded={showList}
                   title={showList ? 'Ocultar lista' : 'Mostrar lista'}
                   aria-label={showList ? 'Ocultar lista' : 'Mostrar lista'}
                   className="ui-action-icon shrink-0"
@@ -2755,7 +2775,7 @@ export const WriteupsView: React.FC = () => {
                   }}
                   aria-label="Título del informe"
                   maxLength={MAX_REPORT_TITLE_LENGTH}
-                  className="writeup-header-title h-10 min-w-[120px] w-48 max-w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-sm font-bold text-white"
+                  className="writeup-header-title h-10 w-48 bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-sm font-bold text-white"
                 />
 
                 </div>
@@ -2881,21 +2901,23 @@ export const WriteupsView: React.FC = () => {
                     disabled={saving || isWriteupEditingBlocked || !dirty}
                     onClick={() => void handleSaveWriteup(false)}
                     aria-label={saving ? 'Guardando informe' : dirty ? 'Guardar cambios del informe' : 'Informe guardado'}
-                    className="ui-action-icon writeup-header-compact-button shrink-0"
+                    className="ui-action-secondary writeup-header-save shrink-0"
                     title={saving ? 'Guardando informe' : dirty ? 'Guardar cambios del informe' : `Informe guardado · ${formatApiDateTime(detail.updated_at, systemLocale || 'es-MX')}`}
                   >
                     {dirty ? <Save className="h-4 w-4" aria-hidden="true" /> : <CheckCircle2 className="h-4 w-4" aria-hidden="true" />}
+                    <span>Guardar</span>
                   </button>
 
                   <button
                     type="button"
                     disabled={revisionLoading}
                     onClick={() => void openRevisionHistory()}
-                    className="ui-action-icon writeup-header-compact-button shrink-0"
+                    className="ui-action-icon writeup-header-compact-button relative shrink-0"
                     aria-label="Abrir historial del informe"
-                    title="Explorar historial de versiones"
+                    title={hasLocalCopiesWithoutKey || recoveryCandidates.length || newRecoveryCopyAvailable ? 'Historial del informe · Hay copias locales' : 'Explorar historial de versiones'}
                   >
                     <History className="w-4 h-4" aria-hidden="true" />
+                    {(hasLocalCopiesWithoutKey || recoveryCandidates.length > 0 || newRecoveryCopyAvailable) && <span className="writeup-header-pending-dot" aria-hidden="true" />}
                   </button>
 
 
@@ -2910,15 +2932,8 @@ export const WriteupsView: React.FC = () => {
                   </button>
 
                   <details className="relative">
-                    <summary data-caret="manual" aria-label="Más acciones del informe" title="Más acciones del informe" className="ui-action-icon writeup-header-more-summary relative cursor-pointer list-none [&::-webkit-details-marker]:hidden"><MoreVertical className="h-4 w-4" aria-hidden="true" />{(recoveryCandidates.length > 0 || newRecoveryCopyAvailable || saveConflict) && <span className="writeup-header-pending-dot" aria-hidden="true" />}</summary>
+                    <summary data-caret="manual" aria-label="Más acciones del informe" title="Más acciones del informe" className="ui-action-icon writeup-header-more-summary relative cursor-pointer list-none [&::-webkit-details-marker]:hidden"><MoreVertical className="h-4 w-4" aria-hidden="true" />{saveConflict && <span className="writeup-header-pending-dot" aria-hidden="true" />}</summary>
                     <div className="absolute right-0 z-30 mt-1 grid min-w-48 gap-1 rounded-lg border border-obsidian-border bg-obsidian-panel p-1 shadow-xl">
-                  {recoveryCandidates.length > 0 && (
-                    <button type="button" onClick={() => setShowRecovery(true)} className="ui-menu-item" aria-label={`Ver ${recoveryCandidates.length} copias locales recuperables`}>
-                      <RefreshCw className="h-4 w-4 text-amber-300" aria-hidden="true" />
-                      <span>Recuperación local ({recoveryCandidates.length})</span>
-                    </button>
-                  )}
-                  {newRecoveryCopyAvailable && <button type="button" onClick={() => void refreshRecoveryCopies()} className="ui-menu-item"><RefreshCw className="h-4 w-4" aria-hidden="true" /><span>Buscar copias de otras pestañas</span></button>}
                   {saveConflict && <button type="button" onClick={async () => {
                     try { if (detail) { const latest = await api.getWriteup(detail.id); writeupVersionByReportRef.current[detail.id] = latest.updated_at; setConflictServer(latest); } }
                     catch { /* Keep the last retrieved version and permit retry. */ }
@@ -2960,21 +2975,12 @@ export const WriteupsView: React.FC = () => {
                   </details>
                 </div>
               </div>
-              <div role="status" className="border-t border-obsidian-border py-1 text-xs text-obsidian-muted">
-                {saveStatusMessage}
-              </div>
-              {hasLocalCopiesWithoutKey && !dirty && !saving && Object.keys(unsavedBoardIds).length === 0 && (
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-obsidian-border text-xs text-obsidian-muted">
-                  <span>Hay una copia local cifrada de este informe.</span>
-                  {/* [Acción secundaria] Solicita la contraseña para abrir la copia cifrada. */}
-                  <button type="button" onClick={unlockLocalCopy} className="ui-nav-action">
-                    Revisar copia local
-                  </button>
-                </div>
-              )}
               </div>
               </div>
 
+              <div role="status" className={showSaveStatus ? 'break-words border-t border-obsidian-border pt-2 text-xs text-obsidian-muted' : 'sr-only'}>
+                {saveStatusMessage}
+              </div>
               {/* Compact summary badge line when metadata tray is collapsed */}
               {!showMetadata && metadataSummary.length > 0 && (
                 <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-slate-400">
@@ -2989,7 +2995,7 @@ export const WriteupsView: React.FC = () => {
               {/* Progressive Disclosure Advanced Metadata & CRM Tray */}
               {showMetadata && (
                 <fieldset disabled={isWriteupEditingBlocked} className="contents">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6 gap-2 pt-1 text-xs">
+                <div className="writeup-header-metadata grid gap-2 pt-1 text-xs">
                 <select
                   value={severity}
                   aria-label="Severidad"
@@ -3128,7 +3134,7 @@ export const WriteupsView: React.FC = () => {
               <p className="min-w-0 break-words"><strong>Relacionado con {relatedContext.origin}</strong> · {relatedContext.reasons.join(' · ')}</p>
               <button type="button" aria-label="Cerrar contexto de correlación" onClick={() => setRelatedContext(null)} className="ui-action-icon shrink-0"><X className="h-4 w-4" /></button>
             </div>}
-            <div id="writeup-correlations-panel" hidden={!showCorrelations}>
+            <div id="writeup-correlations-panel" hidden={!showCorrelations} className="px-2 sm:px-3">
               <WriteupCorrelationsPanel
                 correlations={reportCorrelations}
                 loadedCount={items.length}
@@ -4178,6 +4184,21 @@ export const WriteupsView: React.FC = () => {
                 </button>
               </div>
             </div>
+            {(hasLocalCopiesWithoutKey || recoveryCandidates.length > 0 || newRecoveryCopyAvailable) && (
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-obsidian-border px-4 py-2">
+                <p className="text-xs text-obsidian-muted">
+                  {recoveryCandidates.length > 0 ? formatWriteupCount(recoveryCandidates.length, 'copia local', 'copias locales', systemLocale || 'es-MX') : 'Hay copias locales cifradas'}
+                </p>
+                <button type="button" disabled={pendingWriteupSave || saving} className="ui-action-secondary" onClick={() => {
+                  if (hasLocalCopiesWithoutKey) void unlockLocalCopy();
+                  else if (newRecoveryCopyAvailable) void refreshRecoveryCopies();
+                  else {
+                    closeRevisionHistory();
+                    setShowRecovery(true);
+                  }
+                }}>Revisar copias locales</button>
+              </div>
+            )}
             {diffRevision && <div className="flex flex-wrap gap-2 px-4 py-2 border-b border-slate-800">
               <span className="mr-auto self-center text-xs text-slate-400">v{diffRevision.revision_number} · {REVISION_TYPE_LABEL[diffRevision.change_type]} · {formatApiDateTime(diffRevision.created_at, systemLocale || 'es-MX')}
                 {diffRevision.snapshot?.fields?.status === 'entregado' && ' · Estado al guardar: Entregado'}</span>
@@ -4236,6 +4257,13 @@ export const WriteupsView: React.FC = () => {
                     {detail.export_logs.map(log => <li key={log.id} className="py-2">
                       {log.export_format.toUpperCase()} · {log.redacted_for_client ? 'Copia para cliente' : 'Copia interna'}
                       <span className="block">{formatApiDateTime(log.created_at, systemLocale || 'es-MX')}</span>
+                      <span className="mt-1 block">Código de verificación</span>
+                      <code className="block select-all break-all font-mono">{log.sha256}</code>
+                      {latestExport?.reportId === detail.id && latestExport.sha256 === log.sha256 && (
+                        <button type="button" className="ui-action-secondary mt-2" onClick={latestExport.action.run}>
+                          {latestExport.action.label}
+                        </button>
+                      )}
                     </li>)}
                   </ul>
                 </details>}

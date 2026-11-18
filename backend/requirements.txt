@@ -44,3 +44,4 @@ python-docx==1.1.2
 weasyprint==70.0
 scapy>=2.7,<2.8
 netifaces2>=0.0.22
+ziamath==0.13

@@ -5,8 +5,6 @@ import {
   Bold,
   Calculator,
   Check,
-  CheckSquare,
-  Circle,
   ChevronDown,
   Columns2,
   Code,
@@ -31,7 +29,6 @@ import {
   Server,
   ShieldAlert,
   ShieldCheck,
-  Square,
   Sparkles,
   Strikethrough,
   Table,
@@ -106,7 +103,7 @@ interface WriteupMarkdownSplitEditorProps {
 }
 
 type ToolGroupFilter = 'all' | 'text' | 'blocks' | 'media' | 'pentest';
-type InlineTray = 'none' | 'templates' | 'cvss' | 'code' | 'mermaid' | 'outline' | 'pentest_kit' | 'table' | 'label' | 'caption';
+type InlineTray = 'none' | 'templates' | 'cvss' | 'code' | 'mermaid' | 'outline' | 'pentest_kit' | 'table' | 'caption';
 
 const CODE_LANGUAGES = ['http', 'bash', 'python', 'sql', 'javascript', 'json', 'yaml', 'powershell', 'c', 'xml', 'plaintext'];
 const MAX_CITATION_LENGTH = 5000;
@@ -515,7 +512,7 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
     const left = Math.max(8, Math.min(anchor.left, window.innerWidth - bounds.width - 8));
     const below = anchor.bottom + bounds.height + 8 <= window.innerHeight;
     const top = below ? anchor.bottom + 4 : Math.max(8, anchor.top - bounds.height - 4);
-    Object.assign(popover.style, { position: 'fixed', left: `${left}px`, top: `${top}px`, right: 'auto', bottom: 'auto' });
+    Object.assign(popover.style, { position: 'fixed', left: `${left}px`, top: `${top}px`, right: 'auto', bottom: 'auto', maxHeight: `${window.innerHeight - top - 8}px`, overflowY: 'auto' });
   };
 
   return (
@@ -555,7 +552,44 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
             {[4, 5, 6].map((level) => <button key={level} type="button" onClick={() => prefixLineAtCursor(`${'#'.repeat(level)} `)} title={`Encabezado H${level}`} aria-label={`Encabezado H${level}`} className="ui-action-icon">H{level}</button>)}
               </div>
             </details>
-            <button type="button" onClick={() => toggleTray('label')} aria-label="Insertar etiqueta semántica" aria-expanded={activeTray === 'label'} aria-pressed={activeTray === 'label'} title="Etiqueta semántica" className="ui-action-toggle"><Tag className="h-4 w-4" /><ChevronDown className="h-3 w-3" aria-hidden="true" /></button>
+            <details className="relative shrink-0" onToggle={positionToolbarPopover} onKeyDown={(event) => {
+              if (event.key !== 'Escape' || !event.currentTarget.open) return;
+              event.stopPropagation();
+              event.currentTarget.open = false;
+              event.currentTarget.querySelector('summary')?.focus();
+            }}>
+              <summary data-caret="manual" aria-label="Insertar etiqueta semántica" title="Etiqueta semántica" className="ui-action-toggle cursor-pointer px-1">
+                <Tag className="h-4 w-4" aria-hidden="true" /><ChevronDown className="h-3 w-3" aria-hidden="true" />
+              </summary>
+              <div data-writeup-toolbar-popover className="absolute left-0 top-full z-50 w-64 max-w-[calc(100vw-1rem)] space-y-3 rounded-lg border border-obsidian-borderLight bg-obsidian-panel p-3 shadow-xl">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-medium text-obsidian-text">Etiqueta semántica</span>
+                  <span className={`writeup-label writeup-label-${labelColor} writeup-label-${labelSize}`}>Ejemplo</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="grid min-w-0 gap-1 text-xs text-obsidian-muted">Énfasis
+                    <select value={labelColor} onChange={event => setLabelColor(event.target.value)} className="w-full min-w-0 ps-2">
+                      <option value="neutro">Neutro</option><option value="jade">Positivo</option><option value="dorado">Advertencia</option><option value="rojo">Riesgo</option>
+                    </select>
+                  </label>
+                  <label className="grid min-w-0 gap-1 text-xs text-obsidian-muted">Tamaño
+                    <select value={labelSize} onChange={event => setLabelSize(event.target.value)} className="w-full min-w-0 ps-2">
+                      <option value="pequena">Pequeño</option><option value="normal">Normal</option><option value="grande">Grande</option>
+                    </select>
+                  </label>
+                </div>
+                <button type="button" className="ui-action-secondary w-full" onClick={event => {
+                  const ta = textareaRef.current;
+                  const selected = ta?.value.slice(ta.selectionStart, ta.selectionEnd) || '';
+                  if (/[{}\n]/.test(selected) || selected.length > 120) {
+                    showToast('Selecciona texto de una sola línea, hasta 120 caracteres y sin llaves.', 'warning');
+                    return;
+                  }
+                  event.currentTarget.closest('details')!.open = false;
+                  insertAtCursor(`{etiqueta:${labelColor}:${labelSize}:`, true, '}', 'Texto');
+                }}>Insertar etiqueta</button>
+              </div>
+            </details>
             <details className="relative shrink-0" onToggle={positionToolbarPopover} onClick={(event) => { if ((event.target as HTMLElement).closest('button')) event.currentTarget.open = false; }}>
               <summary data-caret="manual" aria-label="Formato de texto" title="Formato de texto" className="ui-action-toggle cursor-pointer list-none px-1 [&::-webkit-details-marker]:hidden"><Bold className="h-4 w-4" /><ChevronDown className="h-3 w-3" aria-hidden="true" /></summary>
               <div data-writeup-toolbar-popover className="absolute left-0 top-full z-50 mt-1 flex gap-1 rounded-lg border border-obsidian-borderLight bg-obsidian-panel p-1 shadow-xl">
@@ -582,15 +616,33 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
             </button>
             <details className="relative shrink-0" onToggle={positionToolbarPopover} onClick={(event) => { if ((event.target as HTMLElement).closest('button')) event.currentTarget.open = false; }}>
               <summary data-caret="manual" aria-label="Estilos de lista" title="Estilos de lista" className="ui-action-toggle cursor-pointer list-none px-1 [&::-webkit-details-marker]:hidden"><List className="h-4 w-4" aria-hidden="true" /><ChevronDown className="h-3 w-3" aria-hidden="true" /></summary>
-              <div data-writeup-toolbar-popover className="absolute left-0 top-full z-50 mt-1 grid max-h-[min(70dvh,32rem)] w-56 grid-cols-1 overflow-y-auto rounded-lg border border-obsidian-borderLight bg-obsidian-panel p-1 shadow-xl">
-                {/* [Menú y selector] Los estilos básicos y las variantes HTML se distinguen sin bordes de selección. */}
-                {([
-                  { group: 'Markdown', items: [['bullet', 'Viñetas'], ['ordered', 'Numerada'], ['task', 'Tareas pendientes'], ['done', 'Tareas completadas'], ['nested-bullet', 'Viñetas anidadas'], ['nested-ordered', 'Numeración anidada']] },
-                  { group: 'Variantes HTML', items: [['square', 'Viñeta cuadrada'], ['circle', 'Viñeta abierta'], ['alpha', 'Alfabética (a, b, c)'], ['alpha-upper', 'Alfabética (A, B, C)'], ['roman', 'Romana (i, ii, iii)'], ['roman-upper', 'Romana (I, II, III)']] },
-                ] as const).map(({ group, items }) => <div key={group} role="group" aria-label={group} className="border-b border-obsidian-border last:border-b-0">
-                  <div className="px-3 pt-2 text-xs text-obsidian-muted">{group}</div>
-                  {items.map(([style, label]) => <button key={style} type="button" aria-label={label} onClick={() => applyListStyle(style)} className="ui-menu-item justify-start text-left"><span aria-hidden="true" className="flex w-4 shrink-0 items-center justify-center font-mono text-obsidian-muted">{style === 'task' ? <Square className="h-3.5 w-3.5" /> : style === 'done' ? <CheckSquare className="h-3.5 w-3.5" /> : style === 'square' ? <Square className="h-3 w-3" /> : style === 'circle' || style === 'nested-bullet' ? <Circle className="h-3 w-3" /> : style === 'ordered' || style === 'nested-ordered' ? '1.' : style === 'alpha' ? 'a.' : style === 'alpha-upper' ? 'A.' : style === 'roman' ? 'i.' : style === 'roman-upper' ? 'I.' : '•'}</span>{label}</button>)}
-                </div>)}
+              <div data-writeup-toolbar-popover className="absolute left-0 top-full z-50 max-h-[min(70dvh,28rem)] w-72 max-w-[calc(100vw-1rem)] overflow-y-auto rounded-lg border border-obsidian-borderLight bg-obsidian-panel p-2 shadow-xl">
+                {/* [Menú y selector] Los formatos frecuentes se muestran como una galería breve. */}
+                <div className="grid grid-cols-2 gap-1" role="group" aria-label="Tipos de lista">
+                  {([
+                    ['bullet', '•', 'Viñetas'], ['ordered', '1.', 'Numeración'],
+                    ['task', '☐', 'Tareas'], ['done', '☑', 'Tareas marcadas'],
+                  ] as const).map(([style, marker, label]) => (
+                    <button key={style} type="button" onClick={() => applyListStyle(style)} className="ui-menu-item justify-start text-left">
+                      <span className="w-4 shrink-0 text-center font-mono text-obsidian-muted" aria-hidden="true">{marker}</span>{label}
+                    </button>
+                  ))}
+                </div>
+                <details className="group mt-1 border-t border-obsidian-border pt-1">
+                  <summary data-caret="manual" className="ui-nav-action cursor-pointer">Más estilos<ChevronDown className="ml-auto h-3.5 w-3.5 group-open:rotate-180" aria-hidden="true" /></summary>
+                  <div className="grid grid-cols-2 gap-1">
+                    {([
+                      ['nested-bullet', '↳ •', 'Viñetas anidadas'], ['nested-ordered', '↳ 1.', 'Numeración anidada'],
+                      ['square', '▪', 'Cuadradas'], ['circle', '○', 'Circulares'],
+                      ['alpha', 'a.', 'Minúsculas'], ['alpha-upper', 'A.', 'Mayúsculas'],
+                      ['roman', 'i.', 'Romana min.'], ['roman-upper', 'I.', 'Romana may.'],
+                    ] as const).map(([style, marker, label]) => (
+                      <button key={style} type="button" onClick={() => applyListStyle(style)} className="ui-menu-item justify-start text-left">
+                        <span className="w-6 shrink-0 text-center font-mono text-obsidian-muted" aria-hidden="true">{marker}</span>{label}
+                      </button>
+                    ))}
+                  </div>
+                </details>
               </div>
             </details>
           </div>
@@ -828,28 +880,6 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
       {splitView !== 'preview' && <>
 
       {/* Inline Collapsible Tool Trays (never clipped on narrow/medium screens!) */}
-      {activeTray === 'label' && (
-        <div className="flex flex-wrap items-end gap-3 border-t border-obsidian-border p-3 text-xs text-obsidian-text">
-          <label className="flex flex-col gap-1">Énfasis
-            <select value={labelColor} onChange={(event) => setLabelColor(event.target.value)} className="min-h-[44px] rounded border border-obsidian-borderLight bg-obsidian-surface px-3 text-sm text-white">
-              <option value="neutro">Neutro</option><option value="jade">Positivo</option><option value="dorado">Advertencia</option><option value="rojo">Riesgo</option>
-            </select>
-          </label>
-          <label className="flex flex-col gap-1">Tamaño
-            <select value={labelSize} onChange={(event) => setLabelSize(event.target.value)} className="min-h-[44px] rounded border border-obsidian-borderLight bg-obsidian-surface px-3 text-sm text-white">
-              <option value="pequena">Pequeño</option><option value="normal">Normal</option><option value="grande">Grande</option>
-            </select>
-          </label>
-          <button type="button" className="ui-action-primary" onClick={() => {
-            const ta = textareaRef.current;
-            const selected = ta?.value.slice(ta.selectionStart, ta.selectionEnd) || '';
-            if (/[{}\n]/.test(selected) || selected.length > 120) { showToast('Selecciona texto de una sola línea, hasta 120 caracteres y sin llaves.', 'warning'); return; }
-            insertAtCursor(`{etiqueta:${labelColor}:${labelSize}:`, true, '}', 'Texto');
-            setActiveTray('none');
-          }}>Insertar etiqueta</button>
-          <span className="text-obsidian-muted">Selecciona texto antes de abrir la herramienta, o escribe después de insertarla.</span>
-        </div>
-      )}
       {activeTray === 'table' && (
         <div className="space-y-2 border-t border-obsidian-border p-3 text-xs text-obsidian-text">
           <p className="text-obsidian-muted">Escribe los encabezados y los datos; puedes completar las celdas después.</p>
@@ -1256,7 +1286,7 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
       {/* Editor + Live Preview Panes */}
       <div ref={workspaceRef} className={`flex-1 grid min-h-0 min-w-0 max-w-full ${sideBySide ? 'grid-cols-2' : 'grid-cols-1'} ${splitView === 'split' && !sideBySideAvailable ? 'overflow-y-auto' : ''}`}>
         {splitView !== 'preview' && (
-          <div className={`flex min-w-0 flex-col min-h-[360px] ${splitView === 'split' && !sideBySideAvailable ? 'border-b border-obsidian-border' : sideBySide ? 'border-r border-obsidian-border' : ''}`}>
+          <div className={`flex min-w-0 flex-col min-h-[360px] bg-obsidian-surface ${splitView === 'split' && !sideBySideAvailable ? 'border-b border-obsidian-border' : sideBySide ? 'border-r border-obsidian-border' : ''}`}>
             <textarea
               ref={textareaRef}
               value={markdown}
@@ -1276,7 +1306,7 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
               lang="es"
               spellCheck={false}
               placeholder="Escribe el informe. Pega imágenes con Ctrl+V; Ctrl+S guarda; Ctrl+B/I/K aplica formato."
-            className={`mx-auto flex-1 w-full max-w-[52rem] min-h-[280px] bg-obsidian-surface text-obsidian-text font-mono text-base sm:text-sm leading-6 p-3.5 sm:p-4 resize-none focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-obsidian-accent ${readOnly ? 'cursor-text' : ''}`}
+            className={`flex-1 w-full min-h-[280px] rounded-none border-0 bg-transparent text-obsidian-text font-mono text-base sm:text-sm leading-6 p-3.5 sm:p-4 resize-none focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-obsidian-accent ${readOnly ? 'cursor-text' : ''}`}
             />
             {assets.some((asset) => asset.mime_type.startsWith('image/') && markdown.includes(`asset://${asset.id}`) && assetObjectUrls[asset.id]) && (
               <div className="flex max-h-32 gap-3 overflow-auto border-t border-obsidian-border bg-obsidian-panel/60 p-2" aria-label="Imágenes incluidas en el informe">
@@ -1301,8 +1331,8 @@ export const WriteupMarkdownSplitEditor: React.FC<WriteupMarkdownSplitEditorProp
         )}
 
         {splitView !== 'edit' && (
-          <div ref={previewRef} onScroll={(event) => handlePreviewScroll(event.currentTarget)} className="min-w-0 max-w-full overflow-y-auto min-h-[360px] bg-obsidian-panel/30">
-            <div className="mx-auto max-w-[52rem] p-4 sm:p-5">
+          <div ref={previewRef} onScroll={(event) => handlePreviewScroll(event.currentTarget)} className="min-w-0 max-w-full overflow-y-auto min-h-[360px] bg-obsidian-surface">
+            <div className="p-3.5 sm:p-4">
             <MarkdownRichPreview
               markdown={markdown}
               redactPreview={redactPreview}

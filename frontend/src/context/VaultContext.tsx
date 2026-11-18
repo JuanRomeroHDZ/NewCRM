@@ -27,11 +27,13 @@ function parseSection(value: unknown): SectionType | undefined {
 
 export type InspectorEntityType = 'email' | 'platform' | 'payment' | 'prospect';
 
+type ToastAction = { label: string; run: () => void };
+
 interface Toast {
   id: string;
   message: string;
   type?: 'success' | 'info' | 'warning' | 'error';
-  duration?: number;
+  action?: ToastAction;
 }
 
 interface VaultContextType {
@@ -141,7 +143,7 @@ interface VaultContextType {
 
   // Toasts
   toasts: Toast[];
-  showToast: (msg: string, type?: 'success' | 'info' | 'warning' | 'error') => void;
+  showToast: (msg: string, type?: 'success' | 'info' | 'warning' | 'error', action?: ToastAction) => void;
   dismissToast: (id: string) => void;
 
   // Global reload counter
@@ -287,7 +289,7 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
-  const showToast = useCallback((message: string, type: 'success' | 'info' | 'warning' | 'error' = 'info') => {
+  const showToast = useCallback((message: string, type: 'success' | 'info' | 'warning' | 'error' = 'info', action?: ToastAction) => {
     const id = Math.random().toString(36).substring(2, 9);
     const normalized = message.trim().toLowerCase();
     const isVaultTransition = normalized.includes('bóveda') || normalized.includes('espacio seguro');
@@ -302,7 +304,7 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }
         return !duplicate;
       });
-      const next = [...filtered, { id, message, type }];
+      const next = [...filtered, { id, message, type, action }];
       if (next.length > 2) {
         const dropped = next.slice(0, next.length - 2);
         for (const item of dropped) {
@@ -319,7 +321,7 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     toastTimersRef.current[id] = window.setTimeout(() => {
       delete toastTimersRef.current[id];
       setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, 4000);
+    }, action ? 12000 : 4000);
   }, []);
 
   const triggerDataReload = useCallback(() => {

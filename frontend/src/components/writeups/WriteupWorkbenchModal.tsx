@@ -193,8 +193,8 @@ export const WriteupWorkbenchModal: React.FC<WriteupWorkbenchModalProps> = ({
         </header>
 
         {/* [Navegación] Pestañas del laboratorio; la sección actual se anuncia con aria-current. */}
-        <nav aria-label="Secciones del laboratorio" className="flex shrink-0 gap-1 overflow-x-auto border-b border-obsidian-border px-3 py-2">
-          {tabs.map(([id, label, Icon, count]) => <button key={id} type="button" onClick={() => setTab(id)} aria-current={tab === id ? 'page' : undefined} className="ui-nav-action shrink-0"><Icon className="h-4 w-4" />{label}{count > 0 && <span className="font-mono text-[10px] opacity-70">{count}</span>}</button>)}
+        <nav aria-label="Secciones del laboratorio" className="grid shrink-0 grid-cols-2 gap-1 border-b border-obsidian-border px-3 py-2 sm:grid-cols-4">
+          {tabs.map(([id, label, Icon, count]) => <button key={id} type="button" onClick={() => setTab(id)} aria-current={tab === id ? 'page' : undefined} className="ui-nav-action min-w-0"><Icon className="h-4 w-4 shrink-0" aria-hidden="true" /><span className="truncate">{label}</span>{count > 0 && <span className="font-mono text-[10px] opacity-70">{count}</span>}</button>)}
         </nav>
 
         <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-4">

@@ -33,14 +33,17 @@ ASSET_MD_IMG_PATTERN = re.compile(r"!\[([^\]]*)\]\(asset://([a-zA-Z0-9_-]{1,64})
 BOARD_MD_IMG_PATTERN = re.compile(r"!\[([^\]]*)\]\(board://([a-zA-Z0-9_-]{1,64})\)")
 MD_LINK_ASSET_PATTERN = re.compile(r"asset://([a-zA-Z0-9_-]{1,64})")
 MD_LINK_BOARD_PATTERN = re.compile(r"board://([a-zA-Z0-9_-]{1,64})")
-MERMAID_FENCE_PATTERN = re.compile(r"```mermaid\s*\n(.*?)```", re.DOTALL | re.IGNORECASE)
+MERMAID_FENCE_PATTERN = re.compile(
+    r"^ {0,3}(?P<fence>`{3,}|~{3,})mermaid[ \t]*\r?\n(?P<body>[\s\S]*?)^ {0,3}(?P=fence)[ \t]*(?=\r?$)",
+    re.MULTILINE | re.IGNORECASE,
+)
 
 ALLOWED_HTML_TAGS = {
     "a", "abbr", "b", "blockquote", "br", "code", "dd", "del", "details", "div", "dl", "dt",
     "em", "figcaption", "figure", "h1", "h2", "h3", "h4", "h5", "h6", "hr", "i",
     "img", "kbd", "li", "mark", "ol", "p", "pre", "s", "source", "span", "strong", "sub",
     "summary", "sup", "table", "tbody", "td", "th", "thead", "tr", "u", "ul", "video",
-    "caption",
+    "caption", "tfoot", "ins",
 }
 ALLOWED_HTML_ATTRS = {
     "a": {"href", "title", "id", "class"},
@@ -56,14 +59,16 @@ ALLOWED_HTML_ATTRS = {
     "ul": {"type"},
     "source": {"src", "type"},
     "span": {"id", "class", "data-anchor"},
-    "td": {"align"},
-    "th": {"align"},
+    "td": {"align", "colspan", "rowspan"},
+    "th": {"align", "colspan", "rowspan"},
     "u": {"style"},
     "video": {"src", "controls", "loop", "muted", "playsinline", "class"},
 }
 
 
 def _safe_export_attribute(tag: str, attribute: str, value: str) -> str | None:
+    if attribute in {"colspan", "rowspan"}:
+        return value if re.fullmatch(r"[1-9][0-9]?", value) else None
     if tag == "u" and attribute == "style":
         match = re.fullmatch(r"\s*text-decoration-color:\s*(#[0-9a-fA-F]{6})\s*;\s*text-decoration-thickness:\s*1px\s*;?\s*", value)
         return f"text-decoration-color: {match.group(1)}; text-decoration-thickness: 1px;" if match else None
@@ -281,6 +286,54 @@ def _render_writeup_labels_html(text: str) -> str:
     return _LABEL_OR_CODE.sub(replace, text)
 
 
+_MATH_INLINE = r"\$(?![\s$])(?P<inline_text>(?:\\[^\n]|[^\\$\n|])+?)(?<!\s)\$(?![$\d])"
+_MATH_BLOCK = r"^ {0,3}\$\$[ \t]*(?P<block_text>[^$]+?)\$\$[ \t]*(?=\n|$)"
+_MATH_OR_CODE = re.compile(
+    r"(?P<code>^(?: {0,3})(?P<fence>`{3,}|~{3,})[^\n]*\n[\s\S]*?^ {0,3}(?P=fence)[ \t]*(?=\n|$)|(?P<tick>`+)[^\n]*?(?P=tick)|<[^>\n]+>)"
+    rf"|(?P<block>{_MATH_BLOCK})|(?P<inline>(?<![\\$]){_MATH_INLINE})", re.MULTILINE,
+)
+_INLINE_MATH_OR_CODE = re.compile(rf"(?P<code>(?P<tick>`+)[^\n]*?(?P=tick))|(?P<inline>(?<![\\$]){_MATH_INLINE})")
+_BLOCK_MATH = re.compile(_MATH_BLOCK, re.MULTILINE)
+
+
+def _math_svg(expression: str, *, inline: bool, size: float = 14) -> tuple[str, float] | None:
+    if not expression.strip() or len(expression) > 3500:
+        return None
+    try:
+        import ziamath
+
+        math = ziamath.Latex(expression.strip(), inline=inline, size=size, color="#171717", margin=0.6)
+        node = math.svgxml()
+        width = float(node.attrib["width"])
+        height = float(node.attrib["height"])
+        if not (0 < width <= 2200 and 0 < height <= 1200):
+            return None
+        return math.svg(), width
+    except Exception:
+        # Unsupported TeX remains readable in its original notation.
+        return None
+
+
+def _render_math_html(markdown: str) -> str:
+    count = 0
+    def replace(match: re.Match[str]) -> str:
+        nonlocal count
+        if match.group("code") or count >= 160:
+            return match[0]
+        count += 1
+        inline = match.group("inline") is not None
+        expression = match["inline_text"] if inline else match["block_text"]
+        result = _math_svg(expression, inline=inline, size=15 if inline else 17)
+        if not result:
+            return match[0]
+        svg, _ = result
+        mode = "inline" if inline else "block"
+        alt = html_lib.escape(expression.strip(), quote=True)
+        img = f'<img class="report-math-{mode}" src="{_svg_data_uri(svg)}" alt="{alt}" />'
+        return img if inline else f'\n\n<div class="report-equation">{img}</div>\n\n'
+    return _MATH_OR_CODE.sub(replace, markdown)
+
+
 def _preprocess_markdown_for_html(ctx: ExportBundleContext, *, embed_video: bool = True) -> str:
     text = apply_redaction_markers(ctx.markdown_content, ctx.redact_for_client)
     text = _render_writeup_labels_html(text)
@@ -292,7 +345,7 @@ def _preprocess_markdown_for_html(ctx: ExportBundleContext, *, embed_video: bool
 
     if ctx.rendered_diagrams:
         def _replace_mermaid(match: re.Match[str]) -> str:
-            code = match.group(1) or ""
+            code = match["body"]
             key = _diagram_sha256(code)
             svg_xml = ctx.rendered_diagrams.get(key)
             if not svg_xml:
@@ -339,7 +392,7 @@ def _preprocess_markdown_for_html(ctx: ExportBundleContext, *, embed_video: bool
 
     text = ASSET_MD_IMG_PATTERN.sub(_replace_asset, text)
     text = BOARD_MD_IMG_PATTERN.sub(_replace_board, text)
-    return text
+    return _render_math_html(text)
 
 
 def _plain_html_text(fragment: str) -> str:
@@ -703,6 +756,8 @@ def _compile_sanitized_html_parts(
 
     # Markdown images are promoted to figures so they receive a small, numbered caption in every rendered format.
     def index_standalone_image(match: re.Match[str]) -> str:
+        if 'class="report-math-' in match[0]:
+            return match[0]
         nonlocal figure_number
         if any(start <= match.start() < end for start, end in figure_ranges):
             return match.group(0)
@@ -757,6 +812,8 @@ def _compile_sanitized_html_parts(
         index_pages.append('<div class="document-index-page"><h1>Índice de figuras e imágenes</h1><ul>' + ''.join(figure_items) + '</ul></div>')
     if ctx.include_table_index and table_items:
         index_pages.append('<div class="document-index-page"><h1>Índice de tablas</h1><ul>' + ''.join(table_items) + '</ul></div>')
+    if not embed_video:
+        raw_html = re.sub(r"<details(?![^>]*\bopen\b)(?=[\s>])", "<details open", raw_html, flags=re.I)
     clean_options = {
         "tags": ALLOWED_HTML_TAGS,
         "attributes": ALLOWED_HTML_ATTRS,
@@ -837,6 +894,17 @@ def _cover_details(ctx: ExportBundleContext) -> list[tuple[str, str]]:
     return [(label, value) for label, value in details if value.strip()]
 
 
+def _report_metadata(ctx: ExportBundleContext) -> list[tuple[str, str]]:
+    fields = [
+        ("CVSS", f"{ctx.cvss_score:.1f}" if ctx.cvss_score is not None else ""),
+        ("Vector", ctx.cvss_vector or ""),
+        ("CWE", ctx.cwe_id or ""),
+        ("CVE", ctx.cve_id or ""),
+        ("Alcance autorizado", apply_redaction_markers(ctx.target_scope or "", ctx.redact_for_client)),
+    ]
+    return [(label, text) for label, text in fields if text.strip()]
+
+
 def build_standalone_html_document(
     ctx: ExportBundleContext,
     *,
@@ -874,7 +942,6 @@ def build_standalone_html_document(
         else "<span class='mode-pill internal'>REPORTE TÉCNICO INTERNO</span>"
     )
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-    target_scope = html_lib.escape(apply_redaction_markers(ctx.target_scope or "No especificado", ctx.redact_for_client))
     font_size_pt = max(8, min(18, int(ctx.font_size_pt or 11)))
     org_name = html_lib.escape(ctx.organization_name or settings.WRITEUP_ORGANIZATION_NAME)
     cover_details = "".join(
@@ -891,30 +958,27 @@ def build_standalone_html_document(
     </div>
     <footer class="cover-footer">{redacted_badge}<br>Generado: {generated_at} · Estado: {html_lib.escape(ctx.status)} · Severidad: {html_lib.escape(ctx.severity.upper())}</footer>
   </section>"""
-    preamble_html = f"""
-  <section class="report-preamble">
-    <div class="meta-grid">
-      <div><strong>CVSS:</strong> {f"{ctx.cvss_score:.1f}" if ctx.cvss_score is not None else "N/A"}</div>
-      <div><strong>Vector:</strong> {html_lib.escape(ctx.cvss_vector or "N/A")}</div>
-      <div><strong>CWE / CVE:</strong> {html_lib.escape(ctx.cwe_id or "-")} / {html_lib.escape(ctx.cve_id or "-")}</div>
-      <div class="scope-meta"><strong>Alcance autorizado:</strong> {target_scope}</div>
-    </div>
-    {exec_block}
-  </section>"""
-    report_html = f'<div class="report-content"><main class="markdown-body">{markdown_body}</main>{_build_findings_html(ctx)}{_build_citations_html(ctx)}</div>'
+    metadata = "".join(
+        f'<div class="{"scope-meta" if label == "Alcance autorizado" else "metadata-field"}"><strong>{label}:</strong> {html_lib.escape(value)}</div>'
+        for label, value in _report_metadata(ctx)
+    )
+    meta_block = f'<div class="meta-grid">{metadata}</div>' if metadata else ""
+    preamble_html = f'<section class="report-preamble">{meta_block}{exec_block}</section>' if meta_block or exec_block else ""
+    report_html = f'<div class="report-content">{preamble_html}<main class="markdown-body">{markdown_body}</main>{_build_findings_html(ctx)}{_build_citations_html(ctx)}</div>'
 
     if pdf_section == "frontmatter":
-        document_body = cover_html + indexes_html + preamble_html
+        document_body = cover_html + indexes_html
     elif pdf_section == "report":
         document_body = report_html
     else:
-        document_body = cover_html + indexes_html + preamble_html + report_html
+        document_body = cover_html + indexes_html + report_html
 
     return f"""<!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; media-src data:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'" />
 <title>{html_lib.escape(ctx.title)} — {org_name}</title>
 <style>
   @page {{
@@ -926,13 +990,13 @@ def build_standalone_html_document(
   @page frontmatter {{ size: A4; margin: 20mm 16mm 20mm 16mm; @bottom-right {{ content: ""; }} }}
   @page report-content {{ size: A4; margin: 20mm 16mm 20mm 16mm; @bottom-right {{ content: "Página " counter(page) " de " counter(pages); font-size: 9pt; color: #64748b; }} }}
   body {{ font-family: "Liberation Serif", "DejaVu Serif", Georgia, serif; color: #171717; line-height: 1.55; max-width: 850px; margin: 0 auto; padding: 32px; background: white; font-size: {font_size_pt}pt; }}
-  .cover, .document-index-page, .report-preamble {{ page: frontmatter; }}
+  .cover, .document-index-page {{ page: frontmatter; }}
   .report-content {{ page: report-content; }}
-  .cover {{ min-height: 70vh; display: flex; flex-direction: column; break-after: page; page-break-after: always; }}
-  .document-index-page {{ box-sizing: border-box; min-height: 235mm; padding: 0; break-after: page; page-break-after: always; }}
-  .document-index-page h1 {{ font-size: 19pt; margin: 0 0 18pt; color: #171717; }}
+  .cover {{ display: flex; flex-direction: column; break-after: page; }}
+  .document-index-page {{ margin: 18pt 0; }}
+  .document-index-page h1 {{ font-size: 19pt; margin: 0 0 10pt; color: #171717; }}
   .document-index-page ul {{ margin: 0; padding-left: 1.2em; }}
-  .document-index-page li {{ margin: 0 0 5pt; }}
+  .document-index-page li {{ margin: 0 0 2pt; }}
   .document-index-page a {{ display: flex; justify-content: space-between; gap: 16px; text-decoration: none; }}
   .document-index-page a.has-page-ref {{ display: table; width: 100%; text-decoration: none; }}
   .index-entry-label, .index-page-number {{ display: table-cell; border-bottom: 1px dotted #9aa1a8; }}
@@ -942,7 +1006,7 @@ def build_standalone_html_document(
   .index-page-number {{ flex: 0 0 auto; color: #555; font-variant-numeric: tabular-nums; }}
   .letterhead {{ display: flex; justify-content: space-between; gap: 16px; border-bottom: 2px solid #075c4c; padding-bottom: 12px; color: #075c4c; font: bold 10pt "Liberation Sans", sans-serif; overflow-wrap: anywhere; }}
   .watermark {{ color: #555; font: 9pt "Liberation Sans", sans-serif; text-align: right; }}
-  .cover-content {{ margin: auto 0; padding: 48px 0; }}
+  .cover-content {{ margin: auto 0; padding: 28px 0; }}
   .cover h1 {{ margin: 0 0 16px; font-size: 30pt; line-height: 1.15; overflow-wrap: anywhere; }}
   .cover-subtitle {{ color: #075c4c; font: bold 10pt "Liberation Sans", sans-serif; }}
   .cover-footer {{ border-top: 1px solid #b8c7c2; padding-top: 12px; color: #555; font: 9pt "Liberation Sans", sans-serif; }}
@@ -950,13 +1014,14 @@ def build_standalone_html_document(
   .mode-pill {{ margin-left: 12px; color: #555; }}
   .meta-grid {{ display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px 16px; padding: 0 0 14px; border-bottom: 1px solid #bbb; font-size: .9em; overflow-wrap: anywhere; }}
   .scope-meta {{ grid-column: span 3; }}
-  .section-box {{ margin: 24pt 0; }}
+  .section-box {{ margin: 16pt 0; }}
+  .report-preamble {{ margin: 12pt 0; }}
   .report-preamble .section-box p {{ white-space: pre-wrap; }}
   .cover-content p:not(.cover-subtitle) {{ margin: 4pt 0; font: 11pt "Liberation Sans", sans-serif; }}
   body :is(h1, h2, h3, h4, h5, h6, caption) {{ break-after: avoid; }}
   p, li {{ orphans: 3; widows: 3; }}
   a {{ color: #075c4c; text-decoration-thickness: 1px; text-underline-offset: 3px; }}
-  .toc {{ margin: 0; padding: 0; font: .92em/1.7 "Liberation Sans", sans-serif; }}
+  .toc {{ margin: 0; padding: 0; font: .9em/1.36 "Liberation Sans", sans-serif; }}
   .toc ul {{ margin: 0; padding-left: 1.25em; }}
   .toc > ul {{ padding-left: 1em; }}
   .toc a {{ text-decoration: none; }}
@@ -968,7 +1033,7 @@ def build_standalone_html_document(
   .markdown-body h5 {{ font-size: 1.05em; margin: 1em 0 .3em; break-after: avoid; }}
   .markdown-body h6 {{ font-size: .95em; margin: 1em 0 .3em; break-after: avoid; }}
   .meta-table, table {{ width: 100%; table-layout: fixed; border-collapse: collapse; margin: 14px 0; font-size: .88em; }}
-  th, td {{ border-bottom: 1px solid #bbb; padding: 6px 5px; text-align: left; vertical-align: top; overflow-wrap: anywhere; word-break: break-word; }}
+  th, td {{ border-bottom: 1px solid #bbb; padding: 6px 5px; text-align: left; vertical-align: top; overflow-wrap: anywhere; }}
   th {{ border-top: 1px solid #555; border-bottom: 1px solid #555; font-weight: 700; }}
   caption {{ caption-side: top; text-align: left; font-weight: 400; padding: 0 0 7px; color: #3f4650; font-size: .9em; line-height: 1.45; }}
   caption strong, figcaption strong {{ color: #171717; font-weight: 700; }}
@@ -976,14 +1041,18 @@ def build_standalone_html_document(
   .caption-source {{ display: block; margin-top: 2px; color: #60666d; font-size: .9em; }}
   thead {{ display: table-header-group; }}
   tr, figure {{ break-inside: avoid; }}
-  pre {{ background: #f4f4f4; border: 1px solid #ccc; color: #171717; padding: 10px; overflow-x: auto; font-size: 9pt; white-space: pre-wrap; overflow-wrap: anywhere; }}
+  pre {{ background: #f4f4f4; border: 1px solid #ccc; color: #171717; padding: 10px; overflow: auto; font-size: 9pt; white-space: pre-wrap; overflow-wrap: anywhere; }}
   code, kbd {{ font-family: "DejaVu Sans Mono", monospace; font-size: .9em; }}
   pre code {{ padding: 0; font-size: inherit; }}
   details {{ border-bottom: 1px solid #ccc; padding: 8px 0; margin: 10px 0; }}
   summary {{ cursor: pointer; font-weight: 700; }}
   blockquote {{ border-left: 2px solid #777; margin: 12px 0; padding: 0 14px; color: #444; }}
   img, video {{ max-width: 100%; height: auto; margin: 10px auto; display: block; }}
-  figure {{ margin: 14pt 0; }}
+  figure {{ margin: 12pt 0; }}
+  img.report-math-inline {{ display: inline; margin: 0; vertical-align: middle; }}
+  img.report-math-block {{ margin: 6pt auto; max-height: 150mm; }}
+  .report-equation {{ break-inside: avoid; }}
+  .mermaid-diagram img {{ max-height: 165mm; object-fit: contain; }}
   figcaption {{ color: #4b5563; font: 9pt/1.45 "Liberation Sans", sans-serif; text-align: center; }}
   .stale {{ color: #7c2d12; font-size: 9pt; font-weight: 700; }}
   .writeup-label {{ display: inline-block; font-family: "Liberation Sans", sans-serif; font-weight: 700; padding: .1em .45em; border: 1px solid currentColor; border-radius: 3px; }}
@@ -995,7 +1064,7 @@ def build_standalone_html_document(
   .writeup-label-pequena {{ font-size: .8em; }}
   .writeup-label-normal {{ font-size: .95em; }}
   .writeup-label-grande {{ font-size: 1.15em; }}
-  @media print {{ body {{ padding: 0; }} figure img {{ max-height: 190mm; object-fit: contain; }} .cover {{ min-height: 220mm; }} a {{ color: inherit; }} .document-index-page {{ break-after: page; page-break-after: always; }} }}
+  @media print {{ body {{ padding: 0; }} figure img {{ max-height: 190mm; object-fit: contain; }} .cover {{ min-height: 220mm; }} a {{ color: inherit; }} }}
 </style>
 </head>
 <body>
@@ -1218,6 +1287,7 @@ def _build_md_zip_artifact(ctx: ExportBundleContext) -> tuple[bytes, str, str]:
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED) as zf:
         zf.writestr(f"{ctx.slug}.md", _export_markdown_text(ctx, bundle_assets=True).encode("utf-8"))
+        zf.writestr(f"{ctx.slug}.html", build_standalone_html_document(ctx).encode("utf-8"))
         asset_manifest = []
         for asset in ctx.assets_by_id.values():
             raw = decrypt_asset_bytes(asset["encrypted_blob"])
@@ -1232,9 +1302,11 @@ def _build_md_zip_artifact(ctx: ExportBundleContext) -> tuple[bytes, str, str]:
             svg = sanitize_svg_content(board.get("svg_snapshot") or "")
             if svg:
                 zf.writestr(f"boards/board_{board_id[:8]}.svg", svg.encode("utf-8"))
+        published_text = apply_redaction_markers(ctx.markdown_content, ctx.redact_for_client)
+        included_diagrams = {_diagram_sha256(match["body"]) for match in MERMAID_FENCE_PATTERN.finditer(published_text)}
         for diag_hash, diag_svg in ctx.rendered_diagrams.items():
             clean_diag = sanitize_svg_content(diag_svg)
-            if clean_diag:
+            if diag_hash in included_diagrams and clean_diag:
                 zf.writestr(f"diagrams/diagram_{diag_hash[:8]}.svg", clean_diag.encode("utf-8"))
         manifest = {
             "writeup_id": ctx.writeup_id,
@@ -1300,19 +1372,37 @@ def _add_docx_caption_text(document: Any, caption: str) -> Any:
         run = paragraph.add_run(line)
         run.font.name = "Liberation Sans"
         run.font.size = Pt(9 if index == 0 else 8)
+        run.font.color.rgb = RGBColor(55, 65, 81)
         run.bold = index == 0
     return paragraph
 
 
-def _add_docx_label_runs(paragraph: Any, text: str) -> None:
+def _add_docx_label_runs(paragraph: Any, text: str, size: int) -> None:
     """Format known labels while leaving code spans and other text intact."""
     underline_pattern = re.compile(r'<u\s+style="text-decoration-color:\s*(#[0-9a-fA-F]{6});\s*text-decoration-thickness:\s*1px;"\s*>(.*?)</u>', re.I | re.S)
     colors = {"jade": "075C4C", "rojo": "9B1C1C", "azul": "174D86", "dorado": "74510C", "neutro": "303030"}
     sizes = {"pequena": 9, "normal": 11, "grande": 14}
+    def add_math(segment: str) -> None:
+        offset = 0
+        for token in _INLINE_MATH_OR_CODE.finditer(segment):
+            if token["code"]:
+                continue
+            paragraph.add_run(segment[offset:token.start()])
+            expression = token["inline_text"]
+            result = _math_svg(expression, inline=True, size=size * 4 / 3)
+            png = _svg_to_png_bytes(result[0], width=min(1320, math.ceil(result[1] * 3))) if result else None
+            if result and png:
+                image = paragraph.add_run().add_picture(io.BytesIO(png), width=Inches(min(result[1] / 96, 6)))
+                image._inline.docPr.set("descr", expression)
+            else:
+                paragraph.add_run(token[0])
+            offset = token.end()
+        paragraph.add_run(segment[offset:])
+
     def add_plain(segment: str) -> None:
         offset = 0
         for match in _LABEL_OR_CODE.finditer(segment):
-            paragraph.add_run(segment[offset:match.start()])
+            add_math(segment[offset:match.start()])
             if match.group(1):
                 paragraph.add_run(match.group(1))
             else:
@@ -1323,7 +1413,7 @@ def _add_docx_label_runs(paragraph: Any, text: str) -> None:
                 run.font.color.rgb = RGBColor.from_string(colors[color])
                 run.font.size = Pt(sizes[size])
             offset = match.end()
-        paragraph.add_run(segment[offset:])
+        add_math(segment[offset:])
     offset = 0
     for match in underline_pattern.finditer(text):
         add_plain(text[offset:match.start()])
@@ -1377,6 +1467,8 @@ def _add_docx_field(paragraph: Any, instruction: str, placeholder: str = "1") ->
 
 
 def _add_docx_index_entry(paragraph: Any, label: str, anchor: str) -> None:
+    paragraph.paragraph_format.line_spacing = 1.1
+    paragraph.paragraph_format.space_after = Pt(2)
     paragraph.paragraph_format.tab_stops.add_tab_stop(Inches(6.4), WD_TAB_ALIGNMENT.RIGHT, WD_TAB_LEADER.DOTS)
     _add_docx_internal_link(paragraph, label, anchor)
     paragraph.add_run("\t")
@@ -1428,7 +1520,11 @@ def _append_docx_table(
     for row_index, row in enumerate(normalized):
         for column_index in range(columns):
             cell = table.cell(row_index, column_index)
-            cell.text = row[column_index] if column_index < len(row) else ""
+            value = row[column_index] if column_index < len(row) else ""
+            if _INLINE_MATH_OR_CODE.search(value):
+                _add_docx_label_runs(cell.paragraphs[0], value, font_size_pt)
+            else:
+                cell.text = value
             if row_index == 0:
                 for run in cell.paragraphs[0].runs:
                     run.bold = True
@@ -1500,7 +1596,7 @@ def _build_docx_artifact(ctx: ExportBundleContext) -> tuple[bytes, str, str]:
             run.font.color.rgb = RGBColor(85, 85, 85)
 
     label = document.add_paragraph()
-    label.paragraph_format.space_before = Pt(110)
+    label.paragraph_format.space_before = Pt(84)
     label_run = label.add_run("INFORME DE SEGURIDAD")
     label_run.font.name = "Liberation Sans"
     label_run.font.bold = True
@@ -1512,72 +1608,18 @@ def _build_docx_artifact(ctx: ExportBundleContext) -> tuple[bytes, str, str]:
         paragraph.add_run(f"{field_name}: ").bold = True
         paragraph.add_run(field_value)
     cover_footer = document.add_paragraph()
-    cover_footer.paragraph_format.space_before = Pt(120)
+    cover_footer.paragraph_format.space_before = Pt(60)
     cover_footer.add_run("Modo cliente (censurado)" if ctx.redact_for_client else "Reporte técnico interno")
     cover_footer.add_run(f"\nGenerado: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')} · Estado: {ctx.status} · Severidad: {ctx.severity.upper()}")
     for run in cover_footer.runs:
         run.font.name = "Liberation Sans"
         run.font.size = Pt(9)
         run.font.color.rgb = RGBColor(85, 85, 85)
-    document.add_page_break()
     body_md = ANCHOR_PATTERN.sub("", apply_redaction_markers(ctx.markdown_content, ctx.redact_for_client))
     index_entries = _extract_document_index(body_md)
     word_anchor_by_position: dict[tuple[str, int], tuple[str, int]] = {}
     for bookmark_id, entry in enumerate(index_entries, start=1):
         word_anchor_by_position[(entry.kind, entry.offset)] = (f"lesssow{bookmark_id}", bookmark_id)
-
-    index_pages_added = False
-
-    def begin_index_page(title: str) -> None:
-        nonlocal index_pages_added
-        if index_pages_added:
-            document.add_page_break()
-        document.add_heading(title, level=1)
-        index_pages_added = True
-
-    if ctx.include_toc:
-        headings = [entry for entry in index_entries if entry.kind == "heading" and entry.level <= ctx.toc_depth]
-        if headings:
-            begin_index_page("Tabla de contenido")
-            for entry in headings:
-                paragraph = document.add_paragraph()
-                paragraph.paragraph_format.left_indent = Inches(max(0, entry.level - 1) * 0.18)
-                anchor = word_anchor_by_position[(entry.kind, entry.offset)][0]
-                _add_docx_index_entry(paragraph, entry.label, anchor)
-    if ctx.include_figure_index:
-        figures = [entry for entry in index_entries if entry.kind == "figure"]
-        if figures:
-            begin_index_page("Índice de figuras e imágenes")
-            for number, entry in enumerate(figures, 1):
-                paragraph = document.add_paragraph()
-                anchor = word_anchor_by_position[(entry.kind, entry.offset)][0]
-                _add_docx_index_entry(paragraph, f"Figura {number}. {entry.label}", anchor)
-    if ctx.include_table_index:
-        tables = [entry for entry in index_entries if entry.kind == "table"]
-        if tables:
-            begin_index_page("Índice de tablas")
-            for number, entry in enumerate(tables, 1):
-                paragraph = document.add_paragraph()
-                anchor = word_anchor_by_position[(entry.kind, entry.offset)][0]
-                _add_docx_index_entry(paragraph, f"Tabla {number}. {entry.label}", anchor)
-
-    if index_pages_added:
-        document.add_page_break()
-
-    meta_table = document.add_table(rows=4, cols=2)
-    meta_rows = [
-        ("Estado / Severidad", f"{ctx.status} · {ctx.severity.upper()}"),
-        ("CVSS / Vector", f"{ctx.cvss_score if ctx.cvss_score is not None else 'N/A'} ({ctx.cvss_vector or '-'})"),
-        ("CWE / CVE", f"{ctx.cwe_id or '-'} / {ctx.cve_id or '-'}"),
-        ("Alcance", apply_redaction_markers(ctx.target_scope or "No especificado", ctx.redact_for_client)),
-    ]
-    for idx, (label, val) in enumerate(meta_rows):
-        meta_table.cell(idx, 0).text = label
-        meta_table.cell(idx, 1).text = val
-
-    if ctx.executive_summary and ctx.executive_summary.strip():
-        document.add_heading("Resumen Ejecutivo", level=1)
-        document.add_paragraph(apply_redaction_markers(ctx.executive_summary, ctx.redact_for_client))
 
     body_section = document.add_section(WD_SECTION_START.NEW_PAGE)
     page_numbering = docx.oxml.OxmlElement("w:pgNumType")
@@ -1588,11 +1630,46 @@ def _build_docx_artifact(ctx: ExportBundleContext) -> tuple[bytes, str, str]:
     footer.alignment = docx.enum.text.WD_ALIGN_PARAGRAPH.RIGHT
     footer.add_run("Página ")
     _add_docx_field(footer, "PAGE")
-    footer.add_run(" de ")
-    _add_docx_field(footer, "SECTIONPAGES")
     update_fields = docx.oxml.OxmlElement("w:updateFields")
     update_fields.set(docx.oxml.ns.qn("w:val"), "true")
     document.settings._element.append(update_fields)
+
+    if ctx.include_toc:
+        headings = [entry for entry in index_entries if entry.kind == "heading" and entry.level <= ctx.toc_depth]
+        if headings:
+            document.add_heading("Tabla de contenido", level=1)
+            for entry in headings:
+                paragraph = document.add_paragraph()
+                paragraph.paragraph_format.left_indent = Inches(max(0, entry.level - 1) * 0.18)
+                anchor = word_anchor_by_position[(entry.kind, entry.offset)][0]
+                _add_docx_index_entry(paragraph, entry.label, anchor)
+    if ctx.include_figure_index:
+        figures = [entry for entry in index_entries if entry.kind == "figure"]
+        if figures:
+            document.add_heading("Índice de figuras e imágenes", level=1)
+            for number, entry in enumerate(figures, 1):
+                paragraph = document.add_paragraph()
+                anchor = word_anchor_by_position[(entry.kind, entry.offset)][0]
+                _add_docx_index_entry(paragraph, f"Figura {number}. {entry.label}", anchor)
+    if ctx.include_table_index:
+        tables = [entry for entry in index_entries if entry.kind == "table"]
+        if tables:
+            document.add_heading("Índice de tablas", level=1)
+            for number, entry in enumerate(tables, 1):
+                paragraph = document.add_paragraph()
+                anchor = word_anchor_by_position[(entry.kind, entry.offset)][0]
+                _add_docx_index_entry(paragraph, f"Tabla {number}. {entry.label}", anchor)
+
+    meta_rows = _report_metadata(ctx)
+    if meta_rows:
+        meta_table = document.add_table(rows=len(meta_rows), cols=2)
+        for idx, (label, value) in enumerate(meta_rows):
+            meta_table.cell(idx, 0).paragraphs[0].add_run(label).bold = True
+            meta_table.cell(idx, 1).text = value
+
+    if ctx.executive_summary and ctx.executive_summary.strip():
+        document.add_heading("Resumen Ejecutivo", level=1)
+        document.add_paragraph(apply_redaction_markers(ctx.executive_summary, ctx.redact_for_client))
 
     entries_by_line: dict[str, dict[int, list[_DocumentIndexEntry]]] = {
         "heading": {}, "figure": {}, "table": {},
@@ -1710,6 +1787,22 @@ def _build_docx_artifact(ctx: ExportBundleContext) -> tuple[bytes, str, str]:
             index += 1
             continue
 
+        if stripped.startswith("$$"):
+            block = _BLOCK_MATH.match("\n".join(lines[index:index + 100]))
+            if block:
+                expression = block["block_text"].strip()
+                result = _math_svg(expression, inline=False, size=font_size_pt * 1.5)
+                png = _svg_to_png_bytes(result[0], width=min(1600, math.ceil(result[1] * 3))) if result else None
+                if result and png:
+                    paragraph = document.add_paragraph()
+                    paragraph.alignment = docx.enum.text.WD_ALIGN_PARAGRAPH.CENTER
+                    image = paragraph.add_run().add_picture(io.BytesIO(png), width=Inches(min(result[1] / 96, 6)))
+                    image._inline.docPr.set("descr", expression)
+                else:
+                    document.add_paragraph(block[0])
+                index += block[0].count("\n") + 1
+                continue
+
         caption_directive = _CAPTION_DIRECTIVE.match(stripped)
         if caption_directive:
             directive_key = (caption_directive.group(1) or caption_directive.group(3)).casefold()
@@ -1805,7 +1898,7 @@ def _build_docx_artifact(ctx: ExportBundleContext) -> tuple[bytes, str, str]:
                 level = len(heading_match.group(1))
                 heading_text = heading_match.group(2)
             paragraph = document.add_heading(level=min(level, 6))
-            _add_docx_label_runs(paragraph, heading_text)
+            _add_docx_label_runs(paragraph, heading_text, font_size_pt)
             bookmark = make_bookmark(take_entry("heading", line_number))
             if bookmark:
                 _add_docx_bookmark(paragraph, bookmark[0], bookmark[1])
@@ -1908,20 +2001,20 @@ def _build_docx_artifact(ctx: ExportBundleContext) -> tuple[bytes, str, str]:
                         _add_docx_bookmark(paragraph, bookmark[0], bookmark[1])
                 remainder = remainder.replace(image_match.group(0), "", 1)
             if remainder.strip():
-                _add_docx_label_runs(document.add_paragraph(), remainder.strip())
+                _add_docx_label_runs(document.add_paragraph(), remainder.strip(), font_size_pt)
             index = next_index
             continue
 
         if re.match(r"^[-*+]\s+\[[ xX]\]\s+", stripped):
             document.add_paragraph(("☑ " if stripped[3:4].lower() == "x" else "☐ ") + stripped[6:])
         elif stripped.startswith(("- ", "* ", "+ ")):
-            _add_docx_label_runs(document.add_paragraph(style="List Bullet"), stripped[2:])
+            _add_docx_label_runs(document.add_paragraph(style="List Bullet"), stripped[2:], font_size_pt)
         elif re.match(r"^\d+[.)]\s+", stripped):
-            _add_docx_label_runs(document.add_paragraph(style="List Number"), re.sub(r"^\d+[.)]\s+", "", stripped))
+            _add_docx_label_runs(document.add_paragraph(style="List Number"), re.sub(r"^\d+[.)]\s+", "", stripped), font_size_pt)
         elif stripped.startswith("> "):
-            _add_docx_label_runs(document.add_paragraph(), stripped[2:].strip())
+            _add_docx_label_runs(document.add_paragraph(), stripped[2:].strip(), font_size_pt)
         elif stripped:
-            _add_docx_label_runs(document.add_paragraph(), line)
+            _add_docx_label_runs(document.add_paragraph(), line, font_size_pt)
         index += 1
 
     if ctx.findings:

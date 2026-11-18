@@ -1,5 +1,5 @@
 import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { CheckCircle2, Download, FileArchive, FileCode, FileSpreadsheet, FileText, Globe, Shield, X } from 'lucide-react';
+import { ChevronDown, Download, X } from 'lucide-react';
 import { WriteupDetail, WriteupExportFormat } from '../../types';
 import { compileMermaidDiagramsForExport } from './mermaidExportHelper';
 import { reviewPublication } from './writeupWorkbenchUtils';
@@ -18,31 +18,32 @@ interface WriteupExportModalProps {
     font_size_pt?: number;
     watermark_text?: string;
     rendered_diagrams?: Record<string, string>;
-  }) => Promise<string | undefined>;
+  }, destination?: FileSystemFileHandle) => Promise<void>;
 }
+
+type SaveFilePicker = (options: { suggestedName: string }) => Promise<FileSystemFileHandle>;
 
 const EXPORT_OPTIONS: Array<{
   format: WriteupExportFormat;
   label: string;
   ext: string;
   desc: string;
-  icon: React.ComponentType<{ className?: string }>;
 }> = [
-  { format: 'pdf', label: 'PDF Ejecutivo', ext: '.pdf', desc: 'Listo para entregar al cliente con paginación y gráficas.', icon: FileText },
-  { format: 'docx', label: 'Word Editable', ext: '.docx', desc: 'Documento corporativo con tablas, diagramas e imágenes.', icon: FileText },
-  { format: 'html', label: 'Página HTML', ext: '.html', desc: 'Abre en el navegador e incluye sus diagramas.', icon: Globe },
-  { format: 'md_zip', label: 'Paquete portable', ext: '.zip', desc: 'Incluye el texto, los archivos adjuntos, las pizarras y los diagramas.', icon: FileArchive },
-  { format: 'md', label: 'Texto Markdown', ext: '.md', desc: 'Informe de texto con sus datos iniciales.', icon: FileCode },
-  { format: 'sarif', label: 'SARIF 2.1.0', ext: '.sarif.json', desc: 'Estándar de hallazgos compatible con GitHub/CI/SIEM.', icon: Shield },
-  { format: 'json', label: 'JSON Estructurado', ext: '.json', desc: 'Datos completos, citas, activos y hallazgos.', icon: FileCode },
-  { format: 'csv', label: 'CSV / Excel', ext: '.csv', desc: 'Incluye hallazgos y citas; protege el contenido que pueda interpretarse como fórmula.', icon: FileSpreadsheet },
+  { format: 'pdf', label: 'PDF', ext: '.pdf', desc: 'Informe paginado con las figuras del documento.' },
+  { format: 'docx', label: 'Word', ext: '.docx', desc: 'Documento corporativo con tablas, diagramas e imágenes.' },
+  { format: 'html', label: 'HTML', ext: '.html', desc: 'Abre en el navegador e incluye sus diagramas.' },
+  { format: 'md_zip', label: 'Paquete portable', ext: '.zip', desc: 'Incluye Markdown editable, una versión HTML para leer sin conexión y los archivos del informe.' },
+  { format: 'md', label: 'Texto Markdown', ext: '.md', desc: 'Informe de texto con sus datos iniciales.' },
+  { format: 'sarif', label: 'SARIF 2.1.0', ext: '.sarif.json', desc: 'Estándar de hallazgos compatible con GitHub/CI/SIEM.' },
+  { format: 'json', label: 'JSON Estructurado', ext: '.json', desc: 'Datos completos, citas, activos y hallazgos.' },
+  { format: 'csv', label: 'CSV compatible con Excel', ext: '.csv', desc: 'Incluye hallazgos y citas; protege el contenido que pueda interpretarse como fórmula.' },
 ];
 
 export const WriteupExportModal: React.FC<WriteupExportModalProps> = ({ writeup, onClose, onExport }) => {
   const titleId = useId();
   const descriptionId = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
-  const firstFormatRef = useRef<HTMLButtonElement>(null);
+  const firstFormatRef = useRef<HTMLSelectElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
@@ -56,7 +57,6 @@ export const WriteupExportModal: React.FC<WriteupExportModalProps> = ({ writeup,
   const [fontSizePt, setFontSizePt] = useState(11);
   const [watermarkText, setWatermarkText] = useState('');
   const [exporting, setExporting] = useState(false);
-  const [lastSha, setLastSha] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const exportingRef = useRef(false);
   exportingRef.current = exporting;
@@ -76,8 +76,8 @@ export const WriteupExportModal: React.FC<WriteupExportModalProps> = ({ writeup,
       }
       if (event.key !== 'Tab' || !dialogRef.current) return;
       const focusable = Array.from(
-        dialogRef.current.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled), [tabindex]:not([tabindex="-1"])')
-      ).filter((element) => element.getAttribute('aria-hidden') !== 'true');
+        dialogRef.current.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled), summary, [tabindex]:not([tabindex="-1"])')
+      ).filter((element) => element.getClientRects().length > 0 && element.getAttribute('aria-hidden') !== 'true');
       if (focusable.length === 0) return;
       const first = focusable[0];
       const last = focusable[focusable.length - 1];
@@ -98,41 +98,58 @@ export const WriteupExportModal: React.FC<WriteupExportModalProps> = ({ writeup,
     };
   }, []);
 
-  const mermaidCount = useMemo(
-    () => (writeup.markdown_content.match(/```mermaid\b/gi) || []).length,
-    [writeup.markdown_content]
-  );
   const supportsDocumentIndexes = ['pdf', 'docx', 'html', 'md', 'md_zip'].includes(selectedFormat);
   const hasCover = ['pdf', 'docx', 'html'].includes(selectedFormat);
   const isPackaged = selectedFormat === 'md_zip';
   const includesLinkedMedia = hasCover || isPackaged;
-  const supportsTypography = ['pdf', 'docx', 'html'].includes(selectedFormat);
+  const supportsTypography = hasCover;
   const publicationReview = useMemo(() => reviewPublication(writeup), [writeup]);
+  const format = EXPORT_OPTIONS.find(option => option.format === selectedFormat)!;
+  const checks = [
+    { label: 'Imágenes locales ausentes', count: publicationReview.missingImages },
+    { label: 'Enlaces vacíos', count: publicationReview.emptyLinks },
+    { label: 'Secciones sin contenido', count: publicationReview.emptySections },
+    { label: 'Posibles secretos sin marcar', count: publicationReview.possibleSecrets },
+    { label: 'Preguntas y pasos pendientes', count: publicationReview.pendingQuestions + publicationReview.pendingSteps },
+  ].filter(check => check.count > 0);
+  const indexes = [includeToc && 'contenido', includeFigures && 'figuras', includeTables && 'tablas'].filter(Boolean);
+
+
+  const saveFilePicker = (window as Window & { showSaveFilePicker?: SaveFilePicker }).showSaveFilePicker;
 
   const handleRunExport = async () => {
     if (exportingRef.current) return;
-    setLastSha(null);
     setExporting(true);
     setErrorMsg(null);
     try {
+      let destination: FileSystemFileHandle | undefined;
+      if (saveFilePicker) {
+        try {
+          // The native picker needs the activation from this click.
+          destination = await saveFilePicker.call(window, { suggestedName: `${writeup.slug || 'informe'}${format.ext}` });
+        } catch (error) {
+          if (error instanceof DOMException && error.name === 'AbortError') return;
+          if (!(error instanceof DOMException) || !['SecurityError', 'NotAllowedError', 'NotSupportedError'].includes(error.name)) throw error;
+        }
+      }
       let renderedDiagrams: Record<string, string> | undefined;
-      if (mermaidCount > 0 && (selectedFormat === 'pdf' || selectedFormat === 'docx' || selectedFormat === 'html' || selectedFormat === 'md_zip')) {
-        const compiled = await compileMermaidDiagramsForExport(writeup.markdown_content);
+      if (includesLinkedMedia) {
+        const compiled = await compileMermaidDiagramsForExport(writeup.markdown_content, redactForClient);
         if (Object.keys(compiled).length > 0) renderedDiagrams = compiled;
       }
-      const sha = await onExport({
+      await onExport({
         format: selectedFormat,
         redact_for_client: redactForClient,
-        include_watermark: includeWatermark,
-        include_toc: includeToc,
+        include_watermark: hasCover && includeWatermark,
+        include_toc: supportsDocumentIndexes && includeToc,
         toc_depth: tocDepth,
-        include_figure_index: includeFigures,
-        include_table_index: includeTables,
+        include_figure_index: supportsDocumentIndexes && includeFigures,
+        include_table_index: supportsDocumentIndexes && includeTables,
         font_size_pt: fontSizePt,
         watermark_text: watermarkText.trim() || undefined,
         rendered_diagrams: renderedDiagrams,
-      });
-      if (sha) setLastSha(sha);
+      }, destination);
+      onCloseRef.current();
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : 'No se pudo generar el archivo.');
     } finally {
@@ -168,140 +185,87 @@ export const WriteupExportModal: React.FC<WriteupExportModalProps> = ({ writeup,
           </button>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-5 space-y-5">
-          <section aria-label="Revisión antes de exportar" className="border-b border-obsidian-borderLight pb-4 text-xs text-obsidian-muted">
-            <h3 className="mb-2 font-semibold text-obsidian-text">Revisión antes de exportar</h3>
-            <ul className="space-y-1">
-              <li>Imágenes locales ausentes: {publicationReview.missingImages}</li>
-              <li>Enlaces vacíos: {publicationReview.emptyLinks}</li>
-              <li>Secciones sin contenido: {publicationReview.emptySections}</li>
-              <li>Posibles secretos sin marcar: {publicationReview.possibleSecrets}</li>
-              <li>Campos de evidencia censurados: {publicationReview.redactedFields}</li>
-              <li>Preguntas y pasos pendientes: {publicationReview.pendingQuestions + publicationReview.pendingSteps}</li>
-            </ul>
-            <p className="mt-2 text-obsidian-muted">La búsqueda es orientativa: revisa el contenido y las imágenes manualmente antes de compartir.</p>
-          </section>
-          {/* [Estado seleccionable] Separa los documentos de los datos para intercambio. */}
-          {[
-            { label: 'Documentos', formats: EXPORT_OPTIONS.slice(0, 5) },
-            { label: 'Intercambio de datos', formats: EXPORT_OPTIONS.slice(5) },
-          ].map(({ label, formats }) => (
-            <section key={label} aria-label={label}>
-              <h3 className="mb-1 text-xs font-semibold text-obsidian-text">{label}</h3>
-              <div className="grid gap-x-4 sm:grid-cols-2">
-                {formats.map((opt) => {
-                  const Icon = opt.icon;
-                  return (
-                    <button key={opt.format} type="button"
-                      ref={opt.format === 'pdf' ? firstFormatRef : undefined}
-                      onClick={() => { setSelectedFormat(opt.format); setLastSha(null); setErrorMsg(null); }}
-                      disabled={exporting} aria-pressed={selectedFormat === opt.format}
-                      className="ui-action-toggle min-w-0 w-full justify-start px-2 py-2 text-left"
-                    >
-                      <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
-                      <span className="min-w-0 flex-1">
-                        <span className="block font-medium">{opt.label}</span>
-                        <span className="block text-xs font-normal text-obsidian-muted">{opt.desc}</span>
-                      </span>
-                      <span className="shrink-0 font-mono text-xs text-obsidian-muted">{opt.ext}</span>
-                    </button>
-                  );
-                })}
-              </div>
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 sm:px-5">
+          <fieldset disabled={exporting} className="space-y-3">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="grid min-w-0 gap-1 text-xs text-obsidian-text">
+                Formato
+                <select ref={firstFormatRef} value={selectedFormat} onChange={(event) => {
+                  setSelectedFormat(event.target.value as WriteupExportFormat);
+                  setErrorMsg(null);
+                }} className="w-full min-w-0 ps-3">
+                  {[{ label: 'Documentos', options: EXPORT_OPTIONS.slice(0, 5) }, { label: 'Intercambio de datos', options: EXPORT_OPTIONS.slice(5) }].map(group =>
+                    <optgroup key={group.label} label={group.label}>
+                      {group.options.map(option => <option key={option.format} value={option.format}>{option.label} ({option.ext})</option>)}
+                    </optgroup>
+                  )}
+                </select>
+              </label>
+              <label className="grid min-w-0 gap-1 text-xs text-obsidian-text">
+                Destino
+                <select value={redactForClient ? 'client' : 'internal'} onChange={event => {
+                  setRedactForClient(event.target.value === 'client');
+                  setErrorMsg(null);
+                }} className="w-full min-w-0 ps-3">
+                  <option value="client">Copia para cliente</option>
+                  <option value="internal">Uso interno</option>
+                </select>
+              </label>
+            </div>
+            <p className="text-xs text-obsidian-muted">{format.desc}</p>
+            {redactForClient && <p className="text-xs text-obsidian-muted">La copia oculta el contenido marcado para censurar. Revisa los adjuntos antes de compartir.</p>}
+
+            <section aria-label="Contenido de la entrega" className="border-t border-obsidian-border pt-3">
+              <h3 className="text-xs font-semibold text-obsidian-text">Contenido de la entrega</h3>
+              <p className="mt-1 text-xs text-obsidian-muted">
+                {[
+                  hasCover && 'Portada',
+                  supportsDocumentIndexes && indexes.length > 0 && `Índices de ${indexes.join(', ')}`,
+                  isPackaged ? 'Adjuntos y pizarras' : includesLinkedMedia ? 'Figuras referenciadas' : 'Sin archivos adjuntos',
+                ].filter(Boolean).join(' · ')}
+              </p>
             </section>
-          ))}
 
-          <section aria-label="Contenido de la entrega" className="border-y border-obsidian-border py-3">
-            <h3 className="mb-2 text-xs font-semibold text-obsidian-text">Contenido de la entrega</h3>
-            <dl className="grid gap-x-6 gap-y-2 text-xs text-obsidian-muted sm:grid-cols-2">
-              <div><dt className="text-obsidian-text">Destino</dt><dd>{redactForClient ? 'Copia para cliente' : 'Uso interno'}</dd></div>
-              <div><dt className="text-obsidian-text">Portada</dt><dd>{hasCover ? 'Incluida' : 'No aplica'}</dd></div>
-              <div><dt className="text-obsidian-text">Índices solicitados</dt><dd>{supportsDocumentIndexes ? [includeToc && 'Contenido', includeFigures && 'Figuras', includeTables && 'Tablas'].filter(Boolean).join(', ') || 'Ninguno' : 'No aplican'}</dd></div>
-              <div><dt className="text-obsidian-text">Evidencias y anexos</dt><dd>{isPackaged ? 'El ZIP empaqueta los adjuntos y las pizarras del informe.' : includesLinkedMedia ? 'Se incorporan las figuras referenciadas compatibles con el formato.' : 'El formato no incorpora archivos adjuntos.'}</dd></div>
-            </dl>
-          </section>
-
-          <div className="grid grid-cols-1 gap-3 pb-4 sm:grid-cols-2">
-            {supportsTypography && <label className="flex items-center gap-2 text-xs text-obsidian-text">
-              Tamaño del texto
-              <select value={fontSizePt} onChange={(event) => setFontSizePt(Number(event.target.value))} className="min-h-[44px] rounded-md border border-obsidian-borderLight bg-obsidian-surface px-2 text-white">
-                {[8, 9, 10, 11, 12, 13, 14, 16, 18].map((size) => <option key={size} value={size}>{size} pt</option>)}
-              </select>
-            </label>}
-            <label className="flex min-h-[44px] items-start gap-2.5 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={redactForClient}
-                onChange={(e) => setRedactForClient(e.target.checked)}
-                className="mt-0.5 rounded border-obsidian-borderLight bg-obsidian-surface accent-obsidian-accent"
-              />
-              <div>
-              <div className="text-xs font-medium text-obsidian-text">Copia para cliente (ocultar secretos)</div>
-                <div className="text-[11px] text-obsidian-muted">Reemplaza segmentos {'{{redact:...}}'} por [REDACTED].</div>
-              </div>
-            </label>
-
-            {supportsDocumentIndexes && (
-              <div className="space-y-2 border-l border-obsidian-borderLight pl-4 text-xs text-obsidian-text">
-                {includeToc && <label className="flex min-h-[44px] items-center gap-2">Niveles de encabezado
-                  <select value={tocDepth} onChange={(event) => setTocDepth(Number(event.target.value))} className="min-h-[44px] rounded-md border border-obsidian-borderLight bg-obsidian-surface px-2 text-white">
-                    {[1, 2, 3, 4, 5, 6].map((level) => <option key={level} value={level}>Hasta H{level}</option>)}
+            {supportsDocumentIndexes && <details className="group border-t border-obsidian-border pt-1">
+              <summary className="ui-nav-action cursor-pointer">Opciones del documento<ChevronDown className="ml-auto h-4 w-4 group-open:rotate-180" aria-hidden="true" /></summary>
+              <div className="grid gap-x-4 gap-y-1 px-3 pb-2 sm:grid-cols-2">
+                <label className="flex min-h-11 items-center gap-2 text-xs">
+                  <input type="checkbox" checked={includeToc} onChange={event => setIncludeToc(event.target.checked)} /> Índice de contenido
+                </label>
+                {includeToc && <label className="flex min-h-11 flex-wrap items-center gap-2 text-xs">
+                  Profundidad
+                  <select value={tocDepth} onChange={event => setTocDepth(Number(event.target.value))} className="ps-2">
+                    {[1, 2, 3, 4, 5, 6].map(level => <option key={level} value={level}>Hasta H{level}</option>)}
                   </select>
                 </label>}
-                <label className="flex min-h-[44px] items-center gap-2"><input type="checkbox" checked={includeFigures} onChange={(event) => setIncludeFigures(event.target.checked)} /> Índice de figuras e imágenes</label>
-                <label className="flex min-h-[44px] items-center gap-2"><input type="checkbox" checked={includeTables} onChange={(event) => setIncludeTables(event.target.checked)} /> Índice de tablas</label>
+                <label className="flex min-h-11 items-center gap-2 text-xs"><input type="checkbox" checked={includeFigures} onChange={event => setIncludeFigures(event.target.checked)} /> Índice de figuras</label>
+                <label className="flex min-h-11 items-center gap-2 text-xs"><input type="checkbox" checked={includeTables} onChange={event => setIncludeTables(event.target.checked)} /> Índice de tablas</label>
+                {supportsTypography && <>
+                  <label className="flex min-h-11 flex-wrap items-center gap-2 text-xs">
+                    Tamaño del texto
+                    <select value={fontSizePt} onChange={event => setFontSizePt(Number(event.target.value))} className="ps-2">
+                      {[8, 9, 10, 11, 12, 13, 14, 16, 18].map(size => <option key={size} value={size}>{size} pt</option>)}
+                    </select>
+                  </label>
+                  <label className="flex min-h-11 items-center gap-2 text-xs"><input type="checkbox" checked={includeWatermark} onChange={event => setIncludeWatermark(event.target.checked)} /> Marca de confidencialidad</label>
+                  {includeWatermark && <label className="grid gap-1 text-xs sm:col-span-2">
+                    Texto de confidencialidad (opcional)
+                    <input type="text" value={watermarkText} maxLength={120} onChange={event => setWatermarkText(event.target.value)} className="min-h-11 min-w-0 rounded-lg border px-3" />
+                  </label>}
+                </>}
               </div>
-            )}
+            </details>}
+          </fieldset>
 
-            {supportsDocumentIndexes && <label className="flex min-h-[44px] items-start gap-2.5 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={includeToc}
-                  onChange={(e) => setIncludeToc(e.target.checked)}
-                  className="mt-0.5 rounded border-obsidian-borderLight bg-obsidian-surface accent-obsidian-accent"
-                />
-                <div>
-                  <div className="text-xs font-medium text-obsidian-text">Tabla de contenidos</div>
-                  <div className="text-[11px] text-obsidian-muted">Enlaza los encabezados disponibles en el formato elegido.</div>
-                </div>
-              </label>}
-
-            <label className="flex min-h-[44px] items-start gap-2.5 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={includeWatermark}
-                onChange={(e) => setIncludeWatermark(e.target.checked)}
-                className="mt-0.5 rounded border-obsidian-borderLight bg-obsidian-surface accent-obsidian-accent"
-              />
-              <div>
-                <div className="text-xs font-medium text-obsidian-text">Incluir cinta de confidencialidad</div>
-              <div className="text-[11px] text-obsidian-muted">Agrega una marca al documento exportado.</div>
-              </div>
-            </label>
-
-            <div>
-              <label htmlFor={`${titleId}-watermark`} className="block text-[11px] text-obsidian-muted mb-1">Texto de confidencialidad (opcional)</label>
-              <input
-                id={`${titleId}-watermark`}
-                type="text"
-                value={watermarkText}
-                maxLength={120}
-                onChange={(e) => setWatermarkText(e.target.value)}
-                disabled={!includeWatermark}
-                placeholder="Escribe una marca de confidencialidad"
-                className="w-full min-h-11 min-w-0 bg-obsidian-panel border border-obsidian-borderLight rounded-lg px-2.5 py-1.5 text-xs text-obsidian-text disabled:opacity-50"
-              />
+          <details className="group border-t border-obsidian-border pt-1" open={checks.length > 0 || undefined}>
+            <summary className="ui-nav-action cursor-pointer">Revisión antes de exportar{checks.length > 0 && <span className="text-amber-200">· {checks.length} por revisar</span>}<ChevronDown className="ml-auto h-4 w-4 group-open:rotate-180" aria-hidden="true" /></summary>
+            <div className="space-y-1 px-3 pb-2 text-xs text-obsidian-muted">
+              {checks.length === 0 ? <p>La revisión automática no detectó problemas.</p> : <ul className="space-y-1">
+                {checks.map(check => <li key={check.label}>{check.label} · {check.count}</li>)}
+              </ul>}
+              {redactForClient && publicationReview.redactedFields > 0 && <p>Campos de evidencia marcados para censurar · {publicationReview.redactedFields}</p>}
             </div>
-          </div>
-
-          {lastSha && (
-            <div role="status" className="flex min-w-0 items-center gap-2 border border-obsidian-border bg-emerald-500/5 px-3 py-2 text-xs text-emerald-200">
-              <CheckCircle2 className="w-4 h-4 shrink-0" />
-              <div className="min-w-0 break-all">
-                Archivo generado. Código de verificación: <span className="font-mono">{lastSha}</span>
-              </div>
-            </div>
-          )}
+          </details>
 
           {errorMsg && (
             <div role="alert" className="border border-obsidian-border bg-rose-500/5 px-3 py-2 text-xs text-rose-200">
@@ -311,6 +275,7 @@ export const WriteupExportModal: React.FC<WriteupExportModalProps> = ({ writeup,
         </div>
 
         <div className="flex flex-wrap items-center justify-end gap-2 px-3 py-3.5 sm:px-5 bg-obsidian-surface/80 border-t border-obsidian-border">
+          {!saveFilePicker && <p className="mr-auto text-xs text-obsidian-muted">La carpeta se elige en la configuración de descargas del navegador.</p>}
           {/* [Acción secundaria] Cerrar conserva el informe sin cambios. */}
           <button type="button" onClick={requestClose} disabled={exporting} className="ui-action-secondary">
             Cerrar
@@ -323,7 +288,7 @@ export const WriteupExportModal: React.FC<WriteupExportModalProps> = ({ writeup,
           >
             {/* [Acción principal] Genera y descarga el formato seleccionado. */}
             <Download className="w-4 h-4" />
-            {exporting ? 'Compilando...' : `Descargar ${selectedFormat.toUpperCase()}`}
+            {exporting ? 'Generando…' : `${saveFilePicker ? 'Guardar' : 'Descargar'} ${format.ext.slice(1).toUpperCase()}`}
           </button>
         </div>
       </div>

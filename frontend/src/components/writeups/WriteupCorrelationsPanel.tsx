@@ -15,7 +15,7 @@ type Props = {
 export const WriteupCorrelationsPanel: React.FC<Props> = ({
   correlations, loadedCount, totalCount, hasMore, loadingMore, onOpenReport, onLoadMore,
 }) => (
-  <section aria-labelledby="writeup-correlations-title" className="border-b border-obsidian-border py-3">
+  <section aria-labelledby="writeup-correlations-title" className="border-b border-obsidian-border px-3 py-2">
     <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
       <div className="flex min-w-0 items-center gap-2">
         <GitCompare className="h-4 w-4 shrink-0 text-obsidian-muted" aria-hidden="true" />
@@ -47,8 +47,8 @@ export const WriteupCorrelationsPanel: React.FC<Props> = ({
         })}
       </div>
     ) : (
-      <p className="mt-2 text-xs text-obsidian-muted">No hay coincidencias en los informes cargados. Se comparan CVE, CWE, activos y relaciones del CRM; carga más informes para ampliar el análisis.</p>
+      <p className="mt-2 text-xs text-obsidian-muted">No hay coincidencias en los informes cargados.</p>
     )}
-    <p className="mt-1 text-[10px] text-obsidian-muted/70">Las coincidencias orientan la revisión; no afirman que los hallazgos compartan causa raíz.</p>
+    {correlations.length > 0 && <p className="mt-1 text-xs text-obsidian-muted">Confirma cada coincidencia antes de atribuirle una causa común.</p>}
   </section>
 );

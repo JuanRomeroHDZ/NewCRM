@@ -29,6 +29,7 @@ import { Check, Copy, Download, Play, Pause, Sparkles } from 'lucide-react';
 import { WriteupAsset, WriteupBoard } from '../../types';
 import { loadMermaid, sanitizeMermaidSvg } from './mermaidExportHelper';
 import { renderWriteupLabels } from './writeupLabels';
+import { fillMissingTableDelimiters, writeupMarkdownParser } from './writeupMarkdownParser';
 
 let hljsRegistered = false;
 function ensureHljsLanguages() {
@@ -419,7 +420,7 @@ export const MarkdownRichPreview: React.FC<MarkdownRichPreviewProps> = ({
     const captionedTablePattern = /(^|\n)((?:[ \t]*(?:Tabla\s*:\s*|Descripci[oó]n\s*:\s*|Fuente\s*:\s*)[^\n]*(?:\n|$)(?:[ \t]*\n)*)+)[ \t]*\n*((?:\|[^\n]*(?:\n|$)){2,})/gim;
     text = text.replace(captionedTablePattern, (_whole, prefix: string, captionBlock: string, tableMarkdown: string) => {
       const caption = parseWriteupObjectCaption(captionBlock.split(/\r?\n/).map((line) => line.trim()).filter(Boolean));
-      const parsedTable = marked.parse(tableMarkdown.trim(), { async: false, gfm: true, breaks: true, renderer }) as string;
+      const parsedTable = writeupMarkdownParser.parse(fillMissingTableDelimiters(tableMarkdown.trim()), { async: false, gfm: true, breaks: true, renderer }) as string;
       const safeTable = DOMPurify.sanitize(parsedTable, {
         ADD_TAGS: ['table', 'thead', 'tbody', 'tr', 'th', 'td', 'caption'],
         ADD_ATTR: ['class'],
@@ -436,7 +437,7 @@ export const MarkdownRichPreview: React.FC<MarkdownRichPreviewProps> = ({
       return `${prefix}\n\n${placeholder}\n\n`;
     });
 
-    const parsed = marked.parse(text, { async: false, gfm: true, breaks: true, renderer }) as string;
+    const parsed = writeupMarkdownParser.parse(fillMissingTableDelimiters(text), { async: false, gfm: true, breaks: true, renderer }) as string;
     const withCallouts = enhanceCallouts(parsed);
     const cleanHtml = DOMPurify.sanitize(withCallouts, {
       ADD_TAGS: ['details', 'summary', 'kbd', 'mark', 'video', 'source', 'figure', 'figcaption', 'caption', 'input', 'button'],
@@ -491,7 +492,7 @@ export const MarkdownRichPreview: React.FC<MarkdownRichPreviewProps> = ({
   }
 
   return (
-    <div ref={containerRef} onClick={handleContainerClick} className="writeup-prose">
+    <div ref={containerRef} onClick={handleContainerClick} className="writeup-prose relative">
       {previewMarkdown !== markdown && <p className="mb-2 text-xs text-obsidian-muted" aria-hidden="true">Actualizando vista previa…</p>}
       {segments.map((seg, idx) => {
         if (seg.kind === 'html') {

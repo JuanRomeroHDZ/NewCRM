@@ -75,6 +75,11 @@ This follows the user's request to standardize “todos los desplegables” and 
 - Los menús muestran opciones como filas neutrales uniformes: el borde no debe hacer que una opción parezca seleccionada. Etiqueta las acciones y distingue el estado real mediante texto y atributos accesibles.
 - Los controles compactos del editor pueden reducir su altura visual frente a formularios generales, conservando objetivos utilizables y foco visible. No reduzcas tipografía hasta hacerla ilegible.
 
+- En Informes, alinea los campos y las filas de la lista al mismo eje. Cada fila ocupa todo el ancho y se separa con una línea. La cabecera del informe controla la apertura y el cierre de la lista.
+- El editor y la vista previa ocupan todo el ancho de su panel, con el mismo margen interior. El control de guardado lleva la etiqueta «Guardar» y anuncia su estado de forma accesible. Reserva una línea visible para cambios pendientes, guardado en curso, errores y conflictos.
+
+- En Exportar, muestra primero el formato, el destino y un resumen de la entrega. Los ajustes del documento y los resultados de la revisión se abren bajo demanda. Destaca los avisos que requieren revisión. Al completar la exportación, cierra la ventana y muestra una notificación con el nombre del archivo. La notificación permite abrir los formatos que el navegador puede mostrar. El código de verificación se consulta en Historial → Archivos generados.
+
 - **Preview styling preserves the source Markdown, heading order, anchors, and authored content.** Add clarity with restrained display styling while keeping the rendered document faithful to `.md`.
 - **Diagram nodes, labels, and icons stay centered as one group.** Truncate long visible labels with an ellipsis and retain the full label in an accessible title; include a no-custom-color choice for diagram elements.
 - **Keep the whiteboard frame inside the available workspace width and draw a balanced outer border on every edge.** Use shrinkable flex children and prevent horizontal overflow.

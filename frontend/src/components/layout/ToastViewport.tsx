@@ -3,7 +3,7 @@ import { X } from 'lucide-react';
 import { useVault } from '../../context/VaultContext';
 
 export const ToastViewport: React.FC = () => {
-  const { toasts, dismissToast } = useVault();
+  const { toasts, dismissToast, isUnlocked } = useVault();
 
   return (
     <div
@@ -24,7 +24,14 @@ export const ToastViewport: React.FC = () => {
               : 'bg-obsidian-panel/95 border-obsidian-borderLight text-white'
           }`}
         >
-          <span className="min-w-0 break-words">{toast.message}</span>
+          <div className="min-w-0">
+            <p className="break-words">{toast.message}</p>
+            {isUnlocked && toast.action && (
+              <button type="button" onClick={toast.action.run} className="ui-action-secondary mt-2">
+                {toast.action.label}
+              </button>
+            )}
+          </div>
           {/* [Icono] Descarta la notificación actual. */}
           <button
             type="button"
