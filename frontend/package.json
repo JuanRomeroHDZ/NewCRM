@@ -4,12 +4,16 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
+    "sync:excalidraw": "node -e \"const fs=require('fs'),p=require('path');for(const d of['fonts','locales']){const s=p.join('node_modules/@excalidraw/excalidraw/dist/prod',d),t=p.join('public/excalidraw-assets',d);if(fs.existsSync(s)){fs.mkdirSync(t,{recursive:true});fs.cpSync(s,t,{recursive:true,force:true})}}\"",
+    "predev": "npm run sync:excalidraw",
     "dev": "vite",
+    "prebuild": "npm run sync:excalidraw",
     "build": "tsc && vite build",
     "test": "node --test tests/*.test.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
+    "@excalidraw/excalidraw": "^0.18.1",
     "@types/dompurify": "^3.0.5",
     "clsx": "^2.1.1",
     "dompurify": "^3.4.17",

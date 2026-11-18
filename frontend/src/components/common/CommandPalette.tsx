@@ -3,7 +3,7 @@ import {
   Search, Shield, Mail, Globe, Lock, Sparkles, Network, ArrowRight,
   X, Briefcase, Plus, MapPin, BookOpen, AlertCircle, RefreshCw,
   Server, ScanSearch, ArrowLeftRight, Activity, Route, KeyRound,
-  Code2, Radio, Waypoints, Wifi, Camera, UserCheck, AlertOctagon,
+  Code2, Radio, Waypoints, Wifi, Camera, UserCheck, AlertOctagon, FileText, PenTool,
 } from 'lucide-react';
 import { useVault } from '../../context/VaultContext';
 import { useC2 } from '../../context/C2Context';
@@ -185,6 +185,30 @@ export const CommandPalette: React.FC = () => {
       action: () => {
         closeCommandPalette();
         setActiveSection('writeups');
+        if (!isUnlocked) openUnlockModal();
+      }
+    },
+    {
+      id: 'cmd_reports_documents',
+      title: 'Ir a Reportes · Documentos',
+      subtitle: 'Editor Typst con vista previa en vivo y exportación PDF',
+      icon: FileText,
+      color: 'text-obsidian-muted',
+      action: () => {
+        closeCommandPalette();
+        setActiveSection('reports_documents');
+        if (!isUnlocked) openUnlockModal();
+      }
+    },
+    {
+      id: 'cmd_reports_canvases',
+      title: 'Ir a Reportes · Lienzos',
+      subtitle: 'Diagramas y esquemas visuales con Excalidraw',
+      icon: PenTool,
+      color: 'text-obsidian-muted',
+      action: () => {
+        closeCommandPalette();
+        setActiveSection('reports_canvases');
         if (!isUnlocked) openUnlockModal();
       }
     },

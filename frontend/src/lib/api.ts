@@ -6,7 +6,10 @@ import {
   CoreUser, CoreLoginResponse, CoreUserCreateResponse, TotpSetupResponse, CoreUserRole,
   WriteupSummary, WriteupOverview, WriteupDetail, WriteupBoard, WriteupCitation, WriteupAsset,
   WriteupRevision, WriteupRevisionAuthor, WriteupExportOptions, WriteupStructuredFinding, WriteupStatus, WriteupSeverity,
-  WriteupSnippet, WriteupWorkbench, RuntimeConfig, SecurityAuditResponse
+  WriteupSnippet, WriteupWorkbench, RuntimeConfig, SecurityAuditResponse,
+  ReportDocumentSummary, ReportDocumentDetail, ReportDocumentStatus,
+  TypstStatusResponse, TypstCompileResponse,
+  ReportCanvasSummary, ReportCanvasDetail
 } from '../types';
 import { ApiError, createHttpApiError, normalizeResponseReadError, normalizeTransportError } from './apiErrors';
 
@@ -911,5 +914,53 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify(payload),
     }),
+
+  // Reportes (Typst Documentos + Excalidraw Lienzos)
+  getTypstStatus: () => request<TypstStatusResponse>('/reports/typst-status'),
+  listReportDocuments: () => request<ReportDocumentSummary[]>('/reports/documents'),
+  createReportDocument: (payload: { title: string; status?: ReportDocumentStatus; source?: string }) =>
+    request<ReportDocumentDetail>('/reports/documents', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  getReportDocument: (docId: string) => request<ReportDocumentDetail>(`/reports/documents/${docId}`),
+  updateReportDocument: (
+    docId: string,
+    payload: { title?: string; status?: ReportDocumentStatus; source?: string }
+  ) =>
+    request<ReportDocumentDetail>(`/reports/documents/${docId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
+  deleteReportDocument: (docId: string) =>
+    request<void>(`/reports/documents/${docId}`, { method: 'DELETE' }),
+  compileTypstPreview: (source: string) =>
+    request<TypstCompileResponse>('/reports/documents/compile', {
+      method: 'POST',
+      body: JSON.stringify({ source }),
+    }),
+  exportReportDocumentPdf: (docId: string, source?: string) =>
+    requestBlobResponse(`/reports/documents/${docId}/pdf`, {
+      method: 'POST',
+      body: source !== undefined ? JSON.stringify({ source }) : undefined,
+    }),
+
+  listReportCanvases: () => request<ReportCanvasSummary[]>('/reports/canvases'),
+  createReportCanvas: (payload: { title: string; scene_json?: string; element_count?: number; linked_document_id?: string | null }) =>
+    request<ReportCanvasDetail>('/reports/canvases', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  getReportCanvas: (canvasId: string) => request<ReportCanvasDetail>(`/reports/canvases/${canvasId}`),
+  updateReportCanvas: (
+    canvasId: string,
+    payload: { title?: string; scene_json?: string; element_count?: number; linked_document_id?: string | null }
+  ) =>
+    request<ReportCanvasDetail>(`/reports/canvases/${canvasId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
+  deleteReportCanvas: (canvasId: string) =>
+    request<void>(`/reports/canvases/${canvasId}`, { method: 'DELETE' }),
 };
 

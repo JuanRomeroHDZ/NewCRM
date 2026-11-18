@@ -16,6 +16,7 @@ const sections = [
   'c2_http', 'c2_poison', 'c2_mitm6', 'c2_wifi', 'c2_camera', 'c2_opsec',
   'overview_prospection', 'overview_communications', 'overview_finances', 'overview_security', 'overview_c2', 'overview_activity',
   'overview_settings', 'finance_income', 'finance_services', 'finance_expenses', 'finance_cards',
+  'reports_documents', 'reports_canvases',
 ] as const;
 
 export type SectionType = typeof sections[number];

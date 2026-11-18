@@ -16,12 +16,13 @@ from app.models import (
 )
 from app.security.crypto import encrypt_note, NOTE_ENC_PREFIX
 from app.seed_data import seed_initial_demo_data
+from app.models.reports import ReportDocument, ReportCanvas
 from app.api.v1 import (
     auth, emails, platforms, payments, passwords,
     graph, trash, exchange, settings as settings_api, health,
     security, importer, prospects, audit, vault_backup, finances,
     users, system_config, jobs, activity, personal_finances, workshop, crm_capture,
-    crm_sales, agenda, communications, integrations, metrics_and_inbound, writeups, c2_proxy
+    crm_sales, agenda, communications, integrations, metrics_and_inbound, writeups, reports, c2_proxy
 )
 from app.services.config_service import initialize_default_catalogs
 from app.middleware.request_limits import UploadRequestLimitMiddleware
@@ -336,6 +337,7 @@ app.include_router(communications.router, prefix=settings.API_V1_PREFIX)
 app.include_router(integrations.router, prefix=settings.API_V1_PREFIX)
 app.include_router(metrics_and_inbound.router, prefix=settings.API_V1_PREFIX)
 app.include_router(writeups.router, prefix=settings.API_V1_PREFIX)
+app.include_router(reports.router, prefix=settings.API_V1_PREFIX)
 app.include_router(c2_proxy.router, prefix=settings.API_V1_PREFIX)
 
 @app.get("/")

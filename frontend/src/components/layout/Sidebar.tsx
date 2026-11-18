@@ -5,7 +5,7 @@ import {
   Lock, Search, ChevronDown, Clock, PanelLeftClose, PanelLeftOpen,
   Shield, ShieldCheck, FileText, Rocket, MapPinned, Briefcase, X, BookOpen,
   Radar, Server, ScanSearch, ArrowLeftRight, Activity, Route, KeyRound,
-  Code2, Radio, Waypoints, Wifi, Camera, UserCheck,
+  Code2, Radio, Waypoints, Wifi, Camera, UserCheck, PenTool,
 } from 'lucide-react';
 import { useVault, SectionType } from '../../context/VaultContext';
 import { useSessionState } from '../../hooks/useSessionState';
@@ -87,6 +87,17 @@ const navGroups: NavGroup[] = [
       { id: 'passwords', label: 'Contraseñas y notas', icon: Key, requiresVault: true },
       { id: 'writeups', label: 'Informes de seguridad', icon: BookOpen, requiresVault: true },
       { id: 'security_audit', label: 'Auditoría de seguridad', icon: ShieldCheck, requiresVault: true },
+    ],
+  },
+  {
+    id: 'reportes',
+    label: 'Reportes',
+    icon: FileText,
+    overview: 'reports_documents',
+    overviewRequiresVault: true,
+    items: [
+      { id: 'reports_documents', label: 'Documentos', icon: FileText, requiresVault: true },
+      { id: 'reports_canvases', label: 'Lienzos', icon: PenTool, requiresVault: true },
     ],
   },
   {

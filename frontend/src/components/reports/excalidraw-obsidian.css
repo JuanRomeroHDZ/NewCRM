@@ -1,0 +1,135 @@
+/* Estandarización de Excalidraw al sistema de diseño Obsidian (DESIGN.md) */
+.lessso-excalidraw-host {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  background-color: #080a0a;
+}
+
+.lessso-excalidraw-host .excalidraw.theme--dark {
+  --default-bg-color: #080a0a;
+  --island-bg-color: #101313;
+  --island-bg-color-alt: #171b1a;
+  --popup-bg-color: #101313;
+  --popup-secondary-bg-color: #171b1a;
+  --popup-text-color: #dadddc;
+  --popup-text-inverted-color: #080a0a;
+  --dialog-border-color: #252b29;
+  --default-border-color: #252b29;
+  --sidebar-border-color: #252b29;
+  --sidebar-bg-color: #101313;
+  --overlay-bg-color: rgba(8, 10, 10, 0.72);
+  --avatar-border-color: #252b29;
+
+  --color-gray-10: #f1f2f1;
+  --color-gray-20: #dadddc;
+  --color-gray-30: #c7cdca;
+  --color-gray-40: #b3b9b6;
+  --color-gray-50: #88918e;
+  --color-gray-60: #65706c;
+  --color-gray-70: #46504d;
+  --color-gray-80: #28312f;
+  --color-gray-85: #171b1a;
+  --color-gray-90: #101313;
+  --color-gray-100: #080a0a;
+
+  --color-surface-lowest: #080a0a;
+  --color-surface-low: #101313;
+  --color-surface-mid: #171b1a;
+  --color-surface-high: #1f2523;
+  --color-surface-primary-container: #171b1a;
+
+  --color-on-surface: #ffffff;
+  --color-on-primary-container: #ffffff;
+  --text-primary-color: #ffffff;
+  --icon-fill-color: #dadddc;
+  --color-icon-white: #101313;
+  --color-logo-text: #ffffff;
+
+  --color-primary: var(--brand-accent, #0f766e);
+  --color-primary-darker: var(--brand-accent, #0f766e);
+  --color-primary-darkest: var(--brand-accent, #0f766e);
+  --color-primary-light: #171b1a;
+  --color-primary-light-darker: #1f2523;
+  --color-primary-hover: #252b29;
+  --color-brand-hover: var(--brand-accent, #0f766e);
+  --color-brand-active: var(--brand-accent, #0f766e);
+  --color-promo: var(--brand-accent, #0f766e);
+  --color-selection: var(--brand-accent, #0f766e);
+  --color-slider-track: #252b29;
+  --select-highlight-color: var(--brand-accent, #0f766e);
+  --link-color: var(--brand-accent, #0f766e);
+
+  --color-border-outline: #39413f;
+  --color-border-outline-variant: #252b29;
+
+  --button-bg: #171b1a;
+  --button-hover-bg: #252b29;
+  --button-active-bg: #28312f;
+  --button-active-border: var(--brand-accent, #0f766e);
+  --button-gray-1: #171b1a;
+  --button-gray-2: #252b29;
+  --button-gray-3: #39413f;
+  --button-special-active-bg-color: #171b1a;
+  --button-destructive-bg-color: #240b0b;
+  --button-destructive-color: #f87171;
+
+  --input-bg-color: #171b1a;
+  --input-border-color: #252b29;
+  --input-hover-bg-color: #1f2523;
+  --input-label-color: #b3b9bc;
+
+  --keybinding-color: #b3b9bc;
+  --scrollbar-thumb: #252b29;
+  --scrollbar-thumb-hover: #39413f;
+  --focus-highlight-color: var(--brand-accent, #0f766e);
+
+  --color-danger: #f87171;
+  --color-danger-dark: #7f1d1d;
+  --color-danger-darker: #991b1b;
+  --color-danger-darkest: #b91c1c;
+  --color-danger-text: #fecaca;
+  --color-danger-background: #240b0b;
+  --color-danger-icon-background: #450a0a;
+  --color-danger-color: #f87171;
+  --color-danger-icon-color: #f87171;
+
+  --color-warning: #f59e0b;
+  --color-warning-dark: #d97706;
+  --color-warning-darker: #b45309;
+  --color-warning-darkest: #92400e;
+  --color-warning-background: #271a06;
+  --color-warning-icon-background: #451a03;
+  --color-warning-color: #fbbf24;
+  --color-warning-icon-color: #fbbf24;
+
+  --color-success: #10b981;
+  --color-success-darker: #059669;
+  --color-success-darkest: #047857;
+  --color-success-text: #a7f3d0;
+  --color-success-contrast: #10b981;
+  --color-success-contrast-hover: #059669;
+  --color-success-contrast-active: #047857;
+
+  --modal-shadow: 0 8px 24px rgba(0, 0, 0, 0.65);
+
+  font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.lessso-excalidraw-host .excalidraw .Island {
+  border: 1px solid #252b29;
+  box-shadow: none;
+}
+
+.lessso-excalidraw-host .excalidraw .App-menu_top .buttonList {
+  background-color: #101313;
+  border: 1px solid #252b29;
+}
+
+.lessso-excalidraw-host .excalidraw .ToolIcon_type_radio:checked + .ToolIcon__icon,
+.lessso-excalidraw-host .excalidraw .ToolIcon_type_checkbox:checked + .ToolIcon__icon {
+  background-color: #171b1a;
+  box-shadow: inset 0 0 0 1px var(--brand-accent, #0f766e);
+}

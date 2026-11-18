@@ -842,3 +842,50 @@ export interface RuntimeConfig {
   pipeline_stages: Array<{ id: string; label: string; is_terminal?: boolean; order?: number }>;
 }
 
+export type ReportDocumentStatus = 'borrador' | 'en_revision' | 'finalizado' | 'entregado';
+
+export interface ReportDocumentSummary {
+  id: string;
+  title: string;
+  status: ReportDocumentStatus;
+  prospect_id?: string | null;
+  project_id?: string | null;
+  engagement_id?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ReportDocumentDetail extends ReportDocumentSummary {
+  source: string;
+}
+
+export interface TypstStatusResponse {
+  available: boolean;
+  version: string | null;
+  binary: string | null;
+}
+
+export interface TypstCompileResponse {
+  ok: boolean;
+  pages: string[];
+  page_count: number;
+  error: string | null;
+}
+
+export interface ReportCanvasSummary {
+  id: string;
+  title: string;
+  element_count: number;
+  linked_document_id?: string | null;
+  prospect_id?: string | null;
+  project_id?: string | null;
+  engagement_id?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ReportCanvasDetail extends ReportCanvasSummary {
+  scene_json: string;
+}
+
+

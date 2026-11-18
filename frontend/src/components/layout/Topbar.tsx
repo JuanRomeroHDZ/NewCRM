@@ -22,6 +22,8 @@ export const Topbar: React.FC<TopbarProps> = ({ onMenuClick, menuTriggerRef, isM
     passwords: { title: 'Contraseñas y notas', compactTitle: 'Claves', tooltip: 'Consulta tus contraseñas, PIN, llaves de acceso y notas privadas.' },
     graph: { title: 'Mapa de Conexiones', compactTitle: 'Conexiones', tooltip: 'Diagrama visual que muestra qué servicios y clientes dependen de cada correo y tarjeta.' },
     writeups: { title: 'Informes de seguridad', compactTitle: 'Informes', tooltip: 'Documenta revisiones de seguridad, dibuja esquemas y exporta informes.' },
+    reports_documents: { title: 'Reportes · Documentos', compactTitle: 'Documentos', tooltip: 'Edita documentos técnicos en Typst con vista previa en vivo y exportación a PDF.' },
+    reports_canvases: { title: 'Reportes · Lienzos', compactTitle: 'Lienzos', tooltip: 'Crea diagramas y esquemas visuales con Excalidraw.' },
     subscriptions: { title: 'Finanzas, Ingresos y Vencimientos', compactTitle: 'Finanzas', tooltip: 'Control de suscripciones, gastos únicos, pagos recibidos de clientes y vencimientos de dominios o hosting.' },
     overview_prospection: { title: 'Vista general · Prospección', compactTitle: 'Prospección', tooltip: 'Resumen de prospectos y captación.' },
     overview_communications: { title: 'Vista general · Correo y servicios', compactTitle: 'Correo y servicios', tooltip: 'Resumen de correos principales, servicios vinculados y relaciones.' },

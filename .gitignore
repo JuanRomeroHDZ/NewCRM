@@ -34,6 +34,8 @@ htmlcov/
 node_modules/
 frontend/node_modules/
 frontend/dist/
+frontend/public/excalidraw-assets/
+backend/bin/
 /.tools/k6/
 .npm
 .eslintcache
