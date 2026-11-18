@@ -237,7 +237,7 @@ export const SecurityAuditView: React.FC = () => {
           </button>
           <button
             type="button"
-            onClick={() => setActiveSection('settings')}
+            onClick={() => setActiveSection('settings_limits')}
             className="ui-action-secondary"
           >
             <Clock size={16} aria-hidden="true" />
@@ -284,7 +284,7 @@ export const SecurityAuditView: React.FC = () => {
             </svg>
             <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
               <span className="text-2xl font-bold font-mono text-white tracking-tight">{score ?? '—'}</span>
-              {score !== null && <span className="text-[10px] text-obsidian-muted -mt-1">/100</span>}
+              {score !== null && <span className="text-xs text-obsidian-muted -mt-1">/100</span>}
             </div>
           </div>
 
@@ -376,7 +376,7 @@ export const SecurityAuditView: React.FC = () => {
             onChange={(e) => setSearchQuery(e.target.value)}
             aria-label="Filtrar hallazgos de seguridad"
             placeholder="Filtrar hallazgos por cuenta, servicio, llave o correo..."
-            className="w-full min-h-11 pl-8 pr-12 rounded-lg bg-obsidian-bg border border-obsidian-border text-xs text-white placeholder-obsidian-muted/60 focus:outline-none focus:border-obsidian-accent focus-visible:ring-2 focus-visible:ring-obsidian-accent"
+            className="w-full min-h-11 pl-8 pr-12 rounded-lg bg-obsidian-surface border border-obsidian-border text-xs text-white placeholder:text-obsidian-muted focus:outline-none focus:border-obsidian-accent focus-visible:ring-2 focus-visible:ring-obsidian-accent"
           />
           {searchQuery && (
             <button
@@ -431,7 +431,7 @@ export const SecurityAuditView: React.FC = () => {
                           {ak.platform_name}: <span className="font-mono text-obsidian-text">{ak.label}</span>
                         </span>
                       </div>
-                      <div className="text-[10px] text-obsidian-muted font-mono truncate mt-0.5">
+                      <div className="text-xs text-obsidian-muted font-mono truncate mt-0.5">
                         {ak.parent_email ? `${ak.parent_email} · ` : ak.key_prefix ? `Inicio: ${ak.key_prefix}... · ` : ''}Vence: {ak.expires_at}
                       </div>
                     </div>
@@ -446,7 +446,7 @@ export const SecurityAuditView: React.FC = () => {
                       >
                         {isExpired ? 'Ya venció' : 'Por vencer'}
                       </span>
-                      <span className="text-[10px] font-mono text-obsidian-muted">
+                      <span className="text-xs font-mono text-obsidian-muted">
                         {isExpired ? `Hace ${Math.abs(ak.days_remaining)}d` : `En ${ak.days_remaining} día(s)`}
                       </span>
                     </div>
@@ -476,7 +476,7 @@ export const SecurityAuditView: React.FC = () => {
                 text={`Te sugiere cambiar la contraseña cada ${audit?.password_rotation_days_root || 90} días en Correos Principales y cada ${audit?.password_rotation_days_secondary || 180} días en tus demás cuentas.`}
               />
             </div>
-            <span className="text-[10px] font-mono text-obsidian-muted shrink-0">
+            <span className="text-xs font-mono text-obsidian-muted shrink-0">
               Correos: {audit?.password_rotation_days_root || 90}d · Cuentas: {audit?.password_rotation_days_secondary || 180}d
             </span>
           </div>
@@ -494,7 +494,7 @@ export const SecurityAuditView: React.FC = () => {
                     <div className="font-semibold text-white truncate" title={st.name}>
                       {st.name}
                     </div>
-                    <div className="text-[10px] text-obsidian-muted truncate">
+                    <div className="text-xs text-obsidian-muted truncate">
                       {st.type === 'email' ? 'Correo Principal' : 'Cuenta / Servicio'} · Plazo sugerido: {st.threshold_days} días
                     </div>
                   </div>
@@ -502,7 +502,7 @@ export const SecurityAuditView: React.FC = () => {
                     <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/30">
                       Conviene cambiarla
                     </span>
-                    <span className="text-[10px] font-mono text-obsidian-muted">
+                    <span className="text-xs font-mono text-obsidian-muted">
                       {st.age_days} días sin cambiar
                     </span>
                   </div>
@@ -572,7 +572,7 @@ export const SecurityAuditView: React.FC = () => {
                           <div className="font-semibold text-white text-xs truncate" title={item.name}>
                             {item.name}
                           </div>
-                          <div className="text-[10px] text-obsidian-muted capitalize truncate">
+                          <div className="text-xs text-obsidian-muted capitalize truncate">
                             {item.type === 'email' ? 'Correo Principal' : 'Cuenta / Servicio'}
                           </div>
                         </div>
@@ -669,7 +669,7 @@ export const SecurityAuditView: React.FC = () => {
                     <div className="font-semibold text-white truncate" title={u.address}>
                       {u.address}
                     </div>
-                    <div className="text-[10px] text-obsidian-muted truncate">
+                    <div className="text-xs text-obsidian-muted truncate">
                       {u.platform_count} cuentas dependen de este correo
                     </div>
                   </div>

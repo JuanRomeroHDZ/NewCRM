@@ -298,10 +298,10 @@ export const PasswordsView: React.FC = () => {
       {/* [Navegación] La pestaña activa identifica la colección visible. */}
       <div role="tablist" aria-label="Colecciones" className="flex min-w-0 gap-1 border-b border-obsidian-border">
         <button type="button" role="tab" id="passwords-tab" aria-label="Contraseñas y llaves" aria-controls="passwords-panel" aria-selected={activeTab === 'passwords'} onClick={() => selectTab('passwords')} className="ui-action-toggle min-w-0 flex-1 sm:flex-initial">
-          <Key size={16} className="shrink-0" aria-hidden="true" /><span className="truncate">Claves</span><span className="shrink-0 rounded bg-white/10 px-1.5 py-0.5 text-[10px]">{filteredCredentials.length}</span>
+          <Key size={16} className="shrink-0" aria-hidden="true" /><span className="truncate">Claves</span><span className="shrink-0 rounded bg-white/10 px-1.5 py-0.5 text-xs font-mono tabular-nums">{filteredCredentials.length}</span>
         </button>
         <button type="button" role="tab" id="resources-tab" aria-label="Recursos y notas" aria-controls="resources-panel" aria-selected={activeTab === 'resources'} onClick={() => selectTab('resources')} className="ui-action-toggle min-w-0 flex-1 sm:flex-initial">
-          <FolderLock size={16} className="shrink-0" aria-hidden="true" /><span className="truncate">Notas</span><span className="shrink-0 rounded bg-white/10 px-1.5 py-0.5 text-[10px]">{filteredResources.length}</span>
+          <FolderLock size={16} className="shrink-0" aria-hidden="true" /><span className="truncate">Notas</span><span className="shrink-0 rounded bg-white/10 px-1.5 py-0.5 text-xs font-mono tabular-nums">{filteredResources.length}</span>
         </button>
       </div>
 

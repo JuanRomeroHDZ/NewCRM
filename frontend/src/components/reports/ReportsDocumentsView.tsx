@@ -8,8 +8,10 @@ import {
   Eye,
   FileCode2,
   FileText,
+  GitCompare,
   Heading2,
   List,
+  Lock,
   PanelLeftClose,
   PanelLeftOpen,
   Plus,
@@ -25,6 +27,10 @@ import { ApiError } from '../../lib/apiErrors';
 import { formatApiDateTime } from '../../lib/dates';
 import { useVault } from '../../context/VaultContext';
 import {
+  InternalProject,
+  Prospect,
+  ReportCanvasSummary,
+  ReportCorrelationsResponse,
   ReportDocumentDetail,
   ReportDocumentStatus,
   ReportDocumentSummary,
@@ -42,14 +48,19 @@ const STATUS_LABELS: Record<ReportDocumentStatus, string> = {
 };
 
 export const ReportsDocumentsView: React.FC = () => {
-  const { showToast, confirm, prompt } = useVault();
+  const { isUnlocked, openUnlockModal, setActiveSection, showToast, confirm, prompt } = useVault();
 
   const [documents, setDocuments] = useState<ReportDocumentSummary[]>([]);
+  const [canvases, setCanvases] = useState<ReportCanvasSummary[]>([]);
+  const [prospects, setProspects] = useState<Prospect[]>([]);
+  const [projects, setProjects] = useState<InternalProject[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [activeDoc, setActiveDoc] = useState<ReportDocumentDetail | null>(null);
 
   const [titleDraft, setTitleDraft] = useState('');
   const [statusDraft, setStatusDraft] = useState<ReportDocumentStatus>('borrador');
+  const [prospectIdDraft, setProspectIdDraft] = useState<string>('');
+  const [projectIdDraft, setProjectIdDraft] = useState<string>('');
   const [sourceDraft, setSourceDraft] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -60,6 +71,9 @@ export const ReportsDocumentsView: React.FC = () => {
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
+  const [exportFormat, setExportFormat] = useState<'pdf' | 'html' | 'typ'>('pdf');
+  const [correlations, setCorrelations] = useState<ReportCorrelationsResponse | null>(null);
+  const [isCorrelationsOpen, setIsCorrelationsOpen] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -71,13 +85,27 @@ export const ReportsDocumentsView: React.FC = () => {
   const compileRequestSeq = useRef(0);
 
   useEffect(() => {
+    if (!isUnlocked) {
+      setCanvases([]);
+      setProspects([]);
+      setProjects([]);
+      return;
+    }
     api
       .getTypstStatus()
       .then(setTypstStatus)
       .catch(() => setTypstStatus({ available: false, version: null, binary: null }));
-  }, []);
+    api.listReportCanvases().then(setCanvases).catch(() => {});
+    api.getProspects().then(setProspects).catch(() => {});
+    api.getProjects().then(setProjects).catch(() => {});
+  }, [isUnlocked]);
 
   const loadDocuments = useCallback(async (preferId?: string | null) => {
+    if (!isUnlocked) {
+      setDocuments([]);
+      setIsLoadingList(false);
+      return;
+    }
     setIsLoadingList(true);
     setErrorMessage(null);
     try {
@@ -94,11 +122,28 @@ export const ReportsDocumentsView: React.FC = () => {
     } finally {
       setIsLoadingList(false);
     }
-  }, []);
+  }, [isUnlocked]);
 
   useEffect(() => {
     void loadDocuments();
   }, [loadDocuments]);
+
+  const selectDocumentWithGuard = useCallback(
+    async (nextId: string) => {
+      if (nextId === selectedId) return;
+      if (hasUnsavedChanges) {
+        const discard = await confirm({
+          title: 'Cambios sin guardar',
+          message: 'Tienes cambios pendientes en el documento actual. ¿Descartarlos y continuar?',
+          confirmLabel: 'Descartar',
+          tone: 'warning',
+        });
+        if (!discard) return;
+      }
+      setSelectedId(nextId);
+    },
+    [confirm, hasUnsavedChanges, selectedId]
+  );
 
   const runCompile = useCallback(async (source: string) => {
     const seq = ++compileRequestSeq.current;
@@ -123,10 +168,12 @@ export const ReportsDocumentsView: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (!selectedId) {
+    if (!isUnlocked || !selectedId) {
       setActiveDoc(null);
       setTitleDraft('');
       setStatusDraft('borrador');
+      setProspectIdDraft('');
+      setProjectIdDraft('');
       setSourceDraft('');
       setPreviewPages([]);
       setCompileError(null);
@@ -144,9 +191,12 @@ export const ReportsDocumentsView: React.FC = () => {
         setActiveDoc(detail);
         setTitleDraft(detail.title);
         setStatusDraft(detail.status);
+        setProspectIdDraft(detail.prospect_id || '');
+        setProjectIdDraft(detail.project_id || '');
         setSourceDraft(detail.source);
         setHasUnsavedChanges(false);
         void runCompile(detail.source);
+        api.getReportDocumentCorrelations(detail.id).then(setCorrelations).catch(() => setCorrelations(null));
       })
       .catch((err) => {
         if (cancelled) return;
@@ -201,10 +251,14 @@ export const ReportsDocumentsView: React.FC = () => {
         title: cleanTitle,
         status: statusDraft,
         source: sourceDraft,
+        prospect_id: prospectIdDraft || null,
+        project_id: projectIdDraft || null,
       });
       setActiveDoc(updated);
       setTitleDraft(updated.title);
       setStatusDraft(updated.status);
+      setProspectIdDraft(updated.prospect_id || '');
+      setProjectIdDraft(updated.project_id || '');
       setDocuments((prev) =>
         prev.map((item) =>
           item.id === updated.id
@@ -212,6 +266,8 @@ export const ReportsDocumentsView: React.FC = () => {
                 ...item,
                 title: updated.title,
                 status: updated.status,
+                prospect_id: updated.prospect_id,
+                project_id: updated.project_id,
                 updated_at: updated.updated_at,
               }
             : item
@@ -219,6 +275,7 @@ export const ReportsDocumentsView: React.FC = () => {
       );
       setHasUnsavedChanges(false);
       showToast('Documento guardado.', 'success');
+      api.getReportDocumentCorrelations(updated.id).then(setCorrelations).catch(() => {});
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : 'No se pudo guardar el documento.';
       setErrorMessage(msg);
@@ -226,7 +283,7 @@ export const ReportsDocumentsView: React.FC = () => {
     } finally {
       setIsSaving(false);
     }
-  }, [activeDoc, showToast, sourceDraft, statusDraft, titleDraft]);
+  }, [activeDoc, projectIdDraft, prospectIdDraft, showToast, sourceDraft, statusDraft, titleDraft]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -245,18 +302,18 @@ export const ReportsDocumentsView: React.FC = () => {
     if (!activeDoc) return;
     setIsExportingPdf(true);
     try {
-      const { blob, filename } = await api.exportReportDocumentPdf(activeDoc.id, sourceDraft);
+      const { blob, filename } = await api.exportReportDocument(activeDoc.id, exportFormat, sourceDraft);
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement('a');
       anchor.href = url;
-      anchor.download = filename || `${titleDraft.trim() || 'documento'}.pdf`;
+      anchor.download = filename || `${titleDraft.trim() || 'documento'}.${exportFormat}`;
       document.body.appendChild(anchor);
       anchor.click();
       anchor.remove();
       URL.revokeObjectURL(url);
-      showToast(`PDF exportado: ${anchor.download}`, 'success');
+      showToast(`Archivo exportado: ${anchor.download}`, 'success');
     } catch (err) {
-      showToast(err instanceof ApiError ? err.message : 'No se pudo exportar el PDF.', 'error');
+      showToast(err instanceof ApiError ? err.message : `No se pudo exportar en ${exportFormat.toUpperCase()}.`, 'error');
     } finally {
       setIsExportingPdf(false);
     }
@@ -311,6 +368,21 @@ export const ReportsDocumentsView: React.FC = () => {
     return documents.filter((item) => item.title.toLowerCase().includes(query));
   }, [documents, searchQuery]);
 
+  if (!isUnlocked) {
+    return (
+      <section className="mx-auto mt-12 max-w-xl px-4 text-center">
+        <Lock size={24} className="mx-auto text-obsidian-muted" aria-hidden="true" />
+        <h2 className="mt-3 font-heading text-lg font-semibold text-white">Documentos protegidos</h2>
+        <p className="mt-1 text-sm text-obsidian-muted">
+          Desbloquea la bóveda para consultar y editar los documentos cifrados en Typst.
+        </p>
+        <button type="button" onClick={openUnlockModal} className="ui-action-primary mt-4">
+          Desbloquear
+        </button>
+      </section>
+    );
+  }
+
   return (
     <div className="flex flex-col lg:flex-row h-[calc(100vh-5.5rem)] min-h-[540px] min-w-0 gap-4">
       {isSidebarOpen && (
@@ -318,13 +390,13 @@ export const ReportsDocumentsView: React.FC = () => {
           <div className="flex items-center justify-between gap-2 border-b border-obsidian-border px-4 py-3">
             <div className="flex items-center gap-2 min-w-0">
               <FileText className="h-[18px] w-[18px] shrink-0 text-obsidian-muted" />
-              <h2 className="truncate text-sm font-semibold text-white">Documentos</h2>
+              <h2 className="truncate font-heading text-sm font-semibold text-white">Documentos</h2>
             </div>
             {/* [Acción principal] Crea un nuevo documento Typst. */}
             <button
               type="button"
               onClick={handleCreateDocument}
-              className="ui-action-primary !h-9 !min-h-[36px] !px-3 text-xs"
+              className="ui-action-primary !px-3 text-xs"
             >
               <Plus className="h-4 w-4" />
               <span>Nuevo</span>
@@ -343,7 +415,7 @@ export const ReportsDocumentsView: React.FC = () => {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Buscar documento"
-                className="w-full rounded-lg border border-obsidian-border bg-obsidian-surface py-2 pl-9 pr-3 text-sm text-white placeholder:text-obsidian-muted focus:border-obsidian-accent focus:outline-none"
+                className="w-full min-h-11 rounded-lg border border-obsidian-border bg-obsidian-surface py-2 pl-9 pr-3 text-sm text-white placeholder:text-obsidian-muted focus:border-obsidian-accent focus:outline-none"
               />
             </div>
           </div>
@@ -367,8 +439,8 @@ export const ReportsDocumentsView: React.FC = () => {
                   >
                     <button
                       type="button"
-                      onClick={() => setSelectedId(item.id)}
-                      className="min-w-0 flex-1 rounded text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-accent"
+                      onClick={() => void selectDocumentWithGuard(item.id)}
+                      className="min-w-0 min-h-11 flex-1 rounded text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-accent"
                     >
                       <div className="truncate text-sm font-medium text-white">{item.title}</div>
                       <div className="mt-0.5 text-xs text-obsidian-muted">
@@ -379,7 +451,7 @@ export const ReportsDocumentsView: React.FC = () => {
                       type="button"
                       onClick={() => void handleDeleteDocument(item)}
                       aria-label={`Eliminar ${item.title}`}
-                      className="ui-action-icon !h-9 !w-9 !min-h-[36px] !min-w-[36px] text-obsidian-muted hover:text-obsidian-errorText"
+                      className="ui-action-icon text-obsidian-muted hover:text-obsidian-errorText"
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
@@ -413,7 +485,7 @@ export const ReportsDocumentsView: React.FC = () => {
                     setHasUnsavedChanges(true);
                   }}
                   aria-label="Título del documento"
-                  className="min-w-0 flex-1 rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 text-sm font-medium text-white focus:border-obsidian-accent focus:outline-none"
+                  className="min-w-0 flex-1 min-h-11 rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 text-sm font-medium text-white focus:border-obsidian-accent focus:outline-none"
                 />
                 <label htmlFor="doc-status-select" className="sr-only">
                   Estado del documento
@@ -446,7 +518,7 @@ export const ReportsDocumentsView: React.FC = () => {
                   type="button"
                   onClick={() => setPaneMode('edit')}
                   aria-pressed={paneMode === 'edit'}
-                  className={`ui-action-toggle !min-h-[36px] !px-2.5 text-xs ${paneMode === 'edit' ? 'bg-obsidian-panel text-white' : ''}`}
+                  className={`ui-action-toggle !px-2.5 text-xs ${paneMode === 'edit' ? 'bg-obsidian-panel text-white' : ''}`}
                 >
                   <FileCode2 className="h-4 w-4" />
                   <span className="hidden sm:inline">Código</span>
@@ -455,7 +527,7 @@ export const ReportsDocumentsView: React.FC = () => {
                   type="button"
                   onClick={() => setPaneMode('split')}
                   aria-pressed={paneMode === 'split'}
-                  className={`ui-action-toggle !min-h-[36px] !px-2.5 text-xs ${paneMode === 'split' ? 'bg-obsidian-panel text-white' : ''}`}
+                  className={`ui-action-toggle !px-2.5 text-xs ${paneMode === 'split' ? 'bg-obsidian-panel text-white' : ''}`}
                 >
                   <Columns2 className="h-4 w-4" />
                   <span className="hidden sm:inline">Dividido</span>
@@ -464,7 +536,7 @@ export const ReportsDocumentsView: React.FC = () => {
                   type="button"
                   onClick={() => setPaneMode('preview')}
                   aria-pressed={paneMode === 'preview'}
-                  className={`ui-action-toggle !min-h-[36px] !px-2.5 text-xs ${paneMode === 'preview' ? 'bg-obsidian-panel text-white' : ''}`}
+                  className={`ui-action-toggle !px-2.5 text-xs ${paneMode === 'preview' ? 'bg-obsidian-panel text-white' : ''}`}
                 >
                   <Eye className="h-4 w-4" />
                   <span className="hidden sm:inline">Vista previa</span>
@@ -484,15 +556,29 @@ export const ReportsDocumentsView: React.FC = () => {
                 )}
               </span>
 
-              {/* [Acción secundaria] Descarga el documento compilado en PDF. */}
+              <label htmlFor="doc-export-format" className="sr-only">
+                Formato de exportación
+              </label>
+              <select
+                id="doc-export-format"
+                value={exportFormat}
+                onChange={(e) => setExportFormat(e.target.value as 'pdf' | 'html' | 'typ')}
+                className="h-11 rounded-lg border border-obsidian-border bg-obsidian-surface px-2.5 text-xs text-white focus:border-obsidian-accent focus:outline-none"
+              >
+                <option value="pdf">PDF</option>
+                <option value="html">HTML</option>
+                <option value="typ">Typst (.typ)</option>
+              </select>
+
+              {/* [Acción secundaria] Exporta el documento en el formato elegido. */}
               <button
                 type="button"
                 onClick={() => void handleExportPdf()}
-                disabled={isExportingPdf || typstStatus?.available === false}
+                disabled={isExportingPdf || (exportFormat !== 'typ' && typstStatus?.available === false)}
                 className="ui-action-secondary"
               >
                 <Download className="h-4 w-4" />
-                <span>{isExportingPdf ? 'Exportando…' : 'PDF'}</span>
+                <span>{isExportingPdf ? 'Exportando…' : 'Exportar'}</span>
               </button>
 
               {/* [Acción principal] Guarda el código fuente Typst cifrado en el servidor. */}
@@ -508,6 +594,91 @@ export const ReportsDocumentsView: React.FC = () => {
             </div>
           )}
         </header>
+
+        {activeDoc && (prospects.length > 0 || projects.length > 0) && (
+          <div className="flex flex-wrap items-center gap-3 border-b border-obsidian-border px-4 py-2 text-xs">
+            {prospects.length > 0 && (
+              <div className="flex items-center gap-2">
+                <label htmlFor="doc-prospect-select" className="text-obsidian-muted">
+                  Prospecto:
+                </label>
+                <select
+                  id="doc-prospect-select"
+                  value={prospectIdDraft}
+                  onChange={(e) => {
+                    setProspectIdDraft(e.target.value);
+                    setHasUnsavedChanges(true);
+                  }}
+                  className="h-11 max-w-[200px] rounded-lg border border-obsidian-border bg-obsidian-surface px-2.5 text-xs text-white focus:border-obsidian-accent focus:outline-none"
+                >
+                  <option value="">Sin prospecto</option>
+                  {prospects.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.company_name || p.contact_name || p.id}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+            {projects.length > 0 && (
+              <div className="flex items-center gap-2">
+                <label htmlFor="doc-project-select" className="text-obsidian-muted">
+                  Proyecto:
+                </label>
+                <select
+                  id="doc-project-select"
+                  value={projectIdDraft}
+                  onChange={(e) => {
+                    setProjectIdDraft(e.target.value);
+                    setHasUnsavedChanges(true);
+                  }}
+                  className="h-11 max-w-[200px] rounded-lg border border-obsidian-border bg-obsidian-surface px-2.5 text-xs text-white focus:border-obsidian-accent focus:outline-none"
+                >
+                  <option value="">Sin proyecto</option>
+                  {projects.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeDoc && correlations && correlations.matches.length > 0 && (
+          <div className="border-b border-obsidian-border bg-obsidian-surface/60 px-4 py-2">
+            <button
+              type="button"
+              onClick={() => setIsCorrelationsOpen((prev) => !prev)}
+              className="flex min-h-11 w-full items-center justify-between gap-2 text-xs text-obsidian-muted hover:text-white focus-visible:outline-none"
+            >
+              <span className="inline-flex items-center gap-1.5">
+                <GitCompare className="h-4 w-4 text-obsidian-accent" />
+                <span>
+                  {correlations.matches.length}{' '}
+                  {correlations.matches.length === 1 ? 'documento relacionado' : 'documentos relacionados'}
+                </span>
+              </span>
+              <span>{isCorrelationsOpen ? 'Ocultar' : 'Ver'}</span>
+            </button>
+            {isCorrelationsOpen && (
+              <div className="mt-2 flex flex-wrap gap-2">
+                {correlations.matches.map((match) => (
+                  <button
+                    key={match.id}
+                    type="button"
+                    onClick={() => void selectDocumentWithGuard(match.id)}
+                    className="min-h-11 rounded-lg border border-obsidian-border bg-obsidian-panel px-2.5 py-1.5 text-left text-xs text-white hover:border-obsidian-borderLight focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent"
+                  >
+                    <span className="font-medium">{match.title}</span>
+                    <span className="ml-2 text-obsidian-muted">{match.reasons.join(' · ')}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {typstStatus && !typstStatus.available && (
           <div role="status" className="flex items-center gap-2 border-b border-obsidian-border bg-obsidian-surface px-4 py-2 text-xs text-obsidian-amber">
@@ -592,6 +763,35 @@ export const ReportsDocumentsView: React.FC = () => {
                       >
                         <SeparatorHorizontal className="h-4 w-4" />
                       </button>
+                      {canvases.length > 0 ? (
+                        <select
+                          aria-label="Insertar lienzo"
+                          value=""
+                          onChange={(e) => {
+                            const cid = e.target.value;
+                            if (!cid) return;
+                            const chosen = canvases.find((c) => c.id === cid);
+                            const caption = chosen ? chosen.title.replace(/[[\]]/g, '') : 'Diagrama';
+                            insertSnippet(`\n#figure(\n  image("canvas://${cid}", width: 95%),\n  caption: [${caption}],\n)\n`);
+                          }}
+                          className="ml-1 h-8 max-w-[170px] rounded-md border border-obsidian-border bg-obsidian-surface px-2 text-xs text-white focus:border-obsidian-accent focus:outline-none"
+                        >
+                          <option value="">Insertar lienzo…</option>
+                          {canvases.map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {c.linked_document_id === activeDoc?.id ? `${c.title} (vinculado)` : c.title}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setActiveSection('reports_canvases')}
+                          className="ml-1 rounded-md px-2 py-1 text-xs text-obsidian-muted hover:bg-obsidian-surface hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent"
+                        >
+                          Crear lienzo
+                        </button>
+                      )}
                     </div>
                     <button
                       type="button"

@@ -37,6 +37,7 @@ export const DashboardView: React.FC = () => {
     matchesScope,
     baseCurrency,
     systemLocale,
+    setActiveSection,
   } = useVault();
 
   const [emails, setEmails] = useState<EmailAccount[]>([]);
@@ -51,6 +52,7 @@ export const DashboardView: React.FC = () => {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [partialDataWarning, setPartialDataWarning] = useState<string | null>(null);
   const [writeupCount, setWriteupCount] = useState<number | null>(null);
+  const [reportOverview, setReportOverview] = useState<{ total_documents: number; total_canvases: number } | null>(null);
   const [activityCount, setActivityCount] = useState<number | null>(null);
   const [securityAudit, setSecurityAudit] = useState<SecurityAuditResponse | null>(null);
   const [dismissedRateNotice, setDismissedRateNotice] = useState(() => {
@@ -147,14 +149,20 @@ export const DashboardView: React.FC = () => {
     let active = true;
     if (!isUnlocked) {
       setWriteupCount(null);
+      setReportOverview(null);
       setActivityCount(null);
       return () => { active = false; };
     }
-    void Promise.allSettled([api.listWriteupsPage({ limit: 1, offset: 0 }), api.getAuditTrail(1, 0)])
-      .then(([reports, events]) => {
+    void Promise.allSettled([
+      api.listWriteupsPage({ limit: 1, offset: 0 }),
+      api.getAuditTrail(1, 0),
+      api.getReportOverview(),
+    ])
+      .then(([reports, events, newReports]) => {
         if (!active) return;
         setWriteupCount(reports.status === 'fulfilled' ? reports.value.total : null);
         setActivityCount(events.status === 'fulfilled' ? events.value.total : null);
+        setReportOverview(newReports.status === 'fulfilled' ? newReports.value : null);
       })
     return () => { active = false; };
   }, [isUnlocked, dataVersion]);
@@ -273,8 +281,8 @@ export const DashboardView: React.FC = () => {
   if (!isUnlocked) {
     return (
       <div className="mx-auto max-w-xl space-y-4 p-4 pt-12 text-center animate-fadeIn sm:p-8 sm:pt-24">
-        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl border border-amber-500/20 bg-amber-500/10 text-amber-400">
-          <Lock size={32} aria-hidden="true" />
+        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl border border-obsidian-border bg-obsidian-surface text-obsidian-muted">
+          <Lock size={28} aria-hidden="true" />
         </div>
         <div className="flex items-center justify-center gap-2">
         <h2 className="text-xl font-bold text-white">Panel de control protegido</h2>
@@ -363,9 +371,15 @@ export const DashboardView: React.FC = () => {
         {upcomingDates.length ? (
           <ul className="mt-3 divide-y divide-obsidian-border border-t border-obsidian-border">
             {upcomingDates.map((entry) => (
-              <li key={entry.id} className="flex min-w-0 items-center justify-between gap-4 py-3 text-sm">
-                <span className="min-w-0"><span className="block break-words text-obsidian-text">{entry.label}</span><span className="text-xs text-obsidian-muted">{entry.kind}</span></span>
-                <time dateTime={entry.date?.slice(0, 10)} className="shrink-0 text-xs tabular-nums text-obsidian-muted">{new Intl.DateTimeFormat(systemLocale || 'es-MX', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }).format(entry.timestamp)}</time>
+              <li key={entry.id}>
+                <button
+                  type="button"
+                  onClick={() => setActiveSection('finance_services')}
+                  className="ui-nav-action flex min-h-11 w-full min-w-0 items-center justify-between gap-4 rounded-none border-0 px-2 py-3 text-left text-sm"
+                >
+                  <span className="min-w-0"><span className="block break-words text-obsidian-text">{entry.label}</span><span className="text-xs text-obsidian-muted">{entry.kind}</span></span>
+                  <time dateTime={entry.date?.slice(0, 10)} className="shrink-0 text-xs tabular-nums text-obsidian-muted">{new Intl.DateTimeFormat(systemLocale || 'es-MX', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }).format(entry.timestamp)}</time>
+                </button>
               </li>
             ))}
           </ul>
@@ -375,7 +389,8 @@ export const DashboardView: React.FC = () => {
         overview_prospection: `${filteredProspects.length} prospectos · ${recontactProspects.length} por contactar`,
         overview_communications: `${filteredEmails.length} correos · ${filteredPlatforms.length} servicios · ${protectedEmailsCount} protegidos en dos pasos`,
         overview_finances: `${filteredIncomes.length} pagos · ${filteredRenewals.length} vencimientos · ${filteredExpenses.length} gastos · ${filteredPaymentMethods.length} métodos de pago`,
-        overview_security: `${writeupCount === null ? 'Informes no disponibles' : `${writeupCount} informes`} · ${scopedSecurityAudit?.health_score === null || scopedSecurityAudit?.health_score === undefined ? 'estado sin puntaje' : `seguridad ${scopedSecurityAudit.health_score}/100`}`,
+        overview_security: `${writeupCount === null ? 'Resumen de bóveda' : `${writeupCount} informes`} · ${scopedSecurityAudit?.health_score === null || scopedSecurityAudit?.health_score === undefined ? 'estado sin puntaje' : `seguridad ${scopedSecurityAudit.health_score}/100`}`,
+        overview_reports: reportOverview ? `${reportOverview.total_documents} documentos · ${reportOverview.total_canvases} lienzos` : 'Documentos Typst y lienzos Excalidraw',
         overview_activity: `${activityCount === null ? 'Actividad no disponible' : `${activityCount} registros globales · sin filtro de ámbito`} · acceso a la papelera desde su vista`,
         overview_settings: `Bloqueo automático en ${vaultSettings?.timeout_minutes ?? '—'} min · ajustes protegidos`,
       }} />

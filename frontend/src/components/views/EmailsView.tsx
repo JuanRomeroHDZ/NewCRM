@@ -174,7 +174,7 @@ export const EmailsView: React.FC = () => {
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar por dirección o proveedor..."
             aria-label="Buscar por dirección o proveedor"
-            className="min-h-[44px] min-w-0 flex-1 rounded-lg border border-obsidian-border bg-obsidian-panel px-3 text-xs text-white placeholder-obsidian-muted/60 focus:border-indigo-500 focus:outline-none sm:w-64 sm:flex-none"
+            className="min-h-[44px] min-w-0 flex-1 rounded-lg border border-obsidian-border bg-obsidian-surface px-3 text-xs text-white placeholder-obsidian-muted/60 focus:border-obsidian-accent focus:outline-none sm:w-64 sm:flex-none"
           />
           {isUnlocked && (
             <button
@@ -193,9 +193,9 @@ export const EmailsView: React.FC = () => {
 
       {/* Level 2 Security Alert banner if locked */}
       {!isUnlocked && (
-        <div className="flex flex-col justify-between gap-3 rounded-xl border border-amber-500/25 bg-amber-500/10 p-4 sm:flex-row sm:items-center">
-          <div className="flex min-w-0 items-start gap-3 text-xs text-amber-200 sm:items-center">
-            <Lock size={16} className="mt-0.5 flex-shrink-0 text-amber-400 sm:mt-0" aria-hidden="true" />
+        <div className="flex flex-col justify-between gap-3 rounded-xl border border-obsidian-border bg-obsidian-panel p-4 sm:flex-row sm:items-center">
+          <div className="flex min-w-0 items-start gap-3 text-xs text-obsidian-text sm:items-center">
+            <Lock size={16} className="mt-0.5 flex-shrink-0 text-obsidian-muted sm:mt-0" aria-hidden="true" />
             <span className="leading-relaxed">
               Bóveda bloqueada. Desbloquea con tu contraseña de acceso para crear, editar o revelar secretos.
             </span>

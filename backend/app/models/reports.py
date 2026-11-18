@@ -35,6 +35,7 @@ class ReportCanvas(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=gen_uuid)
     title: Mapped[str] = mapped_column(String(200), nullable=False, index=True)
     encrypted_scene_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    encrypted_svg_snapshot: Mapped[str | None] = mapped_column(Text, nullable=True)
     element_count: Mapped[int] = mapped_column(Integer, default=0)
 
     # Optional links (ready for future Document <-> Canvas integration)

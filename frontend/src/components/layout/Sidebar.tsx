@@ -60,7 +60,7 @@ const navGroups: NavGroup[] = [
     overviewRequiresVault: true,
     items: [
       { id: 'emails', label: 'Correos principales', icon: Mail, requiresVault: true },
-      { id: 'platforms', label: 'Servicios vinculados', icon: Globe },
+      { id: 'platforms', label: 'Servicios vinculados', icon: Globe, requiresVault: true },
       { id: 'graph', label: 'Conexiones', icon: Network, requiresVault: true },
     ],
   },
@@ -85,7 +85,6 @@ const navGroups: NavGroup[] = [
     overviewRequiresVault: true,
     items: [
       { id: 'passwords', label: 'Contraseñas y notas', icon: Key, requiresVault: true },
-      { id: 'writeups', label: 'Informes de seguridad', icon: BookOpen, requiresVault: true },
       { id: 'security_audit', label: 'Auditoría de seguridad', icon: ShieldCheck, requiresVault: true },
     ],
   },
@@ -93,7 +92,7 @@ const navGroups: NavGroup[] = [
     id: 'reportes',
     label: 'Reportes',
     icon: FileText,
-    overview: 'reports_documents',
+    overview: 'overview_reports',
     overviewRequiresVault: true,
     items: [
       { id: 'reports_documents', label: 'Documentos', icon: FileText, requiresVault: true },
@@ -145,8 +144,8 @@ const navGroups: NavGroup[] = [
       { id: 'settings_session', label: 'Sesión y portapapeles', icon: Lock, requiresVault: true },
       { id: 'settings_limits', label: 'Recordatorios y límites', icon: Clock, requiresVault: true },
       { id: 'settings_access', label: 'Contraseña de acceso', icon: Key, requiresVault: true },
-      { id: 'settings_network', label: 'Red y servicios', icon: Network, requiresVault: true },
-      { id: 'settings_writeups', label: 'Informes de seguridad', icon: BookOpen, requiresVault: true },
+      { id: 'settings_network', label: 'Monedas y mapa', icon: Network, requiresVault: true },
+      { id: 'settings_writeups', label: 'Reportes e informes', icon: BookOpen, requiresVault: true },
       { id: 'settings_tools', label: 'Herramientas', icon: Settings, requiresVault: true },
       { id: 'settings_backup', label: 'Importación y respaldos', icon: FileText, requiresVault: true },
       { id: 'settings_team', label: 'Accesos del equipo', icon: Shield, requiresVault: true },
@@ -373,7 +372,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onCloseMobile })
         {/* [Navegación] Abre la búsqueda global sin cambiar de sección. */}
         <button type="button" onClick={() => { openCommandPalette(); onCloseMobile(); }} className="ui-nav-action group w-full justify-between border-y border-obsidian-border bg-obsidian-bg px-4" aria-label="Buscador rápido">
           <span className="flex min-w-0 items-center gap-2"><Search size={16} className="shrink-0 group-hover:text-white" aria-hidden="true" />{!compact && <span className="truncate">Buscar en LESSSO</span>}</span>
-          {!compact && <kbd className="shrink-0 rounded border border-obsidian-border bg-obsidian-panel px-1.5 py-0.5 font-mono text-[10px]">{searchHotkey.toUpperCase()}</kbd>}
+          {!compact && <kbd className="shrink-0 rounded border border-obsidian-border bg-obsidian-panel px-1.5 py-0.5 font-mono text-xs">{searchHotkey.toUpperCase()}</kbd>}
         </button>
       </div>
 

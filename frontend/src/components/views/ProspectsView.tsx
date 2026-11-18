@@ -37,6 +37,7 @@ export const ProspectsView: React.FC = () => {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [status, setStatus] = useState('todos');
+  const [onlyOverdue, setOnlyOverdue] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
@@ -57,6 +58,7 @@ export const ProspectsView: React.FC = () => {
       requestVersion.current += 1;
       nextOffset.current = 0;
       setProspects([]);
+      setOnlyOverdue(false);
       setTotal(0);
       setHasMore(false);
       setLoadingMore(false);
@@ -132,9 +134,19 @@ export const ProspectsView: React.FC = () => {
     }
   };
 
-  const visibleProspects = useMemo(() => {
+  const scopedProspects = useMemo(() => {
     return prospects.filter((prospect) => matchesScope(prospect.scope));
   }, [prospects, matchesScope]);
+
+  const overdueCount = useMemo(
+    () => scopedProspects.filter((prospect) => prospect.sla_status === 'vencido').length,
+    [scopedProspects],
+  );
+
+  const visibleProspects = useMemo(() => {
+    if (!onlyOverdue) return scopedProspects;
+    return scopedProspects.filter((prospect) => prospect.sla_status === 'vencido');
+  }, [scopedProspects, onlyOverdue]);
 
   const formatEstimatedValue = (amount?: number, currencyCode?: string) => {
     const code = currencyCode || baseCurrency;
@@ -152,7 +164,7 @@ export const ProspectsView: React.FC = () => {
         <div className="flex min-w-0 items-start gap-3">
           <Briefcase size={18} className="mt-1 shrink-0 text-obsidian-muted" aria-hidden="true" />
           <div className="min-w-0">
-            <h1 className="text-lg font-bold tracking-tight text-white sm:text-xl">Prospectos</h1>
+            <h1 className="font-heading text-lg font-bold tracking-tight text-white sm:text-xl">Prospectos</h1>
             <p className="mt-0.5 text-xs text-obsidian-muted">Oportunidades y seguimiento.</p>
           </div>
         </div>
@@ -185,7 +197,7 @@ export const ProspectsView: React.FC = () => {
               {visibleProspects.length} {visibleProspects.length === 1 ? 'prospecto visible' : 'prospectos visibles'}
             </p>
           </div>
-          <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(12rem,0.45fr)]">
+          <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(11rem,0.4fr)_auto] sm:items-end">
             <label className="min-w-0 text-xs font-medium text-obsidian-muted">
               Buscar
               <span className="relative mt-2 block">
@@ -201,7 +213,7 @@ export const ProspectsView: React.FC = () => {
                   onChange={(event) => setSearch(event.target.value)}
                   placeholder="Empresa, contacto, correo, teléfono o sitio web"
                   aria-label="Buscar prospectos por empresa, contacto, correo, teléfono o sitio web"
-                  className="min-h-11 w-full rounded-lg border border-obsidian-border bg-obsidian-bg pl-9 pr-3 text-sm text-white placeholder:text-obsidian-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent"
+                  className="min-h-11 w-full rounded-lg border border-obsidian-border bg-obsidian-surface pl-9 pr-3 text-sm text-white placeholder:text-obsidian-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent"
                 />
               </span>
             </label>
@@ -210,7 +222,7 @@ export const ProspectsView: React.FC = () => {
               <select
                 value={status}
                 onChange={(event) => setStatus(event.target.value)}
-                className="mt-2 min-h-11 w-full rounded-lg border border-obsidian-border bg-obsidian-bg px-3 text-sm text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent"
+                className="mt-2 min-h-11 w-full rounded-lg border border-obsidian-border bg-obsidian-surface px-3 text-sm text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent"
               >
                 <option value="todos">Todas las etapas</option>
                 {PROSPECT_STATUS_OPTIONS.map((option) => (
@@ -220,6 +232,14 @@ export const ProspectsView: React.FC = () => {
                 ))}
               </select>
             </label>
+            <button
+              type="button"
+              aria-pressed={onlyOverdue}
+              onClick={() => setOnlyOverdue((value) => !value)}
+              className="ui-action-toggle min-h-11 shrink-0 whitespace-nowrap"
+            >{/* [Estado seleccionable] Filtra solo prospectos con seguimiento vencido. */}
+              Seguimiento vencido ({overdueCount})
+            </button>
           </div>
         </div>
 
@@ -253,13 +273,24 @@ export const ProspectsView: React.FC = () => {
         ) : visibleProspects.length === 0 ? (
           <div className="flex flex-col items-start gap-3 p-5 sm:p-7">
             <p className="text-sm text-obsidian-muted">
-              {total > 0
-                ? 'No hay prospectos visibles que coincidan con esta selección.'
-                : search.trim() || status !== 'todos'
-                  ? 'No hay prospectos que coincidan con los filtros.'
-                  : 'Todavía no hay prospectos en tu seguimiento.'}
+              {onlyOverdue
+                ? 'No hay prospectos con seguimiento vencido en la selección actual.'
+                : total > 0
+                  ? 'No hay prospectos visibles que coincidan con esta selección.'
+                  : search.trim() || status !== 'todos'
+                    ? 'No hay prospectos que coincidan con los filtros.'
+                    : 'Todavía no hay prospectos en tu seguimiento.'}
             </p>
-            {total === 0 && !search.trim() && status === 'todos' && (
+            {onlyOverdue && (
+              <button
+                type="button"
+                onClick={() => setOnlyOverdue(false)}
+                className="ui-action-secondary"
+              >
+                Mostrar todos
+              </button>
+            )}
+            {total === 0 && !onlyOverdue && !search.trim() && status === 'todos' && (
               <button
                 type="button"
                 onClick={() => setActiveSection('capture')}
@@ -355,13 +386,13 @@ export const ProspectsView: React.FC = () => {
 
                     <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
                       <span
-                        className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium ${slaMeta.badgeClass}`}
+                        className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium ${slaMeta.badgeClass}`}
                       >
                         <span className={`h-1.5 w-1.5 rounded-full ${slaDotClass}`} aria-hidden="true" />
                         <span>{slaMeta.shortLabel}</span>
                       </span>
                       <span
-                        className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[10px] font-medium ${statusBadgeClass}`}
+                        className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium ${statusBadgeClass}`}
                       >
                         <span className={`h-1.5 w-1.5 rounded-full ${statusDotClass}`} aria-hidden="true" />
                         <span>{statusMeta.label}</span>

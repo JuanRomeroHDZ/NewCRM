@@ -9,7 +9,7 @@ import {
   WriteupSnippet, WriteupWorkbench, RuntimeConfig, SecurityAuditResponse,
   ReportDocumentSummary, ReportDocumentDetail, ReportDocumentStatus,
   TypstStatusResponse, TypstCompileResponse,
-  ReportCanvasSummary, ReportCanvasDetail
+  ReportCanvasSummary, ReportCanvasDetail, ReportCorrelationsResponse, ReportOverview
 } from '../types';
 import { ApiError, createHttpApiError, normalizeResponseReadError, normalizeTransportError } from './apiErrors';
 
@@ -917,8 +917,15 @@ export const api = {
 
   // Reportes (Typst Documentos + Excalidraw Lienzos)
   getTypstStatus: () => request<TypstStatusResponse>('/reports/typst-status'),
+  getReportOverview: () => request<ReportOverview>('/reports/overview'),
   listReportDocuments: () => request<ReportDocumentSummary[]>('/reports/documents'),
-  createReportDocument: (payload: { title: string; status?: ReportDocumentStatus; source?: string }) =>
+  createReportDocument: (payload: {
+    title: string;
+    status?: ReportDocumentStatus;
+    source?: string;
+    prospect_id?: string | null;
+    project_id?: string | null;
+  }) =>
     request<ReportDocumentDetail>('/reports/documents', {
       method: 'POST',
       body: JSON.stringify(payload),
@@ -926,7 +933,13 @@ export const api = {
   getReportDocument: (docId: string) => request<ReportDocumentDetail>(`/reports/documents/${docId}`),
   updateReportDocument: (
     docId: string,
-    payload: { title?: string; status?: ReportDocumentStatus; source?: string }
+    payload: {
+      title?: string;
+      status?: ReportDocumentStatus;
+      source?: string;
+      prospect_id?: string | null;
+      project_id?: string | null;
+    }
   ) =>
     request<ReportDocumentDetail>(`/reports/documents/${docId}`, {
       method: 'PATCH',
@@ -944,9 +957,22 @@ export const api = {
       method: 'POST',
       body: source !== undefined ? JSON.stringify({ source }) : undefined,
     }),
+  exportReportDocument: (docId: string, format: 'pdf' | 'html' | 'typ', source?: string) =>
+    requestBlobResponse(`/reports/documents/${docId}/export?format=${format}`, {
+      method: 'POST',
+      body: source !== undefined ? JSON.stringify({ source }) : undefined,
+    }),
+  getReportDocumentCorrelations: (docId: string) =>
+    request<ReportCorrelationsResponse>(`/reports/documents/${docId}/correlations`),
 
   listReportCanvases: () => request<ReportCanvasSummary[]>('/reports/canvases'),
-  createReportCanvas: (payload: { title: string; scene_json?: string; element_count?: number; linked_document_id?: string | null }) =>
+  createReportCanvas: (payload: {
+    title: string;
+    scene_json?: string;
+    svg_snapshot?: string;
+    element_count?: number;
+    linked_document_id?: string | null;
+  }) =>
     request<ReportCanvasDetail>('/reports/canvases', {
       method: 'POST',
       body: JSON.stringify(payload),
@@ -954,7 +980,13 @@ export const api = {
   getReportCanvas: (canvasId: string) => request<ReportCanvasDetail>(`/reports/canvases/${canvasId}`),
   updateReportCanvas: (
     canvasId: string,
-    payload: { title?: string; scene_json?: string; element_count?: number; linked_document_id?: string | null }
+    payload: {
+      title?: string;
+      scene_json?: string;
+      svg_snapshot?: string;
+      element_count?: number;
+      linked_document_id?: string | null;
+    }
   ) =>
     request<ReportCanvasDetail>(`/reports/canvases/${canvasId}`, {
       method: 'PATCH',

@@ -151,6 +151,7 @@ async def run_additive_schema_migrations(database_engine=None):
         "CREATE INDEX IF NOT EXISTS ix_writeup_revisions_writeup_revision ON writeup_revisions (writeup_id, revision_number)",
         "CREATE INDEX IF NOT EXISTS ix_writeup_revisions_writeup_created ON writeup_revisions (writeup_id, created_at)",
         "ALTER TABLE writeup_assets ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT FALSE NOT NULL",
+        "ALTER TABLE report_canvases ADD COLUMN IF NOT EXISTS encrypted_svg_snapshot TEXT",
     ]
     current_migration = "schema-change"
     try:

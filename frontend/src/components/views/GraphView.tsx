@@ -734,8 +734,8 @@ export const GraphView: React.FC = () => {
     return (
       <div className="mx-auto flex min-h-[calc(100dvh-4rem)] w-full max-w-3xl items-start p-4 sm:items-center sm:p-8">
         <section className="w-full rounded-2xl border border-obsidian-border bg-obsidian-card p-5 sm:p-7" aria-labelledby="graph-locked-title">
-          <Network size={24} className="mb-3 text-indigo-300" aria-hidden="true" />
-          <h2 id="graph-locked-title" className="text-xl font-bold text-white">Mapa de conexiones</h2>
+          <Network size={24} className="mb-3 text-obsidian-muted" aria-hidden="true" />
+          <h2 id="graph-locked-title" className="font-heading text-xl font-bold text-white">Mapa de conexiones</h2>
           <p className="mt-2 max-w-prose text-sm leading-relaxed text-obsidian-muted">
             Desbloquea la bóveda para consultar las relaciones entre tus correos, cuentas, prospectos y pagos.
           </p>
@@ -960,7 +960,7 @@ export const GraphView: React.FC = () => {
           className="absolute inset-0 z-20 flex items-center justify-center bg-obsidian-bg/80 p-4"
         >
           <div className="flex flex-col items-center gap-3 rounded-2xl border border-obsidian-border bg-obsidian-panel px-6 py-5 text-xs text-obsidian-muted shadow-2xl">
-            <LoaderCircle size={22} className="animate-spin text-indigo-400" aria-hidden="true" />
+            <LoaderCircle size={22} className="animate-spin text-obsidian-accent" aria-hidden="true" />
             <span>Cargando mapa de conexiones…</span>
           </div>
         </div>

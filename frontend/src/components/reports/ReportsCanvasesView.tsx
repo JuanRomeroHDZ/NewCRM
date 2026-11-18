@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Excalidraw } from '@excalidraw/excalidraw';
+import { Excalidraw, exportToSvg } from '@excalidraw/excalidraw';
 import '@excalidraw/excalidraw/index.css';
 import './excalidraw-obsidian.css';
 
@@ -8,6 +8,7 @@ if (typeof window !== 'undefined') {
 }
 import {
   CheckCircle2,
+  Lock,
   PanelLeftClose,
   PanelLeftOpen,
   PenTool,
@@ -20,7 +21,7 @@ import { api } from '../../lib/api';
 import { ApiError } from '../../lib/apiErrors';
 import { formatApiDateTime } from '../../lib/dates';
 import { useVault } from '../../context/VaultContext';
-import { ReportCanvasDetail, ReportCanvasSummary } from '../../types';
+import { ReportCanvasDetail, ReportCanvasSummary, ReportDocumentSummary } from '../../types';
 import { EmptyState } from '../common/EmptyState';
 
 interface ParsedExcalidrawScene {
@@ -61,12 +62,14 @@ function parseCanvasScene(raw: string): ParsedExcalidrawScene {
 }
 
 export const ReportsCanvasesView: React.FC = () => {
-  const { showToast, confirm, prompt } = useVault();
+  const { isUnlocked, openUnlockModal, showToast, confirm, prompt } = useVault();
 
   const [canvases, setCanvases] = useState<ReportCanvasSummary[]>([]);
+  const [documents, setDocuments] = useState<ReportDocumentSummary[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [activeCanvas, setActiveCanvas] = useState<ReportCanvasDetail | null>(null);
   const [titleDraft, setTitleDraft] = useState('');
+  const [linkedDocumentId, setLinkedDocumentId] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState('');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
@@ -78,7 +81,20 @@ export const ReportsCanvasesView: React.FC = () => {
 
   const latestSceneRef = useRef<{ json: string; elementCount: number } | null>(null);
 
+  useEffect(() => {
+    if (!isUnlocked) {
+      setDocuments([]);
+      return;
+    }
+    api.listReportDocuments().then(setDocuments).catch(() => {});
+  }, [isUnlocked]);
+
   const loadCanvases = useCallback(async (preferId?: string | null) => {
+    if (!isUnlocked) {
+      setCanvases([]);
+      setIsLoadingList(false);
+      return;
+    }
     setIsLoadingList(true);
     setErrorMessage(null);
     try {
@@ -96,14 +112,31 @@ export const ReportsCanvasesView: React.FC = () => {
     } finally {
       setIsLoadingList(false);
     }
-  }, []);
+  }, [isUnlocked]);
 
   useEffect(() => {
     void loadCanvases();
   }, [loadCanvases]);
 
+  const selectCanvasWithGuard = useCallback(
+    async (nextId: string) => {
+      if (nextId === selectedId) return;
+      if (hasUnsavedChanges) {
+        const discard = await confirm({
+          title: 'Cambios sin guardar',
+          message: 'Tienes cambios pendientes en el lienzo actual. ¿Descartarlos y continuar?',
+          confirmLabel: 'Descartar',
+          tone: 'warning',
+        });
+        if (!discard) return;
+      }
+      setSelectedId(nextId);
+    },
+    [confirm, hasUnsavedChanges, selectedId]
+  );
+
   useEffect(() => {
-    if (!selectedId) {
+    if (!isUnlocked || !selectedId) {
       setActiveCanvas(null);
       setTitleDraft('');
       latestSceneRef.current = null;
@@ -120,6 +153,7 @@ export const ReportsCanvasesView: React.FC = () => {
         if (cancelled) return;
         setActiveCanvas(detail);
         setTitleDraft(detail.title);
+        setLinkedDocumentId(detail.linked_document_id || '');
         latestSceneRef.current = {
           json: detail.scene_json || '{}',
           elementCount: detail.element_count,
@@ -172,17 +206,38 @@ export const ReportsCanvasesView: React.FC = () => {
     if (!activeCanvas) return;
     const cleanTitle = titleDraft.trim() || activeCanvas.title;
     const scenePayload = latestSceneRef.current;
+    const sceneJson = scenePayload?.json ?? activeCanvas.scene_json;
+
+    let svgSnapshot: string | undefined;
+    try {
+      const parsed = parseCanvasScene(sceneJson);
+      const svgEl = await exportToSvg({
+        elements: (parsed.elements || []) as never,
+        appState: {
+          ...(parsed.appState || {}),
+          exportWithDarkMode: false,
+          exportBackground: false,
+        } as never,
+        files: (parsed.files || {}) as never,
+      });
+      svgSnapshot = svgEl.outerHTML;
+    } catch {
+      svgSnapshot = undefined;
+    }
 
     setIsSaving(true);
     setErrorMessage(null);
     try {
       const updated = await api.updateReportCanvas(activeCanvas.id, {
         title: cleanTitle,
-        scene_json: scenePayload?.json ?? activeCanvas.scene_json,
+        scene_json: sceneJson,
+        svg_snapshot: svgSnapshot,
         element_count: scenePayload?.elementCount ?? activeCanvas.element_count,
+        linked_document_id: linkedDocumentId || null,
       });
       setActiveCanvas(updated);
       setTitleDraft(updated.title);
+      setLinkedDocumentId(updated.linked_document_id || '');
       setCanvases((prev) =>
         prev.map((item) =>
           item.id === updated.id
@@ -204,7 +259,7 @@ export const ReportsCanvasesView: React.FC = () => {
     } finally {
       setIsSaving(false);
     }
-  }, [activeCanvas, showToast, titleDraft]);
+  }, [activeCanvas, linkedDocumentId, showToast, titleDraft]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -274,6 +329,21 @@ export const ReportsCanvasesView: React.FC = () => {
     [activeCanvas]
   );
 
+  if (!isUnlocked) {
+    return (
+      <section className="mx-auto mt-12 max-w-xl px-4 text-center">
+        <Lock size={24} className="mx-auto text-obsidian-muted" aria-hidden="true" />
+        <h2 className="mt-3 font-heading text-lg font-semibold text-white">Lienzos protegidos</h2>
+        <p className="mt-1 text-sm text-obsidian-muted">
+          Desbloquea la bóveda para ver y editar los diagramas cifrados en Excalidraw.
+        </p>
+        <button type="button" onClick={openUnlockModal} className="ui-action-primary mt-4">
+          Desbloquear
+        </button>
+      </section>
+    );
+  }
+
   return (
     <div className="flex flex-col lg:flex-row h-[calc(100vh-5.5rem)] min-h-[540px] min-w-0 gap-4">
       {isSidebarOpen && (
@@ -281,13 +351,13 @@ export const ReportsCanvasesView: React.FC = () => {
           <div className="flex items-center justify-between gap-2 border-b border-obsidian-border px-4 py-3">
             <div className="flex items-center gap-2 min-w-0">
               <PenTool className="h-[18px] w-[18px] shrink-0 text-obsidian-muted" />
-              <h2 className="truncate text-sm font-semibold text-white">Lienzos</h2>
+              <h2 className="truncate font-heading text-sm font-semibold text-white">Lienzos</h2>
             </div>
             {/* [Acción principal] Crea un nuevo lienzo de Excalidraw. */}
             <button
               type="button"
               onClick={handleCreateCanvas}
-              className="ui-action-primary !h-9 !min-h-[36px] !px-3 text-xs"
+              className="ui-action-primary !px-3 text-xs"
             >
               <Plus className="h-4 w-4" />
               <span>Nuevo</span>
@@ -306,7 +376,7 @@ export const ReportsCanvasesView: React.FC = () => {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Buscar lienzo"
-                className="w-full rounded-lg border border-obsidian-border bg-obsidian-surface py-2 pl-9 pr-3 text-sm text-white placeholder:text-obsidian-muted focus:border-obsidian-accent focus:outline-none"
+                className="w-full min-h-11 rounded-lg border border-obsidian-border bg-obsidian-surface py-2 pl-9 pr-3 text-sm text-white placeholder:text-obsidian-muted focus:border-obsidian-accent focus:outline-none"
               />
             </div>
           </div>
@@ -330,8 +400,8 @@ export const ReportsCanvasesView: React.FC = () => {
                   >
                     <button
                       type="button"
-                      onClick={() => setSelectedId(item.id)}
-                      className="min-w-0 flex-1 rounded text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-accent"
+                      onClick={() => void selectCanvasWithGuard(item.id)}
+                      className="min-w-0 min-h-11 flex-1 rounded text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-accent"
                     >
                       <div className="truncate text-sm font-medium text-white">{item.title}</div>
                       <div className="mt-0.5 text-xs text-obsidian-muted">
@@ -342,7 +412,7 @@ export const ReportsCanvasesView: React.FC = () => {
                       type="button"
                       onClick={() => void handleDeleteCanvas(item)}
                       aria-label={`Eliminar ${item.title}`}
-                      className="ui-action-icon !h-9 !w-9 !min-h-[36px] !min-w-[36px] text-obsidian-muted hover:text-obsidian-errorText"
+                      className="ui-action-icon text-obsidian-muted hover:text-obsidian-errorText"
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
@@ -367,16 +437,37 @@ export const ReportsCanvasesView: React.FC = () => {
             </button>
 
             {activeCanvas ? (
-              <input
-                type="text"
-                value={titleDraft}
-                onChange={(e) => {
-                  setTitleDraft(e.target.value);
-                  setHasUnsavedChanges(true);
-                }}
-                aria-label="Título del lienzo"
-                className="min-w-0 flex-1 rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 text-sm font-medium text-white focus:border-obsidian-accent focus:outline-none"
-              />
+              <>
+                <input
+                  type="text"
+                  value={titleDraft}
+                  onChange={(e) => {
+                    setTitleDraft(e.target.value);
+                    setHasUnsavedChanges(true);
+                  }}
+                  aria-label="Título del lienzo"
+                  className="min-w-0 flex-1 rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 text-sm font-medium text-white focus:border-obsidian-accent focus:outline-none"
+                />
+                <label htmlFor="canvas-doc-link" className="sr-only">
+                  Documento vinculado
+                </label>
+                <select
+                  id="canvas-doc-link"
+                  value={linkedDocumentId}
+                  onChange={(e) => {
+                    setLinkedDocumentId(e.target.value);
+                    setHasUnsavedChanges(true);
+                  }}
+                  className="h-11 max-w-[220px] rounded-lg border border-obsidian-border bg-obsidian-surface px-3 text-sm text-white focus:border-obsidian-accent focus:outline-none"
+                >
+                  <option value="">Sin documento vinculado</option>
+                  {documents.map((doc) => (
+                    <option key={doc.id} value={doc.id}>
+                      {doc.title}
+                    </option>
+                  ))}
+                </select>
+              </>
             ) : (
               <span className="text-sm text-obsidian-muted">Selecciona o crea un lienzo</span>
             )}

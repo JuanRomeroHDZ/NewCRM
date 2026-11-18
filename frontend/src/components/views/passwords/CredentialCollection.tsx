@@ -40,7 +40,7 @@ export const CredentialFilters: React.FC<CredentialFiltersProps> = ({
           value={search}
           onChange={(event) => onSearchChange(event.target.value)}
           placeholder="Buscar contraseña"
-              className="min-h-11 w-full rounded-lg border border-obsidian-border bg-obsidian-bg py-2 pl-8 pr-3 text-sm text-white placeholder-obsidian-muted/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent"
+              className="min-h-11 w-full rounded-lg border border-obsidian-border bg-obsidian-surface py-2 pl-8 pr-3 text-sm text-white placeholder:text-obsidian-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent"
         />
       </label>
 

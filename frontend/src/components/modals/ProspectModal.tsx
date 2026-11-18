@@ -495,7 +495,7 @@ export const ProspectModal: React.FC = () => {
                   value={companyName}
                   onChange={(e) => setCompanyName(e.target.value)}
                   placeholder="Ej. Estudio Arquitectónico Norte"
-                  className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs focus:outline-none focus:border-indigo-500"
+                  className="w-full px-3 py-2 rounded-xl bg-obsidian-surface border border-obsidian-border text-white text-xs focus:outline-none focus:border-obsidian-accent"
                 />
               </div>
 
@@ -504,7 +504,7 @@ export const ProspectModal: React.FC = () => {
                 <select id="prospectmodal-field-2"
                   value={status}
                   onChange={(e) => setStatus(e.target.value as ProspectStatus)}
-                  className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs focus:outline-none focus:border-indigo-500"
+                  className="w-full px-3 py-2 rounded-xl bg-obsidian-surface border border-obsidian-border text-white text-xs focus:outline-none focus:border-obsidian-accent"
                 >
                   {PROSPECT_STATUS_OPTIONS.map((opt) => (
                     <option key={opt.value} value={opt.value}>
@@ -522,7 +522,7 @@ export const ProspectModal: React.FC = () => {
                   value={contactName}
                   onChange={(e) => setContactName(e.target.value)}
                   placeholder="Ej. Lic. Roberto Mendoza"
-                  className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs focus:outline-none focus:border-indigo-500"
+                  className="w-full px-3 py-2 rounded-xl bg-obsidian-surface border border-obsidian-border text-white text-xs focus:outline-none focus:border-obsidian-accent"
                 />
               </div>
 
@@ -534,7 +534,7 @@ export const ProspectModal: React.FC = () => {
                   value={demoUrl}
                   onChange={(e) => setDemoUrl(e.target.value)}
                   placeholder="https://demo-cliente.vercel.app"
-                  className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-indigo-500"
+                  className="w-full px-3 py-2 rounded-xl bg-obsidian-surface border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-obsidian-accent"
                 />
               </div>
 
@@ -549,7 +549,7 @@ export const ProspectModal: React.FC = () => {
                   value={whatsapp}
                   onChange={(e) => setWhatsapp(e.target.value)}
                   placeholder="Ej. +52 55 1234 5678"
-                  className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-indigo-500"
+                  className="w-full px-3 py-2 rounded-xl bg-obsidian-surface border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-obsidian-accent"
                 />
               </div>
 
@@ -564,7 +564,7 @@ export const ProspectModal: React.FC = () => {
                   value={phones}
                   onChange={(e) => setPhones(e.target.value)}
                   placeholder="Ej. +52 55 1234 5678, (55) 8765 4321"
-                  className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-indigo-500"
+                  className="w-full px-3 py-2 rounded-xl bg-obsidian-surface border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-obsidian-accent"
                 />
               </div>
 
@@ -579,7 +579,7 @@ export const ProspectModal: React.FC = () => {
                   value={mapsUrl}
                   onChange={(e) => setMapsUrl(e.target.value)}
                   placeholder="https://maps.google.com/?q=..."
-                  className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-indigo-500"
+                  className="w-full px-3 py-2 rounded-xl bg-obsidian-surface border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-obsidian-accent"
                 />
               </div>
 
@@ -594,7 +594,7 @@ export const ProspectModal: React.FC = () => {
                   value={socialLinks}
                   onChange={(e) => setSocialLinks(e.target.value)}
                   placeholder="Ej. IG: @negocio | FB: /negocio"
-                  className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs focus:outline-none focus:border-indigo-500"
+                  className="w-full px-3 py-2 rounded-xl bg-obsidian-surface border border-obsidian-border text-white text-xs focus:outline-none focus:border-obsidian-accent"
                 />
               </div>
             </div>
@@ -614,7 +614,7 @@ export const ProspectModal: React.FC = () => {
                   value={estimatedValue}
                   onChange={(e) => setEstimatedValue(normalizeDecimalInput(e.target.value))}
                   placeholder="0.00"
-                  className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-indigo-500"
+                  className="w-full px-3 py-2 rounded-xl bg-obsidian-surface border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-obsidian-accent"
                 />
               </div>
 
@@ -624,7 +624,7 @@ export const ProspectModal: React.FC = () => {
                   aria-label="Divisa"
                   value={currency}
                   onChange={(e) => setCurrency(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs focus:outline-none focus:border-indigo-500"
+                  className="w-full px-3 py-2 rounded-xl bg-obsidian-surface border border-obsidian-border text-white text-xs focus:outline-none focus:border-obsidian-accent"
                 >
                   {currencyOptions.map((c) => (
                     <option key={c.code} value={c.code}>
@@ -639,7 +639,7 @@ export const ProspectModal: React.FC = () => {
                 <select id="prospectmodal-field-6"
                   value={billingType}
                   onChange={(e) => setBillingType(e.target.value as 'one_time' | 'monthly_retainer')}
-                  className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs focus:outline-none focus:border-indigo-500"
+                  className="w-full px-3 py-2 rounded-xl bg-obsidian-surface border border-obsidian-border text-white text-xs focus:outline-none focus:border-obsidian-accent"
                 >
                   <option value="one_time">Pago Único (Proyecto)</option>
                   <option value="monthly_retainer">Iguala Mensual (Recurrente)</option>
@@ -682,7 +682,7 @@ export const ProspectModal: React.FC = () => {
                       setSpecificAlias('');
                     }
                   }}
-                  className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs focus:outline-none focus:border-indigo-500"
+                  className="w-full px-3 py-2 rounded-xl bg-obsidian-surface border border-obsidian-border text-white text-xs focus:outline-none focus:border-obsidian-accent"
                 >
                   <option value="">Sin correo principal vinculado</option>
                   {emails.map((e) => (
@@ -703,7 +703,7 @@ export const ProspectModal: React.FC = () => {
                       value={newEmailAddress}
                       onChange={(e) => setNewEmailAddress(e.target.value)}
                       placeholder="nuevo@dominio.com"
-                      className="w-full px-2.5 py-1.5 rounded-lg bg-obsidian-surface border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-indigo-500"
+                      className="w-full px-2.5 py-1.5 rounded-lg bg-obsidian-surface border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-obsidian-accent"
                     />
                     <div className="flex items-center gap-1.5">
                       <select
@@ -739,7 +739,7 @@ export const ProspectModal: React.FC = () => {
                   value={contactEmail}
                   onChange={(e) => setContactEmail(e.target.value)}
                   placeholder="contacto@cliente.com"
-                  className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-indigo-500"
+                  className="w-full px-3 py-2 rounded-xl bg-obsidian-surface border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-obsidian-accent"
                 />
               </div>
 
@@ -749,7 +749,7 @@ export const ProspectModal: React.FC = () => {
                   <select id="prospectmodal-field-9"
                     value={specificAlias}
                     onChange={(e) => setSpecificAlias(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs focus:outline-none focus:border-indigo-500"
+                    className="w-full px-3 py-2 rounded-xl bg-obsidian-surface border border-obsidian-border text-white text-xs focus:outline-none focus:border-obsidian-accent"
                   >
                     <option value="">Dirección principal ({selectedParentEmail.address})</option>
                     {selectedParentEmail.aliases.map((al, idx) => (
@@ -790,7 +790,7 @@ export const ProspectModal: React.FC = () => {
                   type="datetime-local"
                   value={startedAtInput}
                   onChange={(e) => setStartedAtInput(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-indigo-500"
+                  className="w-full px-3 py-2 rounded-xl bg-obsidian-surface border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-obsidian-accent"
                 />
               </div>
 
@@ -805,7 +805,7 @@ export const ProspectModal: React.FC = () => {
                     maxLength={10}
                     value={slaHours}
                     onChange={(e) => setSlaHours(normalizeDecimalInput(e.target.value))}
-                    className="w-20 shrink-0 px-2 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-indigo-500 sm:w-28 sm:px-3"
+                    className="w-20 shrink-0 px-2 py-2 rounded-xl bg-obsidian-surface border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-obsidian-accent sm:w-28 sm:px-3"
                   />
                   <span className="min-w-0 text-obsidian-muted text-[11px]">
                     horas ({hasValidSlaPreview ? (numericSlaPreview / 24).toFixed(1).replace(/\.0$/, '') : '—'} días)
@@ -898,7 +898,7 @@ export const ProspectModal: React.FC = () => {
                       addTag();
                     }
                   }}
-                  className="flex-1 min-w-0 px-3 py-1.5 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs"
+                  className="flex-1 min-w-0 px-3 py-1.5 rounded-xl bg-obsidian-surface border border-obsidian-border text-white text-xs"
                 />
                 <button
                   type="button"
@@ -941,7 +941,7 @@ export const ProspectModal: React.FC = () => {
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder="Qué secciones incluiste en la demo, comentarios del cliente o recordatorios de seguimiento..."
-                className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs focus:outline-none focus:border-indigo-500"
+                className="w-full px-3 py-2 rounded-xl bg-obsidian-surface border border-obsidian-border text-white text-xs focus:outline-none focus:border-obsidian-accent"
               />
             </div>
           </div>

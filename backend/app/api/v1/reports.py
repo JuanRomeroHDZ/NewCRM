@@ -117,6 +117,51 @@ async def typst_status(_user: User | None = Depends(require_report_access)):
     return await run_in_threadpool(get_typst_status)
 
 
+@router.get("/overview")
+async def reports_overview(
+    db: AsyncSession = Depends(get_db),
+    _user: User | None = Depends(require_report_access),
+):
+    docs = (
+        await db.execute(
+            select(ReportDocument)
+            .where(ReportDocument.is_deleted == False)  # noqa: E712
+            .order_by(desc(ReportDocument.updated_at))
+        )
+    ).scalars().all()
+    canvases = (
+        await db.execute(
+            select(ReportCanvas)
+            .where(ReportCanvas.is_deleted == False)  # noqa: E712
+            .order_by(desc(ReportCanvas.updated_at))
+        )
+    ).scalars().all()
+
+    total_words = 0
+    by_status: dict[str, int] = {}
+    for doc in docs:
+        by_status[doc.status] = by_status.get(doc.status, 0) + 1
+        src = decrypt_note(doc.encrypted_source) if doc.encrypted_source else ""
+        if src:
+            total_words += len(src.split())
+
+    reading_minutes = max(1, (total_words + 199) // 200) if total_words > 0 else 0
+    total_elements = sum(c.element_count for c in canvases)
+    linked_canvases = sum(1 for c in canvases if c.linked_document_id)
+
+    return {
+        "total_documents": len(docs),
+        "total_canvases": len(canvases),
+        "linked_canvases": linked_canvases,
+        "total_words": total_words,
+        "reading_minutes": reading_minutes,
+        "total_canvas_elements": total_elements,
+        "documents_by_status": by_status,
+        "latest_document_title": docs[0].title if docs else None,
+        "latest_canvas_title": canvases[0].title if canvases else None,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Documentos (Typst)
 # ---------------------------------------------------------------------------
@@ -159,12 +204,51 @@ async def create_document(
     return _doc_detail(doc)
 
 
+CANVAS_REF_RE = re.compile(r"canvas://([A-Za-z0-9-]+)(?:\.svg)?")
+
+
+async def _resolve_canvas_assets(source: str, db: AsyncSession) -> tuple[str, dict[str, bytes]]:
+    """Resolve canvas://<id> references in Typst source into local SVG files."""
+    canvas_ids = sorted(set(CANVAS_REF_RE.findall(source)))
+    if not canvas_ids:
+        return source, {}
+
+    rows = (
+        await db.execute(
+            select(ReportCanvas).where(
+                ReportCanvas.id.in_(canvas_ids),
+                ReportCanvas.is_deleted == False,  # noqa: E712
+            )
+        )
+    ).scalars().all()
+
+    extra_files: dict[str, bytes] = {}
+    id_to_filename: dict[str, str] = {}
+    for row in rows:
+        if not row.encrypted_svg_snapshot:
+            continue
+        svg_text = decrypt_note(row.encrypted_svg_snapshot)
+        if svg_text:
+            filename = f"canvas_{row.id}.svg"
+            extra_files[filename] = svg_text.encode("utf-8")
+            id_to_filename[row.id] = filename
+
+    def _replace(match: re.Match[str]) -> str:
+        cid = match.group(1)
+        return id_to_filename.get(cid, match.group(0))
+
+    resolved_source = CANVAS_REF_RE.sub(_replace, source)
+    return resolved_source, extra_files
+
+
 @router.post("/documents/compile", response_model=TypstCompileResponse)
 async def compile_document_preview(
     payload: TypstCompileRequest,
+    db: AsyncSession = Depends(get_db),
     _user: User | None = Depends(require_report_access),
 ):
-    result = await run_in_threadpool(compile_typst_source, payload.source, "svg")
+    resolved_source, extra_files = await _resolve_canvas_assets(payload.source, db)
+    result = await run_in_threadpool(compile_typst_source, resolved_source, "svg", extra_files)
     return TypstCompileResponse(
         ok=result.ok,
         pages=result.pages,
@@ -274,7 +358,8 @@ async def export_document_pdf(
         if payload is not None
         else (decrypt_note(doc.encrypted_source) if doc.encrypted_source else "")
     )
-    result = await run_in_threadpool(compile_typst_source, source or "", "pdf")
+    resolved_source, extra_files = await _resolve_canvas_assets(source or "", db)
+    result = await run_in_threadpool(compile_typst_source, resolved_source, "pdf", extra_files)
     if not result.ok or not result.pdf_bytes:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -287,6 +372,131 @@ async def export_document_pdf(
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@router.post("/documents/{doc_id}/export")
+async def export_document_format(
+    doc_id: str,
+    format: str = "pdf",
+    payload: TypstCompileRequest | None = None,
+    db: AsyncSession = Depends(get_db),
+    _user: User | None = Depends(require_report_access),
+):
+    fmt = format.lower().strip()
+    if fmt not in {"pdf", "html", "typ"}:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Formato no soportado (usa pdf, html o typ).")
+
+    doc = (
+        await db.execute(
+            select(ReportDocument).where(
+                ReportDocument.id == doc_id,
+                ReportDocument.is_deleted == False,  # noqa: E712
+            )
+        )
+    ).scalar_one_or_none()
+    if not doc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Documento no encontrado.")
+
+    source = (
+        payload.source
+        if payload is not None
+        else (decrypt_note(doc.encrypted_source) if doc.encrypted_source else "")
+    )
+    base_name = _safe_pdf_filename(doc.title).rsplit(".", 1)[0]
+
+    if fmt == "typ":
+        return Response(
+            content=(source or "").encode("utf-8"),
+            media_type="text/plain; charset=utf-8",
+            headers={"Content-Disposition": f'attachment; filename="{base_name}.typ"'},
+        )
+
+    resolved_source, extra_files = await _resolve_canvas_assets(source or "", db)
+    result = await run_in_threadpool(compile_typst_source, resolved_source, fmt, extra_files)
+    if not result.ok or not result.pdf_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=result.error or f"No se pudo compilar el archivo {fmt.upper()}.",
+        )
+
+    media_type = "application/pdf" if fmt == "pdf" else "text/html; charset=utf-8"
+    return Response(
+        content=result.pdf_bytes,
+        media_type=media_type,
+        headers={"Content-Disposition": f'attachment; filename="{base_name}.{fmt}"'},
+    )
+
+
+CVE_RE = re.compile(r"\bCVE-\d{4}-\d{4,7}\b", re.IGNORECASE)
+CWE_RE = re.compile(r"\bCWE-\d{1,5}\b", re.IGNORECASE)
+IPV4_RE = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
+
+
+def _extract_signals(text: str) -> tuple[set[str], set[str], set[str]]:
+    cves = {m.upper() for m in CVE_RE.findall(text)}
+    cwes = {m.upper() for m in CWE_RE.findall(text)}
+    ips = set(IPV4_RE.findall(text))
+    return cves, cwes, ips
+
+
+@router.get("/documents/{doc_id}/correlations")
+async def get_document_correlations(
+    doc_id: str,
+    db: AsyncSession = Depends(get_db),
+    _user: User | None = Depends(require_report_access),
+):
+    rows = (
+        await db.execute(
+            select(ReportDocument).where(ReportDocument.is_deleted == False)  # noqa: E712
+        )
+    ).scalars().all()
+    target = next((r for r in rows if r.id == doc_id), None)
+    if not target:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Documento no encontrado.")
+
+    target_src = decrypt_note(target.encrypted_source) if target.encrypted_source else ""
+    t_cves, t_cwes, t_ips = _extract_signals(target_src or "")
+
+    matches = []
+    for other in rows:
+        if other.id == target.id:
+            continue
+        other_src = decrypt_note(other.encrypted_source) if other.encrypted_source else ""
+        o_cves, o_cwes, o_ips = _extract_signals(other_src or "")
+
+        reasons: list[str] = []
+        score = 0
+        shared_cves = sorted(t_cves & o_cves)
+        shared_cwes = sorted(t_cwes & o_cwes)
+        shared_ips = sorted(t_ips & o_ips)
+
+        if shared_cves:
+            score += 40 * len(shared_cves)
+            reasons.append(f"CVE: {', '.join(shared_cves[:3])}")
+        if shared_cwes:
+            score += 25 * len(shared_cwes)
+            reasons.append(f"CWE: {', '.join(shared_cwes[:3])}")
+        if shared_ips:
+            score += 15 * len(shared_ips)
+            reasons.append(f"IP: {', '.join(shared_ips[:3])}")
+        if target.prospect_id and target.prospect_id == other.prospect_id:
+            score += 20
+            reasons.append("Mismo prospecto")
+        if target.project_id and target.project_id == other.project_id:
+            score += 20
+            reasons.append("Mismo proyecto")
+
+        if reasons:
+            matches.append({
+                "id": other.id,
+                "title": other.title,
+                "status": other.status,
+                "score": score,
+                "reasons": reasons,
+            })
+
+    matches.sort(key=lambda item: item["score"], reverse=True)
+    return {"total_checked": max(0, len(rows) - 1), "matches": matches[:10]}
 
 
 # ---------------------------------------------------------------------------
@@ -319,6 +529,7 @@ async def create_canvas(
     canvas = ReportCanvas(
         title=payload.title.strip(),
         encrypted_scene_json=encrypt_note(scene_json),
+        encrypted_svg_snapshot=encrypt_note(payload.svg_snapshot) if payload.svg_snapshot else None,
         element_count=payload.element_count,
         linked_document_id=payload.linked_document_id,
         prospect_id=payload.prospect_id,
@@ -373,6 +584,8 @@ async def update_canvas(
         canvas.title = payload.title.strip()
     if payload.scene_json is not None:
         canvas.encrypted_scene_json = encrypt_note(payload.scene_json)
+    if payload.svg_snapshot is not None:
+        canvas.encrypted_svg_snapshot = encrypt_note(payload.svg_snapshot) if payload.svg_snapshot else None
     if payload.element_count is not None:
         canvas.element_count = payload.element_count
     if payload.linked_document_id is not None:

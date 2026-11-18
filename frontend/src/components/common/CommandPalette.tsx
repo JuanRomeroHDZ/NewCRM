@@ -4,6 +4,7 @@ import {
   X, Briefcase, Plus, MapPin, BookOpen, AlertCircle, RefreshCw,
   Server, ScanSearch, ArrowLeftRight, Activity, Route, KeyRound,
   Code2, Radio, Waypoints, Wifi, Camera, UserCheck, AlertOctagon, FileText, PenTool,
+  Wallet, Receipt, CreditCard, ShieldCheck,
 } from 'lucide-react';
 import { useVault } from '../../context/VaultContext';
 import { useC2 } from '../../context/C2Context';
@@ -177,14 +178,82 @@ export const CommandPalette: React.FC = () => {
       }
     },
     {
-      id: 'cmd_writeups_view',
-      title: 'Ir a informes de seguridad',
-      subtitle: 'Editor Markdown, pizarras de ataque y reportes cifrados',
+      id: 'cmd_overview_finances',
+      title: 'Ir a Finanzas · Resumen',
+      subtitle: 'Balance mensual, proyección anual, egresos a 90 días y tipo de cambio',
+      icon: Wallet,
+      color: 'text-obsidian-muted',
+      action: () => {
+        closeCommandPalette();
+        setActiveSection('overview_finances');
+      }
+    },
+    {
+      id: 'cmd_finance_income',
+      title: 'Ir a Finanzas · Ingresos y pagos',
+      subtitle: 'Registrar cobros, igualas y anticipos de clientes',
+      icon: Wallet,
+      color: 'text-obsidian-muted',
+      action: () => {
+        closeCommandPalette();
+        setActiveSection('finance_income');
+      }
+    },
+    {
+      id: 'cmd_finance_services',
+      title: 'Ir a Finanzas · Servicios y vencimientos',
+      subtitle: 'Monitor de renovaciones próximas, dominios, hostings y APIs',
+      icon: Server,
+      color: 'text-obsidian-muted',
+      action: () => {
+        closeCommandPalette();
+        setActiveSection('finance_services');
+      }
+    },
+    {
+      id: 'cmd_finance_expenses',
+      title: 'Ir a Finanzas · Gastos',
+      subtitle: 'Registro y control de gastos puntuales y recurrentes',
+      icon: Receipt,
+      color: 'text-obsidian-muted',
+      action: () => {
+        closeCommandPalette();
+        setActiveSection('finance_expenses');
+      }
+    },
+    {
+      id: 'cmd_finance_cards',
+      title: 'Ir a Finanzas · Tarjetas y métodos',
+      subtitle: 'Tarjetas protegidas en bóveda y suscripciones vinculadas',
+      icon: CreditCard,
+      color: 'text-obsidian-muted',
+      action: () => {
+        closeCommandPalette();
+        setActiveSection('finance_cards');
+        if (!isUnlocked) openUnlockModal();
+      }
+    },
+    {
+      id: 'cmd_security_audit',
+      title: 'Ir a Seguridad · Diagnóstico',
+      subtitle: 'Revisar contraseñas débiles, reutilizadas y cobertura 2FA',
+      icon: ShieldCheck,
+      color: 'text-obsidian-muted',
+      action: () => {
+        closeCommandPalette();
+        setActiveSection('security_audit');
+        if (!isUnlocked) openUnlockModal();
+      }
+    },
+    {
+      id: 'cmd_overview_reports',
+      title: 'Ir a Reportes · Resumen',
+      subtitle: 'Resumen de documentos Typst, palabras compiladas y lienzos',
       icon: BookOpen,
       color: 'text-obsidian-muted',
       action: () => {
         closeCommandPalette();
-        setActiveSection('writeups');
+        setActiveSection('overview_reports');
         if (!isUnlocked) openUnlockModal();
       }
     },
@@ -422,7 +491,7 @@ export const CommandPalette: React.FC = () => {
             }}
             onKeyDown={handleKeyDown}
             placeholder="Buscar prospecto, cuenta, correo, informe o acción..."
-            className="w-full bg-transparent text-sm text-white placeholder-obsidian-muted/60 focus:outline-none min-w-0"
+            className="w-full bg-transparent text-sm text-white placeholder:text-obsidian-muted focus:outline-none min-w-0"
           />
           <div className="flex items-center gap-1.5 shrink-0">
             <kbd className="hidden sm:inline-block px-2 py-0.5 text-[10px] font-mono bg-obsidian-surface border border-obsidian-border rounded text-obsidian-muted">

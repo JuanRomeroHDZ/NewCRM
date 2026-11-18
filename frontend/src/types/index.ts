@@ -888,4 +888,29 @@ export interface ReportCanvasDetail extends ReportCanvasSummary {
   scene_json: string;
 }
 
+export interface ReportCorrelationMatch {
+  id: string;
+  title: string;
+  status: ReportDocumentStatus;
+  score: number;
+  reasons: string[];
+}
+
+export interface ReportCorrelationsResponse {
+  total_checked: number;
+  matches: ReportCorrelationMatch[];
+}
+
+export interface ReportOverview {
+  total_documents: number;
+  total_canvases: number;
+  linked_canvases: number;
+  total_words: number;
+  reading_minutes: number;
+  total_canvas_elements: number;
+  documents_by_status: Record<string, number>;
+  latest_document_title: string | null;
+  latest_canvas_title: string | null;
+}
+
 

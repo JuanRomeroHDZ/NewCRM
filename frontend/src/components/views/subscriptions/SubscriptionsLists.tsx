@@ -550,14 +550,14 @@ export const SubscriptionsLists: React.FC<SubscriptionsListsProps> = ({
 
                   <div className="border-t border-obsidian-border pt-2 text-xs space-y-2">
                     <div>
-                      <div className="text-obsidian-muted text-[10px]">Número de Tarjeta / Cuenta</div>
+                      <div className="text-obsidian-muted text-xs">Número de tarjeta / cuenta</div>
                       <SecretField
                         value={pay.card_number_plain}
                         masked={pay.card_number_masked}
                         label={`Tarjeta ${pay.alias}`}
                       />
                     </div>
-                    <div className="flex items-center justify-between text-[10px] text-obsidian-muted font-mono pt-1 border-t border-obsidian-border/50">
+                    <div className="flex items-center justify-between text-xs text-obsidian-muted font-mono pt-1 border-t border-obsidian-border/50">
                       <span>
                         {pay.expiry_month && pay.expiry_year ? `Vence: ${pay.expiry_month}/${pay.expiry_year}` : 'Sin fecha de vencimiento'}
                       </span>
@@ -565,79 +565,85 @@ export const SubscriptionsLists: React.FC<SubscriptionsListsProps> = ({
                   </div>
 
                   {pay.billing_notes && (
-                    <p className="text-[11px] text-obsidian-muted line-clamp-2 break-words" title={pay.billing_notes}>
+                    <p className="text-xs text-obsidian-muted line-clamp-2 break-words" title={pay.billing_notes}>
                       {pay.billing_notes}
                     </p>
                   )}
 
-                  {/* Subscriptions tied to this card */}
-                  <div>
-                    <span className="text-[10px] text-obsidian-muted font-semibold uppercase tracking-wider block mb-1.5">
-                      Suscripciones con esta tarjeta ({linked.length})
-                    </span>
-                    <div className="space-y-1">
-                      {linked.map((item) => (
-                        <button
-                          key={item.id}
-                          type="button"
-                          onClick={() => openInspector('platform', item.id)}
-                        className="ui-nav-action w-full items-center justify-between gap-2 py-2 min-w-0"
-                        >{/* [Navegación] Mantiene disponible esta acción en su contexto. */}
-                          <div className="flex items-center gap-2 min-w-0">
-                            <PlatformIcon name={item.name} iconUrl={item.icon_url} size="sm" />
-                            <div className="min-w-0">
-                              <span className="text-white font-medium truncate block" title={item.name}>{item.name}</span>
-                              {item.email_address && (
-                                <span className="text-[10px] text-obsidian-muted font-mono truncate block" title={item.email_address}>
-                                  {item.email_address}
-                                </span>
-                              )}
+                  <details className="border-t border-obsidian-border pt-2.5 text-xs">
+                    <summary className="cursor-pointer select-none py-1 font-medium text-obsidian-muted hover:text-obsidian-text">
+                      Movimientos vinculados: {linked.length} {linked.length === 1 ? 'suscripción' : 'suscripciones'} · {linkedExpenses.length} {linkedExpenses.length === 1 ? 'gasto' : 'gastos'}
+                    </summary>
+                    <div className="mt-2 space-y-3 pl-1">
+                      <div>
+                        <span className="mb-1.5 block text-xs font-semibold text-obsidian-muted">
+                          Suscripciones con esta tarjeta ({linked.length})
+                        </span>
+                        <div className="divide-y divide-obsidian-border">
+                          {linked.map((item) => (
+                            <button
+                              key={item.id}
+                              type="button"
+                              onClick={() => openInspector('platform', item.id)}
+                              className="ui-nav-action w-full items-center justify-between gap-2 py-2 min-w-0"
+                            >{/* [Navegación] Mantiene disponible esta acción en su contexto. */}
+                              <div className="flex items-center gap-2 min-w-0">
+                                <PlatformIcon name={item.name} iconUrl={item.icon_url} size="sm" />
+                                <div className="min-w-0">
+                                  <span className="text-white font-medium truncate block" title={item.name}>{item.name}</span>
+                                  {item.email_address && (
+                                    <span className="text-[11px] text-obsidian-muted font-mono truncate block" title={item.email_address}>
+                                      {item.email_address}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              <span className="font-mono text-obsidian-text font-semibold flex-shrink-0">
+                                ${item.subscription_cost} {item.currency}
+                              </span>
+                            </button>
+                          ))}
+                          {linked.length === 0 && (
+                            <div className="py-1 text-xs text-obsidian-muted">
+                              Sin suscripciones vinculadas.
                             </div>
-                          </div>
-                          <span className="font-mono text-obsidian-text font-semibold flex-shrink-0">
-                            ${item.subscription_cost} {item.currency}
-                          </span>
-                        </button>
-                      ))}
-                      {linked.length === 0 && (
-                        <div className="text-[11px] text-obsidian-muted italic">
-                          Sin suscripciones vinculadas.
+                          )}
                         </div>
-                      )}
-                    </div>
+                      </div>
 
-                  <div className="mt-3 border-t border-obsidian-border pt-3">
-                    <span className="text-[10px] text-obsidian-muted font-semibold block mb-1.5">
-                      Gastos con esta tarjeta ({linkedExpenses.length})
-                    </span>
-                    <div className="divide-y divide-obsidian-border">
-                      {linkedExpenses.map((expense) => {
-                        const service = platforms.find((platform) => platform.id === expense.platform_id);
-                        return (
-                          <div key={expense.id} className="flex min-w-0 items-center justify-between gap-3 py-2 first:pt-0 last:pb-0">
-                            <div className="flex min-w-0 items-center gap-2">
-                              {service
-                                ? <PlatformIcon name={service.name} iconUrl={service.icon_url} size="sm" />
-                                : <Receipt size={16} className="shrink-0 text-obsidian-muted" aria-hidden="true" />}
-                              <div className="min-w-0">
-                                <span className="block truncate text-xs text-obsidian-text" title={expense.concept}>{expense.concept}</span>
-                                <span className="block truncate text-[10px] text-obsidian-muted">
-                                  {service ? service.name : expense.category} · {expense.recurrence_cycle === 'weekly' ? 'semanal' : expense.recurrence_cycle === 'quarterly' ? 'trimestral' : expense.recurrence_cycle === 'monthly' ? 'mensual' : expense.recurrence_cycle === 'yearly' ? 'anual' : 'puntual'}
+                      <div className="border-t border-obsidian-border pt-2.5">
+                        <span className="mb-1.5 block text-xs font-semibold text-obsidian-muted">
+                          Gastos con esta tarjeta ({linkedExpenses.length})
+                        </span>
+                        <div className="divide-y divide-obsidian-border">
+                          {linkedExpenses.map((expense) => {
+                            const service = platforms.find((platform) => platform.id === expense.platform_id);
+                            return (
+                              <div key={expense.id} className="flex min-w-0 items-center justify-between gap-3 py-2 first:pt-0 last:pb-0">
+                                <div className="flex min-w-0 items-center gap-2">
+                                  {service
+                                    ? <PlatformIcon name={service.name} iconUrl={service.icon_url} size="sm" />
+                                    : <Receipt size={16} className="shrink-0 text-obsidian-muted" aria-hidden="true" />}
+                                  <div className="min-w-0">
+                                    <span className="block truncate text-xs text-obsidian-text" title={expense.concept}>{expense.concept}</span>
+                                    <span className="block truncate text-[11px] text-obsidian-muted">
+                                      {service ? service.name : expense.category} · {expense.recurrence_cycle === 'weekly' ? 'semanal' : expense.recurrence_cycle === 'quarterly' ? 'trimestral' : expense.recurrence_cycle === 'monthly' ? 'mensual' : expense.recurrence_cycle === 'yearly' ? 'anual' : 'puntual'}
+                                    </span>
+                                  </div>
+                                </div>
+                                <span className="shrink-0 font-mono text-xs text-obsidian-text">
+                                  ${formatAmount(expense.amount)} {expense.currency}
                                 </span>
                               </div>
-                            </div>
-                            <span className="shrink-0 font-mono text-xs text-obsidian-text">
-                              ${formatAmount(expense.amount)} {expense.currency}
-                            </span>
-                          </div>
-                        );
-                      })}
-                      {linkedExpenses.length === 0 && (
-                        <span className="text-[11px] text-obsidian-muted">Sin gastos vinculados.</span>
-                      )}
+                            );
+                          })}
+                          {linkedExpenses.length === 0 && (
+                            <span className="py-1 block text-xs text-obsidian-muted">Sin gastos vinculados.</span>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                  </div>
+                  </details>
                 </div>
               );
             })}

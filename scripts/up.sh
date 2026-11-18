@@ -217,7 +217,7 @@ compose=(docker compose)
 if $DEVELOPMENT_MODE; then
   compose+=(-f docker-compose.yml -f docker-compose.dev.yml)
 fi
-"${compose[@]}" up -d --build --wait "$@"
+"${compose[@]}" up -d --wait "$@"
 if $CERT_RENEWED; then
   # Un proxy que ya estaba ejecutándose necesita recargar el certificado nuevo.
   docker compose restart proxy

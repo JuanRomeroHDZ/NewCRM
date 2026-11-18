@@ -90,7 +90,11 @@ def get_typst_status() -> dict:
         return {"available": False, "version": None, "binary": binary}
 
 
-def compile_typst_source(source: str, output_format: str = "svg") -> TypstCompileResult:
+def compile_typst_source(
+    source: str,
+    output_format: str = "svg",
+    extra_files: dict[str, bytes] | None = None,
+) -> TypstCompileResult:
     """Compile Typst markup inside an isolated temporary root directory."""
     if len(source) > MAX_TYPST_SOURCE_CHARS:
         return TypstCompileResult(
@@ -111,6 +115,10 @@ def compile_typst_source(source: str, output_format: str = "svg") -> TypstCompil
 
     with tempfile.TemporaryDirectory(prefix="lessso-typst-") as tmpdir:
         root_dir = Path(tmpdir)
+        if extra_files:
+            for rel_name, content in extra_files.items():
+                safe_name = Path(rel_name).name
+                (root_dir / safe_name).write_bytes(content)
         input_file = root_dir / "document.typ"
         input_file.write_text(source, encoding="utf-8")
 
@@ -123,6 +131,20 @@ def compile_typst_source(source: str, output_format: str = "svg") -> TypstCompil
                 str(root_dir),
                 "--format",
                 "pdf",
+                str(input_file),
+                str(output_pattern),
+            ]
+        elif output_format == "html":
+            output_pattern = root_dir / "document.html"
+            cmd = [
+                binary,
+                "compile",
+                "--features",
+                "html",
+                "--root",
+                str(root_dir),
+                "--format",
+                "html",
                 str(input_file),
                 str(output_pattern),
             ]
@@ -159,13 +181,13 @@ def compile_typst_source(source: str, output_format: str = "svg") -> TypstCompil
             err_msg = (proc.stderr or proc.stdout or "Error de compilación de Typst.").strip()
             return TypstCompileResult(ok=False, pages=[], pdf_bytes=None, error=err_msg)
 
-        if output_format == "pdf":
+        if output_format in ("pdf", "html"):
             if not output_pattern.exists():
                 return TypstCompileResult(
                     ok=False,
                     pages=[],
                     pdf_bytes=None,
-                    error="Typst no generó el archivo PDF de salida.",
+                    error=f"Typst no generó el archivo {output_format.upper()} de salida.",
                 )
             return TypstCompileResult(
                 ok=True,

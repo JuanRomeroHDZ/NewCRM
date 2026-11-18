@@ -979,12 +979,92 @@ export const SubscriptionsView: React.FC = () => {
       { label: 'Proyección anual de gastos', value: overviewAmount(realProfit.totalYearlyExpenseMXN) },
       { label: 'Cargos de servicios y gastos · 90 días', value: overviewAmount(next90OutflowMXN) },
     ];
+    const exchangeRateControl = (
+      <div className="flex max-w-full min-w-0 flex-wrap items-center gap-1 rounded-lg border border-obsidian-border bg-obsidian-panel px-2.5 py-1">
+        {isEditingRate ? (
+          <div className="flex items-center gap-1.5">
+            <input
+              type="number"
+              inputMode="decimal"
+              min="0.000001"
+              max={INPUT_LIMITS.EXCHANGE_RATE}
+              step="any"
+              aria-label="Tipo de cambio manual"
+              value={manualRateInput}
+              onChange={(e) => setManualRateInput(e.target.value.slice(0, 10))}
+              className="w-24 min-h-9 rounded-lg border border-obsidian-accent bg-obsidian-surface px-2 py-1 text-xs font-mono text-white focus:outline-none"
+            />
+            <button
+              type="button"
+              onClick={handleSaveManualRate}
+              className="ui-action-primary min-h-9 px-3"
+            >{/* [Acción principal] Inicia o confirma la tarea de este espacio. */}
+              OK
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsEditingRate(false)}
+              aria-label="Cancelar edición de tipo de cambio"
+              className="ui-action-icon min-h-9 min-w-9"
+            >{/* [Acción secundaria] Mantiene disponible esta acción en su contexto. */}
+              <X size={16} aria-hidden="true" />
+            </button>
+          </div>
+        ) : (
+          <>
+            <span className="font-mono text-xs text-white font-bold whitespace-nowrap">
+              1 {exchangePairBase} = ${fin.usdRate.toFixed(2)} {exchangePairTarget}
+            </span>
+            <button
+              type="button"
+              onClick={() => setIsEditingRate(true)}
+              title="Editar tipo de cambio manualmente"
+              aria-label="Editar tipo de cambio manualmente"
+              className="ui-action-icon min-h-9 min-w-9"
+            >{/* [Icono] Acción identificada por su nombre accesible. */}
+              <Edit2 size={15} aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              onClick={handleSyncOfficialRate}
+              disabled={isSyncingRate}
+              title="Actualizar tipo de cambio desde internet"
+              aria-label="Actualizar tipo de cambio desde internet"
+              className="ui-action-icon min-h-9 min-w-9"
+            >{/* [Acción secundaria] Ejecuta la operación de apoyo en este espacio. */}
+              <RefreshCw size={15} className={isSyncingRate ? 'animate-spin' : ''} aria-hidden="true" />
+            </button>
+          </>
+        )}
+      </div>
+    );
     return (
       <div className="mx-auto w-full max-w-5xl min-w-0 space-y-5 p-4 sm:p-6">
         {partialDataWarning && <p role="status" className="border-b border-obsidian-border pb-3 text-sm text-amber-200">{partialDataWarning}</p>}
+        {showRateNotice && (
+          <div role="status" className="flex min-w-0 flex-wrap items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+            <AlertTriangle size={14} aria-hidden="true" />
+            <span className="min-w-0 flex-1">El tipo de cambio requiere revisión.</span>
+            <InfoTooltip
+              title="Tipo de cambio"
+              content={!exchangeRate
+                ? 'No hay una cotización disponible. Actualízala antes de usar los totales convertidos.'
+                : 'La última actualización supera las 24 horas. Actualízala antes de usar los totales convertidos.'}
+              position="bottom"
+            />
+            <button type="button" onClick={dismissRateNotice} aria-label="Ocultar aviso de tipo de cambio" className="ui-action-icon min-w-11 shrink-0 items-center">{/* [Icono] Mantiene disponible esta acción en su contexto. */}
+              <X size={16} aria-hidden="true" />
+            </button>
+          </div>
+        )}
         <section className="border-b border-obsidian-border pb-4" aria-labelledby="finance-overview-title">
-          <h2 id="finance-overview-title" className="font-heading text-xl font-semibold text-obsidian-text">Finanzas</h2>
-          <p className="mt-1 text-sm text-obsidian-muted">Ingresos, vencimientos y gastos en un solo vistazo.</p>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 id="finance-overview-title" className="font-heading text-xl font-semibold text-obsidian-text">Finanzas</h2>
+              <p className="mt-1 text-sm text-obsidian-muted">Ingresos, vencimientos y gastos en un solo vistazo.</p>
+            </div>
+            {exchangeRateControl}
+          </div>
           <div role="group" aria-label="Moneda del resumen financiero" className="mt-3 flex gap-1">
             {(['MXN', 'USD'] as const).map((currency) => (
               <button key={currency} type="button" className="ui-action-toggle" aria-pressed={overviewCurrency === currency} onClick={() => setOverviewCurrency(currency)}>{currency}</button>
@@ -1025,7 +1105,7 @@ export const SubscriptionsView: React.FC = () => {
           </button>
         </div>
       )}
-      {activeSection === 'subscriptions' && showRateNotice && (
+      {activeSection !== 'finance_cards' && showRateNotice && (
         <div role="status" className="flex min-w-0 flex-wrap items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
           <AlertTriangle size={14} aria-hidden="true" />
           <span className="min-w-0 flex-1">El tipo de cambio requiere revisión.</span>
@@ -1046,7 +1126,7 @@ export const SubscriptionsView: React.FC = () => {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-2 min-w-0">
           <CreditCard className="text-obsidian-muted flex-shrink-0" size={18} aria-hidden="true" />
-          <h2 className="text-base font-bold text-white tracking-tight truncate">
+          <h2 className="font-heading text-base font-bold text-white tracking-tight truncate">
             {activeSection === 'finance_income' ? 'Ingresos y pagos'
               : activeSection === 'finance_services' ? 'Servicios y vencimientos'
                 : activeSection === 'finance_expenses' ? 'Gastos'
@@ -1059,9 +1139,9 @@ export const SubscriptionsView: React.FC = () => {
           />
         </div>
 
-        {activeSection === 'subscriptions' && <div className="flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto">
+        {activeSection !== 'finance_cards' && <div className="flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto">
           {/* Compact Exchange Rate Control */}
-          <div className="flex max-w-full min-w-0 flex-wrap items-center gap-1 rounded-lg bg-obsidian-panel px-2 py-1">
+          <div className="flex max-w-full min-w-0 flex-wrap items-center gap-1 rounded-lg border border-obsidian-border bg-obsidian-panel px-2 py-1">
             {isEditingRate ? (
               <div className="flex items-center gap-1.5">
                 <input
@@ -1073,7 +1153,7 @@ export const SubscriptionsView: React.FC = () => {
                   aria-label="Tipo de cambio manual"
                   value={manualRateInput}
                   onChange={(e) => setManualRateInput(e.target.value.slice(0, 10))}
-                  className="w-20 px-2 py-0.5 rounded-lg bg-obsidian-bg border border-indigo-500 text-xs font-mono text-white focus:outline-none"
+                  className="w-24 min-h-11 px-2 py-1 rounded-lg bg-obsidian-surface border border-obsidian-accent text-xs font-mono text-white focus:outline-none"
                 />
                 <button
                   type="button"
@@ -1088,7 +1168,7 @@ export const SubscriptionsView: React.FC = () => {
                   aria-label="Cancelar edición de tipo de cambio"
                   className="ui-action-secondary min-w-11"
                 >{/* [Acción secundaria] Mantiene disponible esta acción en su contexto. */}
-                  X
+                  <X size={16} aria-hidden="true" />
                 </button>
               </div>
             ) : (

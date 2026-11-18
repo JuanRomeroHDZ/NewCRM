@@ -173,7 +173,7 @@ export const PlatformsView: React.FC = () => {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex min-w-0 items-center gap-2">
           <Globe className="flex-shrink-0 text-obsidian-muted" size={18} aria-hidden="true" />
-          <h2 aria-live="polite" className="truncate text-base font-bold tracking-tight text-white">
+          <h2 aria-live="polite" className="font-heading truncate text-base font-bold tracking-tight text-white">
             Cuentas y Servicios ({filteredPlatforms.length})
           </h2>
           <InfoTooltip
@@ -181,14 +181,23 @@ export const PlatformsView: React.FC = () => {
             content="Cuentas y herramientas conectadas a tus correos principales con sus contraseñas, llaves de conexión y suscripciones."
           />
         </div>
-
+        {isUnlocked && (
+          <button
+            type="button"
+            onClick={() => openPlatformModal()}
+            className="ui-action-primary max-w-full shrink-0"
+          >{/* [Acción principal] Inicia o confirma la tarea de este espacio. */}
+            <Plus size={16} aria-hidden="true" />
+            <span>Vincular servicio</span>
+          </button>
+        )}
       </div>
 
       {/* Locked Banner */}
       {!isUnlocked && (
-        <div className="flex flex-col justify-between gap-3 rounded-xl border border-amber-500/25 bg-amber-500/10 p-4 sm:flex-row sm:items-center">
-          <div className="flex min-w-0 items-start gap-3 text-xs text-amber-200 sm:items-center">
-            <Lock size={16} className="mt-0.5 flex-shrink-0 text-amber-400 sm:mt-0" aria-hidden="true" />
+        <div className="flex flex-col justify-between gap-3 rounded-xl border border-obsidian-border bg-obsidian-panel p-4 sm:flex-row sm:items-center">
+          <div className="flex min-w-0 items-start gap-3 text-xs text-obsidian-text sm:items-center">
+            <Lock size={16} className="mt-0.5 flex-shrink-0 text-obsidian-muted sm:mt-0" aria-hidden="true" />
             <span className="leading-relaxed">
               Bóveda bloqueada. Desbloquea con tu contraseña de acceso para consultar cuentas, contraseñas y suscripciones.
             </span>
@@ -220,7 +229,7 @@ export const PlatformsView: React.FC = () => {
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Buscar servicio o usuario..."
               aria-label="Buscar por nombre de servicio o usuario"
-              className="min-h-[44px] w-full rounded-lg border border-obsidian-border bg-obsidian-bg py-2 pl-9 pr-3 text-xs text-white placeholder-obsidian-muted/60 focus:border-indigo-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+              className="min-h-[44px] w-full rounded-lg border border-obsidian-border bg-obsidian-surface py-2 pl-9 pr-3 text-xs text-white placeholder-obsidian-muted/60 focus:border-obsidian-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-accent"
             />
           </div>
 
@@ -233,7 +242,7 @@ export const PlatformsView: React.FC = () => {
             aria-label="Filtrar por correo principal"
             value={selectedEmail}
             onChange={(e) => setSelectedEmail(e.target.value)}
-            className="min-h-[44px] max-w-full min-w-[min(100%,7rem)] flex-[1_1_7rem] rounded-lg border border-obsidian-border bg-obsidian-bg px-3 text-obsidian-text focus:border-indigo-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 sm:max-w-[220px]"
+            className="min-h-[44px] max-w-full min-w-[min(100%,7rem)] flex-[1_1_7rem] rounded-lg border border-obsidian-border bg-obsidian-surface px-3 text-obsidian-text focus:border-obsidian-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-accent sm:max-w-[220px]"
           >
             <option value="">Correos</option>
             {filteredEmails.map((e) => (
@@ -252,7 +261,7 @@ export const PlatformsView: React.FC = () => {
             aria-label="Filtrar por estado de suscripción"
             value={selectedStatus}
             onChange={(e) => setSelectedStatus(e.target.value)}
-            className="min-h-[44px] max-w-full min-w-[min(100%,7rem)] flex-[1_1_7rem] rounded-lg border border-obsidian-border bg-obsidian-bg px-3 text-obsidian-text focus:border-indigo-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 sm:max-w-[180px]"
+            className="min-h-[44px] max-w-full min-w-[min(100%,7rem)] flex-[1_1_7rem] rounded-lg border border-obsidian-border bg-obsidian-surface px-3 text-obsidian-text focus:border-obsidian-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-accent sm:max-w-[180px]"
           >
             <option value="">Estados</option>
             <option value="active">Activa (Con cobro)</option>
@@ -273,7 +282,7 @@ export const PlatformsView: React.FC = () => {
                 aria-label="Filtrar por etiqueta"
                 value={selectedTag}
                 onChange={(e) => setSelectedTag(e.target.value)}
-                className="min-h-[44px] max-w-full min-w-[min(100%,8rem)] flex-[1_1_9rem] rounded-lg border border-obsidian-border bg-obsidian-bg px-3 text-obsidian-text focus:border-indigo-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 sm:max-w-[160px]"
+                className="min-h-[44px] max-w-full min-w-[min(100%,8rem)] flex-[1_1_9rem] rounded-lg border border-obsidian-border bg-obsidian-surface px-3 text-obsidian-text focus:border-obsidian-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-accent sm:max-w-[160px]"
               >
                 <option value="">Todas las Etiquetas</option>
                 {allTags.map((t) => (
@@ -291,7 +300,7 @@ export const PlatformsView: React.FC = () => {
           <div
             role="group"
             aria-label="Modo de visualización"
-            className="hidden min-h-[52px] shrink-0 items-center rounded-lg border border-obsidian-border bg-obsidian-bg p-1 md:flex"
+            className="hidden min-h-[52px] shrink-0 items-center rounded-lg border border-obsidian-border bg-obsidian-surface p-1 md:flex"
           >
             {/* [Estado seleccionable] Cambia la presentación sin modificar los servicios. */}
             <button
@@ -311,16 +320,6 @@ export const PlatformsView: React.FC = () => {
               Lista
             </button>
           </div>
-          {isUnlocked && (
-            <button
-              type="button"
-              onClick={() => openPlatformModal()}
-              className="ui-action-primary max-w-full shrink-0"
-            >{/* [Acción principal] Inicia o confirma la tarea de este espacio. */}
-              <Plus size={16} aria-hidden="true" />
-              <span>Vincular servicio</span>
-            </button>
-          )}
         </div>
       </div>
 

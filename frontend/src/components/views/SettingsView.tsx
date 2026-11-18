@@ -272,16 +272,45 @@ export const SettingsView: React.FC = () => {
 
       <form onSubmit={handleSavePreferences} className="space-y-4 sm:space-y-4">
         {/* Visual Customization (Notion & Obsidian aesthetics) */}
-        <section id="settings-appearance" tabIndex={-1} style={{ outline: activeSection === 'settings_appearance' ? '2px solid var(--brand-accent, #0F766E)' : undefined, outlineOffset: '2px' }} className="min-w-0 scroll-mt-4 space-y-2 border-b border-obsidian-border pb-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent">
+        <section id="settings-appearance" tabIndex={-1} className="min-w-0 scroll-mt-4 space-y-3 border-b border-obsidian-border pb-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent">
           <h3 className="text-sm font-bold text-white flex items-center gap-2">
             <Palette size={16} className="text-obsidian-muted" aria-hidden="true" />
             <span>Apariencia</span>
           </h3>
-          <p className="text-xs leading-5 text-obsidian-muted">La interfaz usa superficies neutras; el lienzo de mapas y pizarras conserva sus propias herramientas de color.</p>
+          <p className="text-xs leading-5 text-obsidian-muted">La interfaz usa superficies neutras; el lienzo de mapas y diagramas conserva sus propias herramientas de color.</p>
+          <div className="flex flex-wrap items-center gap-3 pt-1">
+            <label htmlFor="brand-accent-picker" className="text-xs font-medium text-obsidian-text">
+              Color de acento:
+            </label>
+            <div className="flex items-center gap-2">
+              {['#0F766E', '#0284C7', '#059669', '#B45309', '#64748B'].map((preset) => (
+                <button
+                  key={preset}
+                  type="button"
+                  onClick={() => setLocalAccent(preset)}
+                  aria-label={`Acento ${preset}`}
+                  aria-pressed={localAccent.toUpperCase() === preset}
+                  style={{ backgroundColor: preset }}
+                  className={`h-8 w-8 rounded-full border transition-transform ${
+                    localAccent.toUpperCase() === preset ? 'border-white scale-105' : 'border-obsidian-border'
+                  }`}
+                />
+              ))}
+              <input
+                id="brand-accent-picker"
+                type="color"
+                value={localAccent}
+                onChange={(e) => setLocalAccent(e.target.value)}
+                aria-label="Selector de color de acento"
+                className="h-9 w-11 cursor-pointer rounded-lg border border-obsidian-border bg-obsidian-surface p-1"
+              />
+              <span className="font-mono text-xs text-obsidian-muted">{localAccent.toUpperCase()}</span>
+            </div>
+          </div>
         </section>
 
         {/* Security Parameters */}
-        <div id="settings-session" tabIndex={-1} style={{ outline: activeSection === 'settings_session' ? '2px solid var(--brand-accent, #0F766E)' : undefined, outlineOffset: '2px' }} className="min-w-0 scroll-mt-4 space-y-4 rounded-xl border border-obsidian-border bg-obsidian-panel p-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent sm:p-4">
+        <div id="settings-session" tabIndex={-1} className="min-w-0 scroll-mt-4 space-y-4 rounded-xl border border-obsidian-border bg-obsidian-panel p-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent sm:p-4">
           <div className="flex items-center gap-2">
             <Shield size={16} className="text-obsidian-muted" aria-hidden="true" />
             <h3 className="text-sm font-bold text-white">Sesión y Portapapeles</h3>
@@ -298,7 +327,7 @@ export const SettingsView: React.FC = () => {
                 id="vault-timeout-select"
                 value={localTimeout}
                 onChange={(e) => setLocalTimeout(Number(e.target.value))}
-                className="w-full px-3 py-2 rounded-lg min-h-11 bg-obsidian-bg border border-obsidian-border text-white focus:outline-none focus:border-obsidian-accent"
+                className="w-full px-3 py-2 rounded-lg min-h-11 bg-obsidian-surface border border-obsidian-border text-white focus:outline-none focus:border-obsidian-accent"
               >
                 <option value={1}>1 minuto</option>
                 <option value={5}>5 minutos</option>
@@ -325,7 +354,7 @@ export const SettingsView: React.FC = () => {
                 id="clipboard-clear-select"
                 value={localClipboard}
                 onChange={(e) => setLocalClipboard(Number(e.target.value))}
-                className="w-full px-3 py-2 rounded-lg min-h-11 bg-obsidian-bg border border-obsidian-border text-white focus:outline-none focus:border-obsidian-accent"
+                className="w-full px-3 py-2 rounded-lg min-h-11 bg-obsidian-surface border border-obsidian-border text-white focus:outline-none focus:border-obsidian-accent"
               >
                 <option value={10}>A los 10 segundos</option>
                 <option value={20}>A los 20 segundos</option>
@@ -345,7 +374,7 @@ export const SettingsView: React.FC = () => {
                 maxLength={INPUT_LIMITS.HOTKEY}
                 value={localHotkey}
                 onChange={(e) => setLocalHotkey(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg min-h-11 bg-obsidian-bg border border-obsidian-border text-white font-mono text-xs focus:outline-none focus:border-obsidian-accent"
+                className="w-full px-3 py-2 rounded-lg min-h-11 bg-obsidian-surface border border-obsidian-border text-white font-mono text-xs focus:outline-none focus:border-obsidian-accent"
               />
             </div>
 
@@ -388,7 +417,7 @@ export const SettingsView: React.FC = () => {
                 id="rotation-root-select"
                 value={rotationRootDays}
                 onChange={(e) => setRotationRootDays(Number(e.target.value))}
-                className="w-full px-3 py-2 rounded-lg min-h-11 bg-obsidian-bg border border-obsidian-border text-white focus:outline-none focus:border-obsidian-accent"
+                className="w-full px-3 py-2 rounded-lg min-h-11 bg-obsidian-surface border border-obsidian-border text-white focus:outline-none focus:border-obsidian-accent"
               >
                 <option value={90}>Cada 90 días (Recomendado)</option>
                 <option value={180}>Cada 180 días</option>
@@ -405,7 +434,7 @@ export const SettingsView: React.FC = () => {
                 id="rotation-secondary-select"
                 value={rotationSecondaryDays}
                 onChange={(e) => setRotationSecondaryDays(Number(e.target.value))}
-                className="w-full px-3 py-2 rounded-lg min-h-11 bg-obsidian-bg border border-obsidian-border text-white focus:outline-none focus:border-obsidian-accent"
+                className="w-full px-3 py-2 rounded-lg min-h-11 bg-obsidian-surface border border-obsidian-border text-white focus:outline-none focus:border-obsidian-accent"
               >
                 <option value={90}>Cada 90 días</option>
                 <option value={180}>Cada 180 días (Recomendado)</option>
@@ -422,7 +451,7 @@ export const SettingsView: React.FC = () => {
                 id="max-followup-select"
                 value={maxFollowupAttempts}
                 onChange={(e) => setMaxFollowupAttempts(Number(e.target.value))}
-                className="w-full px-3 py-2 rounded-lg min-h-11 bg-obsidian-bg border border-obsidian-border text-white focus:outline-none focus:border-obsidian-accent"
+                className="w-full px-3 py-2 rounded-lg min-h-11 bg-obsidian-surface border border-obsidian-border text-white focus:outline-none focus:border-obsidian-accent"
               >
                 <option value={3}>3 intentos sin respuesta (Predeterminado)</option>
                 <option value={4}>4 intentos sin respuesta</option>
@@ -449,7 +478,7 @@ export const SettingsView: React.FC = () => {
                     setBudgetCapAmount(decimal < 0 ? value : `${value.slice(0, decimal + 1)}${value.slice(decimal + 1).replace(/\./g, '')}`);
                   }}
                   placeholder="Ej. 5000"
-                  className="min-w-0 min-h-11 flex-1 px-3 py-2 rounded-lg bg-obsidian-bg border border-obsidian-border text-white font-mono text-xs focus:outline-none focus:border-obsidian-accent"
+                  className="min-w-0 min-h-11 flex-1 px-3 py-2 rounded-lg bg-obsidian-surface border border-obsidian-border text-white font-mono text-xs focus:outline-none focus:border-obsidian-accent"
                 />
                 <label htmlFor="budget-cap-currency" className="sr-only">
                   Moneda del presupuesto mensual
@@ -458,7 +487,7 @@ export const SettingsView: React.FC = () => {
                   id="budget-cap-currency"
                   value={budgetCapCurrency}
                   onChange={(e) => setBudgetCapCurrency(e.target.value)}
-                  className="w-24 min-h-11 shrink-0 px-2 py-2 rounded-lg bg-obsidian-bg border border-obsidian-border text-white font-semibold sm:w-28 sm:px-3"
+                  className="w-24 min-h-11 shrink-0 px-2 py-2 rounded-lg bg-obsidian-surface border border-obsidian-border text-white font-semibold sm:w-28 sm:px-3"
                 >
                   {currencySelectOptions.map((code) => (
                     <option key={code} value={code}>
@@ -472,7 +501,7 @@ export const SettingsView: React.FC = () => {
         </div>
 
         {/* Change Master Password */}
-        <div id="settings-access" tabIndex={-1} style={{ outline: activeSection === 'settings_access' ? '2px solid var(--brand-accent, #0F766E)' : undefined, outlineOffset: '2px' }} className="min-w-0 scroll-mt-4 space-y-4 rounded-xl border border-obsidian-border bg-obsidian-panel p-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent sm:p-6">
+        <div id="settings-access" tabIndex={-1} className="min-w-0 scroll-mt-4 space-y-4 rounded-xl border border-obsidian-border bg-obsidian-panel p-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent sm:p-6">
           <div className="flex items-center gap-2">
             <Key size={16} className="text-obsidian-muted" aria-hidden="true" />
             <h3 className="text-sm font-bold text-white">Cambiar contraseña de acceso</h3>
@@ -492,7 +521,7 @@ export const SettingsView: React.FC = () => {
                   maxLength={INPUT_LIMITS.MASTER_PASSWORD}
                   value={currentMasterPassword}
                   onChange={(e) => setCurrentMasterPassword(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg min-h-11 bg-obsidian-bg border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-obsidian-accent"
+                  className="w-full px-3 py-2 rounded-lg min-h-11 bg-obsidian-surface border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-obsidian-accent"
                 />
               </div>
             )}
@@ -513,7 +542,7 @@ export const SettingsView: React.FC = () => {
                   }
                 }}
                 placeholder="Dejar en blanco para mantener actual"
-                className="w-full px-3 py-2 rounded-lg min-h-11 bg-obsidian-bg border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-obsidian-accent"
+                className="w-full px-3 py-2 rounded-lg min-h-11 bg-obsidian-surface border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-obsidian-accent"
               />
             </div>
 
@@ -528,7 +557,7 @@ export const SettingsView: React.FC = () => {
                 value={confirmMasterPassword}
                 onChange={(e) => setConfirmMasterPassword(e.target.value)}
                 placeholder="Repetir nueva contraseña"
-                className="w-full px-3 py-2 rounded-lg min-h-11 bg-obsidian-bg border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-obsidian-accent"
+                className="w-full px-3 py-2 rounded-lg min-h-11 bg-obsidian-surface border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-obsidian-accent"
               />
             </div>
           </div>
@@ -547,11 +576,11 @@ export const SettingsView: React.FC = () => {
         </div>
       </form>
 
-      <section id="settings-network" tabIndex={-1} style={{ outline: activeSection === 'settings_network' ? '2px solid var(--brand-accent, #0F766E)' : undefined, outlineOffset: '2px' }} className="scroll-mt-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent">
+      <section id="settings-network" tabIndex={-1} className="scroll-mt-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent">
         <RuntimeConfigSection />
       </section>
 
-      <section id="settings-tools" tabIndex={-1} style={{ outline: activeSection === 'settings_tools' ? '2px solid var(--brand-accent, #0F766E)' : undefined, outlineOffset: '2px' }} aria-labelledby="settings-tools-heading" className="scroll-mt-4 rounded-xl border border-obsidian-border bg-obsidian-panel p-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent">
+      <section id="settings-tools" tabIndex={-1} aria-labelledby="settings-tools-heading" className="scroll-mt-4 rounded-xl border border-obsidian-border bg-obsidian-panel p-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent">
         <h3 id="settings-tools-heading" className="text-sm font-bold text-white">Herramientas</h3>
         {/* [Acción secundaria] Abrir las herramientas sin cambiar datos directamente. */}
         <div className="mt-3 flex flex-wrap gap-2">
@@ -562,7 +591,7 @@ export const SettingsView: React.FC = () => {
       </section>
 
       {/* Backup & Import/Export Section */}
-      <div id="settings-backup" tabIndex={-1} style={{ outline: activeSection === 'settings_backup' ? '2px solid var(--brand-accent, #0F766E)' : undefined, outlineOffset: '2px' }} className="scroll-mt-4 divide-y divide-obsidian-border border-y border-obsidian-border focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent">
+      <div id="settings-backup" tabIndex={-1} className="scroll-mt-4 divide-y divide-obsidian-border border-y border-obsidian-border focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent">
         {/* Import */}
         <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 py-4">
           <div className="flex min-w-0 items-center gap-2">
@@ -598,7 +627,7 @@ export const SettingsView: React.FC = () => {
         </div>
       </div>
 
-      <section id="settings-team" tabIndex={-1} style={{ outline: activeSection === 'settings_team' ? '2px solid var(--brand-accent, #0F766E)' : undefined, outlineOffset: '2px' }} className="scroll-mt-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent">
+      <section id="settings-team" tabIndex={-1} className="scroll-mt-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent">
         <OperatorAuthSection />
       </section>
     </div>

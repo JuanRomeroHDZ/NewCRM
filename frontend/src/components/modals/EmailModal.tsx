@@ -284,7 +284,7 @@ export const EmailModal: React.FC = () => {
                 value={address}
                 onChange={(e) => setAddress(e.target.value)}
                 placeholder="nombre@tudominio.com"
-                className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-indigo-500"
+                className="w-full px-3 py-2 rounded-xl bg-obsidian-surface border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-obsidian-accent"
               />
             </div>
 
@@ -300,7 +300,7 @@ export const EmailModal: React.FC = () => {
                     setInboxUrl(defaultUrl);
                   }
                 }}
-                className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs focus:outline-none focus:border-indigo-500"
+                className="w-full px-3 py-2 rounded-xl bg-obsidian-surface border border-obsidian-border text-white text-xs focus:outline-none focus:border-obsidian-accent"
               >
                 <option value="Google">Google (Gmail / Workspace)</option>
                 <option value="Proton">Proton Mail</option>
@@ -318,7 +318,7 @@ export const EmailModal: React.FC = () => {
                   value={customProvider}
                   onChange={(e) => setCustomProvider(e.target.value)}
                   placeholder="Nombre del proveedor (ej. Fastmail, Hostinger...)"
-                  className="mt-1.5 w-full px-3 py-1.5 rounded-xl bg-obsidian-bg border border-indigo-500/50 text-white text-xs focus:outline-none focus:border-indigo-500"
+                  className="mt-1.5 w-full px-3 py-1.5 rounded-xl bg-obsidian-bg border border-indigo-500/50 text-white text-xs focus:outline-none focus:border-obsidian-accent"
                 />
               )}
             </div>
@@ -331,7 +331,7 @@ export const EmailModal: React.FC = () => {
                 value={inboxUrl}
                 onChange={(e) => setInboxUrl(e.target.value)}
                 placeholder="https://mail.google.com"
-                className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-indigo-500"
+                className="w-full px-3 py-2 rounded-xl bg-obsidian-surface border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-obsidian-accent"
               />
             </div>
 
@@ -346,7 +346,7 @@ export const EmailModal: React.FC = () => {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••••••••••"
-                className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-indigo-500"
+                className="w-full px-3 py-2 rounded-xl bg-obsidian-surface border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-obsidian-accent"
               />
             </div>
           </div>
@@ -366,7 +366,7 @@ export const EmailModal: React.FC = () => {
                 <select id="emailmodal-field-4"
                   value={recoveryEmailId}
                   onChange={(e) => setRecoveryEmailId(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs focus:outline-none focus:border-indigo-500"
+                  className="w-full px-3 py-2 rounded-xl bg-obsidian-surface border border-obsidian-border text-white text-xs focus:outline-none focus:border-obsidian-accent"
                 >
                   <option value="">Sin correo de respaldo</option>
                   {existingEmails
@@ -387,7 +387,7 @@ export const EmailModal: React.FC = () => {
                   value={recoveryPhone}
                   onChange={(e) => setRecoveryPhone(e.target.value)}
                   placeholder="Ej. +52 55 1234 5678"
-                  className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-indigo-500"
+                  className="w-full px-3 py-2 rounded-xl bg-obsidian-surface border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-obsidian-accent"
                 />
               </div>
 
@@ -396,7 +396,7 @@ export const EmailModal: React.FC = () => {
                 <select id="emailmodal-field-6"
                   value={twoFactorMethod}
                   onChange={(e) => setTwoFactorMethod(e.target.value as any)}
-                  className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs focus:outline-none focus:border-indigo-500"
+                  className="w-full px-3 py-2 rounded-xl bg-obsidian-surface border border-obsidian-border text-white text-xs focus:outline-none focus:border-obsidian-accent"
                 >
                   <option value="authenticator">App Autenticadora (Google/Authy)</option>
                   <option value="passkey">Llave Física / Passkey</option>
@@ -427,7 +427,7 @@ export const EmailModal: React.FC = () => {
                   }
                 }}
                 placeholder="ventas@tudominio.com o usuario+prospectos@gmail.com"
-                className="flex-1 min-w-0 px-3 py-1.5 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-indigo-500"
+                className="flex-1 min-w-0 px-3 py-1.5 rounded-xl bg-obsidian-surface border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-obsidian-accent"
               />
               <button
                 type="button"
@@ -470,7 +470,7 @@ export const EmailModal: React.FC = () => {
                   }
                 }}
                 placeholder="Ingresa un código de recuperación (ej. XXXX-XXXX)"
-                className="flex-1 min-w-0 px-3 py-1.5 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-indigo-500"
+                className="flex-1 min-w-0 px-3 py-1.5 rounded-xl bg-obsidian-surface border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-obsidian-accent"
               />
               <button
                 type="button"
@@ -520,7 +520,7 @@ export const EmailModal: React.FC = () => {
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Ej. Correo principal para contacto con clientes o administración de servidores..."
-              className="w-full px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs focus:outline-none focus:border-indigo-500"
+              className="w-full px-3 py-2 rounded-xl bg-obsidian-surface border border-obsidian-border text-white text-xs focus:outline-none focus:border-obsidian-accent"
             />
           </div>
           </div>

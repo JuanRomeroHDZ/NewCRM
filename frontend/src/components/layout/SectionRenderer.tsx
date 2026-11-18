@@ -16,6 +16,7 @@ const sectionViews: Record<SectionType, React.LazyExoticComponent<React.Componen
   writeups: lazy(() => import('../writeups/WriteupsView').then((module) => ({ default: module.WriteupsView }))),
   reports_documents: lazy(() => import('../reports/ReportsDocumentsView').then((module) => ({ default: module.ReportsDocumentsView }))),
   reports_canvases: lazy(() => import('../reports/ReportsCanvasesView').then((module) => ({ default: module.ReportsCanvasesView }))),
+  overview_reports: lazy(() => import('../views/ModuleOverviewView').then((module) => ({ default: module.ModuleOverviewView }))),
   subscriptions: lazy(() => import('../views/SubscriptionsView').then((module) => ({ default: module.SubscriptionsView }))),
   overview_finances: lazy(() => import('../views/SubscriptionsView').then((module) => ({ default: module.SubscriptionsView }))),
   finance_income: lazy(() => import('../views/SubscriptionsView').then((module) => ({ default: module.SubscriptionsView }))),

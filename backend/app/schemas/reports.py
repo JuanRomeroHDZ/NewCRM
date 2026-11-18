@@ -53,6 +53,7 @@ class TypstCompileResponse(BaseModel):
 class ReportCanvasCreate(BaseModel):
     title: str = Field(default="Nuevo lienzo", min_length=1, max_length=200)
     scene_json: str | None = None
+    svg_snapshot: str | None = None
     element_count: int = Field(default=0, ge=0)
     linked_document_id: str | None = None
     prospect_id: str | None = None
@@ -63,6 +64,7 @@ class ReportCanvasCreate(BaseModel):
 class ReportCanvasUpdate(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=200)
     scene_json: str | None = None
+    svg_snapshot: str | None = None
     element_count: int | None = Field(default=None, ge=0)
     linked_document_id: str | None = None
     prospect_id: str | None = None

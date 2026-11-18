@@ -10,7 +10,7 @@ const SYSTEM_CURRENCIES = [
   { code: 'USD', name: 'Dólar estadounidense', symbol: 'US$', is_base: false },
 ] as const;
 
-const INPUT_CLASS = 'w-full min-w-0 min-h-11 rounded-lg border border-obsidian-border bg-obsidian-bg px-3 py-2 text-xs text-white focus:border-obsidian-accent focus:outline-none';
+const INPUT_CLASS = 'w-full min-w-0 min-h-11 rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 text-xs text-white focus:border-obsidian-accent focus:outline-none';
 const LABEL_CLASS = 'mb-1 block text-xs text-obsidian-muted';
 
 function parseColonias(value: string): { values: string[]; error: string | null } {
@@ -232,15 +232,6 @@ export const RuntimeConfigSection: React.FC = () => {
           <h3 className="text-sm font-bold text-white">Monedas y mapa</h3>
           <InfoTooltip content="Configura el formato de moneda y la ubicación de búsqueda." />
         </div>
-        {/* [Acción principal] Guarda la configuración completa del formulario. */}
-        <button
-          type="submit"
-          disabled={saving || configUnavailable}
-          className="ui-action-primary"
-        >
-          <Save size={16} aria-hidden="true" />
-          <span>{saving ? 'Guardando…' : 'Guardar'}</span>
-        </button>
       </div>
 
       {runtimeConfigLoading && (
@@ -330,7 +321,7 @@ export const RuntimeConfigSection: React.FC = () => {
             <div key={zone.slug} className="grid grid-cols-1 items-center gap-2 border-t border-obsidian-border/70 pt-2 sm:grid-cols-[minmax(0,0.75fr)_minmax(0,1.5fr)_auto]">
               <label htmlFor={`zone-colonias-${zone.slug}`} className="min-w-0 font-medium text-white">
                 <span className="block truncate">{zone.zone}</span>
-                <span className="font-mono text-[10px] text-obsidian-muted">{zone.slug}</span>
+                <span className="font-mono text-xs text-obsidian-muted">{zone.slug}</span>
               </label>
               <input
                 id={`zone-colonias-${zone.slug}`}
@@ -371,13 +362,9 @@ export const RuntimeConfigSection: React.FC = () => {
       </fieldset>
     </form>
         <section id="settings-writeups" tabIndex={-1} aria-labelledby="settings-writeups-heading" className="scroll-mt-4 space-y-3 rounded-xl border border-obsidian-border bg-obsidian-panel p-4 text-xs focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent sm:p-5">
-          <div className="flex flex-wrap items-center justify-between gap-2">
           <h3 id="settings-writeups-heading" className="flex items-center gap-2 text-sm font-semibold text-white">
-            <FileText size={18} className="text-obsidian-muted" aria-hidden="true" /> Informes de seguridad
+            <FileText size={18} className="text-obsidian-muted" aria-hidden="true" /> Reportes e informes
           </h3>
-          {/* [Acción principal] Guarda también las preferencias de informes. */}
-          <button type="submit" form="runtime-config-form" disabled={saving || configUnavailable} className="ui-action-primary"><Save size={16} aria-hidden="true" />{saving ? 'Guardando…' : 'Guardar'}</button>
-          </div>
           <fieldset disabled={configUnavailable || saving} className="min-w-0 border-0 p-0 disabled:opacity-60">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
@@ -391,6 +378,13 @@ export const RuntimeConfigSection: React.FC = () => {
           </div>
           </fieldset>
         </section>
+        {/* [Acción principal] Guarda monedas, zonas del mapa y ajustes de reportes en una sola acción. */}
+        <div className="flex justify-end">
+          <button type="submit" form="runtime-config-form" disabled={saving || configUnavailable} className="ui-action-primary">
+            <Save size={16} aria-hidden="true" />
+            <span>{saving ? 'Guardando…' : 'Guardar configuración regional y reportes'}</span>
+          </button>
+        </div>
     </div>
   );
 };

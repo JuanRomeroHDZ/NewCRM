@@ -4,11 +4,10 @@ import {
 } from 'lucide-react';
 import { useVault } from '../../context/VaultContext';
 import { api, getApiUserToken } from '../../lib/api';
-import type { AuditLogItem, CoreUser } from '../../types';
+import type { CoreUser } from '../../types';
 import { InfoTooltip } from '../common/InfoTooltip';
 import { EmptyState } from '../common/EmptyState';
 import { INPUT_LIMITS } from '../../lib/validation';
-import { censorSensitiveText } from '../../lib/censorSensitiveText';
 
 const TRASH_TYPE_LABELS: Record<string, string> = {
   email: 'Correo principal',
@@ -21,25 +20,6 @@ const TRASH_TYPE_LABELS: Record<string, string> = {
   payment_card: 'Tarjeta / Método de pago',
 };
 
-const AUDIT_ACTION_LABELS: Record<string, string> = {
-  vault_unlock: 'Desbloqueo',
-  export: 'Exportación',
-  restore: 'Restauración',
-  create: 'Creación',
-  update: 'Actualización',
-  delete: 'Eliminación',
-  copy_secret: 'Copia secreto',
-  update_2fa: 'Verificación en 2 pasos',
-  contact_followup: 'Seguimiento',
-  contact_attempt: 'Intento de contacto',
-  billing_renewal: 'Renovación',
-  auto_archive: 'Archivo frío',
-  reactivate: 'Reactivación',
-  recycle_demo: 'Demo reciclada',
-  auto_purge: 'Auto-purga',
-  permanent_delete: 'Eliminación permanente',
-};
-
 export const TrashView: React.FC = () => {
   const {
     isUnlocked, openUnlockModal, showToast, triggerDataReload, dataVersion, confirm,
@@ -47,11 +27,9 @@ export const TrashView: React.FC = () => {
   } = useVault();
 
   const [trashItems, setTrashItems] = useState<any[]>([]);
-  const [auditLogs, setAuditLogs] = useState<AuditLogItem[]>([]);
   const [currentUser, setCurrentUser] = useState<CoreUser | null>(null);
   const [requiresUserLogin, setRequiresUserLogin] = useState(false);
   const [retentionDays, setRetentionDays] = useState<number>(0);
-  const [activeTab, setActiveTab] = useState<'trash' | 'audit'>('trash');
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -62,7 +40,6 @@ export const TrashView: React.FC = () => {
     const generation = ++loadGeneration.current;
     if (!isUnlocked) {
       setTrashItems([]);
-      setAuditLogs([]);
       setCurrentUser(null);
       setRequiresUserLogin(false);
       setRetentionDays(0);
@@ -74,7 +51,6 @@ export const TrashView: React.FC = () => {
     }
     if (!getApiUserToken()) {
       setTrashItems([]);
-      setAuditLogs([]);
       setCurrentUser(null);
       setRequiresUserLogin(true);
       setLoadError(null);
@@ -90,19 +66,16 @@ export const TrashView: React.FC = () => {
       setCurrentUser(user);
       if (user.must_change_password) {
         setTrashItems([]);
-        setAuditLogs([]);
         setLoadError(null);
         setLoading(false);
         return;
       }
-      const [tList, aList, vStatus] = await Promise.all([
+      const [tList, vStatus] = await Promise.all([
         api.getTrash(),
-        api.getAuditLogs(60),
         api.getVaultStatus().catch(() => null),
       ]);
       if (generation !== loadGeneration.current) return;
       setTrashItems(tList);
-      setAuditLogs(aList);
       if (vStatus && typeof vStatus.trash_retention_days === 'number') {
         setRetentionDays(vStatus.trash_retention_days);
       }
@@ -111,7 +84,6 @@ export const TrashView: React.FC = () => {
       const hasUserSession = Boolean(getApiUserToken());
       setCurrentUser(null);
       setTrashItems([]);
-      setAuditLogs([]);
       setRequiresUserLogin(!hasUserSession);
       if (!hasUserSession) {
         setLoadError(null);
@@ -134,7 +106,6 @@ export const TrashView: React.FC = () => {
     const handleSessionExpired = () => {
       loadGeneration.current += 1;
       setTrashItems([]);
-      setAuditLogs([]);
       setCurrentUser(null);
       setRequiresUserLogin(true);
       setLoadError(null);
@@ -251,10 +222,10 @@ export const TrashView: React.FC = () => {
         </div>
         <button
           type="button"
-          onClick={() => setActiveSection('settings')}
+          onClick={() => setActiveSection('settings_team')}
           className="ui-action-secondary"
         >
-          Abrir Ajustes
+          Abrir Accesos del equipo
         </button>
       </div>
     );
@@ -274,10 +245,10 @@ export const TrashView: React.FC = () => {
         </div>
         <button
           type="button"
-          onClick={() => setActiveSection('settings')}
+          onClick={() => setActiveSection('settings_access')}
           className="ui-action-secondary"
         >
-          Abrir Ajustes
+          Abrir Contraseña de acceso
         </button>
       </div>
     );
@@ -319,7 +290,7 @@ export const TrashView: React.FC = () => {
                 id="trash-retention-select"
                 value={retentionDays}
                 onChange={(event) => handleRetentionChange(Number(event.target.value))}
-                className="min-h-11 max-w-full rounded-lg border border-obsidian-border bg-obsidian-bg px-2 text-white focus:border-obsidian-accent focus:outline-none"
+                className="min-h-11 max-w-full rounded-lg border border-obsidian-border bg-obsidian-surface px-2 text-white focus:border-obsidian-accent focus:outline-none"
               >
                 <option value={0}>Sin límite</option>
                 <option value={30}>30 días</option>
@@ -329,25 +300,14 @@ export const TrashView: React.FC = () => {
             </div>
           )}
 
-          {/* [Navegación] Cambia entre la papelera y la actividad reciente. */}
-          <div className="flex max-w-full flex-wrap items-center gap-1 text-xs">
-            <button
-              type="button"
-              onClick={() => setActiveTab('trash')}
-              aria-pressed={activeTab === 'trash'}
-              className="ui-action-toggle"
-            >
-              Papelera ({trashItems.length})
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('audit')}
-              aria-pressed={activeTab === 'audit'}
-              className="ui-action-toggle"
-            >
-              Actividad Reciente
-            </button>
-          </div>
+          {/* [Navegación] Permite consultar el historial completo de actividad. */}
+          <button
+            type="button"
+            onClick={() => setActiveSection('audit_logs')}
+            className="ui-action-secondary text-xs"
+          >
+            Historial completo
+          </button>
         </div>
       </div>
 
@@ -357,13 +317,13 @@ export const TrashView: React.FC = () => {
         </div>
       )}
 
-      {loading && trashItems.length === 0 && auditLogs.length === 0 ? (
-        <div className="space-y-3" role="status" aria-label="Cargando papelera y actividad reciente">
+      {loading && trashItems.length === 0 ? (
+        <div className="space-y-3" role="status" aria-label="Cargando papelera">
           <div className="h-16 rounded-xl bg-obsidian-panel border border-obsidian-border animate-pulse" />
           <div className="h-24 rounded-xl bg-obsidian-panel border border-obsidian-border animate-pulse" />
           <div className="h-24 rounded-xl bg-obsidian-panel border border-obsidian-border animate-pulse" />
         </div>
-      ) : loadError && trashItems.length === 0 && auditLogs.length === 0 ? (
+      ) : loadError && trashItems.length === 0 ? (
         <EmptyState
           icon={AlertTriangle}
           tone="error"
@@ -372,7 +332,7 @@ export const TrashView: React.FC = () => {
           actionLabel="Reintentar"
           onAction={loadData}
         />
-      ) : activeTab === 'trash' ? (
+      ) : (
         <div className="space-y-4">
           {trashItems.length > 0 && (
             <div className="flex flex-wrap items-center gap-3 rounded-xl border border-obsidian-border bg-obsidian-panel p-3 text-xs">
@@ -385,7 +345,7 @@ export const TrashView: React.FC = () => {
                   onChange={(e) => setSearchQuery(e.target.value)}
                   aria-label="Buscar elementos en la papelera"
                   placeholder="Buscar elemento eliminado..."
-                  className="w-full min-h-11 pl-8 pr-12 rounded-lg bg-obsidian-bg border border-obsidian-border text-xs text-white placeholder-obsidian-muted/60 focus:outline-none focus:border-obsidian-accent"
+                  className="w-full min-h-11 pl-8 pr-12 rounded-lg bg-obsidian-surface border border-obsidian-border text-xs text-white placeholder-obsidian-muted/60 focus:outline-none focus:border-obsidian-accent"
                 />
                 {searchQuery && (
                   <button
@@ -407,7 +367,7 @@ export const TrashView: React.FC = () => {
                   id="trash-type-filter"
                   value={typeFilter}
                   onChange={(e) => setTypeFilter(e.target.value)}
-                  className="min-h-11 px-3 rounded-lg bg-obsidian-bg border border-obsidian-border text-white text-xs focus:outline-none focus:border-obsidian-accent"
+                  className="min-h-11 px-3 rounded-lg bg-obsidian-surface border border-obsidian-border text-white text-xs focus:outline-none focus:border-obsidian-accent"
                 >
                   <option value="all">Todos ({trashItems.length})</option>
                   {availableTypes.map((typeKey) => (
@@ -436,7 +396,7 @@ export const TrashView: React.FC = () => {
                           <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-obsidian-surface text-obsidian-muted border border-obsidian-border flex-shrink-0">
                             {typeLabel}
                           </span>
-                          <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-obsidian-bg text-obsidian-muted border border-obsidian-border flex-shrink-0">
+                          <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-obsidian-surface text-obsidian-muted border border-obsidian-border flex-shrink-0">
                             {elapsedDays === 0 ? 'Eliminado hoy' : `En papelera hace ${elapsedDays} día(s)`}
                           </span>
                           {daysUntilHidden !== null && daysUntilHidden !== undefined ? (
@@ -503,51 +463,6 @@ export const TrashView: React.FC = () => {
               </div>
             )}
           </div>
-        </div>
-      ) : (
-        /* Audit log list */
-        <div className="rounded-xl bg-obsidian-panel border border-obsidian-border overflow-hidden">
-          <div className="p-4 border-b border-obsidian-border bg-obsidian-surface/40 flex items-center justify-between text-xs">
-            <span className="font-semibold text-white">Actividad reciente del sistema</span>
-            <span className="text-obsidian-muted font-mono">{auditLogs.length} registros</span>
-          </div>
-
-          {auditLogs.length === 0 ? (
-            <div className="px-3 py-8 text-center text-xs text-obsidian-muted">
-              No hay registros de actividad reciente disponibles.
-            </div>
-          ) : (
-            <div className="divide-y divide-obsidian-border max-h-[600px] overflow-y-auto">
-              {auditLogs.map((log) => {
-                const safeEntityName = censorSensitiveText(log.entity_name || log.entity_type);
-                const safeDetails = censorSensitiveText(log.details);
-                return (
-                <div key={log.id} className="p-3.5 hover:bg-obsidian-surface/40 transition-colors text-xs flex flex-col sm:flex-row sm:items-start justify-between gap-2 sm:gap-4 min-w-0">
-                  <div className="space-y-1 min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2 min-w-0">
-                      <span className={`px-2 py-0.5 rounded border text-[11px] font-semibold flex-shrink-0 ${
-                        ['delete', 'auto_purge', 'permanent_delete'].includes(log.action)
-                          ? 'border-rose-500/30 bg-rose-500/10 text-rose-300'
-                          : 'border-obsidian-border bg-obsidian-surface text-obsidian-muted'
-                      }`}>
-                        {AUDIT_ACTION_LABELS[log.action] || log.action}
-                      </span>
-                      <span className="font-semibold text-white break-words" title={safeEntityName}>
-                        {safeEntityName}
-                      </span>
-                    </div>
-                    <p className="text-obsidian-muted text-xs leading-relaxed break-words">
-                      {safeDetails || 'Operación registrada en base de datos'}
-                    </p>
-                  </div>
-
-                  <div className="text-[11px] text-obsidian-muted font-mono whitespace-nowrap flex-shrink-0">
-                    {new Date(log.timestamp).toLocaleString(locale)}
-                  </div>
-                </div>
-              );})}
-            </div>
-          )}
         </div>
       )}
     </div>

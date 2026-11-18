@@ -1,13 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import {
-  Activity, ArrowRight, Briefcase, CreditCard, Lock, Mail, Radar,
+  Activity, ArrowRight, Briefcase, CreditCard, FileText, Lock, Mail, PenTool, Radar,
   Settings, ShieldCheck, BookOpen, RefreshCw,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useVault, SectionType } from '../../context/VaultContext';
 import { useC2 } from '../../context/C2Context';
 import { api } from '../../lib/api';
-import type { AuditLogItem, EmailAccount, PlatformAccount, Prospect, SecurityAuditResponse, VaultCredentialItem, WriteupOverview } from '../../types';
+import type { AuditLogItem, EmailAccount, PlatformAccount, Prospect, ReportOverview, SecurityAuditResponse, VaultCredentialItem, WriteupOverview } from '../../types';
 
 type OverviewRoute = Extract<SectionType, `overview_${string}`>;
 type Metric = { label: string; value: string; detail?: string };
@@ -31,9 +31,17 @@ const definitions: Record<Exclude<OverviewRoute, 'overview_finances'>, OverviewD
   },
   overview_security: {
     title: 'Seguridad',
-    description: 'Estado de la bóveda, credenciales e informes de seguridad.',
+    description: 'Estado de la bóveda, credenciales y auditoría de seguridad.',
     links: [
-      { id: 'writeups', label: 'Informes de seguridad', description: 'Edita informes Markdown, evidencias y pizarras.', icon: BookOpen },
+      { id: 'passwords', label: 'Contraseñas y notas', description: 'Consulta claves, notas protegidas y recursos de acceso.', icon: Lock },
+    ],
+  },
+  overview_reports: {
+    title: 'Reportes',
+    description: 'Documentos técnicos en Typst, lienzos visuales en Excalidraw y su relación.',
+    links: [
+      { id: 'reports_documents', label: 'Documentos (Typst)', description: 'Redacta informes en Typst, correlaciona hallazgos y exporta a PDF, HTML o .typ.', icon: FileText },
+      { id: 'reports_canvases', label: 'Lienzos (Excalidraw)', description: 'Dibuja diagramas, vincúlalos a un documento e insértalos con un clic.', icon: PenTool },
     ],
   },
   overview_c2: {
@@ -184,6 +192,23 @@ export const ModuleOverviewView: React.FC = () => {
           ...(reports ? [{ label: 'Informe más extenso', value: reports.largest_document_title || 'Sin informes', detail: `${count(reports.largest_document_words)} palabras` }] : []),
           ...(reports ? [{ label: 'Revisiones', value: count(reports.revision_count), detail: reports.unreadable_documents ? `${count(reports.unreadable_documents)} documentos no disponibles para el resumen` : undefined }] : []),
         ];
+      } else if (activeSection === 'overview_reports') {
+        const result = await Promise.allSettled([api.getReportOverview()]);
+        if (result[0].status === 'fulfilled') {
+          const ov = result[0].value as ReportOverview;
+          const hours = Math.floor(ov.reading_minutes / 60);
+          const mins = ov.reading_minutes % 60;
+          const readingLabel = ov.reading_minutes === 0 ? '0 min' : hours > 0 ? `${hours} h ${mins} min` : `${mins} min`;
+          const statusSummary = Object.entries(ov.documents_by_status)
+            .map(([k, v]) => `${k}: ${count(v)}`)
+            .join(' · ') || 'Sin documentos';
+          nextMetrics = [
+            { label: 'Documentos (Typst)', value: count(ov.total_documents), detail: statusSummary },
+            { label: 'Palabras y lectura estimada', value: `${count(ov.total_words)} palabras`, detail: `Lectura estimada: ${readingLabel}` },
+            { label: 'Lienzos (Excalidraw)', value: count(ov.total_canvases), detail: `${count(ov.linked_canvases)} vinculados · ${count(ov.total_canvas_elements)} elementos` },
+            { label: 'Último documento / lienzo', value: ov.latest_document_title || 'Sin documentos', detail: ov.latest_canvas_title ? `Lienzo: ${ov.latest_canvas_title}` : 'Sin lienzos' },
+          ];
+        } else failed = true;
       } else if (activeSection === 'overview_activity') {
         const result = await Promise.allSettled([api.getAuditTrail(1, 0), api.getTrash()]);
         const logs = result[0].status === 'fulfilled' ? result[0].value as { total: number; items: AuditLogItem[] } : null;
@@ -255,7 +280,8 @@ export const GlobalModuleDirectory: React.FC<GlobalModuleDirectoryProps> = ({ me
     { id: 'overview_prospection', label: 'Prospección', description: metrics.overview_prospection || 'Oportunidades, captación y seguimiento.', icon: Briefcase },
     { id: 'overview_communications', label: 'Correo y servicios', description: metrics.overview_communications || 'Cuentas principales, servicios y relaciones.', icon: Mail },
     { id: 'overview_finances', label: 'Finanzas', description: metrics.overview_finances || 'Ingresos, vencimientos, gastos y métodos de pago.', icon: CreditCard },
-    { id: 'overview_security', label: 'Seguridad', description: metrics.overview_security || 'Credenciales, informes y estado de seguridad.', icon: ShieldCheck },
+    { id: 'overview_security', label: 'Seguridad', description: metrics.overview_security || 'Credenciales y auditoría de seguridad.', icon: ShieldCheck },
+    { id: 'overview_reports', label: 'Reportes', description: metrics.overview_reports || 'Documentos Typst, lienzos Excalidraw y correlaciones.', icon: FileText },
     { id: 'overview_c2', label: 'Red y Lab (C2)', description: `${count(c2.activeModuleCount)} módulos activos · ${c2.activeEngagementId ? 'Entorno seleccionado' : 'Sin entorno seleccionado'}`, icon: Radar },
     { id: 'overview_activity', label: 'Actividad y papelera', description: metrics.overview_activity || 'Historial de cambios y elementos eliminados.', icon: Activity },
     { id: 'overview_settings', label: 'Ajustes', description: metrics.overview_settings || 'Preferencias, acceso, sesión y respaldos.', icon: Settings },

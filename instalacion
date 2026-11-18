@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+# Instalación inicial de LESSSO: dependencias, .env, certificados TLS y build de imágenes Docker.
+set -euo pipefail
+cd "$(dirname "${BASH_SOURCE[0]}")"
+
+if (( EUID == 0 )); then
+  echo 'Ejecuta ./instalacion con tu usuario habitual, sin sudo.' >&2
+  exit 1
+fi
+
+for dependency in python3 openssl docker; do
+  if ! command -v "$dependency" >/dev/null 2>&1; then
+    echo "Falta $dependency. Instálalo antes de instalar LESSSO." >&2
+    exit 1
+  fi
+done
+
+if ! docker compose version >/dev/null 2>&1; then
+  echo 'Falta Docker Compose v2 o posterior. Instala el complemento Docker Compose.' >&2
+  exit 1
+fi
+
+if ! docker info >/dev/null 2>&1; then
+  echo 'Docker no está disponible para este usuario. Inicia Docker y comprueba sus permisos con docker info.' >&2
+  exit 1
+fi
+
+python3 - <<'PY'
+from pathlib import Path
+import os, secrets
+
+path = Path('.env')
+existing = path.exists()
+lines = path.read_text().splitlines() if existing else Path('.env.example').read_text().splitlines()
+original = list(lines)
+
+values = {
+    'SERVER_SECRET_KEY': secrets.token_hex(32),
+    'POSTGRES_PASSWORD': secrets.token_hex(32),
+    'C2_WORKER_SECRET': secrets.token_hex(32),
+    'C2_SOCKET_GID': str(os.getgid()),
+}
+
+for key, value in values.items():
+    matches = [i for i, line in enumerate(lines) if line.startswith(key + '=')]
+    if existing and key in ('SERVER_SECRET_KEY', 'POSTGRES_PASSWORD') and (
+        not matches or not lines[matches[0]].split('=', 1)[1].strip().strip('"\'')
+    ):
+        raise SystemExit(
+            f'Falta {key} en .env. Configura el valor existente o retira ese archivo solo para una instalación nueva.'
+        )
+    if not matches:
+        lines.append(key + '=' + value)
+    elif not lines[matches[0]].split('=', 1)[1].strip().strip('"\''):
+        lines[matches[0]] = key + '=' + value
+
+if not existing or lines != original:
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, 'w') as file:
+        file.write('\n'.join(lines) + '\n')
+os.chmod(path, 0o600)
+PY
+
+mkdir -p c2-runtime
+chmod 750 c2-runtime
+
+if [[ ! -f nginx/certs/local/ca.crt || ! -f nginx/certs/local/server.crt || ! -f nginx/certs/local/server.key ]]; then
+  ./scripts/generate_certs.sh
+fi
+
+echo 'Construyendo imágenes de LESSSO (backend, frontend, proxy)...'
+docker compose build
+docker compose -f docker-compose.yml -f docker-compose.dev.yml build frontend
+
+echo
+echo 'Instalación completada. Ejecuta ./lessso para iniciar y administrar el CRM.'
