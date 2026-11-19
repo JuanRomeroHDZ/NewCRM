@@ -70,18 +70,18 @@ USER root
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends poppler-utils \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=test-dependencies --chown=appuser:appgroup /root/.local /home/appuser/.local
-COPY --chown=appuser:appgroup --chmod=u=rwX,go=rX . /app
+COPY --chown=appuser:appgroup . /app
 USER appuser
 HEALTHCHECK NONE
 CMD ["python", "-m", "pytest", "-q", "-p", "no:cacheprovider"]
 
 # Production is the final/default target. Test dependencies stay isolated.
 FROM runtime-base AS runner
-COPY --chown=appuser:appgroup --chmod=u=rwX,go=rX . /app
+COPY --chown=appuser:appgroup . /app
 
 USER appuser
 # Catch missing or unreadable revisions during build, before replacing the API.
-RUN python -m alembic heads
+RUN python -m alembic -c /app/alembic.ini heads
 
 EXPOSE 8000
 

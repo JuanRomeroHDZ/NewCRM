@@ -247,9 +247,6 @@ export default function ReportPdfPreview({ blob, toolbar, controls }: { blob: Bl
           </div>,
           controls,
         )}
-        </div>,
-        controls,
-      )}
       {showOutline && <nav aria-label="Índice del PDF" className="max-h-64 overflow-auto border-b border-obsidian-border pb-2">
         <PdfOutline items={outline} navigate={navigate} />
       </nav>}
