@@ -8,12 +8,13 @@ import httpx
 import websockets
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import AsyncSessionLocal, get_db
 from app.api.v1.agenda import PentestEngagementCreate
 from app.models.agenda import PentestEngagement
 from app.models.core import User, DbSession
 from app.models.crm_sales import Client
-from app.security.tokens import require_vault_unlocked, verify_vault_token
+from app.security.tokens import require_vault_unlocked, verify_vault_token_and_release
 from app.services.core_auth import get_current_user_from_token, hash_token, utc_now
 from app.services.c2_scope import (
     interface_scope_required,
@@ -359,7 +360,7 @@ async def _owner_active(token: str) -> bool:
 
 
 @router.websocket('/ws')
-async def events(websocket: WebSocket):
+async def events(websocket: WebSocket, db: AsyncSession = Depends(get_db)):
     protocols = websocket.scope.get("subprotocols", [])
     vault = next((p[6:] for p in protocols if p.startswith("vault.")), "")
     user = next((p[5:] for p in protocols if p.startswith("user.")), "")
@@ -367,7 +368,7 @@ async def events(websocket: WebSocket):
     if "lessso-v1" not in protocols:
         await websocket.close(code=4401)
         return
-    if not verify_vault_token(vault) or not await _owner_active(user):
+    if not await verify_vault_token_and_release(vault, db) or not await _owner_active(user):
         await websocket.close(code=4401)
         return
     connection = _connection()
@@ -384,7 +385,7 @@ async def events(websocket: WebSocket):
                 open_timeout=3) as upstream:
             await websocket.accept(subprotocol="lessso-v1")
             while True:
-                if not verify_vault_token(vault) or not await _owner_active(user):
+                if not await verify_vault_token_and_release(vault, db) or not await _owner_active(user):
                     await websocket.close(code=4401)
                     return
                 try:

@@ -110,9 +110,9 @@ async def rekey_vault(db: AsyncSession, old_key: bytes, new_key: bytes) -> None:
 
     if db.bind and db.bind.dialect.name == "postgresql":
         table_models = {model.__table__.fullname: model for model in (*MODELS, UserSettings)}
-        quote_identifier = db.bind.dialect.identifier_preparer.quote
+        quote_identifier = db.bind.dialect.identifier_preparer.quote_identifier
         quoted_tables = ", ".join(
-            quote_identifier(model.__table__.name, force=True)
+            quote_identifier(model.__table__.name)
             for _, model in sorted(table_models.items())
         )
         # SQL identifiers cannot be bound as parameters; quote only model-owned names.

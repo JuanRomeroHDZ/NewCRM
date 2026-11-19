@@ -41,10 +41,34 @@ services:
         condition: service_healthy
 
   # Backend API (Python 3.12 + FastAPI Async + SQLAlchemy 2.0)
-  backend:
+  migrate:
+    image: newcrm-backend:local
     build:
       context: ./backend
       dockerfile: Dockerfile
+      target: runner
+    restart: "no"
+    labels:
+      com.lessso.one-shot: "true"
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:?Configura POSTGRES_USER en .env}:${POSTGRES_PASSWORD:?Genera POSTGRES_PASSWORD en .env}@db:5432/${POSTGRES_DB:?Configura POSTGRES_DB en .env}
+      SERVER_SECRET_KEY: ${SERVER_SECRET_KEY:?Genera SERVER_SECRET_KEY en .env}
+      FALLBACK_USD_MXN_RATE: ${FALLBACK_USD_MXN_RATE:?Configura FALLBACK_USD_MXN_RATE en .env}
+    command: ["python", "-m", "app.migrate"]
+    networks:
+      - backend_net
+    depends_on:
+      db:
+        condition: service_healthy
+
+  backend:
+    image: newcrm-backend:local
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: runner
     group_add:
       - "${C2_SOCKET_GID:-1000}"
     restart: unless-stopped
@@ -52,7 +76,8 @@ services:
       - .env
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:?Configura POSTGRES_USER en .env}:${POSTGRES_PASSWORD:?Genera POSTGRES_PASSWORD en .env}@db:5432/${POSTGRES_DB:?Configura POSTGRES_DB en .env}
-      REDIS_URL: redis://redis:6379/0
+      DB_POOL_SIZE: ${DB_POOL_SIZE:-5}
+      DB_MAX_OVERFLOW: ${DB_MAX_OVERFLOW:-5}
       SERVER_NAME: ${SERVER_NAME:-lessso-srv}
       SERVER_SECRET_KEY: ${SERVER_SECRET_KEY:?Genera SERVER_SECRET_KEY en .env}
       INITIAL_OWNER_USERNAME: ${INITIAL_OWNER_USERNAME:-}
@@ -93,10 +118,9 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      redis:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     volumes:
-      - ./backend:/app
       - ./c2-runtime:/run/lessso-c2
       - vault_media:/app/media
       - backup_data:${BACKUP_LOCAL_PATH:-/app/backups}
@@ -119,22 +143,6 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
-
-  # Centralized Session & Ephemeral Cache (Redis 7)
-  redis:
-    image: redis:7-alpine
-    restart: unless-stopped
-    command: ["redis-server", "--appendonly", "yes", "--save", "60", "1"]
-    volumes:
-      - redis_data:/data
-    networks:
-      - backend_net
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 5s
 
   # Optional full encrypted backup. It is not started by the default profile.
   # The private age identity is never mounted or passed to this service.
@@ -180,6 +188,7 @@ services:
       - ./backend/tests:/source/deployment/backend/tests:ro
       - ./backend/pytest.ini:/source/deployment/backend/pytest.ini:ro
       - ./backend/requirements.txt:/source/deployment/backend/requirements.txt:ro
+      - ./backend/requirements-test.txt:/source/deployment/backend/requirements-test.txt:ro
       - ./backend/Dockerfile:/source/deployment/backend/Dockerfile:ro
       - ./frontend/src:/source/deployment/frontend/src:ro
       - ./frontend/scripts:/source/deployment/frontend/scripts:ro
@@ -218,8 +227,6 @@ networks:
 volumes:
   postgres_data:
     name: ${POSTGRES_VOLUME_NAME:-emailsaver_postgres_data}
-  redis_data:
-    name: ${REDIS_VOLUME_NAME:-emailsaver_redis_data}
   vault_media:
     name: ${VAULT_MEDIA_VOLUME_NAME:-emailsaver_vault_media}
   backup_data:

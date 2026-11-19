@@ -378,6 +378,9 @@ async def test_payment_reversal_does_not_delete_record(db_session):
 
 @pytest.mark.asyncio
 async def test_invoice_cancellation_preserves_record(db_session):
+    db_session.add(Client(id="dummy-client-1", company_name="Cliente de facturación"))
+    await db_session.flush()
+
     inv = await CrmSalesService.record_invoice(
         session=db_session,
         sale_id=None,

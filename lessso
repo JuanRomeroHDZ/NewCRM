@@ -94,7 +94,7 @@ wait_for_compose_services() {
   if (( ${#targets[@]} )); then
     services="$(printf '%s\n' "${targets[@]}")"
   else
-    services="$("${compose[@]}" config --services)" || return 1
+    services="$("${compose[@]}" ps --all --services)" || return 1
   fi
   [[ -n "$services" ]] || return 1
   deadline=$((SECONDS + 180))
@@ -111,11 +111,11 @@ wait_for_compose_services() {
 
       while IFS= read -r id; do
         [[ -n "$id" ]] || continue
-        details="$(docker inspect --format '{{.State.Status}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$id" 2>/dev/null)" || {
+        details="$(docker inspect --format '{{.State.Status}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}|{{.State.ExitCode}}|{{index .Config.Labels "com.lessso.one-shot"}}' "$id" 2>/dev/null)" || {
           pending=true
           continue
         }
-        IFS='|' read -r state health <<< "$details"
+        IFS='|' read -r state health exit_code one_shot <<< "$details"
         case "$state" in
           running)
             case "$health" in
@@ -123,7 +123,15 @@ wait_for_compose_services() {
               *) pending=true ;;
             esac
             ;;
-          exited|dead)
+          exited)
+            if [[ "$one_shot" == "true" && "$exit_code" == "0" ]]; then
+              :
+            else
+              echo "El contenedor del servicio ${service} terminó con estado ${state} (código ${exit_code})." >&2
+              return 1
+            fi
+            ;;
+          dead)
             echo "El contenedor del servicio ${service} terminó con estado ${state}." >&2
             return 1
             ;;
@@ -145,6 +153,26 @@ lock_project() {
     echo 'Hay otra operación de LESSSO en curso. Espera a que termine.' >&2
     return 1
   fi
+}
+
+remove_legacy_redis() {
+  local project ids
+  local -a containers
+  project="$("${compose[@]}" config --format json | python3 -c '
+import json, sys
+config = json.load(sys.stdin)
+if "redis" not in config["services"]:
+    print(config["name"])
+')" || return 1
+  [[ -n "$project" ]] || return 0
+  ids="$(docker container ls --all --quiet \
+    --filter "label=com.docker.compose.project=$project" \
+    --filter 'label=com.docker.compose.service=redis')" || return 1
+  [[ -n "$ids" ]] || return 0
+  mapfile -t containers <<< "$ids"
+  echo 'Retirando el contenedor Redis de la versión anterior. Se conserva su volumen.'
+  docker container stop "${containers[@]}" >/dev/null &&
+    docker container rm "${containers[@]}" >/dev/null
 }
 
 require_installation() {
@@ -279,15 +307,18 @@ start_crm() (
   validate_connection && ensure_certificate || exit 1
   mkdir -p -m 750 c2-runtime || exit 1
 
-  local -a args=(up -d --build)
-  local help native_wait=false
-  help="$("${compose[@]}" up --help 2>&1)" || exit 1
-  if grep -Eq -- '(^|[[:space:],])--wait([[:space:],]|$)' <<< "$help" &&
-     grep -Eq -- '(^|[[:space:],])--wait-timeout([[:space:],]|$)' <<< "$help"; then
-    args+=(--wait --wait-timeout 180)
-    native_wait=true
+  if ! "${compose[@]}" build backend frontend; then
+    report_start_failure
+    exit 1
   fi
-  if ! "${compose[@]}" "${args[@]}" || { ! $native_wait && ! wait_for_compose_services; }; then
+  remove_legacy_redis || exit 1
+  local backend_ids
+  backend_ids="$("${compose[@]}" ps --all --quiet backend)" || exit 1
+  if [[ -n "$backend_ids" ]] && ! "${compose[@]}" stop backend; then
+    report_start_failure
+    exit 1
+  fi
+  if ! "${compose[@]}" up -d || ! wait_for_compose_services db migrate backend frontend proxy; then
     report_start_failure
     exit 1
   fi

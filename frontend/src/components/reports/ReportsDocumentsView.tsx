@@ -489,7 +489,7 @@ export const ReportsDocumentsView: React.FC = () => {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [activeDoc, handleSaveDocument]);
 
-  const handleExport = async (exportFormat: 'pdf' | 'html' | 'typ') => {
+  const handleExport = async (exportFormat: 'pdf' | 'html' | 'typ' | 'typst_zip') => {
     if (!activeDoc || isExporting) return;
     setIsExporting(true);
     try {
@@ -502,7 +502,8 @@ export const ReportsDocumentsView: React.FC = () => {
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement('a');
       anchor.href = url;
-      anchor.download = filename || `${titleDraft.trim() || 'documento'}.${exportFormat}`;
+      const fallbackExtension = exportFormat === 'typst_zip' ? 'typst.zip' : exportFormat;
+      anchor.download = filename || `${titleDraft.trim() || 'documento'}.${fallbackExtension}`;
       document.body.appendChild(anchor);
       anchor.click();
       anchor.remove();
@@ -1055,14 +1056,19 @@ export const ReportsDocumentsView: React.FC = () => {
                           <input type="checkbox" checked={redactForClient}
                             onChange={(event) => setRedactForClient(event.target.checked)}
                             className="h-4 w-4 accent-obsidian-accent" />
-                          Copia para cliente (PDF / HTML)
+                          Copia para cliente (PDF, HTML, ZIP)
                         </label>
                         {redactForClient && (
                           <p className="px-2 pb-2 text-xs text-obsidian-muted">Censura IP, credenciales comunes y marcas de censura. Revisa las imágenes antes de compartir.</p>
                         )}
-                        {([['pdf', 'PDF'], ['html', 'HTML'], ['typ', 'Código Typst (.typ)']] as const).map(([format, label]) => (
+                        {([
+                          ['pdf', 'PDF'],
+                          ['html', 'HTML (experimental)'],
+                          ['typ', 'Código Typst (.typ)'],
+                          ['typst_zip', 'Proyecto Typst (.zip)'],
+                        ] as const).map(([format, label]) => (
                           <button key={format} type="button" className={DOCUMENT_ACTION_CLASS}
-                            disabled={format === 'typ' ? redactForClient : typstStatus?.available === false}
+                            disabled={format === 'typ' ? redactForClient : (format === 'pdf' || format === 'html') && typstStatus?.available === false}
                             onClick={() => { closeActions(true); void handleExport(format); }}>
                             {label}
                           </button>
@@ -1298,7 +1304,7 @@ export const ReportsDocumentsView: React.FC = () => {
                           <ToolbarButton label="Lista de tareas" icon={ListChecks} onClick={() => insertSnippet('\n- [ ] Tarea pendiente\n- [x] Tarea completada\n')} />
                           <ToolbarButton label="Cita" icon={Quote} onClick={() => editorRef.current?.wrapSelection('#quote[', ']')} />
                           <ToolbarButton label="Bloque de código" icon={Code} onClick={() => insertSnippet('\n```text\nCódigo o salida\n```\n')} />
-                          <ToolbarButton label="Tabla" icon={Table} onClick={() => insertSnippet('\n#table(\n  columns: (1fr, 1fr),\n  [Campo], [Detalle],\n  [Dato], [Descripción],\n)\n')} />
+                          <ToolbarButton label="Tabla" icon={Table} onClick={() => insertSnippet('\n#set table.cell(breakable: false)\n#table(\n  columns: (1fr, 1fr),\n  table.header([Campo], [Detalle]),\n  [Dato], [Descripción],\n)\n')} />
                           <ToolbarButton label="Salto de página" icon={SeparatorHorizontal} onClick={() => insertSnippet('\n#pagebreak()\n')} />
                         </div>
                         <span aria-hidden="true" className="h-7 w-px shrink-0 bg-obsidian-border" />

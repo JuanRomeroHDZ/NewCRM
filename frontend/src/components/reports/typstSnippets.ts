@@ -71,7 +71,7 @@ export const TYPST_QUICK_SNIPPETS: TypstQuickSnippet[] = [
   { id: 'checklist', label: 'Lista de tareas', snippet: '\n- [ ] Tarea pendiente\n- [x] Tarea completada\n' },
   { id: 'quote', label: 'Cita', snippet: '\n#quote(block: true)[Texto de la cita]\n' },
   { id: 'code', label: 'Bloque de código', snippet: '\n```text\nCódigo o salida\n```\n' },
-  { id: 'table', label: 'Tabla', snippet: '\n#table(\n  columns: (1fr, 1fr),\n  [Campo], [Detalle],\n  [Dato], [Descripción],\n)\n' },
+  { id: 'table', label: 'Tabla', snippet: '\n#set table.cell(breakable: false)\n#table(\n  columns: (1fr, 1fr),\n  table.header([Campo], [Detalle]),\n  [Dato], [Descripción],\n)\n' },
   { id: 'pagebreak', label: 'Salto de página', snippet: '\n#pagebreak()\n' },
   { id: 'note', label: 'Nota en el código', snippet: '\n// Nota: ' },
 ];

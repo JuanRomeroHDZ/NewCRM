@@ -1,6 +1,8 @@
+import io
 import json
 import ipaddress
 import re
+import zipfile
 from fastapi import APIRouter, Depends, File, HTTPException, Request, Response, UploadFile, status
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -41,6 +43,7 @@ from app.services.writeup_media import optimize_and_encrypt_image
 router = APIRouter(prefix="/reports", tags=["reports"], dependencies=[Depends(require_vault_unlocked)])
 
 REPORT_ROLES = {"owner", "business_admin", "operator"}
+MAX_TYPST_PROJECT_BYTES = 100 * 1024 * 1024
 
 
 async def require_report_access(request: Request, db: AsyncSession = Depends(get_db)) -> User | None:
@@ -534,6 +537,29 @@ async def _resolve_typst_assets(
     return source, {**canvas_files, **document_files}
 
 
+def _build_typst_project_bundle(source: str, assets: dict[str, bytes]) -> bytes:
+    """Package a portable Typst source file and its materialized relative assets."""
+    total_size = len(source.encode("utf-8")) + sum(len(content) for content in assets.values())
+    if total_size > MAX_TYPST_PROJECT_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="El proyecto Typst supera el límite de exportación de 100 MiB.",
+        )
+
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, mode="w", compression=zipfile.ZIP_DEFLATED, compresslevel=6) as bundle:
+        bundle.writestr("document.typ", source)
+        for filename, content in sorted(assets.items()):
+            path = filename.replace("\\", "/").split("/")
+            if len(path) != 1 or path[0] in {"", ".", "..", "document.typ"}:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="No se pudo crear el proyecto Typst por una ruta de recurso inválida.",
+                )
+            bundle.writestr(path[0], content)
+    return output.getvalue()
+
+
 @router.post("/documents/compile", response_model=TypstCompileResponse)
 async def compile_document_preview(
     payload: TypstCompileRequest,
@@ -678,8 +704,8 @@ async def export_document_format(
     _user: User | None = Depends(require_report_access),
 ):
     fmt = format.lower().strip()
-    if fmt not in {"pdf", "html", "typ"}:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Formato no soportado (usa pdf, html o typ).")
+    if fmt not in {"pdf", "html", "typ", "typst_zip"}:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Formato no soportado (usa pdf, html, typ o typst_zip).")
     if redact_for_client and fmt == "typ":
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -716,6 +742,14 @@ async def export_document_format(
         prepare_typst_source(source or "", redact_for_client=redact_for_client),
         db,
     )
+    if fmt == "typst_zip":
+        bundle = await run_in_threadpool(_build_typst_project_bundle, resolved_source, extra_files)
+        return Response(
+            content=bundle,
+            media_type="application/zip",
+            headers={"Content-Disposition": f'attachment; filename="{base_name}.typst.zip"'},
+        )
+
     result = await run_in_threadpool(compile_typst_source, resolved_source, fmt, extra_files)
     if not result.ok or not result.pdf_bytes:
         raise HTTPException(

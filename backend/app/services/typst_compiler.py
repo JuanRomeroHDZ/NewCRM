@@ -18,6 +18,7 @@ DEFAULT_TYPST_TEMPLATE = """#set page(
   lang: "es",
 )
 #set heading(numbering: "1.1")
+#set table.cell(breakable: false)
 
 = Informe técnico
 
@@ -34,7 +35,7 @@ Describe aquí el alcance, los hallazgos principales y las recomendaciones prior
   columns: (auto, 1fr, auto),
   inset: 8pt,
   align: horizon,
-  [*ID*], [*Descripción*], [*Severidad*],
+  table.header([*ID*], [*Descripción*], [*Severidad*]),
   [H-01], [Ejemplo de hallazgo documentado en Typst], [Media],
 )
 

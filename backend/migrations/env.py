@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from app.config import settings
 from app.database import Base
 from app import models  # noqa: F401
+from app.models import reports as report_models  # noqa: F401
 
 
 def run_migrations_offline():

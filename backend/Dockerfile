@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.14
 # Multi-stage hardened Dockerfile for the LESSSO FastAPI backend
 FROM python:3.12-slim AS builder
 
@@ -12,8 +13,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 RUN pip install --no-cache-dir --default-timeout=100 --retries 5 --user -r requirements.txt
 
-# Final Runtime Stage
-FROM python:3.12-slim AS runner
+FROM builder AS test-dependencies
+COPY requirements-test.txt .
+RUN pip install --no-cache-dir --default-timeout=100 --retries 5 --user -r requirements-test.txt
+
+# Shared runtime base for production and the isolated test image.
+FROM python:3.12-slim AS runtime-base
 
 WORKDIR /app
 
@@ -51,21 +56,34 @@ RUN groupadd -g 1001 appgroup && \
     useradd -u 1001 -g appgroup -s /bin/bash -m appuser && \
     chmod 755 /home/appuser
 
-# Copy installed packages from builder
+# Copy runtime packages from builder before either final image copies source.
 COPY --from=builder /root/.local /home/appuser/.local
 ENV PATH=/home/appuser/.local/bin:$PATH
 
-# Copy application code
-COPY --chown=appuser:appgroup . /app
+# Test-only image. Poppler is used by PDF assertions; production stays smaller.
+FROM runtime-base AS test
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends poppler-utils \
+    && rm -rf /var/lib/apt/lists/*
+COPY --from=test-dependencies --chown=appuser:appgroup /root/.local /home/appuser/.local
+COPY --chown=appuser:appgroup --chmod=u=rwX,go=rX . /app
+USER appuser
+HEALTHCHECK NONE
+CMD ["python", "-m", "pytest", "-q", "-p", "no:cacheprovider"]
+
+# Production is the final/default target. Test dependencies stay isolated.
+FROM runtime-base AS runner
+COPY --chown=appuser:appgroup --chmod=u=rwX,go=rX . /app
 
 USER appuser
+# Catch missing or unreadable revisions during build, before replacing the API.
+RUN python -m alembic heads
 
 EXPOSE 8000
 
-# Healthcheck
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD curl -f http://localhost:8000/health || exit 1
 
-# Las sesiones de bóveda viven en memoria del proceso; varios procesos las aislarían.
-# Mantener un proceso hasta disponer de sesiones compartidas y revocables.
+# Una API worker por contenedor mantiene acotado el pool local de PostgreSQL.
+# Escala horizontalmente con réplicas del servicio backend en Compose.
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]

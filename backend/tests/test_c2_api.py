@@ -1,4 +1,6 @@
 """Tests de integración API y WebSocket para LESSSO | C2 bajo /api/v1/c2."""
+from contextlib import asynccontextmanager
+
 import pytest
 from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
@@ -8,7 +10,8 @@ from app.c2.core.bus import bus
 from app.config import settings
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy.ext.asyncio import async_sessionmaker
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
 import pytest_asyncio
 from app.api.v1 import auth, c2
 from app.database import get_db
@@ -29,6 +32,29 @@ async def client(test_engine):
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         yield ac
     app.dependency_overrides.clear()
+
+
+@asynccontextmanager
+async def _websocket_test_client(test_engine):
+    """Use non-pooled connections because Starlette runs WS tests on its own loop."""
+    websocket_engine = create_async_engine(test_engine.url, poolclass=NullPool)
+    session_factory = async_sessionmaker(websocket_engine, expire_on_commit=False)
+
+    async def override_db():
+        async with session_factory() as session:
+            yield session
+
+    previous_override = app.dependency_overrides.get(get_db)
+    app.dependency_overrides[get_db] = override_db
+    try:
+        with TestClient(app) as websocket_client:
+            yield websocket_client
+    finally:
+        if previous_override is None:
+            app.dependency_overrides.pop(get_db, None)
+        else:
+            app.dependency_overrides[get_db] = previous_override
+        await websocket_engine.dispose()
 from app.security.tokens import create_vault_token, revoke_vault_token
 
 
@@ -67,49 +93,50 @@ async def test_c2_routes_reject_unauthenticated(client):
         assert res.status_code == 401, f"POST {route} expected 401, got {res.status_code}"
 
 
-def test_c2_websocket_rejects_invalid_and_revoked_tokens():
+@pytest.mark.asyncio
+async def test_c2_websocket_rejects_invalid_and_revoked_tokens(client, db_session):
     """WS /api/v1/c2/ws debe cerrar con 4401 si falta token, es inválido o fue revocado."""
-    client = TestClient(app)
+    token = await create_vault_token(timeout_minutes=5, db=db_session)
+    assert await revoke_vault_token(token, db_session) is True
+    async with _websocket_test_client(db_session.bind) as client:
+        # Sin token
+        with pytest.raises(WebSocketDisconnect) as exc_missing:
+            with client.websocket_connect("/api/v1/c2/ws"):
+                pass
+        assert exc_missing.value.code == 4401
 
-    # Sin token
-    with pytest.raises(WebSocketDisconnect) as exc_missing:
-        with client.websocket_connect("/api/v1/c2/ws"):
-            pass
-    assert exc_missing.value.code == 4401
+        # Token inválido
+        with pytest.raises(WebSocketDisconnect) as exc_bad:
+            with client.websocket_connect("/api/v1/c2/ws?token=invalid-jwt-token"):
+                pass
+        assert exc_bad.value.code == 4401
 
-    # Token inválido
-    with pytest.raises(WebSocketDisconnect) as exc_bad:
-        with client.websocket_connect("/api/v1/c2/ws?token=invalid-jwt-token"):
-            pass
-    assert exc_bad.value.code == 4401
-
-    # Token válido revocado (bóveda bloqueada)
-    token = create_vault_token(timeout_minutes=5)
-    assert revoke_vault_token(token) is True
-    with pytest.raises(WebSocketDisconnect) as exc_revoked:
-        with client.websocket_connect(f"/api/v1/c2/ws?token={token}"):
-            pass
-    assert exc_revoked.value.code == 4401
+        # Token válido revocado (bóveda bloqueada)
+        with pytest.raises(WebSocketDisconnect) as exc_revoked:
+            with client.websocket_connect(f"/api/v1/c2/ws?token={token}"):
+                pass
+        assert exc_revoked.value.code == 4401
 
 
-def test_c2_websocket_accepts_valid_token_and_replays_events():
+@pytest.mark.asyncio
+async def test_c2_websocket_accepts_valid_token_and_replays_events(client, db_session):
     """WS /api/v1/c2/ws acepta token válido y entrega eventos del EventBus."""
-    token = create_vault_token(timeout_minutes=5)
+    token = await create_vault_token(timeout_minutes=5, db=db_session)
     try:
-        client = TestClient(app)
-        with client.websocket_connect(f"/api/v1/c2/ws?token={token}") as ws:
-            bus.emit({"type": "info", "msg": "ws-test-event"})
-            ev = ws.receive_json()
-            # Si había eventos previos en el replay buffer, leer hasta ver el emitido
-            seen = [ev]
-            for _ in range(30):
-                if ev.get("msg") == "ws-test-event":
-                    break
+        async with _websocket_test_client(db_session.bind) as client:
+            with client.websocket_connect(f"/api/v1/c2/ws?token={token}") as ws:
+                bus.emit({"type": "info", "msg": "ws-test-event"})
                 ev = ws.receive_json()
-                seen.append(ev)
-            assert any(item.get("msg") == "ws-test-event" for item in seen)
+                # Si había eventos previos en el replay buffer, leer hasta ver el emitido
+                seen = [ev]
+                for _ in range(30):
+                    if ev.get("msg") == "ws-test-event":
+                        break
+                    ev = ws.receive_json()
+                    seen.append(ev)
+                assert any(item.get("msg") == "ws-test-event" for item in seen)
     finally:
-        revoke_vault_token(token)
+        await revoke_vault_token(token, db_session)
 
 
 @pytest.mark.asyncio

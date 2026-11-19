@@ -1,6 +1,7 @@
-from pydantic import Field
-from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Literal
+
+from pydantic import Field, model_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -11,6 +12,9 @@ class Settings(BaseSettings):
     # Host-specific values are supplied by the operator through the environment.
     SERVER_NAME: str = Field(default="lessso-srv", min_length=2, max_length=64, pattern=r"^[a-zA-Z0-9._-]+$")
     DATABASE_URL: str = "sqlite+aiosqlite:///./lessso.db"
+    DB_POOL_SIZE: int = Field(default=5, ge=1, le=100)
+    DB_MAX_OVERFLOW: int = Field(default=5, ge=0, le=100)
+    DB_POOL_TIMEOUT_SECONDS: int = Field(default=30, ge=1, le=300)
     BACKUP_LOCAL_PATH: str = "/app/backups"
     CORS_ORIGINS: list[str] = Field(default_factory=list)
 
@@ -99,6 +103,16 @@ class Settings(BaseSettings):
     LESSSO_DEMO: bool = False
     C2_STATE_DIR: str = "/var/lib/lessso"
     C2_CAPTURE_DIR: str = "/tmp/lessso_captures"
+
+    @model_validator(mode="after")
+    def validate_database_pool_capacity(self):
+        # Protected PostgreSQL requests hold one connection for the vault
+        # advisory lock and another for their ORM session.
+        if self.DB_POOL_SIZE + self.DB_MAX_OVERFLOW < 2:
+            raise ValueError(
+                "DB_POOL_SIZE + DB_MAX_OVERFLOW debe ser al menos 2 para atender solicitudes protegidas."
+            )
+        return self
 
     model_config = SettingsConfigDict(case_sensitive=True, env_file="../.env", env_file_encoding="utf-8", extra="ignore")
 

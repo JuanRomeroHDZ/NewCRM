@@ -1,19 +1,9 @@
 import React from 'react';
-import { AlertTriangle, Edit3, Eye, EyeOff, FolderLock, Search, Trash2 } from 'lucide-react';
+import { AlertTriangle, Edit3, Eye, EyeOff, FolderLock, Trash2 } from 'lucide-react';
 import type { SecureResource, SecureResourceType } from '../../../types';
 import { CopyButton } from '../../common/CopyButton';
 import { EmptyState } from '../../common/EmptyState';
-import { INPUT_LIMITS } from '../../../lib/validation';
 import { resourceTypeMeta, ScopeBadge } from './passwordViewHelpers';
-
-const resourceTypes = [
-  { id: 'all', label: 'Todos' },
-  { id: 'env_file', label: 'Variables (.env)' },
-  { id: 'ssh_key', label: 'Llaves SSH' },
-  { id: 'backup_codes', label: 'Códigos de recuperación' },
-  { id: 'software_license', label: 'Licencias' },
-  { id: 'nota_segura', label: 'Notas privadas' },
-];
 
 interface SecureResourceCollectionProps {
   resources: SecureResource[];
@@ -22,9 +12,6 @@ interface SecureResourceCollectionProps {
   error: string | null;
   onRetry: () => void;
   search: string;
-  onSearchChange: (value: string) => void;
-  typeFilter: string;
-  onTypeChange: (value: string) => void;
   revealedResourceIds: Set<string>;
   onToggleReveal: (id: string) => void;
   onEdit: (resource: SecureResource) => void;
@@ -39,9 +26,6 @@ export const SecureResourceCollection: React.FC<SecureResourceCollectionProps> =
   error,
   onRetry,
   search,
-  onSearchChange,
-  typeFilter,
-  onTypeChange,
   revealedResourceIds,
   onToggleReveal,
   onEdit,
@@ -49,50 +33,10 @@ export const SecureResourceCollection: React.FC<SecureResourceCollectionProps> =
   onClearFilters,
 }) => (
   <section aria-label="Recursos y notas" className="space-y-4">
-    <div className="flex min-w-0 flex-wrap items-center gap-3 border-b border-obsidian-border pb-4">
-      <label className="relative min-w-0 w-full flex-1 sm:min-w-[220px]">
-        <span className="sr-only">Buscar por título, etiquetas o notas</span>
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-obsidian-muted" aria-hidden="true" />
-        <input
-          type="search"
-          maxLength={INPUT_LIMITS.SEARCH}
-          value={search}
-          onChange={(event) => onSearchChange(event.target.value)}
-          placeholder="Buscar por título, etiquetas o notas"
-          className="min-h-11 w-full rounded-lg border border-obsidian-border bg-obsidian-bg py-2 pl-9 pr-3 text-sm text-white placeholder-obsidian-muted/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent"
-        />
-      </label>
-      <label className="w-full min-w-0 sm:hidden">
-        <span className="sr-only">Filtrar recursos por tipo</span>
-        <select
-          value={typeFilter}
-          onChange={(event) => onTypeChange(event.target.value)}
-          className="min-h-11 w-full min-w-0 rounded-lg border border-obsidian-border bg-obsidian-bg px-3 text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent"
-        >
-          {resourceTypes.map((type) => <option key={type.id} value={type.id}>{type.label}</option>)}
-        </select>
-      </label>
-      {/* [Estado seleccionable] Cambia la categoría de recursos visible. */}
-      <div className="hidden max-w-full flex-wrap items-center gap-1.5 sm:flex" role="group" aria-label="Filtrar recursos por tipo">
-        {resourceTypes.map((type) => (
-          <button
-            key={type.id}
-            type="button"
-            aria-pressed={typeFilter === type.id}
-            onClick={() => onTypeChange(type.id)}
-            className="ui-action-toggle whitespace-nowrap"
-          >
-            {type.label}
-          </button>
-        ))}
-      </div>
-    </div>
-
     {loading && (
-      <div className="divide-y divide-obsidian-border overflow-hidden rounded-xl border border-obsidian-border bg-obsidian-panel" role="status" aria-label="Cargando recursos">
-        <div className="h-24 animate-pulse bg-obsidian-surface/50" />
-        <div className="h-24 animate-pulse bg-obsidian-surface/50" />
-        <div className="h-24 animate-pulse bg-obsidian-surface/50" />
+      <div className="divide-y divide-obsidian-border border-y border-obsidian-border" role="status" aria-label="Cargando recursos">
+        <div className="h-20 animate-pulse bg-obsidian-surface/50" />
+        <div className="h-20 animate-pulse bg-obsidian-surface/50" />
       </div>
     )}
 
@@ -101,7 +45,7 @@ export const SecureResourceCollection: React.FC<SecureResourceCollectionProps> =
     )}
 
     {!loading && !error && filteredResources.length > 0 && (
-      <div className="divide-y divide-obsidian-border overflow-hidden rounded-xl border border-obsidian-border bg-obsidian-panel">
+      <div className="divide-y divide-obsidian-border border-y border-obsidian-border">
         {filteredResources.map((resource) => {
           const meta = resourceTypeMeta(resource.resource_type as SecureResourceType);
           const Icon = meta.icon;
@@ -170,7 +114,7 @@ export const SecureResourceCollection: React.FC<SecureResourceCollectionProps> =
     )}
 
     {filteredResources.length === 0 && !loading && !error && (
-      <div className="space-y-3 rounded-xl border border-obsidian-border bg-obsidian-panel p-5 text-center sm:p-8">
+      <div className="space-y-3 px-4 py-8 text-center">
         <FolderLock size={20} className="mx-auto text-obsidian-muted" aria-hidden="true" />
         {resources.length === 0 ? (
           <>

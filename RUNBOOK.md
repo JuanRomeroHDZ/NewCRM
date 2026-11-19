@@ -2,7 +2,9 @@
 
 ## Arrancar o reiniciar
 
-Desde la raíz de NewCRM, ejecuta `./lessso` con tu cuenta habitual. **Inicio** ofrece **CRM estable** y **CRM en desarrollo**. Ambos reconstruyen las imágenes que cambiaron y esperan a que los servicios estén disponibles.
+Desde la raíz de NewCRM, ejecuta `./lessso` con tu cuenta habitual. **Inicio** ofrece **CRM estable** y **CRM en desarrollo**. El menú construye primero las imágenes modificadas, detiene la API anterior antes de migrar y luego espera a que la base, el job de migración, la API, el frontend y el proxy queden listos.
+
+El servicio único `migrate` aplica revisiones Alembic y tareas de datos idempotentes antes de iniciar las réplicas de API. La imagen estable ejecuta el código incluido en la imagen, sin montar el árbol del backend del host. Desarrollo monta el código como solo lectura y activa la recarga automática. No borres volúmenes para actualizar.
 
 En desarrollo, React Refresh carga su módulo de inicio desde el mismo origen y la recarga automática se conecta por WebSocket al puerto HTTPS del proxy. Si la pestaña estaba abierta al cambiar de modo, recárgala para cargar la versión elegida.
 
@@ -17,6 +19,28 @@ docker compose logs --tail 80 backend
 El volumen PostgreSQL conserva el usuario, contraseña y nombre de base con que se inicializó. Para actualizar una instalación anterior, copia primero los valores efectivos a `.env`; los cambios en las variables de Compose no modifican automáticamente esos datos dentro del volumen. Los defaults de contraseña de la versión anterior estaban publicados en el código y deben rotarse al recuperar una instalación que dependía de ellos. Cambia la contraseña del rol desde PostgreSQL y actualiza `.env` en el mismo mantenimiento.
 
 Si los datos cifrados se escribieron con una clave anterior, agrégala a `LEGACY_SERVER_SECRET_KEYS` y verifica su lectura antes de retirar esa clave. Haz un respaldo antes de rotar y conserva los volúmenes durante la operación.
+
+Las bases antiguas sin `alembic_version` se adoptan de forma aditiva: se completan las tablas que faltan, se agregan columnas históricas faltantes, se registra el baseline y se actualiza a la revisión actual. No se eliminan ni recrean tablas o filas. El baseline es irreversible con Alembic porque su `downgrade` eliminaría el esquema adoptado. La reversión se hace restaurando una copia verificada, nunca con `alembic downgrade`.
+
+### Actualizar una instalación
+
+1. Genera una copia cifrada completa, cópiala fuera del host y verifica la restauración en PostgreSQL aislado con el procedimiento de este runbook.
+2. Conserva `.env`, las credenciales efectivas del volumen PostgreSQL, `SERVER_SECRET_KEY` y la identidad privada age en su ubicación segura. No los sustituyas por valores de `.env.example`.
+3. Ejecuta `./lessso` → **Inicio** → **CRM estable**. El contenedor `migrate` aplica el esquema y prepara la base antes de que Compose arranque la API.
+4. Revisa `docker compose logs migrate` y `docker compose ps`: `migrate` debe terminar con `Exited (0)` y la API debe estar sana. Inicia sesión con la cuenta existente y valida una exportación representativa.
+5. Si falla, conserva el volumen original y los logs. Recupera en una base separada desde la copia verificada antes de decidir si sustituyes los datos del servicio.
+
+En desarrollo, guarda los cambios en `backend/app` para que se recargue la API. Después de añadir una revisión Alembic, vuelve a elegir **CRM en desarrollo** en el menú para construir la imagen que contiene la revisión y aplicarla antes de iniciar la API.
+
+Las migraciones de datos de una sola ejecución registran su identificador en `core_data_migrations`; si una ejecución falla antes de terminar, la siguiente la reanuda sin volver a cifrar las filas ya procesadas. No ejecutes migraciones de prueba contra el volumen con datos reales.
+
+Una instalación de un solo host puede ejecutar varias réplicas API cuando PostgreSQL tenga capacidad suficiente. Por ejemplo, después de iniciar el modo estable:
+
+```bash
+docker compose up -d --scale backend=2
+```
+
+Las sesiones de bóveda y los bloqueos de re-cifrado se comparten mediante PostgreSQL; la clave derivada no se guarda en la base. Nginx vuelve a resolver el servicio backend para detectar réplicas. El límite de conexiones del pool principal es `réplicas × (DB_POOL_SIZE + DB_MAX_OVERFLOW)`; reserva capacidad adicional en PostgreSQL para el job de migración, respaldos, conexiones administrativas y mantenimiento. Las solicitudes protegidas se limitan por proceso a la mitad de la capacidad del pool, ya que cada una mantiene una conexión para el bloqueo distribuido y otra para su sesión de base de datos. La capacidad combinada debe ser de al menos dos conexiones. No aumentes el pool sin revisar `max_connections` y las solicitudes simultáneas esperadas.
 
 ## Certificados locales
 

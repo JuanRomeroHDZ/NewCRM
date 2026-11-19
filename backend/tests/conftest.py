@@ -7,15 +7,19 @@ from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, Asyn
 from app.database import Base, get_db
 from app.main import app
 
-# La base externa solo se permite con habilitación explícita y un nombre de prueba concreto.
-TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL", "sqlite+aiosqlite:///:memory:")
-if not TEST_DATABASE_URL.startswith("sqlite+aiosqlite:///:memory:"):
-    parsed_url = make_url(TEST_DATABASE_URL)
-    if (os.environ.get("EMAILCRM_DISPOSABLE_DATABASE") != "1"
-            or parsed_url.drivername != "postgresql+asyncpg"
-            or parsed_url.database != "emailcrm_disposable_test"
-            or parsed_url.host not in ("localhost", "127.0.0.1")):
-        raise RuntimeError("La base de pruebas debe ser una base PostgreSQL temporal y autorizada explícitamente.")
+# Production behavior (locks, foreign keys, and time types) is PostgreSQL-specific.
+# Never silently fall back to SQLite or accept a live application database.
+TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL")
+if not TEST_DATABASE_URL:
+    raise RuntimeError(
+        "Configura TEST_DATABASE_URL con una PostgreSQL desechable llamada emailcrm_disposable_test."
+    )
+parsed_url = make_url(TEST_DATABASE_URL)
+if (os.environ.get("EMAILCRM_DISPOSABLE_DATABASE") != "1"
+        or parsed_url.drivername != "postgresql+asyncpg"
+        or parsed_url.database != "emailcrm_disposable_test"
+        or parsed_url.host not in ("localhost", "127.0.0.1")):
+    raise RuntimeError("La base de pruebas debe ser una PostgreSQL temporal y autorizada explícitamente.")
 
 @pytest_asyncio.fixture
 async def test_engine():

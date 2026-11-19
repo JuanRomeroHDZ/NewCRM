@@ -1,6 +1,7 @@
 import pytest
 from datetime import datetime, timedelta, timezone
 from app.models.agenda import AgendaEvent, PentestEngagement, PentestFinding
+from app.models.crm_sales import Client
 from app.services.agenda_service import AgendaService
 
 def utc_now() -> datetime:
@@ -77,6 +78,9 @@ async def test_pentest_finding_blocked_outside_authorized_window(db_session):
     # Engagement window strictly in the past
     past_start = utc_now() - timedelta(days=5)
     past_end = utc_now() - timedelta(days=4)
+
+    db_session.add(Client(id="dummy-client", company_name="Cliente de prueba"))
+    await db_session.flush()
 
     eng = PentestEngagement(
         client_id="dummy-client",

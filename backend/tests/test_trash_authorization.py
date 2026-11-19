@@ -163,13 +163,13 @@ async def test_trash_visibility_policy_is_admin_only(client, db_session, auth_to
         address="old@example.test",
         provider="Example",
         is_deleted=True,
-        deleted_at=datetime.now(timezone.utc) - timedelta(days=45),
+        deleted_at=datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=45),
     )
     recent_item = EmailAccount(
         address="recent@example.test",
         provider="Example",
         is_deleted=True,
-        deleted_at=datetime.now(timezone.utc) - timedelta(days=5),
+        deleted_at=datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=5),
     )
     db_session.add_all([old_item, recent_item])
     await db_session.commit()

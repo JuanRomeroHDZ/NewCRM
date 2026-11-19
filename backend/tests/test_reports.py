@@ -1,5 +1,8 @@
 import json
+import subprocess
 from io import BytesIO
+from pathlib import Path
+import zipfile
 import pytest
 from PIL import Image
 from app.api.v1.reports import prepare_typst_source
@@ -142,11 +145,150 @@ async def test_typst_live_compile_svg_pdf_and_error(client, auth_token):
     assert pdf_res.content.startswith(b"%PDF-")
 
 
+@pytest.mark.asyncio
+async def test_typst_export_endpoint_compiles_attached_image_and_long_table(
+    client, auth_token, tmp_path: Path
+):
+    """Exercise encrypted asset resolution and the real Typst PDF/HTML exporters together."""
+    headers = {"X-Vault-Token": auth_token}
+    created = await client.post(
+        "/api/v1/reports/documents",
+        headers=headers,
+        json={"title": "Exportación de integración", "source": "= Integración Typst"},
+    )
+    assert created.status_code == 201, created.text
+    doc_id = created.json()["id"]
+
+    image_bytes = BytesIO()
+    Image.new("RGB", (320, 180), (45, 92, 135)).save(image_bytes, format="PNG")
+    uploaded = await client.post(
+        f"/api/v1/reports/documents/{doc_id}/assets",
+        headers=headers,
+        files={"file": ("captura.png", image_bytes.getvalue(), "image/png")},
+    )
+    assert uploaded.status_code == 201, uploaded.text
+    asset_id = uploaded.json()["id"]
+
+    svg = '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="80"><rect width="100" height="80" fill="#111827"/><circle cx="50" cy="40" r="24" fill="#0f766e"/></svg>'
+    canvas = await client.post(
+        "/api/v1/reports/canvases",
+        headers=headers,
+        json={"title": "Diagrama exportable", "element_count": 1, "svg_snapshot": svg},
+    )
+    assert canvas.status_code == 201, canvas.text
+    canvas_id = canvas.json()["id"]
+
+    rows = "\n".join(
+        f"  [H-{index:02d}], [Hallazgo {index}: {'Detalle técnico y recomendación prioritaria. ' * 9}], [Media],"
+        for index in range(1, 43)
+    )
+    source = f'''#set page(paper: "a4", margin: 1.7cm)
+#set text(font: "DejaVu Sans", size: 9pt, lang: "es")
+#set heading(numbering: "1.1")
+#set table.cell(breakable: false)
+
+= Informe de integración Typst
+
+Texto verificable del documento exportado.
+
+#figure(image("asset://{asset_id}", width: 62%), caption: [Captura adjunta de integración])
+
+#figure(image("canvas://{canvas_id}", width: 45%), caption: [Diagrama adjunto])
+
+== Hallazgos y tabla extensa
+
+#table(
+  columns: (auto, 1fr, auto),
+  inset: 5pt,
+  align: horizon,
+  table.header([*ID*], [*Descripción*], [*Severidad*]),
+{rows}
+)
+
+== Cierre
+
+Texto al final de la tabla para verificar el flujo de páginas.
+'''
+
+    pdf = await client.post(
+        f"/api/v1/reports/documents/{doc_id}/export?format=pdf",
+        headers=headers,
+        json={"source": source},
+    )
+    assert pdf.status_code == 200, pdf.text
+    assert pdf.headers["content-type"].startswith("application/pdf")
+    assert pdf.content.startswith(b"%PDF-")
+    pdf_path = tmp_path / "report.pdf"
+    pdf_path.write_bytes(pdf.content)
+
+    info = subprocess.run(
+        ["pdfinfo", str(pdf_path)], check=True, capture_output=True, text=True
+    ).stdout
+    page_line = next(line for line in info.splitlines() if line.startswith("Pages:"))
+    assert int(page_line.split(":", 1)[1].strip()) >= 2
+
+    extracted = subprocess.run(
+        ["pdftotext", str(pdf_path), "-"], check=True, capture_output=True, text=True
+    ).stdout
+    assert "Informe de integración Typst" in extracted
+    assert "H-42" in extracted
+    assert "Texto al final de la tabla" in extracted
+    assert extracted.count("Severidad") >= 2
+
+    images = subprocess.run(
+        ["pdfimages", "-list", str(pdf_path)], check=True, capture_output=True, text=True
+    ).stdout
+    assert "image" in images.lower()
+
+    html = await client.post(
+        f"/api/v1/reports/documents/{doc_id}/export?format=html",
+        headers=headers,
+        json={"source": source},
+    )
+    assert html.status_code == 200, html.text
+    assert html.headers["content-type"].startswith("text/html")
+    html_text = html.content.decode("utf-8")
+    assert "Informe de integración Typst" in html_text
+    assert "Hallazgos y tabla extensa" in html_text
+    assert "<img" in html_text.lower()
+    assert "asset://" not in html_text
+    assert "canvas://" not in html_text
+
+    project = await client.post(
+        f"/api/v1/reports/documents/{doc_id}/export?format=typst_zip",
+        headers=headers,
+        json={"source": source},
+    )
+    assert project.status_code == 200, project.text
+    assert project.headers["content-type"].startswith("application/zip")
+    assert project.headers["content-disposition"].endswith(".typst.zip\"")
+
+    with zipfile.ZipFile(BytesIO(project.content)) as archive:
+        names = archive.namelist()
+        assert names[0] == "document.typ"
+        assert all("/" not in name and chr(92) not in name for name in names)
+        project_source = archive.read("document.typ").decode("utf-8")
+        assert "asset://" not in project_source and "canvas://" not in project_source
+        assert "H-42" in project_source and "Texto al final de la tabla" in project_source
+        image_names = [name for name in names if name.startswith("report_asset_")]
+        canvas_names = [name for name in names if name.startswith("canvas_")]
+        assert len(image_names) == 1 and len(canvas_names) == 1
+        assert image_names[0] in project_source and canvas_names[0] in project_source
+        assert archive.read(image_names[0])
+        assert svg in archive.read(canvas_names[0]).decode("utf-8")
+
+        resources = {name: archive.read(name) for name in names if name != "document.typ"}
+        compiled = compile_typst_source(project_source, output_format="pdf", extra_files=resources)
+        assert compiled.ok, compiled.error
+        assert compiled.pdf_bytes and compiled.pdf_bytes.startswith(b"%PDF-")
+
+
 def test_typst_client_redaction_unwraps_markers_and_hides_sensitive_values():
+    fake_token = ".".join(("eyJhbGciOiJIUzI1NiJ9", "eyJzdWIiOiIxIn0", "signature"))
     source = (
         '= Evidencia\n'
         'IP: 192.168.1.23\n'
-        'Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.signature\n'
+        f'Authorization: Bearer {fake_token}\n'
         'password = "mi-clave"\n'
         'IPv6: 2001:db8::1\n'
         'Nota: {{redact:secreto interno}}\n'

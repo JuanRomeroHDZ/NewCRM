@@ -1,86 +1,41 @@
-from types import SimpleNamespace
+from pathlib import Path
 
 import pytest
+from alembic.config import Config
+from alembic.script import ScriptDirectory
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app import main as main_module
-
-
-class FakeConnection:
-    def __init__(self, dialect_name="sqlite", fail=False):
-        self.dialect = SimpleNamespace(name=dialect_name)
-        self.columns = {"platform_accounts": {"email_id": False}}
-        self.executed = []
-        self.indexes = set()
-        self.fail = fail
-
-    async def run_sync(self, callback):
-        return callback(self)
-
-    async def execute(self, statement):
-        sql = str(statement)
-        if sql.upper().startswith("CREATE INDEX IF NOT EXISTS "):
-            index_name = sql.split()[5]
-            if index_name in self.indexes:
-                return
-            self.indexes.add(index_name)
-        self.executed.append(sql)
-        if self.fail:
-            raise RuntimeError("Fallo controlado de migración")
-        parts = sql.split()
-        if len(parts) > 5 and parts[:3] == ["ALTER", "TABLE", parts[2]] and parts[3:5] == ["ADD", "COLUMN"]:
-            table_name, column_name = parts[2], parts[5]
-            self.columns.setdefault(table_name, {})[column_name] = True
+from app.data_migrations import migrate_plaintext_notes_to_encrypted
+from app.models import CoreDataMigration, EmailAccount
+from app.security.crypto import NOTE_ENC_PREFIX, decrypt_note
 
 
-class FakeTransaction:
-    def __init__(self, connection):
-        self.connection = connection
-
-    async def __aenter__(self):
-        return self.connection
-
-    async def __aexit__(self, exc_type, exc, traceback):
-        return False
-
-
-class FakeEngine:
-    def __init__(self, connection):
-        self.connection = connection
-
-    def begin(self):
-        return FakeTransaction(self.connection)
+def test_migration_graph_has_one_current_head():
+    config = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
+    scripts = ScriptDirectory.from_config(config)
+    assert scripts.get_current_head() == "20261118_0003"
+    assert len(scripts.get_heads()) == 1
 
 
 @pytest.mark.asyncio
-async def test_sqlite_schema_changes_are_idempotent_and_skip_unsupported_alters(monkeypatch):
-    connection = FakeConnection()
+async def test_plaintext_note_migration_is_lossless_and_idempotent(test_engine, db_session):
+    row = EmailAccount(
+        id="legacy-note-record",
+        address="legacy-note@example.test",
+        notes="Nota privada anterior a la migración",
+    )
+    db_session.add(row)
+    await db_session.commit()
 
-    def fake_inspect(sync_connection):
-        return SimpleNamespace(
-            get_columns=lambda table: [
-                {"name": name, "nullable": nullable}
-                for name, nullable in sync_connection.columns.get(table, {}).items()
-            ]
-        )
+    session_factory = async_sessionmaker(test_engine, class_=AsyncSession, expire_on_commit=False)
+    await migrate_plaintext_notes_to_encrypted(session_factory)
+    await db_session.refresh(row)
+    encrypted_value = row.notes
+    assert encrypted_value.startswith(NOTE_ENC_PREFIX)
+    assert decrypt_note(encrypted_value) == "Nota privada anterior a la migración"
 
-    monkeypatch.setattr(main_module, "inspect", fake_inspect)
-    engine = FakeEngine(connection)
-
-    await main_module.run_additive_schema_migrations(engine)
-    statement_count = len(connection.executed)
-    await main_module.run_additive_schema_migrations(engine)
-
-    assert connection.columns["email_accounts"]["scope"] is True
-    assert connection.columns["pentest_engagements"]["authorized_ipv6_targets"] is True
-    assert len(connection.executed) == statement_count
-    assert not any("ALTER COLUMN" in statement for statement in connection.executed)
-
-
-@pytest.mark.asyncio
-async def test_schema_migration_failure_is_logged_and_stops_startup(caplog):
-    connection = FakeConnection(dialect_name="postgresql", fail=True)
-
-    with pytest.raises(RuntimeError, match="migración del esquema"):
-        await main_module.run_additive_schema_migrations(FakeEngine(connection))
-
-    assert "platform_accounts.icon_url" in caplog.text
+    await migrate_plaintext_notes_to_encrypted(session_factory)
+    await db_session.refresh(row)
+    assert row.notes == encrypted_value
+    marker = await db_session.get(CoreDataMigration, "legacy_plaintext_notes_v1")
+    assert marker is not None

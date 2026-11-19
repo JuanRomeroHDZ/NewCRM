@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import ExchangeRate
 from app.config import settings
 
-async def seed_initial_demo_data(db: AsyncSession):
+async def initialize_default_exchange_rate(db: AsyncSession) -> None:
     """
     Inicializa únicamente la tasa de cambio base del sistema si la base de datos está vacía.
     NO crea UserSettings con contraseñas por defecto; la configuración de la contraseña

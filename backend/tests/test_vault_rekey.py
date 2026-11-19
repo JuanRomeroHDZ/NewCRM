@@ -80,6 +80,41 @@ async def test_password_change_rolls_back_if_ciphertext_is_corrupt(client, auth_
 
 
 @pytest.mark.asyncio
+async def test_password_change_and_session_revocation_commit_atomically(
+    client, auth_token, monkeypatch
+):
+    headers = {"X-Vault-Token": auth_token}
+    email = await client.post("/api/v1/emails", headers=headers, json={
+        "address": "atomico@example.test", "password": "Clave protegida",
+    })
+    assert email.status_code == 200
+
+    async def fail_revocation(_db):
+        raise RuntimeError("simulated revocation write failure")
+
+    monkeypatch.setattr("app.api.v1.settings.revoke_all_vault_sessions", fail_revocation)
+    with pytest.raises(RuntimeError, match="simulated revocation write failure"):
+        await client.put("/api/v1/settings", headers=headers, json={
+            "current_master_password": "MasterPasswordTest123!",
+            "new_master_password": "NuevaClaveAtomica456!",
+        })
+
+    assert (await client.post("/api/v1/auth/unlock", json={
+        "master_password": "NuevaClaveAtomica456!",
+    })).status_code == 401
+    old_unlock = await client.post("/api/v1/auth/unlock", json={
+        "master_password": "MasterPasswordTest123!",
+    })
+    assert old_unlock.status_code == 200
+    saved = await client.get(
+        f"/api/v1/emails/{email.json()['id']}",
+        headers={"X-Vault-Token": old_unlock.json()["token"]},
+    )
+    assert saved.status_code == 200
+    assert saved.json()["password_plain"] == "Clave protegida"
+
+
+@pytest.mark.asyncio
 async def test_password_change_preserves_legacy_server_key_data(client, auth_token, test_engine):
     headers = {"X-Vault-Token": auth_token}
     email = await client.post("/api/v1/emails", headers=headers, json={"address": "antigua@example.test"})

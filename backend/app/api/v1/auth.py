@@ -1,15 +1,17 @@
 import json
 import secrets
+import hashlib
+import hmac
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Body, Depends, HTTPException, Header, Request, status
 from pydantic import BaseModel, Field, SecretStr, field_validator
-from sqlalchemy import func, select, update
+from sqlalchemy import delete, func, select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings as app_settings
 from app.database import get_db
 from app.models import UserSettings
-from app.models.core import ConfigParameter, DbSession, User
+from app.models.core import ConfigParameter, DbSession, User, VaultUnlockAttempt
 from app.schemas import (
     MasterPasswordSetup,
     TotpSetupConfirmRequest,
@@ -45,7 +47,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 @router.post("/activity")
 async def vault_activity(request: Request, x_vault_token: str | None = Header(None), db: AsyncSession = Depends(get_db)):
-    remaining = touch_vault_token(x_vault_token)
+    remaining = await touch_vault_token(x_vault_token, db)
     if not remaining:
         raise HTTPException(status_code=401, detail="La sesión venció. Desbloquea la bóveda para continuar.")
     account_active = None
@@ -63,9 +65,6 @@ async def vault_activity(request: Request, x_vault_token: str | None = Header(No
         await db.commit()
         account_active = result.rowcount == 1
     return {"remaining_seconds": remaining, "account_active": account_active}
-
-_VAULT_FAILED_ATTEMPTS: dict[str, list[datetime]] = {}
-
 
 class InitialAccountRequest(BaseModel):
     username: str = Field(..., min_length=3, max_length=64, pattern=r"^[a-zA-Z0-9._-]+$")
@@ -108,27 +107,51 @@ async def _initial_account_is_available(db: AsyncSession) -> bool:
     )
 
 
-def reset_vault_lockout(client_key: str | None = None) -> None:
-    """Clears failed attempts for one client, or all attempts during setup."""
-    if client_key is None:
-        _VAULT_FAILED_ATTEMPTS.clear()
-    else:
-        _VAULT_FAILED_ATTEMPTS.pop(client_key, None)
-
-
 def _client_key(request: Request) -> str:
     return request.client.host if request.client and request.client.host else "local"
 
 
-def _is_vault_locked_out(client_key: str) -> bool:
-    now = datetime.now(timezone.utc)
-    cutoff = now - timedelta(minutes=app_settings.LOCKOUT_MINUTES)
-    attempts = [ts for ts in _VAULT_FAILED_ATTEMPTS.get(client_key, []) if ts >= cutoff]
-    if attempts:
-        _VAULT_FAILED_ATTEMPTS[client_key] = attempts
-    else:
-        _VAULT_FAILED_ATTEMPTS.pop(client_key, None)
-    return len(attempts) >= app_settings.MAX_FAILED_LOGIN_ATTEMPTS
+def _client_key_hash(client_key: str) -> str:
+    """Hash client IPs with the server key; raw addresses are not stored for lockouts."""
+    return hmac.new(
+        app_settings.SERVER_SECRET_KEY.encode("utf-8"),
+        client_key.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+
+
+async def _is_vault_locked_out(db: AsyncSession, client_key: str) -> bool:
+    cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=app_settings.LOCKOUT_MINUTES)
+    client_hash = _client_key_hash(client_key)
+    if db.bind is not None and db.bind.dialect.name == "postgresql":
+        # Serialize attempts only for this hashed client key, preventing a
+        # parallel burst from crossing the threshold on different replicas.
+        await db.execute(
+            text("SELECT pg_advisory_xact_lock(:namespace, hashtext(:client_key))"),
+            {"namespace": 19521, "client_key": client_hash},
+        )
+    attempts = await db.scalar(
+        select(func.count(VaultUnlockAttempt.id)).where(
+            VaultUnlockAttempt.client_key_hash == client_hash,
+            VaultUnlockAttempt.attempted_at >= cutoff,
+        )
+    )
+    await db.execute(delete(VaultUnlockAttempt).where(VaultUnlockAttempt.attempted_at < cutoff))
+    return int(attempts or 0) >= app_settings.MAX_FAILED_LOGIN_ATTEMPTS
+
+
+async def _record_vault_unlock_failure(db: AsyncSession, client_key: str) -> None:
+    db.add(VaultUnlockAttempt(client_key_hash=_client_key_hash(client_key)))
+    await db.commit()
+
+
+async def reset_vault_lockout(db: AsyncSession, client_key: str | None = None) -> None:
+    """Clear failed attempts for one client or all clients, shared across replicas."""
+    statement = delete(VaultUnlockAttempt)
+    if client_key is not None:
+        statement = statement.where(VaultUnlockAttempt.client_key_hash == _client_key_hash(client_key))
+    await db.execute(statement)
+    await db.commit()
 
 
 @router.get("/status", response_model=VaultStatusResponse)
@@ -141,8 +164,8 @@ async def get_vault_status(
     user_settings = res.scalar_one_or_none()
 
     is_setup = user_settings is not None
-    is_unlocked = verify_vault_token(x_vault_token) if is_setup else False
-    remaining = get_vault_remaining_seconds(x_vault_token) if is_unlocked else 0
+    is_unlocked = await verify_vault_token(x_vault_token, db) if is_setup else False
+    remaining = await get_vault_remaining_seconds(x_vault_token, db) if is_unlocked else 0
 
     return VaultStatusResponse(
         is_setup=is_setup,
@@ -189,8 +212,8 @@ async def setup_master_password(payload: MasterPasswordSetup, db: AsyncSession =
     await log_audit_event(db, action="create", entity_type="vault", details="Configuración inicial de contraseña de acceso")
     await db.commit()
 
-    reset_vault_lockout()
-    token = create_vault_token(settings.vault_timeout_minutes, encryption_key=derived_aes_key)
+    await reset_vault_lockout(db)
+    token = await create_vault_token(settings.vault_timeout_minutes, encryption_key=derived_aes_key, db=db)
     return {
         "message": "Bóveda configurada exitosamente.",
         "token": token,
@@ -204,7 +227,7 @@ async def unlock_vault(
     db: AsyncSession = Depends(get_db),
 ):
     client_key = _client_key(request)
-    if _is_vault_locked_out(client_key):
+    if await _is_vault_locked_out(db, client_key):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Demasiados intentos fallidos. Espera unos minutos antes de intentar de nuevo."
@@ -217,13 +240,13 @@ async def unlock_vault(
         raise HTTPException(status_code=400, detail="El espacio seguro aún no está configurado. Configure una contraseña de acceso primero.")
 
     if not verify_master_password(settings.master_password_hash, payload.master_password):
-        _VAULT_FAILED_ATTEMPTS.setdefault(client_key, []).append(datetime.now(timezone.utc))
+        await _record_vault_unlock_failure(db, client_key)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Contraseña de acceso incorrecta."
         )
 
-    reset_vault_lockout(client_key)
+    await reset_vault_lockout(db, client_key)
 
     # If vault_salt was missing from a legacy DB migration, generate and save it
     vault_salt = getattr(settings, "vault_salt", None)
@@ -237,7 +260,7 @@ async def unlock_vault(
     await log_audit_event(db, action="vault_unlock", entity_type="vault", details="Bóveda desbloqueada con éxito")
     await db.commit()
 
-    token = create_vault_token(settings.vault_timeout_minutes, encryption_key=derived_aes_key)
+    token = await create_vault_token(settings.vault_timeout_minutes, encryption_key=derived_aes_key, db=db)
     return {
         "message": "Bóveda desbloqueada.",
         "token": token,
@@ -254,7 +277,7 @@ async def verify_vault_password(
 ):
     """Rechecks the vault password for a sensitive action without opening a session."""
     client_key = _client_key(request)
-    if _is_vault_locked_out(client_key):
+    if await _is_vault_locked_out(db, client_key):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Demasiados intentos fallidos. Espera unos minutos antes de intentar de nuevo."
@@ -265,20 +288,20 @@ async def verify_vault_password(
         raise HTTPException(status_code=400, detail="La bóveda aún no está configurada.")
 
     if not verify_master_password(settings.master_password_hash, payload.master_password):
-        _VAULT_FAILED_ATTEMPTS.setdefault(client_key, []).append(datetime.now(timezone.utc))
+        await _record_vault_unlock_failure(db, client_key)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Contraseña de acceso incorrecta."
         )
 
-    reset_vault_lockout(client_key)
+    await reset_vault_lockout(db, client_key)
     return {"verified": True}
 
 @router.post("/lock")
-async def lock_vault(x_vault_token: str | None = Header(None)):
-    """Locks the vault immediately and revokes the active session token in the session manager."""
+async def lock_vault(x_vault_token: str | None = Header(None), db: AsyncSession = Depends(get_db)):
+    """Locks the vault immediately and revokes the active shared session."""
     if x_vault_token:
-        revoke_vault_token(x_vault_token)
+        await revoke_vault_token(x_vault_token, db)
     return {"message": "Bóveda bloqueada exitosamente y sesión revocada."}
 
 

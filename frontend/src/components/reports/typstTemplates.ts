@@ -18,6 +18,7 @@ const pageSetup = `#set page(
   lang: "es",
 )
 #set heading(numbering: "1.1")
+#set table.cell(breakable: false)
 ${TYPST_HEADING_HIERARCHY}
 
 `;
@@ -49,7 +50,7 @@ export const TYPST_DOCUMENT_TEMPLATES: TypstDocumentTemplate[] = [
   columns: (auto, 1fr, auto),
   inset: 8pt,
   align: horizon,
-  [*ID*], [*Descripción*], [*Severidad*],
+  table.header([*ID*], [*Descripción*], [*Severidad*]),
   [H-01], [Descripción del hallazgo], [Media],
 )
 
@@ -91,7 +92,7 @@ Identificador sensible: {{redact:valor_sensible}}
 #table(
   columns: (1fr, 2fr),
   inset: 8pt,
-  [Entregable], [Descripción],
+  table.header([Entregable], [Descripción]),
   [Informe], [Resultados y recomendaciones acordadas],
   [Sesión de cierre], [Presentación de resultados],
 )

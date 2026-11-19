@@ -40,7 +40,7 @@ const definitions: Record<Exclude<OverviewRoute, 'overview_finances'>, OverviewD
     title: 'Reportes',
     description: 'Documentos técnicos en Typst, lienzos visuales en Excalidraw y su relación.',
     links: [
-      { id: 'reports_documents', label: 'Documentos (Typst)', description: 'Redacta informes en Typst, correlaciona hallazgos y exporta a PDF, HTML o .typ.', icon: FileText },
+      { id: 'reports_documents', label: 'Documentos (Typst)', description: 'Redacta informes en Typst, correlaciona hallazgos y exporta a PDF, HTML experimental, .typ o un proyecto portátil .zip.', icon: FileText },
       { id: 'reports_canvases', label: 'Lienzos (Excalidraw)', description: 'Dibuja diagramas, vincúlalos a un documento e insértalos con un clic.', icon: PenTool },
     ],
   },

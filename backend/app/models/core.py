@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import String, Boolean, Integer, Text, DateTime, ForeignKey
+from sqlalchemy import String, Boolean, Integer, Text, DateTime, ForeignKey, Index, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
 
@@ -97,3 +97,39 @@ class ActivityEvent(Base):
     details_after: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON for admin audit
     ip_address: Mapped[str | None] = mapped_column(String(64), nullable=True)
     is_redacted: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class VaultSession(Base):
+    """Shared revocation and idle-timeout state; the vault key is never stored here."""
+
+    __tablename__ = "vault_sessions"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)  # JWT jti
+    timeout_seconds: Mapped[int] = mapped_column(Integer, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
+
+
+class VaultUnlockAttempt(Base):
+    """Hashed client identifiers make the vault lockout consistent across API replicas."""
+
+    __tablename__ = "vault_unlock_attempts"
+    __table_args__ = (
+        Index("ix_vault_unlock_attempts_client_attempted", "client_key_hash", "attempted_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=gen_uuid)
+    client_key_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    attempted_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
+
+
+class CoreDataMigration(Base):
+    """Completion markers for application-level data migrations."""
+
+    __tablename__ = "core_data_migrations"
+
+    id: Mapped[str] = mapped_column(String(96), primary_key=True)
+    applied_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, server_default=func.now(), nullable=False
+    )

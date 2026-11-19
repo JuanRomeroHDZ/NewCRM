@@ -18,6 +18,7 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from app.api.v1 import c2
 from app.security.tokens import require_vault_unlocked
+from app.database import get_db
 from app.c2.core import demo, fw
 from app.c2.core.bus import bus
 from app.c2.core.cleanup import full_cleanup
@@ -71,5 +72,11 @@ class InternalAuth:
 
 app.add_middleware(InternalAuth)
 app.dependency_overrides[require_vault_unlocked] = lambda: True
-c2.verify_vault_token = lambda token: bool(token) and hmac.compare_digest(token.encode(), _WORKER_SECRET.encode())
+app.dependency_overrides[get_db] = lambda: None
+
+async def verify_worker_vault_token(token, db=None):
+    return bool(token) and hmac.compare_digest(token.encode(), _WORKER_SECRET.encode())
+
+
+c2.verify_vault_token_and_release = verify_worker_vault_token
 app.include_router(c2.router)

@@ -10,6 +10,7 @@ import pytest
 
 from app.api.v1 import c2_proxy
 from app.main import app
+from app.database import get_db
 from app.security.tokens import require_vault_unlocked
 
 
@@ -124,15 +125,26 @@ async def test_websocket_requires_sessions_and_relays_worker_events(worker, monk
     async def owner_active(token):
         return token == 'owner-session'
 
+    async def vault_active(token, db=None):
+        return token == 'vault-session'
+
     monkeypatch.setattr(c2_proxy, '_owner_active', owner_active)
-    monkeypatch.setattr(c2_proxy, 'verify_vault_token', lambda token: token == 'vault-session')
-    test_client = TestClient(app)
-    with pytest.raises(WebSocketDisconnect) as error:
-        with test_client.websocket_connect('/api/v1/c2/ws', subprotocols=['lessso-v1', 'vault.vault-session', 'user.other']):
-            pass
-    assert error.value.code == 4401
-    with test_client.websocket_connect('/api/v1/c2/ws', subprotocols=['lessso-v1', 'vault.vault-session', 'user.owner-session']) as ws:
-        assert isinstance(ws.receive_json(), dict)
+    monkeypatch.setattr(c2_proxy, 'verify_vault_token_and_release', vault_active)
+    assert c2_proxy._connection() == (str(worker[0]), worker[1])
+    app.dependency_overrides[get_db] = lambda: None
+    try:
+        test_client = TestClient(app)
+        with pytest.raises(WebSocketDisconnect) as error:
+            with test_client.websocket_connect('/api/v1/c2/ws', subprotocols=['lessso-v1', 'vault.vault-session', 'user.other']):
+                pass
+        assert error.value.code == 4401
+        try:
+            with test_client.websocket_connect('/api/v1/c2/ws', subprotocols=['lessso-v1', 'vault.vault-session', 'user.owner-session']) as ws:
+                assert isinstance(ws.receive_json(), dict)
+        except WebSocketDisconnect as error:
+            pytest.fail(f"El relay cerró inesperadamente el WebSocket con código {error.code}.")
+    finally:
+        app.dependency_overrides.pop(get_db, None)
 
 
 @pytest.mark.asyncio

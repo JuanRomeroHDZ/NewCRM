@@ -148,7 +148,7 @@ async def test_prospect_phone_and_multi_phone_list_validation(client, auth_token
 
 
 async def test_vault_unlock_lockout_and_core_user_security(client, db_session):
-    reset_vault_lockout()
+    await reset_vault_lockout(db_session)
     setup_res = await client.post("/api/v1/auth/setup", json={"master_password": "MasterPassword123!"})
     assert setup_res.status_code == 200
 
@@ -158,7 +158,7 @@ async def test_vault_unlock_lockout_and_core_user_security(client, db_session):
 
     locked = await client.post("/api/v1/auth/unlock", json={"master_password": "MasterPassword123!"})
     assert locked.status_code == 429
-    reset_vault_lockout()
+    await reset_vault_lockout(db_session)
 
     owner, owner_token = await _make_user(db_session, username="sec_owner", role="owner", password="OwnerSecretPassword1!")
     other_token, _ = await create_user_session(db_session, owner)

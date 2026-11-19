@@ -1,81 +1,9 @@
 import React from 'react';
-import { AlertTriangle, ChevronDown, Filter, Key, Plus, Search } from 'lucide-react';
+import { AlertTriangle, Key, Plus } from 'lucide-react';
 import type { VaultCredentialItem } from '../../../types';
 import { EmptyState } from '../../common/EmptyState';
 import { SecretField } from '../../common/SecretField';
-import { INPUT_LIMITS } from '../../../lib/validation';
 import { credentialCategoryClass, ScopeBadge } from './passwordViewHelpers';
-
-const categories = [
-  { id: 'all', label: 'Todas' },
-  { id: 'email', label: 'Correos principales' },
-  { id: 'platform', label: 'Cuentas y servicios' },
-  { id: 'pin', label: 'PIN' },
-  { id: 'api_key', label: 'Llaves API' },
-];
-
-interface CredentialFiltersProps {
-  search: string;
-  onSearchChange: (value: string) => void;
-  categoryFilter: string;
-  onCategoryChange: (value: string) => void;
-}
-
-export const CredentialFilters: React.FC<CredentialFiltersProps> = ({
-  search,
-  onSearchChange,
-  categoryFilter,
-  onCategoryChange,
-}) => {
-  const selectedCategory = categories.find((category) => category.id === categoryFilter)?.label || 'Todas';
-
-  return (
-    <div className="flex min-w-0 flex-1 items-center gap-2">
-      <label className="relative min-w-0 flex-1">
-        <span className="sr-only">Buscar contraseñas por nombre, usuario o correo</span>
-        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-obsidian-muted" aria-hidden="true" />
-        <input
-          type="search"
-          maxLength={INPUT_LIMITS.SEARCH}
-          value={search}
-          onChange={(event) => onSearchChange(event.target.value)}
-          placeholder="Buscar contraseña"
-              className="min-h-11 w-full rounded-lg border border-obsidian-border bg-obsidian-surface py-2 pl-8 pr-3 text-sm text-white placeholder:text-obsidian-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent"
-        />
-      </label>
-
-      {/* [Menú y selector] El filtro mantiene visible la categoría elegida. */}
-      <details className="group relative shrink-0">
-        <summary
-          aria-label={`Filtrar contraseñas por tipo. Selección: ${selectedCategory}`}
-          data-caret="manual"
-          className="ui-action-secondary cursor-pointer list-none [&::-webkit-details-marker]:hidden"
-        >
-          <Filter size={16} aria-hidden="true" />
-          <span className="hidden max-w-24 truncate sm:inline">{selectedCategory}</span>
-          <ChevronDown size={16} className="text-obsidian-muted transition-transform group-open:rotate-180" aria-hidden="true" />
-        </summary>
-        <div role="group" aria-label="Filtrar contraseñas por tipo" className="absolute right-0 top-full z-30 mt-2 grid w-52 gap-1 rounded-xl border border-obsidian-border bg-obsidian-panel p-2 shadow-xl">
-          {categories.map((category) => (
-            <button
-              key={category.id}
-              type="button"
-              aria-pressed={categoryFilter === category.id}
-              onClick={(event) => {
-                onCategoryChange(category.id);
-                const details = event.currentTarget.closest('details');
-                if (details) details.open = false;
-              }}
-              className="ui-action-toggle ui-menu-item"
-            >
-              {category.label}
-            </button>
-          ))}
-        </div>
-      </details>
-    </div>
-  );
-};
 
 interface CredentialCollectionProps {
   credentials: VaultCredentialItem[];
@@ -106,7 +34,7 @@ export const CredentialCollection: React.FC<CredentialCollectionProps> = ({
 }) => (
   <section aria-label="Contraseñas y llaves" className="space-y-4">
     {loading && (
-      <div className="divide-y divide-obsidian-border overflow-hidden rounded-xl border border-obsidian-border bg-obsidian-panel" role="status" aria-label="Cargando contraseñas y llaves">
+      <div className="divide-y divide-obsidian-border border-y border-obsidian-border" role="status" aria-label="Cargando contraseñas y llaves">
         <div className="h-20 animate-pulse bg-obsidian-surface/50" />
         <div className="h-20 animate-pulse bg-obsidian-surface/50" />
       </div>
@@ -124,7 +52,7 @@ export const CredentialCollection: React.FC<CredentialCollectionProps> = ({
     )}
 
     {!loading && !error && filteredCredentials.length > 0 && (
-      <div className="divide-y divide-obsidian-border overflow-hidden rounded-xl border border-obsidian-border bg-obsidian-panel">
+      <div className="divide-y divide-obsidian-border border-y border-obsidian-border">
         {filteredCredentials.map((item) => (
           <article key={item.id} className="grid min-w-0 gap-3 p-3 sm:grid-cols-[minmax(0,1fr)_minmax(220px,0.8fr)] sm:items-center sm:gap-6 sm:p-4">
             <div className="min-w-0">
@@ -168,7 +96,7 @@ export const CredentialCollection: React.FC<CredentialCollectionProps> = ({
     )}
 
     {filteredCredentials.length === 0 && !loading && !error && (
-      <div className="space-y-3 rounded-xl border border-obsidian-border bg-obsidian-panel p-5 text-center sm:p-8">
+      <div className="space-y-3 px-4 py-8 text-center">
         <Key size={20} className="mx-auto text-obsidian-muted" aria-hidden="true" />
         {credentials.length === 0 ? (
           <>

@@ -1,15 +1,33 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { FolderLock, Key } from 'lucide-react';
+import { FolderLock, Key, Plus, Search } from 'lucide-react';
 import { useVault } from '../../context/VaultContext';
 import { api } from '../../lib/api';
+import { INPUT_LIMITS } from '../../lib/validation';
 import type { EntityScope, SecureResource, VaultCredentialItem } from '../../types';
 import { InfoTooltip } from '../common/InfoTooltip';
-import { CredentialCollection, CredentialFilters } from './passwords/CredentialCollection';
+import { CredentialCollection } from './passwords/CredentialCollection';
 import { SecureResourceCollection } from './passwords/SecureResourceCollection';
 import { SecureResourceEditor } from './passwords/SecureResourceEditor';
 import { VaultPasswordConfirmModal } from '../common/VaultPasswordConfirmModal';
 
 type CollectionTab = 'passwords' | 'resources';
+
+const credentialTypes = [
+  { id: 'all', label: 'Todos los tipos' },
+  { id: 'email', label: 'Correos principales' },
+  { id: 'platform', label: 'Cuentas y servicios' },
+  { id: 'pin', label: 'PIN' },
+  { id: 'api_key', label: 'Llaves API' },
+];
+
+const resourceTypes = [
+  { id: 'all', label: 'Todos los tipos' },
+  { id: 'env_file', label: 'Variables (.env)' },
+  { id: 'ssh_key', label: 'Llaves SSH' },
+  { id: 'backup_codes', label: 'Códigos de recuperación' },
+  { id: 'software_license', label: 'Licencias' },
+  { id: 'nota_segura', label: 'Notas privadas' },
+];
 
 interface PendingProtectedCopy {
   value: string;
@@ -257,56 +275,63 @@ export const PasswordsView: React.FC = () => {
     );
   }
 
-  return (
-    <div className="mx-auto w-full max-w-7xl space-y-5 p-3 sm:p-5 lg:p-6">
-      <header className="space-y-3">
-        <div className="flex min-w-0 items-center justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-2">
-            {activeTab === 'passwords' ? <Key className="shrink-0 text-obsidian-muted" size={18} aria-hidden="true" /> : <FolderLock className="shrink-0 text-obsidian-muted" size={18} aria-hidden="true" />}
-            <h2 className="truncate text-base font-semibold text-white">
-              {activeTab === 'passwords' ? `Claves (${filteredCredentials.length})` : `Recursos (${filteredResources.length})`}
-            </h2>
-            <InfoTooltip
-              title={activeTab === 'passwords' ? 'Contraseñas y llaves' : 'Recursos y notas'}
-              content={activeTab === 'passwords' ? 'Consulta y copia tus contraseñas.' : 'Guarda códigos, licencias y notas.'}
-            />
-          </div>
-          {activeTab === 'resources' && (
-            <button type="button" onClick={openCreateResource} className="ui-action-primary shrink-0">Nuevo recurso</button>
-          )}
-        </div>
-        {activeTab === 'passwords' && (
-          <div className="flex min-w-0 items-center gap-2">
-            <CredentialFilters
-              search={credentialSearch}
-              onSearchChange={setCredentialSearch}
-              categoryFilter={categoryFilter}
-              onCategoryChange={setCategoryFilter}
-            />
-            <button
-              type="button"
-              onClick={openPasswordGen}
-              className="ui-action-secondary shrink-0"
-            >
-              <span className="hidden sm:inline">Generar contraseña</span>
-              <span className="sm:hidden">Generar</span>
-            </button>
-          </div>
-        )}
-      </header>
+  const isCredentials = activeTab === 'passwords';
+  const searchLabel = isCredentials ? 'Buscar por nombre, usuario o correo' : 'Buscar por título, etiquetas o notas';
+  const tabs = [
+    { id: 'passwords', label: 'Claves', Icon: Key, count: filteredCredentials.length },
+    { id: 'resources', label: 'Notas', Icon: FolderLock, count: filteredResources.length },
+  ] as const;
 
-      {/* [Navegación] La pestaña activa identifica la colección visible. */}
-      <div role="tablist" aria-label="Colecciones" className="flex min-w-0 gap-1 border-b border-obsidian-border">
-        <button type="button" role="tab" id="passwords-tab" aria-label="Contraseñas y llaves" aria-controls="passwords-panel" aria-selected={activeTab === 'passwords'} onClick={() => selectTab('passwords')} className="ui-action-toggle min-w-0 flex-1 sm:flex-initial">
-          <Key size={16} className="shrink-0" aria-hidden="true" /><span className="truncate">Claves</span><span className="shrink-0 rounded bg-white/10 px-1.5 py-0.5 text-xs font-mono tabular-nums">{filteredCredentials.length}</span>
-        </button>
-        <button type="button" role="tab" id="resources-tab" aria-label="Recursos y notas" aria-controls="resources-panel" aria-selected={activeTab === 'resources'} onClick={() => selectTab('resources')} className="ui-action-toggle min-w-0 flex-1 sm:flex-initial">
-          <FolderLock size={16} className="shrink-0" aria-hidden="true" /><span className="truncate">Notas</span><span className="shrink-0 rounded bg-white/10 px-1.5 py-0.5 text-xs font-mono tabular-nums">{filteredResources.length}</span>
-        </button>
+  return (
+    <div className="mx-auto w-full max-w-7xl p-3 sm:p-5 lg:p-6">
+      {/* [Navegación] Las dos colecciones comparten la misma barra de herramientas. */}
+      <div role="tablist" aria-label="Colecciones" className="flex min-w-0 gap-1 border-b border-obsidian-border"
+        onKeyDown={(event) => {
+          if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+          event.preventDefault();
+          const nextTab = event.key === 'Home' ? 'passwords' : event.key === 'End' ? 'resources'
+            : isCredentials ? 'resources' : 'passwords';
+          selectTab(nextTab);
+          event.currentTarget.querySelector<HTMLButtonElement>(`#${nextTab}-tab`)?.focus();
+        }}>
+        {tabs.map(({ id, label, Icon, count }) => (
+          <button key={id} type="button" role="tab" id={`${id}-tab`} aria-controls={`${id}-panel`}
+            aria-selected={activeTab === id} tabIndex={activeTab === id ? 0 : -1}
+            onClick={() => selectTab(id)} className="ui-action-toggle min-w-0 flex-1 sm:flex-initial">
+            <Icon size={16} className="shrink-0" aria-hidden="true" />
+            <span className="truncate">{label}</span>
+            <span className="shrink-0 rounded bg-obsidian-surface px-1.5 py-0.5 font-mono text-xs tabular-nums">{count}</span>
+          </button>
+        ))}
       </div>
 
-      {activeTab === 'passwords' ? (
-        <div id="passwords-panel" role="tabpanel" aria-labelledby="passwords-tab">
+      <div id={`${activeTab}-panel`} role="tabpanel" aria-labelledby={`${activeTab}-tab`} className="space-y-4 py-4">
+        <div className="grid min-w-0 grid-cols-1 items-center gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,11rem)_11rem]">
+          <label className="relative min-w-0">
+            <span className="sr-only">{searchLabel}</span>
+            <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-obsidian-muted" aria-hidden="true" />
+            <input type="search" maxLength={INPUT_LIMITS.SEARCH} placeholder={searchLabel}
+              value={isCredentials ? credentialSearch : resourceSearch}
+              onChange={(event) => (isCredentials ? setCredentialSearch : setResourceSearch)(event.target.value)}
+              className="min-h-11 w-full rounded-lg border border-obsidian-border bg-obsidian-surface py-2 pl-9 pr-3 text-sm text-white" />
+          </label>
+          <select aria-label={isCredentials ? 'Filtrar claves por tipo' : 'Filtrar notas por tipo'}
+            value={isCredentials ? categoryFilter : resourceTypeFilter}
+            onChange={(event) => (isCredentials ? setCategoryFilter : setResourceTypeFilter)(event.target.value)}
+            className="min-h-11 w-full min-w-0 truncate text-sm">
+            {(isCredentials ? credentialTypes : resourceTypes).map(({ id, label }) => (
+              <option key={id} value={id}>{label}</option>
+            ))}
+          </select>
+          {/* [Acción de colección] Generar una contraseña o crear un recurso. */}
+          <button type="button" onClick={isCredentials ? openPasswordGen : openCreateResource}
+            className={isCredentials ? 'ui-action-secondary' : 'ui-action-primary'}>
+            {!isCredentials && <Plus size={16} aria-hidden="true" />}
+            {isCredentials ? 'Generar contraseña' : 'Nuevo recurso'}
+          </button>
+        </div>
+
+        {isCredentials ? (
           <CredentialCollection
             credentials={credentials}
             filteredCredentials={filteredCredentials}
@@ -320,9 +345,7 @@ export const PasswordsView: React.FC = () => {
             onRequestProtectedCopy={requestProtectedCopy}
             onClearFilters={() => { setCredentialSearch(''); setCategoryFilter('all'); }}
           />
-        </div>
-      ) : (
-        <div id="resources-panel" role="tabpanel" aria-labelledby="resources-tab">
+        ) : (
           <SecureResourceCollection
             resources={resources}
             filteredResources={filteredResources}
@@ -330,17 +353,16 @@ export const PasswordsView: React.FC = () => {
             error={resourcesError}
             onRetry={loadResources}
             search={resourceSearch}
-            onSearchChange={setResourceSearch}
-            typeFilter={resourceTypeFilter}
-            onTypeChange={setResourceTypeFilter}
             revealedResourceIds={revealedResourceIds}
             onToggleReveal={toggleRevealResource}
             onEdit={openEditResource}
             onDelete={deleteResource}
             onClearFilters={() => { setResourceSearch(''); setResourceTypeFilter('all'); }}
           />
-        </div>
-      )}
+        )}
+      </div>
+      <div id={isCredentials ? 'resources-panel' : 'passwords-panel'} role="tabpanel"
+        aria-labelledby={isCredentials ? 'resources-tab' : 'passwords-tab'} hidden />
 
       {isResourceEditorOpen && (
         <SecureResourceEditor

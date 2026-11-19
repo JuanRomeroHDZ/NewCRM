@@ -959,7 +959,7 @@ export const api = {
       method: 'POST',
       body: source !== undefined ? JSON.stringify({ source }) : undefined,
     }),
-  exportReportDocument: (docId: string, format: 'pdf' | 'html' | 'typ', source?: string, redactForClient = false) => {
+  exportReportDocument: (docId: string, format: 'pdf' | 'html' | 'typ' | 'typst_zip', source?: string, redactForClient = false) => {
     const params = new URLSearchParams({ format });
     if (redactForClient) params.set('redact_for_client', 'true');
     return requestBlobResponse(`/reports/documents/${docId}/export?${params.toString()}`, {

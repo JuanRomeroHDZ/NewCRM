@@ -1,19 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, Header, Query
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select, func, desc, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models import AuditLog
-from app.security.tokens import verify_vault_token
+from app.security.tokens import require_vault_unlocked
 
 router = APIRouter(prefix="/audit", tags=["audit"])
-
-def require_vault_unlocked(x_vault_token: str | None = Header(None)):
-    if not verify_vault_token(x_vault_token):
-        raise HTTPException(
-            status_code=401,
-            detail="El espacio seguro está bloqueado. Ingrese su contraseña de acceso para acceder a los registros de auditoría."
-        )
-    return True
 
 @router.get("/logs")
 async def get_audit_logs(

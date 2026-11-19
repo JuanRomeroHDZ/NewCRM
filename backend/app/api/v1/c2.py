@@ -3,7 +3,7 @@
 Todos los endpoints HTTP exigen sesión de bóveda Level 2 activa mediante
 `Depends(require_vault_unlocked)`. El WebSocket `/ws` valida el token de
 bóveda en `?token=<vault_token>` (o cabecera `x-vault-token`) mediante
-`verify_vault_token` y `session_manager.is_session_active` y cierra con
+`verify_vault_token` contra el estado compartido de la base y cierra con
 código 4401 cuando es inválido o la bóveda está bloqueada.
 """
 import asyncio
@@ -47,7 +47,9 @@ from app.c2.modules.poison import NamePoisoner
 from app.c2.modules.sniff import Sniffer
 from app.c2.modules.wifi import Deauther, HandshakeCapturer, PmkidCapturer, WifiScanner
 from app.c2.modules.wpad import WpadSpoofer
-from app.security.tokens import require_vault_unlocked, verify_vault_token
+from app.security.tokens import require_vault_unlocked, verify_vault_token_and_release
+from app.database import get_db
+from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/c2", tags=["c2"])
 http_router = APIRouter(dependencies=[Depends(require_vault_unlocked)])
@@ -1340,9 +1342,9 @@ def api_envcheck():
 # WebSocket de eventos en vivo (autenticación por token de bóveda)
 # --------------------------------------------------------------------------- #
 @router.websocket("/ws")
-async def ws_events(websocket: WebSocket):
+async def ws_events(websocket: WebSocket, db: AsyncSession = Depends(get_db)):
     token = websocket.query_params.get("token") or websocket.headers.get("x-vault-token")
-    if not verify_vault_token(token):
+    if not await verify_vault_token_and_release(token, db):
         await websocket.close(code=4401)
         return
     await websocket.accept()
@@ -1351,14 +1353,14 @@ async def ws_events(websocket: WebSocket):
     queue = bus.subscribe()
     try:
         while True:
-            if not verify_vault_token(token):
+            if not await verify_vault_token_and_release(token, db):
                 await websocket.close(code=4401)
                 break
             try:
                 event = await asyncio.wait_for(queue.get(), timeout=25.0)
                 await websocket.send_json(event)
             except asyncio.TimeoutError:
-                if not verify_vault_token(token):
+                if not await verify_vault_token_and_release(token, db):
                     await websocket.close(code=4401)
                     break
                 await websocket.send_json({"type": "ping"})

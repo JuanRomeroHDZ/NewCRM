@@ -131,14 +131,16 @@ test('defangIocs y autoRedactSensitiveData neutralizan URLs/IPs y envuelven secr
   const defanged = pentestUtils.defangIocs('Conectar a https://evil.test/c2 y http://192.168.10.42:8080');
   assert.equal(defanged, 'Conectar a hxxps://evil.test/c2 y hxxp://192[.]168[.]10[.]42:8080');
 
+  const fakeJwt = ['eyJhbGciOiJIUzI1NiJ9', 'eyJzdWIiOiJhZG1pbiJ9', 'sig12345678'].join('.');
+  const fakeAwsKey = ['AKIA', '1234567890ABCDEF'].join('');
   const raw = [
-    'Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJhZG1pbiJ9.sig12345678',
-    'AWS=AKIA1234567890ABCDEF',
+    `Authorization: Bearer ${fakeJwt}`,
+    `AWS=${fakeAwsKey}`,
     'x-api-key: {{redact:YA_PROTEGIDA}}',
   ].join('\n');
   const redacted = pentestUtils.autoRedactSensitiveData(raw);
   assert.ok(redacted.count >= 2);
-  assert.ok(redacted.result.includes('{{redact:AKIA1234567890ABCDEF}}'));
+  assert.ok(redacted.result.includes(`{{redact:${fakeAwsKey}}}`));
   assert.ok(!redacted.result.includes('{{redact:{{redact:'));
 });
 

@@ -10,6 +10,23 @@ jobs:
   backend-tests:
     name: Backend Tests & Lint
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: emailcrm_disposable_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d emailcrm_disposable_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      TEST_DATABASE_URL: postgresql+asyncpg://postgres:postgres@127.0.0.1:5432/emailcrm_disposable_test
+      EMAILCRM_DISPOSABLE_DATABASE: "1"
 
     steps:
       - name: Checkout code
@@ -24,7 +41,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r backend/requirements.txt
+          pip install -r backend/requirements.txt -r backend/requirements-test.txt
 
       - name: Run Pytest test suite
         env:
@@ -63,3 +80,202 @@ jobs:
         run: |
           cd frontend
           npm run build
+
+      - name: Run frontend tests
+        run: |
+          cd frontend
+          npm test
+
+  migration-smoke:
+    name: Alembic fresh and legacy upgrade
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: lessso_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d lessso_ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+
+      - name: Migrate an empty database twice
+        working-directory: backend
+        env:
+          DATABASE_URL: postgresql+asyncpg://postgres:postgres@127.0.0.1:5432/lessso_ci
+          SERVER_SECRET_KEY: ci-migration-secret-key-minimum-thirty-two-characters
+          FALLBACK_USD_MXN_RATE: "20.5"
+        run: |
+          python -m app.migrate
+          python -m app.migrate
+
+      - name: Preserve records while adopting a legacy schema
+        working-directory: backend
+        env:
+          DATABASE_URL: postgresql+asyncpg://postgres:postgres@127.0.0.1:5432/lessso_legacy_ci
+          SERVER_SECRET_KEY: ci-migration-secret-key-minimum-thirty-two-characters
+          FALLBACK_USD_MXN_RATE: "20.5"
+        run: |
+          python - <<'PY'
+          import asyncio
+          import asyncpg
+          import os
+          from sqlalchemy import text
+          from app import models
+          from app.models import reports
+          from app.database import AsyncSessionLocal, Base, engine
+          from app.models import EmailAccount
+
+          async def prepare():
+              admin = await asyncpg.connect("postgresql://postgres:postgres@127.0.0.1:5432/lessso_ci")
+              await admin.execute("CREATE DATABASE lessso_legacy_ci")
+              await admin.close()
+              async with engine.begin() as connection:
+                  await connection.run_sync(Base.metadata.create_all)
+              async with AsyncSessionLocal() as session:
+                  session.add(EmailAccount(
+                      id="legacy-record",
+                      address="preserve@example.test",
+                      notes="Legacy plaintext note for the migration smoke test.",
+                  ))
+                  await session.commit()
+              async with engine.begin() as connection:
+                  await connection.execute(text("ALTER TABLE email_accounts DROP COLUMN deleted_at"))
+                  await connection.execute(text("ALTER TABLE email_accounts DROP COLUMN password_updated_at"))
+                  await connection.execute(text("ALTER TABLE report_canvases DROP COLUMN encrypted_svg_snapshot"))
+              await engine.dispose()
+
+          asyncio.run(prepare())
+          PY
+          python -m app.migrate
+          python -m app.migrate
+          python - <<'PY'
+          import asyncio
+          from sqlalchemy import text
+          from app.database import engine
+
+          async def verify():
+              async with engine.connect() as connection:
+                  note = await connection.execute(text("SELECT notes FROM email_accounts WHERE id='legacy-record'"))
+                  marker = await connection.execute(
+                      text("SELECT id FROM core_data_migrations WHERE id='legacy_plaintext_notes_v1'")
+                  )
+                  revision = await connection.execute(text("SELECT version_num FROM alembic_version"))
+                  assert note.scalar_one().startswith("enc:v1:")
+                  assert marker.scalar_one() == "legacy_plaintext_notes_v1"
+                  assert revision.scalar_one() == "20261118_0003"
+              await engine.dispose()
+
+          asyncio.run(verify())
+          PY
+
+      - name: Refuse destructive downgrade of the adopted baseline
+        working-directory: backend
+        env:
+          DATABASE_URL: postgresql+asyncpg://postgres:postgres@127.0.0.1:5432/lessso_legacy_ci
+          SERVER_SECRET_KEY: ci-migration-secret-key-minimum-thirty-two-characters
+          FALLBACK_USD_MXN_RATE: "20.5"
+        run: |
+          python - <<'PY'
+          from alembic import command
+          from app.migrate import _alembic_config
+
+          try:
+              command.downgrade(_alembic_config(), "base")
+          except RuntimeError as exc:
+              assert "irreversible" in str(exc).lower()
+          else:
+              raise AssertionError("The adopted schema baseline must refuse destructive downgrade.")
+          PY
+          python - <<'PY'
+          import asyncio
+          from sqlalchemy import text
+          from app.database import engine
+
+          async def verify():
+              async with engine.connect() as connection:
+                  email = await connection.execute(text("SELECT address FROM email_accounts WHERE id='legacy-record'"))
+                  revision = await connection.execute(text("SELECT version_num FROM alembic_version"))
+                  assert email.scalar_one() == "preserve@example.test"
+                  assert revision.scalar_one() == "20261118_0003"
+              await engine.dispose()
+
+          asyncio.run(verify())
+          PY
+
+  docker-build:
+    name: Compose validation and container builds
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: emailcrm_disposable_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d emailcrm_disposable_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Create temporary Compose environment
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import secrets
+
+          template = Path(".env.example").read_text(encoding="utf-8")
+          values = {
+              "POSTGRES_PASSWORD": secrets.token_hex(32),
+              "SERVER_SECRET_KEY": secrets.token_hex(32),
+              "FALLBACK_USD_MXN_RATE": "20.5",
+          }
+          lines = []
+          for line in template.splitlines():
+              name = line.split("=", 1)[0] if "=" in line and not line.lstrip().startswith("#") else None
+              lines.append(f"{name}={values[name]}" if name in values else line)
+          Path(".env").write_text("\n".join(lines) + "\n", encoding="utf-8")
+          PY
+          chmod 600 .env
+
+      - name: Validate stable and development Compose definitions
+        run: |
+          docker compose config --quiet
+          docker compose -f docker-compose.yml -f docker-compose.dev.yml config --quiet
+
+      - name: Build production services and PDF test image
+        run: |
+          docker compose build backend frontend
+          docker build --file backend/Dockerfile --target test --tag lessso-backend-test backend
+          docker run --rm --network host --env-file .env \
+            -e TEST_DATABASE_URL=postgresql+asyncpg://postgres:postgres@127.0.0.1:5432/emailcrm_disposable_test \
+            -e EMAILCRM_DISPOSABLE_DATABASE=1 lessso-backend-test

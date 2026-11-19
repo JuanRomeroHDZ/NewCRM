@@ -381,7 +381,16 @@ class SecureResource(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, onupdate=utc_now)
 
 
-from app.models.core import User, DbSession, ConfigParameter, JobQueue, ActivityEvent
+from app.models.core import (
+    User,
+    DbSession,
+    ConfigParameter,
+    JobQueue,
+    ActivityEvent,
+    VaultSession,
+    VaultUnlockAttempt,
+    CoreDataMigration,
+)
 from app.models.finances import Budget, Debt, DebtPayment
 from app.models.crm_capture import LeadCacheCell, LeadAuditScore, LeadDuplicateCandidate, PermanentDiscard
 from app.models.crm_sales import FolioSequence, Client, Proposal, Sale, PaymentInstallment, PaymentRecord, Invoice
