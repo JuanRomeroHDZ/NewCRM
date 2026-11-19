@@ -229,21 +229,24 @@ export default function ReportPdfPreview({ blob, toolbar, controls }: { blob: Bl
       )}
       {createPortal(
         <div className="flex flex-wrap items-center gap-2 border-b border-obsidian-border px-3 py-1.5">
-          <button type="button" className="ui-action-icon" disabled={start <= 1}
-            onClick={() => move(Math.max(1, start - step))} aria-label="Página anterior"><ChevronLeft className="size-4" aria-hidden="true" /></button>
-          <span className="text-xs tabular-nums text-obsidian-muted" role="status">
-            {layout === 'continuous' ? `${count} páginas` : `Página ${start}${shown > 1 ? `–${start + shown - 1}` : ''} de ${count}`}
-          </span>
-          <button type="button" className="ui-action-icon" disabled={start + step > count}
-            onClick={() => move(start + step)} aria-label="Página siguiente"><ChevronRight className="size-4" aria-hidden="true" /></button>
-          <div className="ml-auto flex items-center gap-1" role="group" aria-label="Zoom del PDF">
-            <button type="button" className="ui-action-icon" disabled={zoom <= 50}
-              onClick={() => setZoom(zoom - 25)} aria-label="Alejar"><Minus className="size-4" aria-hidden="true" /></button>
-            <button type="button" className="ui-action-secondary tabular-nums" title="Restablecer zoom"
-              aria-label={`Zoom ${zoom} %, restablecer a 100 %`} onClick={() => setZoom(100)}>{zoom} %</button>
-            <button type="button" className="ui-action-icon" disabled={zoom >= 200}
-              onClick={() => setZoom(zoom + 25)} aria-label="Acercar"><Plus className="size-4" aria-hidden="true" /></button>
-          </div>
+            <button type="button" className="ui-action-icon" disabled={start <= 1}
+              onClick={() => move(Math.max(1, start - step))} aria-label="Página anterior"><ChevronLeft className="size-4" aria-hidden="true" /></button>
+            <span className="text-xs tabular-nums text-obsidian-muted" role="status">
+              {layout === 'continuous' ? `${count} páginas` : `Página ${start}${shown > 1 ? `–${start + shown - 1}` : ''} de ${count}`}
+            </span>
+            <button type="button" className="ui-action-icon" disabled={start + step > count}
+              onClick={() => move(start + step)} aria-label="Página siguiente"><ChevronRight className="size-4" aria-hidden="true" /></button>
+            <div className="ml-auto flex items-center gap-1" role="group" aria-label="Zoom del PDF">
+              <button type="button" className="ui-action-icon" disabled={zoom <= 50}
+                onClick={() => setZoom(zoom - 25)} aria-label="Alejar"><Minus className="size-4" aria-hidden="true" /></button>
+              <button type="button" className="ui-action-secondary tabular-nums" title="Restablecer zoom"
+                aria-label={`Zoom ${zoom} %, restablecer a 100 %`} onClick={() => setZoom(100)}>{zoom} %</button>
+              <button type="button" className="ui-action-icon" disabled={zoom >= 200}
+                onClick={() => setZoom(zoom + 25)} aria-label="Acercar"><Plus className="size-4" aria-hidden="true" /></button>
+            </div>
+          </div>,
+          controls,
+        )}
         </div>,
         controls,
       )}

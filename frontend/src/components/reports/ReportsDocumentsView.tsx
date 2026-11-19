@@ -156,6 +156,7 @@ export const ReportsDocumentsView: React.FC = () => {
   const [exportError, setExportError] = useState<string | null>(null);
   const [exportFormat, setExportFormat] = useState<'pdf' | 'html' | 'typ' | 'typst_zip'>('pdf');
   const [pdfControls, setPdfControls] = useState<HTMLDivElement | null>(null);
+  const [pdfControls, setPdfControls] = useState<HTMLDivElement | null>(null);
   const [previewToolbar, setPreviewToolbar] = useState<HTMLDivElement | null>(null);
   const [previewFormat, setPreviewFormat] = useState<'svg' | 'pdf' | 'html'>('svg');
   const [formatPreview, setFormatPreview] = useState<{ value: string | Blob; error: boolean } | null>(null);
