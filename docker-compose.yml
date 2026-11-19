@@ -173,6 +173,7 @@ services:
       - ./docker-compose.dev.yml:/source/deployment/docker-compose.dev.yml:ro
       - ./nginx:/source/deployment/nginx:ro
       - ./scripts:/source/deployment/scripts:ro
+      - ./lessso:/source/deployment/lessso:ro
       - ./backend/app:/source/deployment/backend/app:ro
       - ./backend/alembic.ini:/source/deployment/backend/alembic.ini:ro
       - ./backend/migrations:/source/deployment/backend/migrations:ro
@@ -181,6 +182,7 @@ services:
       - ./backend/requirements.txt:/source/deployment/backend/requirements.txt:ro
       - ./backend/Dockerfile:/source/deployment/backend/Dockerfile:ro
       - ./frontend/src:/source/deployment/frontend/src:ro
+      - ./frontend/scripts:/source/deployment/frontend/scripts:ro
       - ./frontend/public:/source/deployment/frontend/public:ro
       - ./frontend/tests:/source/deployment/frontend/tests:ro
       - ./frontend/package.json:/source/deployment/frontend/package.json:ro

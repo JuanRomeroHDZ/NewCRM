@@ -263,7 +263,7 @@ async def upload_document_asset(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
             detail=f"La imagen excede el límite configurado de {settings.WRITEUP_MAX_IMAGE_BYTES} bytes.",
         )
-    optimized = optimize_and_encrypt_image(raw_bytes, file.filename)
+    optimized = await run_in_threadpool(optimize_and_encrypt_image, raw_bytes, file.filename)
     asset = ReportDocumentAsset(
         document_id=doc_id,
         filename=optimized.filename,
@@ -401,6 +401,11 @@ async def _resolve_canvas_assets(source: str, db: AsyncSession) -> tuple[str, di
     extra_files: dict[str, bytes] = {}
     id_to_filename: dict[str, str] = {}
     for row in rows:
+        if row.element_count == 0:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=f'El lienzo «{row.title}» está vacío. Añade elementos y guárdalo, o elimina su referencia del informe.',
+            )
         if not row.encrypted_svg_snapshot:
             continue
         svg_text = decrypt_note(row.encrypted_svg_snapshot)

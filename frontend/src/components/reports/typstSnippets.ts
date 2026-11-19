@@ -1,5 +1,7 @@
 import type { Completion, CompletionContext, CompletionResult } from '@codemirror/autocomplete';
 
+import { TYPST_HEADING_HIERARCHY } from './typstTemplates';
+
 export interface TypstFunctionSnippet {
   label: string;
   detail: string;
@@ -62,6 +64,7 @@ export interface TypstQuickSnippet {
 }
 
 export const TYPST_QUICK_SNIPPETS: TypstQuickSnippet[] = [
+  { id: 'heading-hierarchy', label: 'Sangría de títulos', snippet: `\n${TYPST_HEADING_HIERARCHY}\n` },
   { id: 'section', label: 'Sección', snippet: '\n== Título de sección\n\n' },
   { id: 'bullets', label: 'Lista con viñetas', snippet: '\n- Primer elemento\n- Segundo elemento\n' },
   { id: 'numbered', label: 'Lista numerada', snippet: '\n+ Primer paso\n+ Segundo paso\n' },

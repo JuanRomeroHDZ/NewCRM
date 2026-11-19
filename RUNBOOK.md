@@ -2,25 +2,15 @@
 
 ## Arrancar o reiniciar
 
-Desde la raíz de NewCRM, con tu usuario habitual:
+Desde la raíz de NewCRM, ejecuta `./lessso` con tu cuenta habitual. **Inicio** ofrece **CRM estable** y **CRM en desarrollo**. Ambos reconstruyen las imágenes que cambiaron y esperan a que los servicios estén disponibles.
+
+En desarrollo, React Refresh carga su módulo de inicio desde el mismo origen y la recarga automática se conecta por WebSocket al puerto HTTPS del proxy. Si la pestaña estaba abierta al cambiar de modo, recárgala para cargar la versión elegida.
+
+Usa **Configuración → Ver estado** para consultar los servicios y **Configuración → Detener CRM** para detenerlos. Para consultar los registros del backend:
 
 ```bash
-./scripts/up.sh
-docker compose --env-file .env --env-file .env.runtime ps
-docker compose --env-file .env --env-file .env.runtime logs --tail 80 backend
+docker compose logs --tail 80 backend
 ```
-
-El arranque usa `.env.runtime` para conservar los puertos y la dirección elegidos. Para editar código con recarga automática, abre `./lessso` y selecciona **Abrir CRM en desarrollo (recarga automática)**; la dirección HTTPS no cambia. Para volver al frontend de producción, selecciona **Abrir CRM**.
-
-En desarrollo, React Refresh carga su módulo de inicio desde el mismo origen y la recarga automática se conecta por WebSocket al puerto HTTPS del proxy. Si la pestaña estaba abierta de antes de cambiar de modo, recárgala una vez para cargar los módulos de la versión actual.
-
-Para detener los servicios sin borrar los datos persistentes:
-
-```bash
-docker compose down
-```
-
-No uses `docker compose down -v` salvo que realmente quieras eliminar las bases y los volúmenes.
 
 ## Reutilizar una base existente
 
@@ -32,7 +22,7 @@ Si los datos cifrados se escribieron con una clave anterior, agrégala a `LEGACY
 
 `./lessso` genera automáticamente una CA privada y el certificado del servidor dentro de `nginx/certs/local/`. Copia únicamente `ca.crt` a los dispositivos cliente e instálalo como autoridad de confianza. Nunca compartas `ca.key` ni `server.key`. Los certificados se vuelven a generar en el servidor y no se incluyen en la imagen ni en Git.
 
-Para publicar en una red privada, selecciona **Administrar servicios → Elegir acceso local o de red e iniciar CRM** e introduce una de las IPv4 privadas asignadas al servidor. El programa guarda la dirección en `.env.runtime`, incorpora esa IP al certificado del servidor usando la CA existente y muestra la URL para los clientes. Instala `ca.crt` en cada cliente. Si la IP cambia, repite la selección; si la dirección guardada ya no pertenece al equipo, el menú detecta la dirección privada activa de la ruta de salida y la propone. Para cerrar el acceso por red, selecciona `127.0.0.1`. La dirección elegida reemplaza el enlace local: utiliza la URL mostrada también en el servidor. La interfaz solo admite direcciones privadas concretas o `127.0.0.1`, no `0.0.0.0`.
+En **Configuración → Cambiar IP y puertos**, elige una IPv4 privada asignada al servidor o `127.0.0.1` para acceso local. El menú guarda las preferencias en `.env.runtime`. Al iniciar de nuevo, el proxy aplica la dirección y los puertos elegidos y renueva el certificado del servidor si hace falta, usando la CA existente.
 
 Si cambia `SERVER_NAME`, vuelve a generar el certificado del servidor y asegúrate de que el nombre resuelva al equipo dentro de la red local.
 

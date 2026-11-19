@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Excalidraw, exportToSvg } from '@excalidraw/excalidraw';
+import { Excalidraw, exportToCanvas } from '@excalidraw/excalidraw';
 import '@excalidraw/excalidraw/index.css';
 import './excalidraw-obsidian.css';
 
@@ -7,8 +7,11 @@ if (typeof window !== 'undefined') {
   (window as Window & { EXCALIDRAW_ASSET_PATH?: string }).EXCALIDRAW_ASSET_PATH = '/excalidraw-assets/';
 }
 import {
+  AlertTriangle,
   CheckCircle2,
   Lock,
+  Menu,
+  RefreshCw,
   PanelLeftClose,
   PanelLeftOpen,
   PenTool,
@@ -61,6 +64,36 @@ function parseCanvasScene(raw: string): ParsedExcalidrawScene {
   }
 }
 
+// Keep the existing SVG snapshot field and canvas:// references compatible.
+async function createReportSnapshot(sceneJson: string): Promise<string> {
+  const scene = parseCanvasScene(sceneJson);
+  const elements = (scene.elements || []).filter((element) => !element.isDeleted);
+  if (!elements.length) return '';
+  const canvas = await exportToCanvas({
+    elements: elements as never,
+    appState: { ...scene.appState, exportWithDarkMode: true, exportBackground: true },
+    files: (scene.files || {}) as never,
+    getDimensions: (width: number, height: number) => {
+      const scale = Math.min(2, 2400 / Math.max(width, height));
+      return { width: Math.max(1, Math.round(width * scale)), height: Math.max(1, Math.round(height * scale)), scale };
+    },
+  });
+  const image = canvas.toDataURL('image/png');
+  if (!image.startsWith('data:image/png;base64,')) throw new Error('No se pudo generar la imagen del lienzo.');
+  const { width, height } = canvas;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><image width="${width}" height="${height}" href="${image}"/></svg>`;
+}
+
+function sceneSignature(raw: string): string {
+  const scene = parseCanvasScene(raw);
+  return JSON.stringify([
+    scene.elements?.filter((element) => !element.isDeleted)
+      .map(({ id, version, versionNonce }) => [id, version, versionNonce]),
+    scene.appState?.viewBackgroundColor,
+    scene.appState?.gridModeEnabled ? scene.appState.gridSize : null,
+  ]);
+}
+
 export const ReportsCanvasesView: React.FC = () => {
   const { isUnlocked, openUnlockModal, showToast, confirm, prompt } = useVault();
 
@@ -75,10 +108,29 @@ export const ReportsCanvasesView: React.FC = () => {
 
   const [isLoadingList, setIsLoadingList] = useState(true);
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
+  const [detailLoadAttempt, setDetailLoadAttempt] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [sceneDirty, setSceneDirty] = useState(false);
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const actionsRef = useRef<HTMLDivElement>(null);
+  const actionTriggerRef = useRef<HTMLButtonElement>(null);
+  const savingRef = useRef(false);
+  const hasUnsavedChanges = !!activeCanvas && (
+    sceneDirty || (titleDraft.trim() || activeCanvas.title) !== activeCanvas.title ||
+    linkedDocumentId !== (activeCanvas.linked_document_id || '')
+  );
+
+  useEffect(() => {
+    if (!actionsOpen) return;
+    const dismiss = (event: PointerEvent) => {
+      if (event.target instanceof Node && !actionsRef.current?.contains(event.target)) setActionsOpen(false);
+    };
+    document.addEventListener('pointerdown', dismiss);
+    return () => document.removeEventListener('pointerdown', dismiss);
+  }, [actionsOpen]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  const savedSceneSignature = useMemo(() => sceneSignature(activeCanvas?.scene_json || "{}"), [activeCanvas?.scene_json]);
   const latestSceneRef = useRef<{ json: string; elementCount: number } | null>(null);
 
   useEffect(() => {
@@ -120,7 +172,7 @@ export const ReportsCanvasesView: React.FC = () => {
 
   const selectCanvasWithGuard = useCallback(
     async (nextId: string) => {
-      if (nextId === selectedId) return;
+      if (nextId === selectedId || savingRef.current) return;
       if (hasUnsavedChanges) {
         const discard = await confirm({
           title: 'Cambios sin guardar',
@@ -140,11 +192,13 @@ export const ReportsCanvasesView: React.FC = () => {
       setActiveCanvas(null);
       setTitleDraft('');
       latestSceneRef.current = null;
-      setHasUnsavedChanges(false);
+      setSceneDirty(false);
       return;
     }
 
     let cancelled = false;
+    setActiveCanvas(null);
+    setActionsOpen(false);
     setIsLoadingDetail(true);
     setErrorMessage(null);
     api
@@ -158,7 +212,7 @@ export const ReportsCanvasesView: React.FC = () => {
           json: detail.scene_json || '{}',
           elementCount: detail.element_count,
         };
-        setHasUnsavedChanges(false);
+        setSceneDirty(false);
       })
       .catch((err) => {
         if (cancelled) return;
@@ -172,7 +226,7 @@ export const ReportsCanvasesView: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [selectedId]);
+  }, [detailLoadAttempt, isUnlocked, selectedId]);
 
   const handleCreateCanvas = async () => {
     const entered = await prompt({
@@ -202,32 +256,17 @@ export const ReportsCanvasesView: React.FC = () => {
     }
   };
 
-  const handleSaveCanvas = useCallback(async () => {
-    if (!activeCanvas) return;
+  const handleSaveCanvas = useCallback(async (refreshSnapshot = false) => {
+    if (!activeCanvas || savingRef.current || (!hasUnsavedChanges && !refreshSnapshot)) return;
+    savingRef.current = true;
     const cleanTitle = titleDraft.trim() || activeCanvas.title;
     const scenePayload = latestSceneRef.current;
     const sceneJson = scenePayload?.json ?? activeCanvas.scene_json;
 
-    let svgSnapshot: string | undefined;
-    try {
-      const parsed = parseCanvasScene(sceneJson);
-      const svgEl = await exportToSvg({
-        elements: (parsed.elements || []) as never,
-        appState: {
-          ...(parsed.appState || {}),
-          exportWithDarkMode: false,
-          exportBackground: false,
-        } as never,
-        files: (parsed.files || {}) as never,
-      });
-      svgSnapshot = svgEl.outerHTML;
-    } catch {
-      svgSnapshot = undefined;
-    }
-
     setIsSaving(true);
     setErrorMessage(null);
     try {
+      const svgSnapshot = await createReportSnapshot(sceneJson);
       const updated = await api.updateReportCanvas(activeCanvas.id, {
         title: cleanTitle,
         scene_json: sceneJson,
@@ -246,20 +285,23 @@ export const ReportsCanvasesView: React.FC = () => {
                 title: updated.title,
                 element_count: updated.element_count,
                 updated_at: updated.updated_at,
+                has_svg_snapshot: updated.has_svg_snapshot,
+                linked_document_id: updated.linked_document_id,
               }
             : item
         )
       );
-      setHasUnsavedChanges(false);
+      setSceneDirty(sceneSignature(latestSceneRef.current?.json ?? sceneJson) !== sceneSignature(updated.scene_json));
       showToast('Lienzo guardado.', 'success');
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : 'No se pudo guardar el lienzo.';
       setErrorMessage(msg);
       showToast(msg, 'error');
     } finally {
+      savingRef.current = false;
       setIsSaving(false);
     }
-  }, [activeCanvas, linkedDocumentId, showToast, titleDraft]);
+  }, [activeCanvas, hasUnsavedChanges, linkedDocumentId, showToast, titleDraft]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -314,6 +356,7 @@ export const ReportsCanvasesView: React.FC = () => {
       const serializableAppState = {
         viewBackgroundColor: appState.viewBackgroundColor,
         gridSize: appState.gridSize,
+        gridModeEnabled: appState.gridModeEnabled,
         theme: 'dark',
       };
       const serialized = JSON.stringify({
@@ -323,10 +366,10 @@ export const ReportsCanvasesView: React.FC = () => {
       });
       if (latestSceneRef.current?.json !== serialized) {
         latestSceneRef.current = { json: serialized, elementCount: nonDeletedCount };
-        setHasUnsavedChanges(true);
+        setSceneDirty(sceneSignature(serialized) !== savedSceneSignature);
       }
     },
-    [activeCanvas]
+    [activeCanvas, savedSceneSignature]
   );
 
   if (!isUnlocked) {
@@ -408,14 +451,6 @@ export const ReportsCanvasesView: React.FC = () => {
                         {item.element_count} elementos · {formatApiDateTime(item.updated_at)}
                       </div>
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => void handleDeleteCanvas(item)}
-                      aria-label={`Eliminar ${item.title}`}
-                      className="ui-action-icon text-obsidian-muted hover:text-obsidian-errorText"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
                   </div>
                 );
               })
@@ -425,8 +460,8 @@ export const ReportsCanvasesView: React.FC = () => {
       )}
 
       <section className="flex min-w-0 flex-1 flex-col rounded-xl border border-obsidian-border bg-obsidian-panel min-h-0">
-        <header className="flex flex-wrap items-center justify-between gap-3 border-b border-obsidian-border px-4 py-3">
-          <div className="flex min-w-0 flex-1 items-center gap-2">
+        <header className="flex flex-wrap items-center justify-between gap-2 border-b border-obsidian-border px-3 py-2">
+          <div className="flex min-w-0 flex-1 basis-60 items-center gap-2">
             <button
               type="button"
               onClick={() => setIsSidebarOpen((prev) => !prev)}
@@ -441,9 +476,10 @@ export const ReportsCanvasesView: React.FC = () => {
                 <input
                   type="text"
                   value={titleDraft}
+                  maxLength={200}
+                  disabled={isSaving}
                   onChange={(e) => {
                     setTitleDraft(e.target.value);
-                    setHasUnsavedChanges(true);
                   }}
                   aria-label="Título del lienzo"
                   className="min-w-0 flex-1 rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 text-sm font-medium text-white focus:border-obsidian-accent focus:outline-none"
@@ -454,11 +490,11 @@ export const ReportsCanvasesView: React.FC = () => {
                 <select
                   id="canvas-doc-link"
                   value={linkedDocumentId}
+                  disabled={isSaving}
                   onChange={(e) => {
                     setLinkedDocumentId(e.target.value);
-                    setHasUnsavedChanges(true);
                   }}
-                  className="h-11 max-w-[220px] rounded-lg border border-obsidian-border bg-obsidian-surface px-3 text-sm text-white focus:border-obsidian-accent focus:outline-none"
+                  className="h-11 w-2/5 max-w-56 rounded-lg border border-obsidian-border bg-obsidian-surface px-3 text-sm text-white focus:border-obsidian-accent focus:outline-none"
                 >
                   <option value="">Sin documento vinculado</option>
                   {documents.map((doc) => (
@@ -474,29 +510,46 @@ export const ReportsCanvasesView: React.FC = () => {
           </div>
 
           {activeCanvas && (
-            <div className="flex items-center gap-3">
-              <span className="text-xs text-obsidian-muted" aria-live="polite">
-                {isSaving ? (
-                  'Guardando…'
-                ) : hasUnsavedChanges ? (
-                  'Cambios pendientes'
-                ) : (
-                  <span className="inline-flex items-center gap-1 text-obsidian-emerald">
-                    <CheckCircle2 className="h-3.5 w-3.5" />
-                    Guardado
-                  </span>
-                )}
+            <div className="flex items-center gap-2">
+              <span role="status" className="flex items-center justify-center px-1"
+                title={isSaving ? 'Guardando…' : hasUnsavedChanges ? 'Cambios pendientes' : 'Guardado'}>
+                <span className="sr-only">{isSaving ? 'Guardando…' : hasUnsavedChanges ? 'Cambios pendientes' : 'Guardado'}</span>
+                {isSaving ? <RefreshCw className="h-4 w-4 motion-safe:animate-spin" aria-hidden="true" />
+                  : hasUnsavedChanges ? <AlertTriangle className="h-4 w-4 text-obsidian-amber" aria-hidden="true" />
+                    : <CheckCircle2 className="h-4 w-4 text-obsidian-emerald" aria-hidden="true" />}
               </span>
-              {/* [Acción principal] Guarda el estado del lienzo cifrado en el servidor. */}
-              <button
-                type="button"
-                onClick={() => void handleSaveCanvas()}
-                disabled={isSaving}
-                className="ui-action-primary"
-              >
-                <Save className="h-4 w-4" />
-                <span>Guardar</span>
-              </button>
+              <div ref={actionsRef} className="relative"
+                onBlur={(event) => {
+                  if (!event.currentTarget.contains(event.relatedTarget)) setActionsOpen(false);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key !== 'Escape' || !actionsOpen) return;
+                  event.stopPropagation();
+                  setActionsOpen(false);
+                  actionTriggerRef.current?.focus();
+                }}>
+                <button ref={actionTriggerRef} type="button" className="ui-action-icon !h-11 !w-11"
+                  aria-label="Acciones del lienzo" aria-expanded={actionsOpen}
+                  aria-controls={actionsOpen ? 'canvas-actions' : undefined}
+                  onClick={() => setActionsOpen((open) => !open)}>
+                  <Menu className="h-4 w-4" aria-hidden="true" />
+                </button>
+                {actionsOpen && (
+                  <div id="canvas-actions" className="absolute right-0 top-full z-50 mt-2 w-60 rounded-lg border border-obsidian-borderLight bg-obsidian-panel p-1 shadow-lg">
+                    {([
+                      [Save, 'Guardar', !hasUnsavedChanges || isSaving, () => void handleSaveCanvas()],
+                      [RefreshCw, 'Actualizar imagen del informe', hasUnsavedChanges || isSaving || activeCanvas.element_count === 0, () => void handleSaveCanvas(true)],
+                      [Trash2, 'Eliminar', isSaving, () => void handleDeleteCanvas(activeCanvas)],
+                    ] as const).map(([Icon, label, disabled, action]) => (
+                      <button key={label} type="button" disabled={disabled}
+                        className={`flex min-h-11 w-full items-center gap-2 rounded px-3 text-left text-sm hover:bg-obsidian-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent disabled:opacity-50 ${label === 'Eliminar' ? 'text-obsidian-errorText' : ''}`}
+                        onClick={() => { setActionsOpen(false); actionTriggerRef.current?.focus(); action(); }}>
+                        <Icon className="h-4 w-4 shrink-0" aria-hidden="true" /> {label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </header>
@@ -518,9 +571,15 @@ export const ReportsCanvasesView: React.FC = () => {
                 onAction={() => void handleCreateCanvas()}
               />
             </div>
-          ) : isLoadingDetail || !activeCanvas ? (
+          ) : isLoadingDetail ? (
             <div className="flex h-full items-center justify-center text-sm text-obsidian-muted">
               Cargando lienzo…
+            </div>
+          ) : !activeCanvas ? (
+            <div className="flex h-full items-center justify-center p-6">
+              <button type="button" className="ui-action-secondary" onClick={() => setDetailLoadAttempt((value) => value + 1)}>
+                Reintentar abrir lienzo
+              </button>
             </div>
           ) : (
             <div className="lessso-excalidraw-host">

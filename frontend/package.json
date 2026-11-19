@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "sync:excalidraw": "node -e \"const fs=require('fs'),p=require('path');for(const d of['fonts','locales']){const s=p.join('node_modules/@excalidraw/excalidraw/dist/prod',d),t=p.join('public/excalidraw-assets',d);if(fs.existsSync(s)){fs.mkdirSync(t,{recursive:true});fs.cpSync(s,t,{recursive:true,force:true})}}\"",
+    "sync:excalidraw": "node scripts/sync-excalidraw-assets.mjs",
     "predev": "npm run sync:excalidraw",
     "dev": "vite",
     "prebuild": "npm run sync:excalidraw",

@@ -2,6 +2,7 @@ import random
 import secrets
 import string
 import json
+from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -28,7 +29,7 @@ def generate_password(
     include_digits: bool = Query(True),
     include_symbols: bool = Query(True),
     avoid_ambiguous: bool = Query(True),
-    mode: str = Query("random", enum=["random", "passphrase"])
+    mode: Literal["random", "passphrase"] = "random"
 ):
     """Generates a secure password or passphrase with live entropy calculation."""
     if mode == "passphrase":

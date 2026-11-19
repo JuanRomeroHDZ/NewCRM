@@ -22,7 +22,13 @@ services:
       VITE_DEV_HMR_CLIENT_PORT: "${HTTPS_PORT:-8443}"
     volumes:
       - ./frontend/src:/app/src
-      - ./frontend/public:/app/public
+      - ./frontend/public/fonts:/app/public/fonts:ro
+      - ./frontend/public/vendor:/app/public/vendor:ro
+      - ./frontend/public/robots.txt:/app/public/robots.txt:ro
+      - ./frontend/public/startup.js:/app/public/startup.js:ro
+      # Generated dependencies stay in a Docker volume so rootful and rootless Docker
+      # do not create root-owned Excalidraw assets in the host checkout.
+      - excalidraw_assets:/app/public/excalidraw-assets
       - ./frontend/index.html:/app/index.html
       - ./frontend/vite.config.ts:/app/vite.config.ts
       - ./frontend/tailwind.config.js:/app/tailwind.config.js
@@ -34,3 +40,6 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
+
+volumes:
+  excalidraw_assets:

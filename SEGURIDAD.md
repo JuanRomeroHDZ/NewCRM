@@ -25,7 +25,7 @@
 
 ## Red y servicios externos
 
-- El proxy publica `127.0.0.1` por defecto. Para acceso desde la LAN, usa `./lessso` → opción **6** y selecciona una IPv4 privada asignada a este equipo (10/172.16–31/192.168). El proxy se enlaza a esa dirección concreta; `0.0.0.0` no está permitido. Si la IP guardada deja de estar asignada, el arranque propone automáticamente la dirección privada de la ruta de salida y renueva el certificado local.
+- El proxy publica `127.0.0.1` por defecto. Para acceso desde la LAN, usa **Configuración → Cambiar IP y puertos** en `./lessso` y selecciona una IPv4 privada asignada a este equipo (10/172.16–31/192.168). El proxy se enlaza a esa dirección concreta; `0.0.0.0` no está permitido. Si la IP guardada deja de estar asignada, el arranque propone automáticamente la dirección privada de la ruta de salida y renueva el certificado local.
 - Nginx termina TLS y limita solicitudes de autenticación. No expongas los puertos del proxy a Internet sin diseñar una configuración de despliegue específica.
 - Usa el modo desarrollador para un entorno de pruebas confiable. En la auditoría de esta instalación, npm señaló una alerta sin versión corregida publicada para `picomatch`, utilizada por las herramientas de desarrollo. La auditoría del conjunto de producción devolvió cero alertas.
 - Para usarlo desde otro dispositivo, instala `nginx/certs/local/ca.crt` como autoridad de confianza en ese dispositivo. Publicar una IP privada permite que otros equipos de esa red alcancen el inicio de sesión; mantén la red y las cuentas bajo control.

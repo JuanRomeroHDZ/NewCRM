@@ -11,7 +11,6 @@ import {
   FileCode2,
   FileText,
   GitCompare,
-  Heading2,
   History,
   ImagePlus,
   Italic,
@@ -20,6 +19,7 @@ import {
   ListChecks,
   ListOrdered,
   Lock,
+  Menu,
   MessageSquarePlus,
   PanelLeftClose,
   PanelLeftOpen,
@@ -41,7 +41,6 @@ import {
   Undo2,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import DOMPurify from 'dompurify';
 import { api } from '../../lib/api';
 import { ApiError } from '../../lib/apiErrors';
 import { formatApiDateTime } from '../../lib/dates';
@@ -122,6 +121,8 @@ const savedTypstRecoveryDraft = (document: ReportDocumentDetail): TypstRecoveryD
   source: document.source,
 });
 
+const DOCUMENT_ACTION_CLASS = 'flex min-h-11 w-full items-center gap-2 rounded px-3 text-left text-sm hover:bg-obsidian-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent disabled:cursor-not-allowed disabled:opacity-50';
+
 export const ReportsDocumentsView: React.FC = () => {
   const { isUnlocked, openUnlockModal, setActiveSection, showToast, confirm } = useVault();
 
@@ -151,17 +152,21 @@ export const ReportsDocumentsView: React.FC = () => {
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [recoverySnapshots, setRecoverySnapshots] = useState<TypstRecoverySnapshot[]>([]);
   const [recoveryStatus, setRecoveryStatus] = useState<RecoveryStatus>('idle');
-  const [recoverySavedAt, setRecoverySavedAt] = useState<number | null>(null);
   const [recoveryError, setRecoveryError] = useState<string | null>(null);
 
   const [isLoadingList, setIsLoadingList] = useState(true);
+  const [listLoadError, setListLoadError] = useState<string | null>(null);
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
+  const [detailLoadError, setDetailLoadError] = useState<string | null>(null);
+  const [detailLoadAttempt, setDetailLoadAttempt] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
-  const [isExportingPdf, setIsExportingPdf] = useState(false);
-  const [exportFormat, setExportFormat] = useState<'pdf' | 'html' | 'typ'>('pdf');
+  const [isExporting, setIsExporting] = useState(false);
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
+  const actionsRef = useRef<HTMLDivElement>(null);
+  const actionsButtonRef = useRef<HTMLButtonElement>(null);
   const [correlations, setCorrelations] = useState<ReportCorrelationsResponse | null>(null);
   const [isCorrelationsOpen, setIsCorrelationsOpen] = useState(false);
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const [typstStatus, setTypstStatus] = useState<TypstStatusResponse | null>(null);
@@ -175,12 +180,18 @@ export const ReportsDocumentsView: React.FC = () => {
   const editorRef = useRef<TypstCodeEditorHandle | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const savingDocumentIdsRef = useRef(new Set<string>());
+  const mountedRef = useRef(false);
   const selectedIdRef = useRef(selectedId);
   const activeDocIdRef = useRef(activeDoc?.id ?? null);
   const draftValuesRef = useRef({ titleDraft, statusDraft, prospectIdDraft, projectIdDraft, sourceDraft });
   selectedIdRef.current = selectedId;
   activeDocIdRef.current = activeDoc?.id ?? null;
   draftValuesRef.current = { titleDraft, statusDraft, prospectIdDraft, projectIdDraft, sourceDraft };
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   useEffect(() => {
     if (!isUnlocked) {
@@ -201,10 +212,12 @@ export const ReportsDocumentsView: React.FC = () => {
   const loadDocuments = useCallback(async (preferId?: string | null) => {
     if (!isUnlocked) {
       setDocuments([]);
+      setListLoadError(null);
       setIsLoadingList(false);
       return;
     }
     setIsLoadingList(true);
+    setListLoadError(null);
     setErrorMessage(null);
     try {
       const list = await api.listReportDocuments();
@@ -216,7 +229,7 @@ export const ReportsDocumentsView: React.FC = () => {
         return targetId;
       });
     } catch (err) {
-      setErrorMessage(err instanceof ApiError ? err.message : 'No se pudieron cargar los documentos.');
+      setListLoadError(err instanceof ApiError ? err.message : 'No se pudieron cargar los documentos.');
     } finally {
       setIsLoadingList(false);
     }
@@ -225,6 +238,14 @@ export const ReportsDocumentsView: React.FC = () => {
   useEffect(() => {
     void loadDocuments();
   }, [loadDocuments]);
+
+  const hasUnsavedChanges = activeDoc !== null && (
+    (titleDraft.trim() || activeDoc.title) !== activeDoc.title ||
+    statusDraft !== activeDoc.status ||
+    prospectIdDraft !== (activeDoc.prospect_id || '') ||
+    projectIdDraft !== (activeDoc.project_id || '') ||
+    sourceDraft !== activeDoc.source
+  );
 
   const selectDocumentWithGuard = useCallback(
     async (nextId: string) => {
@@ -253,10 +274,12 @@ export const ReportsDocumentsView: React.FC = () => {
         setPreviewPages(res.pages);
         setCompileError(null);
       } else {
+        setPreviewPages([]);
         setCompileError(res.error || 'Error de compilación de Typst.');
       }
     } catch (err) {
       if (seq !== compileRequestSeq.current) return;
+      setPreviewPages([]);
       setCompileError(err instanceof ApiError ? err.message : 'No se pudo compilar la vista previa.');
     } finally {
       if (seq === compileRequestSeq.current) {
@@ -273,15 +296,24 @@ export const ReportsDocumentsView: React.FC = () => {
       setProspectIdDraft('');
       setProjectIdDraft('');
       setSourceDraft('');
+      setDetailLoadError(null);
       setPreviewPages([]);
       setCompileError(null);
-      setHasUnsavedChanges(false);
+      setIsLoadingDetail(false);
+      compileRequestSeq.current += 1;
+      setIsCompiling(false);
       return;
     }
 
     let cancelled = false;
     setIsLoadingDetail(true);
+    setActiveDoc(null);
+    setDetailLoadError(null);
     setErrorMessage(null);
+    setPreviewPages([]);
+    setCompileError(null);
+    compileRequestSeq.current += 1;
+    setIsCompiling(false);
     setCorrelations(null);
     api
       .getReportDocument(selectedId)
@@ -293,7 +325,6 @@ export const ReportsDocumentsView: React.FC = () => {
         setProspectIdDraft(detail.prospect_id || '');
         setProjectIdDraft(detail.project_id || '');
         setSourceDraft(detail.source);
-        setHasUnsavedChanges(false);
         void runCompile(detail.source, detail.id);
         api.getReportDocumentCorrelations(detail.id)
           .then((result) => { if (!cancelled) setCorrelations(result); })
@@ -301,7 +332,7 @@ export const ReportsDocumentsView: React.FC = () => {
       })
       .catch((err) => {
         if (cancelled) return;
-        setErrorMessage(err instanceof ApiError ? err.message : 'No se pudo abrir el documento.');
+        setDetailLoadError(err instanceof ApiError ? err.message : 'No se pudo abrir el documento.');
       })
       .finally(() => {
         if (!cancelled) setIsLoadingDetail(false);
@@ -310,7 +341,7 @@ export const ReportsDocumentsView: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [selectedId, runCompile]);
+  }, [selectedId, runCompile, detailLoadAttempt]);
 
   useEffect(() => {
     if (!activeDoc || isLoadingDetail || paneMode === 'edit') return;
@@ -351,8 +382,30 @@ export const ReportsDocumentsView: React.FC = () => {
     }
   };
 
+  const closeActions = useCallback((restoreFocus = false) => {
+    setActionsOpen(false);
+    setExportOpen(false);
+    if (restoreFocus) actionsButtonRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    closeActions();
+    setIsHistoryOpen(false);
+    setRedactForClient(false);
+  }, [selectedId, closeActions]);
+
+  useEffect(() => {
+    if (!actionsOpen) return;
+    const dismiss = (event: PointerEvent) => {
+      if (event.target instanceof Node && !actionsRef.current?.contains(event.target)) closeActions();
+    };
+    document.addEventListener('pointerdown', dismiss);
+    return () => document.removeEventListener('pointerdown', dismiss);
+  }, [actionsOpen, closeActions]);
+
   const handleSaveDocument = useCallback(async () => {
     if (!activeDoc) return false;
+    if (!hasUnsavedChanges) return true;
     const targetDocumentId = activeDoc.id;
     if (savingDocumentIdsRef.current.has(targetDocumentId)) return false;
     savingDocumentIdsRef.current.add(targetDocumentId);
@@ -402,7 +455,6 @@ export const ReportsDocumentsView: React.FC = () => {
           setProspectIdDraft(updated.prospect_id || '');
           setProjectIdDraft(updated.project_id || '');
         }
-        setHasUnsavedChanges(!draftUnchanged);
       }
       showToast(`Documento guardado: ${updated.title}`, 'success');
       api.getReportDocumentCorrelations(updated.id)
@@ -422,7 +474,7 @@ export const ReportsDocumentsView: React.FC = () => {
       savingDocumentIdsRef.current.delete(targetDocumentId);
       setIsSaving(false);
     }
-  }, [activeDoc, projectIdDraft, prospectIdDraft, showToast, sourceDraft, statusDraft, titleDraft]);
+  }, [activeDoc, hasUnsavedChanges, projectIdDraft, prospectIdDraft, showToast, sourceDraft, statusDraft, titleDraft]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -437,9 +489,9 @@ export const ReportsDocumentsView: React.FC = () => {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [activeDoc, handleSaveDocument]);
 
-  const handleExportPdf = async () => {
-    if (!activeDoc) return;
-    setIsExportingPdf(true);
+  const handleExport = async (exportFormat: 'pdf' | 'html' | 'typ') => {
+    if (!activeDoc || isExporting) return;
+    setIsExporting(true);
     try {
       const { blob, filename } = await api.exportReportDocument(
         activeDoc.id,
@@ -459,7 +511,7 @@ export const ReportsDocumentsView: React.FC = () => {
     } catch (err) {
       showToast(err instanceof ApiError ? err.message : `No se pudo exportar en ${exportFormat.toUpperCase()}.`, 'error');
     } finally {
-      setIsExportingPdf(false);
+      setIsExporting(false);
     }
   };
 
@@ -496,7 +548,6 @@ export const ReportsDocumentsView: React.FC = () => {
     const editor = editorRef.current;
     if (!editor) {
       setSourceDraft((prev) => `${prev}${prev.endsWith('\n') || prev === '' ? '' : '\n'}${snippet}`);
-      setHasUnsavedChanges(true);
       return;
     }
     editor.insert(snippet);
@@ -580,9 +631,6 @@ export const ReportsDocumentsView: React.FC = () => {
       setProspectIdDraft(recoveredDraft.prospectId);
       setProjectIdDraft(recoveredDraft.projectId);
       setSourceDraft(recoveredDraft.source);
-      setHasUnsavedChanges(
-        serializeTypstRecoveryDraft(recoveredDraft) !== serializeTypstRecoveryDraft(serverDraft),
-      );
       lastRecoveryDraftRef.current = serializeTypstRecoveryDraft(recoveredDraft);
       setIsHistoryOpen(false);
       showToast('Copia local cargada en el borrador.', 'info');
@@ -611,7 +659,6 @@ export const ReportsDocumentsView: React.FC = () => {
   useEffect(() => {
     if (!activeDoc || isLoadingDetail) {
       setRecoverySnapshots([]);
-      setRecoverySavedAt(null);
       if (!isLoadingDetail) setRecoveryStatus('idle');
       return;
     }
@@ -621,7 +668,6 @@ export const ReportsDocumentsView: React.FC = () => {
     lastRecoveryDraftRef.current = serverDraftSerialized;
     setRecoveryError(null);
     setRecoverySnapshots([]);
-    setRecoverySavedAt(null);
     setRecoveryStatus('idle');
     listTypstRecoverySnapshots(activeDoc.id)
       .then(async (snapshots) => {
@@ -629,7 +675,6 @@ export const ReportsDocumentsView: React.FC = () => {
         setRecoverySnapshots(snapshots);
         const latest = snapshots[0];
         if (!latest) return;
-        setRecoverySavedAt(latest.createdAt);
         setRecoveryStatus('saved');
         const serverUpdatedAt = new Date(activeDoc.updated_at).getTime();
         if (latest.createdAt <= serverUpdatedAt) return;
@@ -656,7 +701,6 @@ export const ReportsDocumentsView: React.FC = () => {
             setProspectIdDraft(recoveredDraft.prospectId);
             setProjectIdDraft(recoveredDraft.projectId);
             setSourceDraft(recoveredDraft.source);
-            setHasUnsavedChanges(true);
             lastRecoveryDraftRef.current = serializeTypstRecoveryDraft(recoveredDraft);
           }
         } catch (err) {
@@ -694,7 +738,6 @@ export const ReportsDocumentsView: React.FC = () => {
         if (sequence !== recoveryRequestSeq.current) return;
         lastRecoveryDraftRef.current = serializedDraft;
         setRecoverySnapshots(snapshots);
-        setRecoverySavedAt(requestedAt);
         setRecoveryStatus('saved');
       } catch (err) {
         if (sequence !== recoveryRequestSeq.current) return;
@@ -703,10 +746,30 @@ export const ReportsDocumentsView: React.FC = () => {
       }
     }, 1200);
     return () => {
-      window.clearTimeout(timer);
-      if (recoveryRequestSeq.current === sequence) recoveryRequestSeq.current += 1;
+      // Keep the final debounced write alive when this view unmounts during
+      // in-app navigation. Draft edits still cancel older timers on rerender.
+      if (mountedRef.current) {
+        window.clearTimeout(timer);
+        if (recoveryRequestSeq.current === sequence) recoveryRequestSeq.current += 1;
+      }
     };
   }, [activeDoc, hasUnsavedChanges, isLoadingDetail, projectIdDraft, prospectIdDraft, sourceDraft, statusDraft, titleDraft]);
+
+  useEffect(() => {
+    if (!activeDoc || !hasUnsavedChanges) return;
+    const draft = toTypstRecoveryDraft(
+      { titleDraft, statusDraft, prospectIdDraft, projectIdDraft, sourceDraft },
+      activeDoc.title,
+    );
+    if (serializeTypstRecoveryDraft(draft) === lastRecoveryDraftRef.current) return;
+
+    const warnBeforeLeaving = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warnBeforeLeaving);
+    return () => window.removeEventListener('beforeunload', warnBeforeLeaving);
+  }, [activeDoc, hasUnsavedChanges, projectIdDraft, prospectIdDraft, recoveryStatus, sourceDraft, statusDraft, titleDraft]);
 
   const filteredDocuments = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -715,12 +778,14 @@ export const ReportsDocumentsView: React.FC = () => {
   }, [documents, searchQuery]);
 
   const canvasesWithSnapshots = useMemo(
-    () => canvases.filter((canvas) => canvas.has_svg_snapshot),
+    () => canvases.filter((canvas) => canvas.element_count > 0 && canvas.has_svg_snapshot),
     [canvases],
   );
 
-  const sanitizedPreviewPages = useMemo(
-    () => previewPages.map((markup) => DOMPurify.sanitize(markup, { USE_PROFILES: { svg: true, svgFilters: true } })),
+  // SVG image mode keeps Typst's glyph references and disables scripts and external loads.
+  const errorLocation = compileError?.match(/document\.typ:(\d+):(\d+)/);
+  const previewImages = useMemo(
+    () => previewPages.map((markup) => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(markup)}`),
     [previewPages],
   );
 
@@ -820,7 +885,18 @@ export const ReportsDocumentsView: React.FC = () => {
 
           <div className="flex-1 overflow-y-auto divide-y divide-obsidian-border">
             {isLoadingList ? (
-              <p className="p-4 text-sm text-obsidian-muted">Cargando documentos…</p>
+              <p role="status" aria-live="polite" className="p-4 text-sm text-obsidian-muted">Cargando documentos…</p>
+            ) : listLoadError ? (
+              <div role="alert" className="space-y-3 p-4 text-sm text-obsidian-errorText">
+                <p>{listLoadError}</p>
+                <button
+                  type="button"
+                  onClick={() => void loadDocuments()}
+                  className="ui-action-secondary min-h-11 !px-3 text-xs"
+                >
+                  Reintentar
+                </button>
+              </div>
             ) : filteredDocuments.length === 0 ? (
               <div className="p-4 text-sm text-obsidian-muted">
                 {documents.length === 0 ? 'Aún no hay documentos creados.' : 'Sin coincidencias.'}
@@ -845,14 +921,6 @@ export const ReportsDocumentsView: React.FC = () => {
                         {STATUS_LABELS[item.status] || item.status} · {formatApiDateTime(item.updated_at)}
                       </div>
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => void handleDeleteDocument(item)}
-                      aria-label={`Eliminar ${item.title}`}
-                      className="ui-action-icon text-obsidian-muted hover:text-obsidian-errorText"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
                   </div>
                 );
               })
@@ -862,8 +930,8 @@ export const ReportsDocumentsView: React.FC = () => {
       )}
 
       <section className="flex min-w-0 flex-1 flex-col rounded-xl border border-obsidian-border bg-obsidian-panel min-h-0">
-        <header className="flex flex-wrap items-center justify-between gap-3 border-b border-obsidian-border px-4 py-3">
-          <div className="flex min-w-0 flex-1 items-center gap-2">
+        <header className="flex flex-wrap items-center justify-between gap-2 border-b border-obsidian-border px-3 py-2">
+          <div className="flex min-w-0 flex-1 basis-60 items-center gap-2">
             <button
               type="button"
               onClick={() => setIsSidebarOpen((prev) => !prev)}
@@ -880,9 +948,9 @@ export const ReportsDocumentsView: React.FC = () => {
                   value={titleDraft}
                   onChange={(e) => {
                     setTitleDraft(e.target.value);
-                    setHasUnsavedChanges(true);
                   }}
                   aria-label="Título del documento"
+                  maxLength={200}
                   className="min-w-0 flex-1 min-h-11 rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 text-sm font-medium text-white focus:border-obsidian-accent focus:outline-none"
                 />
                 <label htmlFor="doc-status-select" className="sr-only">
@@ -893,9 +961,8 @@ export const ReportsDocumentsView: React.FC = () => {
                   value={statusDraft}
                   onChange={(e) => {
                     setStatusDraft(e.target.value as ReportDocumentStatus);
-                    setHasUnsavedChanges(true);
                   }}
-                  className="h-11 rounded-lg border border-obsidian-border bg-obsidian-surface px-3 text-sm text-white focus:border-obsidian-accent focus:outline-none"
+                  className="h-11 w-28 shrink-0 rounded-lg border border-obsidian-border bg-obsidian-surface px-2 text-xs text-white focus:border-obsidian-accent focus:outline-none"
                 >
                   {Object.entries(STATUS_LABELS).map(([value, label]) => (
                     <option key={value} value={value}>
@@ -911,100 +978,104 @@ export const ReportsDocumentsView: React.FC = () => {
 
           {activeDoc && (
             <div className="flex flex-wrap items-center gap-2">
-              <div className="flex items-center rounded-lg border border-obsidian-border bg-obsidian-surface p-0.5" role="group" aria-label="Modo de vista">
-                <button
-                  type="button"
-                  onClick={() => setPaneMode('edit')}
-                  aria-pressed={paneMode === 'edit'}
-                  aria-label="Mostrar solo código"
-                  className={`ui-action-toggle !px-2.5 text-xs ${paneMode === 'edit' ? 'bg-obsidian-panel text-white' : ''}`}
-                >
-                  <FileCode2 className="h-4 w-4" />
-                  <span className="hidden sm:inline">Código</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPaneMode('split')}
-                  aria-pressed={paneMode === 'split'}
-                  aria-label="Mostrar código y vista previa"
-                  className={`ui-action-toggle !px-2.5 text-xs ${paneMode === 'split' ? 'bg-obsidian-panel text-white' : ''}`}
-                >
-                  <Columns2 className="h-4 w-4" />
-                  <span className="hidden sm:inline">Dividido</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPaneMode('preview')}
-                  aria-pressed={paneMode === 'preview'}
-                  aria-label="Mostrar solo vista previa"
-                  className={`ui-action-toggle !px-2.5 text-xs ${paneMode === 'preview' ? 'bg-obsidian-panel text-white' : ''}`}
-                >
-                  <Eye className="h-4 w-4" />
-                  <span className="hidden sm:inline">Vista previa</span>
-                </button>
+              <div className="flex items-center rounded-lg border border-obsidian-border bg-obsidian-surface" role="group" aria-label="Modo de vista">
+                {([
+                  ['edit', 'Solo código', FileCode2],
+                  ['split', 'Código y vista previa', Columns2],
+                  ['preview', 'Solo vista previa', Eye],
+                ] as const).map(([mode, label, Icon]) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => setPaneMode(mode)}
+                    aria-pressed={paneMode === mode}
+                    aria-label={label}
+                    title={label}
+                    className={`ui-action-icon !h-11 !w-11 ${paneMode === mode ? 'bg-obsidian-panel text-white' : ''}`}
+                  >
+                    <Icon className="h-4 w-4" aria-hidden="true" />
+                  </button>
+                ))}
               </div>
 
-              <span className="px-1 text-xs text-obsidian-muted" aria-live="polite">
-                {isSaving ? (
-                  'Guardando…'
-                ) : hasUnsavedChanges ? (
-                  'Cambios pendientes'
-                ) : (
-                  <span className="inline-flex items-center gap-1 text-obsidian-emerald">
-                    <CheckCircle2 className="h-3.5 w-3.5" />
-                    Guardado
-                  </span>
-                )}
+              <span role="status" className="flex items-center justify-center px-1"
+                title={isSaving ? 'Guardando…' : hasUnsavedChanges ? 'Cambios pendientes' : 'Guardado'}>
+                <span className="sr-only">{isSaving ? 'Guardando…' : hasUnsavedChanges ? 'Cambios pendientes' : 'Guardado'}</span>
+                {isSaving ? <RefreshCw className="h-4 w-4 motion-safe:animate-spin" aria-hidden="true" />
+                  : hasUnsavedChanges ? <AlertTriangle className="h-4 w-4 text-obsidian-amber" aria-hidden="true" />
+                    : <CheckCircle2 className="h-4 w-4 text-obsidian-emerald" aria-hidden="true" />}
               </span>
 
-              <label htmlFor="doc-export-format" className="sr-only">
-                Formato de exportación
-              </label>
-              <select
-                id="doc-export-format"
-                value={exportFormat}
-                onChange={(e) => setExportFormat(e.target.value as 'pdf' | 'html' | 'typ')}
-                className="h-11 rounded-lg border border-obsidian-border bg-obsidian-surface px-2.5 text-xs text-white focus:border-obsidian-accent focus:outline-none"
+              <div
+                ref={actionsRef}
+                className="relative"
+                onBlur={(event) => {
+                  if (!event.currentTarget.contains(event.relatedTarget)) closeActions();
+                }}
+                onKeyDown={(event) => {
+                  if (event.key !== 'Escape' || !actionsOpen) return;
+                  event.stopPropagation();
+                  if (exportOpen) {
+                    setExportOpen(false);
+                    actionsRef.current?.querySelector<HTMLButtonElement>('#report-export-toggle')?.focus();
+                  } else {
+                    closeActions(true);
+                  }
+                }}
               >
-                <option value="pdf">PDF</option>
-                <option value="html">HTML</option>
-                <option value="typ">Typst (.typ)</option>
-              </select>
-
-              {exportFormat !== 'typ' && (
-                <label className="flex min-h-11 items-center gap-2 rounded-lg px-2 text-xs text-obsidian-muted hover:bg-obsidian-surface">
-                  <input
-                    type="checkbox"
-                    checked={redactForClient}
-                    onChange={(event) => setRedactForClient(event.target.checked)}
-                    className="h-4 w-4 rounded border-obsidian-border bg-obsidian-surface accent-obsidian-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent"
-                  />
-                  <EyeOff className="h-4 w-4 shrink-0" aria-hidden="true" />
-                  <span>Copia para cliente</span>
-                </label>
-              )}
-
-              {/* [Acción secundaria] Exporta el documento en el formato elegido. */}
-              <button
-                type="button"
-                onClick={() => void handleExportPdf()}
-                disabled={isExportingPdf || (exportFormat !== 'typ' && typstStatus?.available === false)}
-                className="ui-action-secondary"
-              >
-                <Download className="h-4 w-4" />
-                <span>{isExportingPdf ? 'Exportando…' : 'Exportar'}</span>
-              </button>
-
-              {/* [Acción principal] Guarda el código fuente Typst cifrado en el servidor. */}
-              <button
-                type="button"
-                onClick={() => void handleSaveDocument()}
-                disabled={isSaving}
-                className="ui-action-primary"
-              >
-                <Save className="h-4 w-4" />
-                <span>Guardar</span>
-              </button>
+                <button
+                  ref={actionsButtonRef}
+                  type="button"
+                  className="ui-action-icon !h-11 !w-11"
+                  aria-label="Acciones del documento"
+                  title="Acciones del documento"
+                  aria-expanded={actionsOpen}
+                  aria-controls={actionsOpen ? 'report-actions' : undefined}
+                  onClick={() => actionsOpen ? closeActions() : setActionsOpen(true)}
+                >
+                  <Menu className="h-4 w-4" aria-hidden="true" />
+                </button>
+                {actionsOpen && (
+                  <div id="report-actions" className="absolute right-0 top-full z-30 mt-2 max-h-[min(60dvh,24rem)] w-60 max-w-[calc(100vw-2rem)] overflow-y-auto rounded-lg border border-obsidian-borderLight bg-obsidian-panel p-1 shadow-lg">
+                    <button type="button" className={DOCUMENT_ACTION_CLASS} disabled={!hasUnsavedChanges || isSaving}
+                      onClick={() => { closeActions(true); void handleSaveDocument(); }}>
+                      <Save className="h-4 w-4" aria-hidden="true" /> Guardar
+                    </button>
+                    <button type="button" className={DOCUMENT_ACTION_CLASS} aria-expanded={isHistoryOpen}
+                      onClick={() => { setIsHistoryOpen((open) => !open); closeActions(true); }}>
+                      <History className="h-4 w-4" aria-hidden="true" /> Historial local ({recoverySnapshots.length})
+                    </button>
+                    <button id="report-export-toggle" type="button" className={DOCUMENT_ACTION_CLASS} aria-expanded={exportOpen}
+                      disabled={isExporting} onClick={() => setExportOpen((open) => !open)}>
+                      <Download className="h-4 w-4" aria-hidden="true" /> {isExporting ? 'Exportando…' : 'Exportar'}
+                    </button>
+                    {exportOpen && (
+                      <div className="border-y border-obsidian-border py-1 pl-3">
+                        <label className="flex min-h-11 items-center gap-2 px-2 text-xs text-obsidian-muted">
+                          <input type="checkbox" checked={redactForClient}
+                            onChange={(event) => setRedactForClient(event.target.checked)}
+                            className="h-4 w-4 accent-obsidian-accent" />
+                          Copia para cliente (PDF / HTML)
+                        </label>
+                        {redactForClient && (
+                          <p className="px-2 pb-2 text-xs text-obsidian-muted">Censura IP, credenciales comunes y marcas de censura. Revisa las imágenes antes de compartir.</p>
+                        )}
+                        {([['pdf', 'PDF'], ['html', 'HTML'], ['typ', 'Código Typst (.typ)']] as const).map(([format, label]) => (
+                          <button key={format} type="button" className={DOCUMENT_ACTION_CLASS}
+                            disabled={format === 'typ' ? redactForClient : typstStatus?.available === false}
+                            onClick={() => { closeActions(true); void handleExport(format); }}>
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    <button type="button" className={`${DOCUMENT_ACTION_CLASS} text-obsidian-errorText`} disabled={isSaving}
+                      onClick={() => { closeActions(true); void handleDeleteDocument(activeDoc); }}>
+                      <Trash2 className="h-4 w-4" aria-hidden="true" /> Eliminar
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </header>
@@ -1021,7 +1092,6 @@ export const ReportsDocumentsView: React.FC = () => {
                   value={prospectIdDraft}
                   onChange={(e) => {
                     setProspectIdDraft(e.target.value);
-                    setHasUnsavedChanges(true);
                   }}
                   className="h-11 max-w-[200px] rounded-lg border border-obsidian-border bg-obsidian-surface px-2.5 text-xs text-white focus:border-obsidian-accent focus:outline-none"
                 >
@@ -1044,7 +1114,6 @@ export const ReportsDocumentsView: React.FC = () => {
                   value={projectIdDraft}
                   onChange={(e) => {
                     setProjectIdDraft(e.target.value);
-                    setHasUnsavedChanges(true);
                   }}
                   className="h-11 max-w-[200px] rounded-lg border border-obsidian-border bg-obsidian-surface px-2.5 text-xs text-white focus:border-obsidian-accent focus:outline-none"
                 >
@@ -1101,67 +1170,60 @@ export const ReportsDocumentsView: React.FC = () => {
           </div>
         )}
 
-        {activeDoc && (
-          <div className="border-b border-obsidian-border px-4 py-2">
-            <div className="flex min-h-11 flex-wrap items-center justify-between gap-2" role="status" aria-live="polite">
-              <span className="text-xs text-obsidian-muted">
-                {recoveryStatus === 'saving'
-                  ? 'Cifrando copia local…'
-                  : recoveryStatus === 'saved' && recoverySavedAt
-                    ? `Copia local cifrada · ${formatApiDateTime(new Date(recoverySavedAt).toISOString())}`
-                    : recoveryStatus === 'error'
-                      ? 'No se pudo guardar o abrir la copia local cifrada.'
-                      : 'El borrador se recupera con la clave actual de la bóveda.'}
-              </span>
-              <button
-                type="button"
-                onClick={() => setIsHistoryOpen((open) => !open)}
-                aria-expanded={isHistoryOpen}
-                aria-controls="typst-recovery-history"
-                className="ui-action-secondary min-h-11 !px-3 text-xs"
-              >
-                <History className="h-4 w-4" aria-hidden="true" />
-                <span>Historial local ({recoverySnapshots.length})</span>
-              </button>
+        {activeDoc && recoveryError && (
+          <p role="alert" className="border-b border-obsidian-border px-3 py-2 text-xs text-obsidian-errorText">{recoveryError}</p>
+        )}
+
+        {activeDoc && isHistoryOpen && (
+          <div id="typst-recovery-history" className="max-h-60 overflow-y-auto border-b border-obsidian-border px-3 py-2">
+            <p className="mb-2 text-xs text-obsidian-muted">
+              Las copias guardan solo texto cifrado. Para restaurarlas necesitas la misma clave de bóveda.
+            </p>
+            {recoverySnapshots.length === 0 ? (
+              <p className="py-2 text-sm text-obsidian-muted">Todavía no hay copias locales de este documento.</p>
+            ) : (
+              <ul className="divide-y divide-obsidian-border">
+                {recoverySnapshots.map((snapshot) => (
+                  <li key={snapshot.id} className="flex min-h-12 items-center justify-between gap-3 py-1.5">
+                    <time dateTime={new Date(snapshot.createdAt).toISOString()} className="text-sm text-obsidian-muted">
+                      {formatApiDateTime(new Date(snapshot.createdAt).toISOString())}
+                    </time>
+                    <button
+                      type="button"
+                      onClick={() => void handleRestoreRecovery(snapshot)}
+                      className="ui-action-secondary min-h-11 !px-3 text-xs"
+                      aria-label={`Restaurar copia del ${formatApiDateTime(new Date(snapshot.createdAt).toISOString())}`}
+                    >
+                      Restaurar
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+
+        {compileError && (
+          <div className="shrink-0 border-b border-obsidian-border bg-obsidian-dangerBg px-3 py-2 text-xs">
+            <div className="flex min-w-0 flex-wrap items-center gap-x-3">
+              <p role="alert" className="my-1 min-w-0 flex-1 truncate text-obsidian-errorText">
+                {compileError.split('\n')[0]}
+              </p>
+              {errorLocation && (
+                <button type="button" className="ui-action-secondary min-h-11 !px-2"
+                  onClick={() => {
+                    if (paneMode === 'preview') setPaneMode('split');
+                    const [, line, column] = errorLocation;
+                    requestAnimationFrame(() => editorRef.current?.goToLine(Number(line), Number(column)));
+                  }}>
+                  Ir a la línea {errorLocation[1]}
+                </button>
+              )}
             </div>
-            {(recoveryError || (redactForClient && exportFormat !== 'typ')) && (
-              <div className="flex flex-wrap gap-x-5 gap-y-1 pb-1 text-xs">
-                {recoveryError && <p role="alert" className="text-obsidian-errorText">{recoveryError}</p>}
-                {redactForClient && exportFormat !== 'typ' && (
-                  <p className="text-obsidian-muted">
-                    Se censuran IPs IPv4, patrones comunes de credenciales y marcadores {'{{redact:...}}'}. Revisa las capturas antes de compartir.
-                  </p>
-                )}
-              </div>
-            )}
-            {isHistoryOpen && (
-              <div id="typst-recovery-history" className="border-t border-obsidian-border py-2">
-                <p className="mb-2 text-xs text-obsidian-muted">
-                  Las copias guardan solo texto cifrado. Para restaurarlas necesitas la misma clave de bóveda.
-                </p>
-                {recoverySnapshots.length === 0 ? (
-                  <p className="py-2 text-sm text-obsidian-muted">Todavía no hay copias locales de este documento.</p>
-                ) : (
-                  <ul className="divide-y divide-obsidian-border">
-                    {recoverySnapshots.map((snapshot) => (
-                      <li key={snapshot.id} className="flex min-h-12 items-center justify-between gap-3 py-1.5">
-                        <time dateTime={new Date(snapshot.createdAt).toISOString()} className="text-sm text-obsidian-muted">
-                          {formatApiDateTime(new Date(snapshot.createdAt).toISOString())}
-                        </time>
-                        <button
-                          type="button"
-                          onClick={() => void handleRestoreRecovery(snapshot)}
-                          className="ui-action-secondary min-h-11 !px-3 text-xs"
-                          aria-label={`Restaurar copia del ${formatApiDateTime(new Date(snapshot.createdAt).toISOString())}`}
-                        >
-                          Restaurar
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            )}
+            <details key={compileError} className="text-obsidian-muted">
+              <summary className="max-w-max cursor-pointer py-2">Detalles de compilación</summary>
+              <pre tabIndex={0} className="max-h-[min(8rem,20dvh)] overflow-auto whitespace-pre-wrap break-all font-mono text-obsidian-errorText">{compileError}</pre>
+            </details>
           </div>
         )}
 
@@ -1182,14 +1244,31 @@ export const ReportsDocumentsView: React.FC = () => {
                 onAction={() => { setIsSidebarOpen(true); setIsCreateFormOpen(true); }}
               />
             </div>
-          ) : isLoadingDetail || !activeDoc ? (
-            <div className="flex flex-1 items-center justify-center text-sm text-obsidian-muted">
+          ) : isLoadingDetail ? (
+            <div role="status" aria-live="polite" className="flex flex-1 items-center justify-center text-sm text-obsidian-muted">
               Cargando documento…
+            </div>
+          ) : detailLoadError ? (
+            <div role="alert" className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
+              <p className="text-sm text-obsidian-errorText">{detailLoadError}</p>
+              <button
+                type="button"
+                onClick={() => setDetailLoadAttempt((attempt) => attempt + 1)}
+                className="ui-action-secondary min-h-11"
+              >
+                Reintentar
+              </button>
+            </div>
+          ) : !activeDoc ? (
+            <div className="flex flex-1 items-center justify-center text-sm text-obsidian-muted">
+              Selecciona o crea un documento Typst.
             </div>
           ) : (
             <div className="flex flex-1 flex-col md:flex-row min-h-0 min-w-0 divide-y md:divide-y-0 md:divide-x divide-obsidian-border">
-              {paneMode !== 'preview' && (
-                <div className="flex min-w-0 flex-1 flex-col bg-obsidian-bg">
+              <div
+                aria-hidden={paneMode === 'preview'}
+                className={`${paneMode === 'preview' ? 'hidden' : 'flex'} min-w-0 flex-1 flex-col bg-obsidian-bg`}
+              >
                   <div className="flex min-w-0 items-center gap-2 border-b border-obsidian-border px-2 py-1.5 text-xs text-obsidian-muted">
                     <div className="min-w-0 flex-1 overflow-x-auto" role="toolbar" aria-label="Herramientas de edición Typst">
                       <div className="flex w-max items-center gap-2 py-0.5">
@@ -1206,7 +1285,14 @@ export const ReportsDocumentsView: React.FC = () => {
                         </div>
                         <span aria-hidden="true" className="h-7 w-px shrink-0 bg-obsidian-border" />
                         <div className="flex items-center gap-1" role="group" aria-label="Bloques y estructura">
-                          <ToolbarButton label="Sección" icon={Heading2} onClick={() => insertSnippet('\n== Título de sección\n\n')} />
+                          <select aria-label="Nivel de título" value=""
+                            className="h-11 rounded-lg border border-obsidian-border bg-obsidian-surface px-2 text-xs"
+                            onChange={(event) => editorRef.current?.setHeading(Number(event.target.value))}>
+                            <option value="">Título…</option>
+                            {Array.from({ length: 6 }, (_, index) => (
+                              <option key={index} value={index + 1}>Nivel {index + 1}</option>
+                            ))}
+                          </select>
                           <ToolbarButton label="Lista con viñetas" icon={List} onClick={() => insertSnippet('\n- Primer elemento\n- Segundo elemento\n')} />
                           <ToolbarButton label="Lista numerada" icon={ListOrdered} onClick={() => insertSnippet('\n+ Primer paso\n+ Segundo paso\n')} />
                           <ToolbarButton label="Lista de tareas" icon={ListChecks} onClick={() => insertSnippet('\n- [ ] Tarea pendiente\n- [x] Tarea completada\n')} />
@@ -1227,8 +1313,8 @@ export const ReportsDocumentsView: React.FC = () => {
                                 const canvasId = event.target.value;
                                 if (!canvasId) return;
                                 const canvas = canvasesWithSnapshots.find((item) => item.id === canvasId);
-                                const caption = canvas?.title.replace(/[\[\]\r\n]/g, ' ').trim() || 'Diagrama';
-                                insertSnippet(`\n#figure(\n  image("canvas://${canvasId}", width: 95%),\n  caption: [${caption}],\n)\n`);
+                                const caption = JSON.stringify(canvas?.title || 'Diagrama');
+                                insertSnippet(`\n#figure(\n  image("canvas://${canvasId}", width: 95%),\n  caption: ${caption},\n)\n`);
                               }}
                               className="h-11 max-w-[190px] rounded-lg border border-obsidian-border bg-obsidian-surface px-2 text-xs text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent"
                             >
@@ -1314,12 +1400,10 @@ export const ReportsDocumentsView: React.FC = () => {
                     label="Código fuente Typst"
                     onChange={(value) => {
                       setSourceDraft(value);
-                      setHasUnsavedChanges(true);
                     }}
                     onPasteImages={handleImageFiles}
                   />
-                </div>
-              )}
+              </div>
 
               {paneMode !== 'edit' && (
                 <div className="flex min-w-0 flex-1 flex-col bg-obsidian-bg">
@@ -1330,25 +1414,20 @@ export const ReportsDocumentsView: React.FC = () => {
                     {typstStatus?.version && <span className="font-mono">{typstStatus.version}</span>}
                   </div>
 
-                  {compileError && (
-                    <div role="alert" className="border-b border-obsidian-border bg-obsidian-dangerBg px-4 py-2.5 font-mono text-xs text-obsidian-errorText whitespace-pre-wrap">
-                      {compileError}
-                    </div>
-                  )}
-
                   <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
                     {previewPages.length === 0 ? (
                       <div className="flex h-full items-center justify-center text-sm text-obsidian-muted">
                         {isCompiling ? 'Compilando vista previa…' : 'Sin páginas renderizadas.'}
                       </div>
                     ) : (
-                      sanitizedPreviewPages.map((svgMarkup, idx) => (
-                        <div
+                      previewImages.map((src, idx) => (
+                        <img
                           key={idx}
-                          role="img"
-                          aria-label={`Página ${idx + 1}`}
-                          className="mx-auto w-full max-w-[820px] overflow-hidden rounded-lg border border-obsidian-border bg-white [&>svg]:block [&>svg]:h-auto [&>svg]:w-full"
-                          dangerouslySetInnerHTML={{ __html: svgMarkup }}
+                          src={src}
+                          alt={`Página ${idx + 1} del documento`}
+                          loading={idx === 0 ? 'eager' : 'lazy'}
+                          decoding="async"
+                          className="mx-auto block h-auto w-full max-w-[820px] rounded-lg border border-obsidian-border bg-white"
                         />
                       ))
                     )}

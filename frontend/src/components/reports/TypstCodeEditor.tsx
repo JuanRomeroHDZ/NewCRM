@@ -28,6 +28,8 @@ import { typstCompletionSource } from './typstSnippets';
 
 export interface TypstCodeEditorHandle {
   focus: () => void;
+  setHeading: (level: number) => void;
+  goToLine: (line: number, column: number) => void;
   insert: (snippet: string) => void;
   wrapSelection: (prefix: string, suffix: string, placeholder?: string) => void;
   undo: () => void;
@@ -58,7 +60,10 @@ const typstLanguage = StreamLanguage.define<TypstModeState>({
       stream.next();
       return 'string';
     }
-    if (stream.sol() && stream.match(/={1,6}\s+.*$/)) return 'heading';
+    if (stream.sol()) {
+      const heading = stream.match(/^\s*(={1,6})[ \t]+.*$/);
+      if (heading && heading !== true) return `heading${heading[1].length}`;
+    }
     if (stream.eatSpace()) return null;
     if (stream.match(/\/\/.*$/)) return 'comment';
     if (stream.match(/```/)) {
@@ -77,7 +82,9 @@ const typstLanguage = StreamLanguage.define<TypstModeState>({
 });
 
 const typstHighlighting = HighlightStyle.define([
-  { tag: tags.heading, color: '#FFFFFF', fontWeight: '700' },
+  ...([tags.heading1, tags.heading2, tags.heading3, tags.heading4, tags.heading5, tags.heading6]
+    .map((tag, index) => ({ tag, color: '#FFFFFF', fontWeight: index < 3 ? '700' : '600',
+      fontSize: `${[1.18, 1.12, 1.06, 1, 0.96, 0.92][index]}em` }))),
   { tag: tags.keyword, color: 'var(--brand-accent, #0F766E)', fontWeight: '600' },
   { tag: tags.string, color: '#D2D8D5' },
   { tag: tags.comment, color: '#B3B9BC', fontStyle: 'italic' },
@@ -119,6 +126,29 @@ export const TypstCodeEditor = forwardRef<TypstCodeEditorHandle, TypstCodeEditor
 
   useImperativeHandle(ref, () => ({
     focus: () => viewRef.current?.focus(),
+    setHeading: (level) => {
+      const view = viewRef.current;
+      if (!view) return;
+      const line = view.state.doc.lineAt(view.state.selection.main.head);
+      const marker = /^\s*=+[ \t]+/.exec(line.text)?.[0] ?? '';
+      const prefix = '='.repeat(level) + ' ';
+      const title = line.text.slice(marker.length).trim() ? '' : 'Título';
+      const from = line.from + prefix.length;
+      view.dispatch({
+        changes: { from: line.from, to: line.from + marker.length, insert: prefix + title },
+        selection: title ? EditorSelection.range(from, from + title.length) : EditorSelection.cursor(from),
+        scrollIntoView: true,
+      });
+      view.focus();
+    },
+    goToLine: (number, column) => {
+      const view = viewRef.current;
+      if (!view) return;
+      const line = view.state.doc.line(Math.min(Math.max(number, 1), view.state.doc.lines));
+      const position = Math.min(line.to, line.from + Math.max(0, column - 1));
+      view.dispatch({ selection: EditorSelection.cursor(position), effects: EditorView.scrollIntoView(position, { y: 'center' }) });
+      view.focus();
+    },
     insert: (snippet) => {
       const view = viewRef.current;
       if (!view) return;

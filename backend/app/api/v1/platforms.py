@@ -1,6 +1,7 @@
 import calendar
 import json
 from datetime import date, datetime, timedelta, timezone
+from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -598,7 +599,7 @@ async def delete_platform_soft(
 @router.get("/{platform_id}/secret")
 async def get_single_secret(
     platform_id: str,
-    secret_type: str = Query("password", enum=["password", "pin", "api_key", "env_var"]),
+    secret_type: Literal["password", "pin", "api_key", "env_var"] = "password",
     item_id: str | None = None,
     db: AsyncSession = Depends(get_db)
 ):

@@ -1,15 +1,17 @@
 #!/usr/bin/env bash
-# Controles locales de CRM y C2; nunca borra volúmenes ni datos.
+# Entrada única para instalar, configurar y operar el CRM.
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")"
 
 if (( EUID == 0 )); then
-  echo 'Abre ./lessso con tu usuario habitual, sin sudo.' >&2
+  echo 'Ejecuta ./lessso con tu usuario habitual, sin sudo.' >&2
   exit 1
 fi
 
-prepare_installation() {
-  for dependency in python3 openssl docker; do
+RUNTIME_FILE=.env.runtime
+
+check_dependencies() {
+  for dependency in python3 openssl docker flock; do
     if ! command -v "$dependency" >/dev/null 2>&1; then
       echo "Falta $dependency. Instálalo antes de iniciar LESSSO." >&2
       return 1
@@ -23,158 +25,329 @@ prepare_installation() {
     echo 'Docker no está disponible para este usuario. Inicia Docker y comprueba sus permisos con docker info.' >&2
     return 1
   fi
-  python3 - <<'PY' || return 1
-from pathlib import Path
-import os, secrets
-path = Path('.env')
-existing = path.exists()
-if existing:
-    lines = path.read_text().splitlines()
-else:
-    lines = Path('.env.example').read_text().splitlines()
-original = list(lines)
-values = {'SERVER_SECRET_KEY': secrets.token_hex(32), 'POSTGRES_PASSWORD': secrets.token_hex(32),
-          'C2_WORKER_SECRET': secrets.token_hex(32), 'C2_SOCKET_GID': str(os.getgid())}
-for key, value in values.items():
-    matches = [i for i, line in enumerate(lines) if line.startswith(key + '=')]
-    if existing and key in ('SERVER_SECRET_KEY', 'POSTGRES_PASSWORD') and (
-        not matches or not lines[matches[0]].split('=', 1)[1].strip().strip('"\'')
-    ):
-        raise SystemExit(f'Falta {key} en .env. Configura el valor existente o retira ese archivo solo para una instalación nueva.')
-    if not matches:
-        lines.append(key + '=' + value)
-    elif not lines[matches[0]].split('=', 1)[1].strip().strip('"\''):
-        lines[matches[0]] = key + '=' + value
-if not existing or lines != original:
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, 'w') as file:
-        file.write('\n'.join(lines) + '\n')
-os.chmod(path, 0o600)
-PY
-  mkdir -p c2-runtime || return 1
-  chmod 750 c2-runtime || return 1
-  if [[ ! -f nginx/certs/local/ca.crt || ! -f nginx/certs/local/server.crt || ! -f nginx/certs/local/server.key ]]; then
-    ./scripts/generate_certs.sh || return 1
-  fi
 }
 
-prepare_c2() {
-  local c2_python="backend/.venv-c2/bin/python"
-  local import_check='import os, secrets; os.environ["C2_WORKER_SECRET"] = secrets.token_hex(32); from app.c2_worker import app; assert app'
-  if [[ ! -x "$c2_python" ]] ||
-     ! PYTHONPATH="$PWD/backend" \
-       "$c2_python" -c "$import_check" >/dev/null 2>&1; then
-    echo 'Preparando o reparando el entorno de C2 (dependencias del backend)...'
-    ./scripts/c2.sh setup || return 1
-  fi
+# Lee solo una variable simple de .env; no ejecuta ni muestra sus secretos.
+dotenv_value() {
+  python3 - "$1" "$2" <<'PY'
+import pathlib, sys
+key, filename = sys.argv[1:]
+path = pathlib.Path(filename)
+if path.exists():
+    for line in path.read_text(encoding='utf-8').splitlines():
+        line = line.strip()
+        if not line or line.startswith('#') or '=' not in line:
+            continue
+        name, value = line.split('=', 1)
+        if name.strip() == key:
+            value = value.strip()
+            if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+                value = value[1:-1]
+            print(value)
+            break
+PY
+}
 
-  if ! PYTHONPATH="$PWD/backend" \
-    "$c2_python" -c "$import_check" >/dev/null 2>&1; then
-    echo 'El entorno de C2 sigue incompleto después de instalar las dependencias. Revisa el error de instalación y backend/requirements.txt.' >&2
+is_free() {
+  python3 - "$HOST_BIND_IP" "$1" <<'PY'
+import socket, sys
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+try:
+    s.bind((sys.argv[1], int(sys.argv[2])))
+except OSError:
+    sys.exit(1)
+finally:
+    s.close()
+PY
+}
+
+is_ours() {
+  local mapping container_port
+  for container_port in 80 443; do
+    mapping="$(docker compose port proxy "$container_port" 2>/dev/null)" || continue
+    [[ "$mapping" == "$HOST_BIND_IP:$1" ]] && return 0
+  done
+  return 1
+}
+
+# Puertos bloqueados para HTTP(S) por Fetch; también se comprueban al
+# recuperar valores guardados o generados automáticamente.
+browser_safe_port() {
+  [[ "$1" =~ ^[0-9]{1,5}$ ]] || return 1
+  local port=$((10#$1))
+  (( port >= 1 && port <= 65535 )) || return 1
+  case "$port" in
+    1|7|9|11|13|15|17|19|20|21|22|23|25|37|42|43|53|69|77|79|87|95|101|102|103|104|109|110|111|113|115|117|119|123|135|137|139|143|161|179|389|427|465|512|513|514|515|526|530|531|532|540|548|554|556|563|587|601|636|989|990|993|995|1719|1720|1723|2049|3659|4045|4190|5060|5061|6000|6566|6665|6666|6667|6668|6669|6679|6697|10080) return 1 ;;
+  esac
+}
+
+report_start_failure() {
+  echo 'No se pudo construir o iniciar LESSSO. Estado de los servicios:' >&2
+  "${compose[@]}" ps -a >&2 || true
+  echo 'Últimos logs de los servicios:' >&2
+  "${compose[@]}" logs --tail=40 >&2 || true
+}
+
+wait_for_compose_services() {
+  local services service ids id details state health pending deadline
+  local -a targets=("$@")
+  if (( ${#targets[@]} )); then
+    services="$(printf '%s\n' "${targets[@]}")"
+  else
+    services="$("${compose[@]}" config --services)" || return 1
+  fi
+  [[ -n "$services" ]] || return 1
+  deadline=$((SECONDS + 180))
+
+  while (( SECONDS < deadline )); do
+    pending=false
+    while IFS= read -r service; do
+      [[ -n "$service" ]] || continue
+      ids="$("${compose[@]}" ps --all --quiet "$service")" || return 1
+      if [[ -z "$ids" ]]; then
+        pending=true
+        continue
+      fi
+
+      while IFS= read -r id; do
+        [[ -n "$id" ]] || continue
+        details="$(docker inspect --format '{{.State.Status}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$id" 2>/dev/null)" || {
+          pending=true
+          continue
+        }
+        IFS='|' read -r state health <<< "$details"
+        case "$state" in
+          running)
+            case "$health" in
+              healthy|none) ;;
+              *) pending=true ;;
+            esac
+            ;;
+          exited|dead)
+            echo "El contenedor del servicio ${service} terminó con estado ${state}." >&2
+            return 1
+            ;;
+          *) pending=true ;;
+        esac
+      done <<< "$ids"
+    done <<< "$services"
+
+    if ! $pending; then return 0; fi
+    sleep 2
+  done
+  echo 'Los servicios no quedaron sanos dentro del límite de 180 segundos.' >&2
+  return 1
+}
+
+lock_project() {
+  exec 9>>"$RUNTIME_FILE.lock" || return 1
+  if ! flock -n 9; then
+    echo 'Hay otra operación de LESSSO en curso. Espera a que termine.' >&2
     return 1
   fi
 }
 
-session() (
-  local before after service
-  local startup_finished=0
-  local -a started=()
-  before="$(docker compose ps --services --filter status=running)" || exit 1
-  capture_started() {
-    if ! after="$(docker compose ps --services --filter status=running)"; then
-      echo 'No se pudo comprobar qué servicios cerrar; revisa docker compose ps.' >&2
+require_installation() {
+  if [[ ! -f .env ]]; then
+    echo 'Falta .env. Elige Instalación inicial en el menú.' >&2
+    return 1
+  fi
+}
+
+read_connection() {
+  PORT="${PORT:-$(dotenv_value PORT "$RUNTIME_FILE")}"
+  PORT="${PORT:-$(dotenv_value PORT .env)}"
+  PORT="${PORT:-8080}"
+  HTTPS_PORT="${HTTPS_PORT:-$(dotenv_value HTTPS_PORT "$RUNTIME_FILE")}"
+  HTTPS_PORT="${HTTPS_PORT:-$(dotenv_value HTTPS_PORT .env)}"
+  HTTPS_PORT="${HTTPS_PORT:-8443}"
+  HOST_BIND_IP="${HOST_BIND_IP:-$(dotenv_value HOST_BIND_IP "$RUNTIME_FILE")}"
+  HOST_BIND_IP="${HOST_BIND_IP:-$(dotenv_value HOST_BIND_IP .env)}"
+  HOST_BIND_IP="${HOST_BIND_IP:-127.0.0.1}"
+  export PORT HTTPS_PORT HOST_BIND_IP
+}
+
+save_connection() (
+  umask 077
+  local staged
+  staged="$(mktemp "${RUNTIME_FILE}.XXXXXX")" || exit 1
+  trap 'rm -f -- "$staged"' EXIT
+  printf 'PORT=%s\nHTTPS_PORT=%s\nHOST_BIND_IP=%s\n' "$PORT" "$HTTPS_PORT" "$HOST_BIND_IP" > "$staged" &&
+    mv -f -- "$staged" "$RUNTIME_FILE"
+)
+
+validate_connection() {
+  local port
+  if ! python3 scripts/lan_address.py --validate "$HOST_BIND_IP"; then
+    echo 'Elige una IP asignada a este equipo en Configuración.' >&2
+    return 1
+  fi
+  for port in "$PORT" "$HTTPS_PORT"; do
+    if ! browser_safe_port "$port"; then
+      echo "Puerto inválido o bloqueado por el navegador: $port." >&2
       return 1
     fi
-    while IFS= read -r service; do
-      [[ -n "$service" ]] || continue
-      if ! printf '%s\n' "$before" | grep -Fxq "$service"; then started+=("$service"); fi
-    done <<< "$after"
-  }
-  cleanup_session() {
-    local exit_status=$?
-    trap - EXIT
-    if (( ! startup_finished )); then
-      capture_started || return 1
-    fi
-    if ((${#started[@]})); then
-      echo 'Cerrando los servicios iniciados por esta sesión...'
-      docker compose stop "${started[@]}" || return 1
-    else
-      echo 'Los servicios ya estaban abiertos; permanecen activos.'
-    fi
-    return "$exit_status"
-  }
-  trap cleanup_session EXIT
-  trap 'exit 130' INT TERM HUP
-  if [[ ${1:-crm} == demo ]]; then
-    prepare_c2 || exit 1
+  done
+  PORT="$((10#$PORT))"
+  HTTPS_PORT="$((10#$HTTPS_PORT))"
+  if [[ "$PORT" == "$HTTPS_PORT" ]]; then
+    echo 'HTTP y HTTPS necesitan puertos diferentes.' >&2
+    return 1
   fi
-  ./scripts/up.sh || exit 1
-  capture_started || exit 1
-  startup_finished=1
-  if [[ ${1:-crm} == demo ]]; then
-    ./scripts/c2.sh demo
-  else
-    echo 'Sesión abierta. Pulsa Intro o Ctrl+C para cerrarla.'
-    read -r || true
+  for port in "$PORT" "$HTTPS_PORT"; do
+    if ! is_free "$port" && ! is_ours "$port"; then
+      echo "El puerto $port está ocupado. Elige otro en Configuración." >&2
+      return 1
+    fi
+  done
+}
+
+ensure_certificate() {
+  local certs=nginx/certs/local
+  CERT_RENEWED=false
+  if [[ -s "$certs/server.key" ]] &&
+     openssl verify -verify_ip "$HOST_BIND_IP" -CAfile "$certs/ca.crt" "$certs/server.crt" >/dev/null 2>&1; then
+    return 0
+  fi
+  ./scripts/generate_certs.sh || return 1
+  CERT_RENEWED=true
+}
+
+install_crm() (
+  check_dependencies && lock_project || exit 1
+  if [[ ! -e .env && ! -L .env ]]; then
+    # Never generate new keys over a checkout whose containers still exist.
+    local existing
+    existing="$(docker ps -aq --filter "label=com.docker.compose.project.working_dir=$PWD")" || exit 1
+    if [[ -n "$existing" || -e "$RUNTIME_FILE" ]] ||
+       docker volume inspect "${POSTGRES_VOLUME_NAME:-emailsaver_postgres_data}" >/dev/null 2>&1; then
+      echo 'Hay datos o configuración de una instalación anterior. Recupera el .env original antes de continuar.' >&2
+      exit 1
+    fi
+    python3 - <<'PYENV' || exit 1
+from pathlib import Path
+import os
+import secrets
+
+template = Path(".env.example").read_text(encoding="utf-8")
+for key in ("SERVER_SECRET_KEY", "POSTGRES_PASSWORD"):
+    template = template.replace(f"\n{key}=\n", f"\n{key}={secrets.token_hex(32)}\n", 1)
+fd = os.open(".env", os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+with os.fdopen(fd, "w", encoding="utf-8") as target:
+    target.write(template)
+PYENV
+  fi
+
+  read_connection
+  docker compose config --quiet || exit 1
+  mkdir -p -m 750 c2-runtime || exit 1
+
+  # A running proxy loads certificates at startup. Defer renewal to start_crm.
+  local proxy
+  proxy="$(docker compose ps --filter status=running --quiet proxy)" || exit 1
+  if [[ -z "$proxy" ]]; then
+    ensure_certificate || exit 1
+  fi
+  echo 'Configuración y dependencias listas. Elige un modo en Inicio para construir y levantar los servicios.'
+)
+
+configure_connection() (
+  check_dependencies && require_installation && lock_project || exit 1
+  read_connection
+  echo 'Direcciones privadas disponibles (127.0.0.1 limita el acceso a este equipo):'
+  python3 scripts/lan_address.py --list || exit 1
+  local ip http https
+  read -r -p "Dirección IPv4 [$HOST_BIND_IP]: " ip || exit 1
+  read -r -p "Puerto HTTP [$PORT]: " http || exit 1
+  read -r -p "Puerto HTTPS [$HTTPS_PORT]: " https || exit 1
+  HOST_BIND_IP="${ip:-$HOST_BIND_IP}"
+  PORT="${http:-$PORT}"
+  HTTPS_PORT="${https:-$HTTPS_PORT}"
+  validate_connection && save_connection || exit 1
+  echo "Configuración guardada. Se aplicará al elegir un modo en Inicio."
+)
+
+start_crm() (
+  local mode="$1"
+  check_dependencies && require_installation && lock_project || exit 1
+  read_connection
+  local -a compose=(docker compose)
+  if [[ "$mode" == desarrollo ]]; then
+    compose+=(-f docker-compose.yml -f docker-compose.dev.yml)
+  fi
+  "${compose[@]}" config --quiet || exit 1
+  validate_connection && ensure_certificate || exit 1
+  mkdir -p -m 750 c2-runtime || exit 1
+
+  local -a args=(up -d --build)
+  local help native_wait=false
+  help="$("${compose[@]}" up --help 2>&1)" || exit 1
+  if grep -Eq -- '(^|[[:space:],])--wait([[:space:],]|$)' <<< "$help" &&
+     grep -Eq -- '(^|[[:space:],])--wait-timeout([[:space:],]|$)' <<< "$help"; then
+    args+=(--wait --wait-timeout 180)
+    native_wait=true
+  fi
+  if ! "${compose[@]}" "${args[@]}" || { ! $native_wait && ! wait_for_compose_services; }; then
+    report_start_failure
+    exit 1
+  fi
+  if $CERT_RENEWED && ! { "${compose[@]}" restart proxy && wait_for_compose_services proxy; }; then
+    report_start_failure
+    exit 1
+  fi
+
+  save_connection || exit 1
+  printf '\nCRM en modo %s\n  HTTP:  http://%s:%s\n  HTTPS: https://%s:%s\n' \
+    "$mode" "$HOST_BIND_IP" "$PORT" "$HOST_BIND_IP" "$HTTPS_PORT"
+  if [[ "$HOST_BIND_IP" != 127.0.0.1 ]]; then
+    echo 'Para acceder desde otro equipo, instala nginx/certs/local/ca.crt como autoridad de confianza.'
   fi
 )
 
+manage_crm() (
+  check_dependencies && require_installation || exit 1
+  read_connection
+  if [[ "$1" == stop ]]; then lock_project || exit 1; fi
+  docker compose "$1"
+)
+
 config_menu() {
-  printf '\nConfiguración\n1) Elegir puertos e iniciar CRM\n2) Elegir acceso local o de red e iniciar CRM\n3) Ver estado del CRM\n4) Detener CRM\n0) Volver\n\n'
   local choice
-  read -r -p 'Elige una opción: ' choice || return 0
+  printf '\nConfiguración\n1) Cambiar IP y puertos\n2) Ver estado\n3) Detener CRM\n0) Volver\n'
+  read -r -p 'Opción: ' choice || return 0
   case "$choice" in
-    1) prepare_installation && ./scripts/up.sh --choose-ports ;;
-    2) prepare_installation && ./scripts/up.sh --choose-address ;;
-    3) docker compose ps ;;
-    4) docker compose stop ;;
+    1) configure_connection ;;
+    2) manage_crm ps ;;
+    3) manage_crm stop ;;
     0) return 0 ;;
     *) echo 'Opción no válida.' ;;
   esac
 }
 
 start_menu() {
-  printf '\nInicio\n1) CRM (normal)\n2) CRM con C2 (demostración)\n3) CRM con C2 (real)\n4) CRM en desarrollo (recarga automática)\n5) CRM con C2 (demostración) en desarrollo\n6) CRM temporal (se apaga al terminar)\n0) Volver\n\n'
   local choice
-  read -r -p 'Elige una opción: ' choice || return 0
+  printf '\nInicio\n1) CRM estable\n2) CRM en desarrollo (recarga automática)\n0) Volver\n'
+  read -r -p 'Opción: ' choice || return 0
   case "$choice" in
-    1|'') prepare_installation && ./scripts/up.sh || echo 'El CRM no pudo iniciarse.' ;;
-    2) prepare_installation && session demo || echo 'La sesión de demostración se cerró o no pudo iniciarse.' ;;
-    3)
-      if ! prepare_installation; then
-        echo 'No se pudo preparar el CRM. Revisa el error indicado arriba.' >&2
-      elif ! prepare_c2; then
-        echo 'No se pudo preparar C2; el CRM no se inició.' >&2
-      elif ! ./scripts/up.sh; then
-        echo 'No se pudo iniciar el CRM; C2 no se inició.' >&2
-      elif ! ./scripts/c2.sh start; then
-        echo 'El CRM quedó activo, pero C2 no se inició. Revisa el error de permisos o dependencias indicado arriba.' >&2
-      fi
-      ;;
-    4) prepare_installation && ./scripts/up.sh --development || echo 'El CRM no pudo iniciarse en modo desarrollo.' ;;
-    5)
-      prepare_installation && prepare_c2 && ./scripts/up.sh --development && ./scripts/c2.sh demo ||
-        echo 'No se pudo iniciar el CRM con C2 en modo desarrollo.'
-      ;;
-    6) prepare_installation && session || echo 'La sesión del CRM se cerró o no pudo iniciarse.' ;;
+    1) start_crm estable ;;
+    2) start_crm desarrollo ;;
     0) return 0 ;;
     *) echo 'Opción no válida.' ;;
   esac
 }
 
-if [[ ! -t 0 ]]; then
-  echo 'Ejecuta ./lessso en una terminal para abrir el menú.'
-  exit 0
+if [[ $# != 0 || ! -t 0 ]]; then
+  echo 'Ejecuta ./lessso sin argumentos en una terminal para abrir el menú.'
+  exit 1
 fi
 while true; do
-  printf '\nLESSSO\n\n1) Instalación (./instalacion)\n2) Configuración (puertos, IPs, estado)\n3) Inicio (CRM, C2, desarrollo)\n0) Salir\n\n'
-  read -r -p 'Elige una opción: ' choice || exit 0
+  printf '\nLESSSO\n1) Instalación inicial\n2) Configuración\n3) Inicio\n0) Salir\n'
+  read -r -p 'Opción: ' choice || break
   case "$choice" in
-    1) ./instalacion || echo 'La instalación no pudo completarse.' ;;
-    2) config_menu || echo 'No se pudo completar la acción.' ;;
-    3|'') start_menu || echo 'No se pudo iniciar.' ;;
-    0) exit 0 ;;
+    1) install_crm ;;
+    2) config_menu ;;
+    3) start_menu ;;
+    0) break ;;
     *) echo 'Opción no válida.' ;;
-  esac
+  esac || echo 'La operación no terminó. Revisa el mensaje anterior.' >&2
 done

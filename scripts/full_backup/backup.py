@@ -32,6 +32,7 @@ ALLOWED_DEPLOYMENT_DIRECTORIES = (
     "backend/migrations",
     "backend/tests",
     "frontend/src",
+    "frontend/scripts",
     "frontend/public",
     "frontend/tests",
     "docs",
@@ -39,6 +40,7 @@ ALLOWED_DEPLOYMENT_DIRECTORIES = (
 ALLOWED_DEPLOYMENT_FILES = frozenset(
     {
         "docker-compose.yml",
+        "lessso",
         "docker-compose.dev.yml",
         ".env.example",
         "README.md",
@@ -105,7 +107,7 @@ EXCLUDED_SOURCE_SUFFIXES = frozenset(
     }
 )
 SOURCE_TEXT_SUFFIXES = frozenset(
-    {".py", ".js", ".jsx", ".ts", ".tsx", ".json", ".html", ".css", ".svg", ".txt", ".yaml", ".yml", ".toml", ".ini", ".conf", ".template", ".sh", ".md", ".rst", ".example"}
+    {".py", ".js", ".mjs", ".jsx", ".ts", ".tsx", ".json", ".html", ".css", ".svg", ".txt", ".yaml", ".yml", ".toml", ".ini", ".conf", ".template", ".sh", ".md", ".rst", ".example"}
 )
 SENSITIVE_SOURCE_PATTERNS = (
     ("private-key block", re.compile(b"-----BEGIN " + rb"(?:RSA |EC |OPENSSH )?" + b"PRIVATE KEY-----")),
@@ -212,7 +214,9 @@ def _is_forbidden_env_path(value: str, is_directory: bool = False) -> bool:
 
 
 def _check_source_for_embedded_secrets(path: Path, archive_path: str) -> None:
-    if archive_path.startswith("deployment/nginx/certs/") or path.suffix.lower() not in SOURCE_TEXT_SUFFIXES:
+    if archive_path.startswith("deployment/nginx/certs/"):
+        return
+    if path.name != "lessso" and path.suffix.lower() not in SOURCE_TEXT_SUFFIXES:
         return
     raw = path.read_bytes()
     for label, pattern in SENSITIVE_SOURCE_PATTERNS:

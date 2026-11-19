@@ -5,6 +5,9 @@ export interface TypstDocumentTemplate {
   source: string;
 }
 
+export const TYPST_HEADING_HIERARCHY =
+  '#show heading: it => pad(left: (it.level - 1) * 0.55em)[#it]';
+
 const pageSetup = `#set page(
   paper: "a4",
   margin: (x: 2.2cm, y: 2.2cm),
@@ -15,6 +18,7 @@ const pageSetup = `#set page(
   lang: "es",
 )
 #set heading(numbering: "1.1")
+${TYPST_HEADING_HIERARCHY}
 
 `;
 

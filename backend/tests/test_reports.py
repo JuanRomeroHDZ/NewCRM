@@ -298,7 +298,7 @@ async def test_report_canvas_asset_is_resolved_for_preview(client, auth_token, m
     created = await client.post(
         "/api/v1/reports/canvases",
         headers=headers,
-        json={"title": "Diagrama guardado", "svg_snapshot": "<svg><path d='M0 0'/></svg>"},
+        json={"title": "Diagrama guardado", "element_count": 1, "svg_snapshot": "<svg><path d='M0 0'/></svg>"},
     )
     assert created.status_code == 201
     canvas_id = created.json()["id"]
@@ -319,3 +319,22 @@ async def test_report_canvas_asset_is_resolved_for_preview(client, auth_token, m
     assert compiled.json()["ok"] is True
     assert f"canvas_{canvas_id}.svg" in captured["source"]
     assert captured["extra_files"][f"canvas_{canvas_id}.svg"].startswith(b"<svg>")
+
+
+@pytest.mark.asyncio
+async def test_report_rejects_legacy_snapshot_for_empty_canvas(client, auth_token):
+    headers = {"X-Vault-Token": auth_token}
+    created = await client.post(
+        "/api/v1/reports/canvases",
+        headers=headers,
+        json={"title": "Lienzo vacío", "element_count": 0, "svg_snapshot": "<svg/>"},
+    )
+    assert created.status_code == 201
+    canvas_id = created.json()["id"]
+    preview = await client.post(
+        "/api/v1/reports/documents/compile",
+        headers=headers,
+        json={"source": f'#image("canvas://{canvas_id}")'},
+    )
+    assert preview.status_code == 422
+    assert "está vacío" in preview.json()["detail"]
