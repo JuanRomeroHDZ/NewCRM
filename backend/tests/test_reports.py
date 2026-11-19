@@ -231,7 +231,7 @@ Texto al final de la tabla para verificar el flujo de páginas.
         ["pdftotext", str(pdf_path), "-"], check=True, capture_output=True, text=True
     ).stdout
     assert "Informe de integración Typst" in extracted
-    assert "H-42" in extracted
+    assert all(f"H-{index:02d}" in extracted for index in range(1, 43))
     assert "Texto al final de la tabla" in extracted
     assert extracted.count("Severidad") >= 2
 
@@ -239,6 +239,28 @@ Texto al final de la tabla para verificar el flujo de páginas.
         ["pdfimages", "-list", str(pdf_path)], check=True, capture_output=True, text=True
     ).stdout
     assert "image" in images.lower()
+
+    # The image is raster, but the canvas stays vector in the PDF. Verify that
+    # Poppler actually renders both source colors in their expected vertical order.
+    rendered = tmp_path / "first-page"
+    subprocess.run(
+        ["pdftoppm", "-f", "1", "-l", "1", "-singlefile", "-r", "72", "-png", str(pdf_path), str(rendered)],
+        check=True, capture_output=True,
+    )
+    with Image.open(rendered.with_suffix(".png")) as page:
+        page = page.convert("RGB")
+        center_column = [page.getpixel((page.width // 2, y)) for y in range(page.height)]
+        def rows_matching(color):
+            # Image optimization can round a color channel before export.
+            return [
+                y for y, pixel in enumerate(center_column)
+                if max(abs(actual - expected) for actual, expected in zip(pixel, color)) <= 5
+            ]
+
+        raster_rows = rows_matching((45, 92, 135))
+        canvas_rows = rows_matching((15, 118, 110))
+        assert len(raster_rows) > 20 and len(canvas_rows) > 20
+        assert max(raster_rows) < min(canvas_rows)
 
     html = await client.post(
         f"/api/v1/reports/documents/{doc_id}/export?format=html",
@@ -372,7 +394,8 @@ async def test_report_recovery_is_encrypted_and_can_be_restored(client, auth_tok
 
 
 @pytest.mark.asyncio
-async def test_report_image_asset_is_encrypted_and_resolved_for_preview(client, auth_token, monkeypatch):
+@pytest.mark.parametrize("source_format", ["PNG", "AVIF"])
+async def test_report_image_asset_is_encrypted_and_resolved_for_preview(client, auth_token, monkeypatch, source_format):
     headers = {"X-Vault-Token": auth_token}
     created = await client.post(
         "/api/v1/reports/documents",
@@ -383,11 +406,12 @@ async def test_report_image_asset_is_encrypted_and_resolved_for_preview(client, 
     doc_id = created.json()["id"]
 
     image_bytes = BytesIO()
-    Image.new("RGB", (2, 2), (32, 64, 96)).save(image_bytes, format="PNG")
+    Image.new("RGB", (2, 2), (32, 64, 96)).save(image_bytes, format=source_format)
+    extension = source_format.lower()
     uploaded = await client.post(
         f"/api/v1/reports/documents/{doc_id}/assets",
         headers=headers,
-        files={"file": ("captura.png", image_bytes.getvalue(), "image/png")},
+        files={"file": (f"captura.{extension}", image_bytes.getvalue(), f"image/{extension}")},
     )
     assert uploaded.status_code == 201, uploaded.text
     asset = uploaded.json()
@@ -401,6 +425,10 @@ async def test_report_image_asset_is_encrypted_and_resolved_for_preview(client, 
     )
     assert fetched.status_code == 200
     assert fetched.headers["cache-control"] == "no-store"
+    assert fetched.headers["content-type"] == "image/webp"
+    if source_format == "PNG":
+        with Image.open(BytesIO(fetched.content)) as decoded:
+            assert decoded.getpixel((0, 0)) == (32, 64, 96)
 
     captured = {}
 

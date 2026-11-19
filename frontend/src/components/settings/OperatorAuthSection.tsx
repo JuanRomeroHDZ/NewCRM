@@ -3,14 +3,15 @@ import {
   UserCheck, ShieldCheck, KeyRound, LogOut, UserPlus, Users, Unlock,
   Copy, Check, Search, AlertTriangle, RefreshCw, X, Eye, EyeOff
 } from 'lucide-react';
-import { api, getApiUserToken, setApiUserToken } from '../../lib/api';
+import { api, getApiUserToken, setApiUserToken, useBrowserAccountSession } from '../../lib/api';
 import { CoreUser, CoreUserRole, TotpSetupResponse } from '../../types';
 import { useVault } from '../../context/VaultContext';
-import { INPUT_LIMITS, isValidEmail } from '../../lib/validation';
+import { INPUT_LIMITS, isAccountPasswordStrong, isValidEmail } from '../../lib/validation';
 
 const ROLE_LABELS: Record<CoreUserRole, string> = {
   owner: 'Propietario',
   business_admin: 'Administrador',
+  operator: 'Operador',
   seller: 'Ventas',
   readonly: 'Solo Lectura',
 };
@@ -166,7 +167,7 @@ export const OperatorAuthSection: React.FC = () => {
         password: loginPassword,
         ...(loginTotp.trim() ? { totp_code: loginTotp.trim() } : {}),
       });
-      setApiUserToken(res.token);
+      useBrowserAccountSession(res.token);
       setCurrentUser(res.user);
       setSessionError(null);
       setLoginError(null);
@@ -186,8 +187,8 @@ export const OperatorAuthSection: React.FC = () => {
   const handleBootstrapAccount = async (event: React.FormEvent) => {
     event.preventDefault();
     setBootstrapError(null);
-    if (!/^[a-zA-Z0-9._-]{3,64}$/.test(bootstrapUsername.trim())) {
-      setBootstrapError('El usuario debe tener entre 3 y 64 caracteres: letras, números, punto, guion o guion bajo.');
+    if (!/^[a-zA-Z0-9._-]{12,64}$/.test(bootstrapUsername.trim()) || !/[._-]/.test(bootstrapUsername)) {
+      setBootstrapError('Usa de 12 a 64 caracteres para el usuario, con al menos un punto, guion o guion bajo.');
       return;
     }
     if (!isValidEmail(bootstrapEmail.trim())) {
@@ -198,8 +199,8 @@ export const OperatorAuthSection: React.FC = () => {
       setBootstrapError('Ingresa tu nombre completo.');
       return;
     }
-    if (bootstrapPassword.length < 12 || bootstrapPassword.length > INPUT_LIMITS.PASSWORD) {
-      setBootstrapError('Usa una contraseña de 12 a 256 caracteres.');
+    if (!isAccountPasswordStrong(bootstrapPassword) || bootstrapPassword.length > INPUT_LIMITS.PASSWORD) {
+      setBootstrapError('Usa al menos 15 caracteres e incluye un símbolo.');
       return;
     }
     if (bootstrapPassword !== bootstrapPasswordConfirm) {
@@ -215,7 +216,7 @@ export const OperatorAuthSection: React.FC = () => {
         full_name: bootstrapFullName.trim(),
         password: bootstrapPassword,
       });
-      setApiUserToken(response.token);
+      useBrowserAccountSession(response.token);
       setCurrentUser(response.user);
       setBootstrapPassword('');
       setBootstrapPasswordConfirm('');
@@ -234,23 +235,23 @@ export const OperatorAuthSection: React.FC = () => {
     try {
       await api.userLogout();
     } catch {
-      // Ignore network errors while clearing local operator token
-    } finally {
-      setApiUserToken(null);
-      setCurrentUser(null);
-      setUsersList([]);
-      setUsersError(null);
-      setSessionError(null);
-      setTotpSetupData(null);
-      setCreatedTempPassword(null);
-      showToast('Sesión operativa cerrada.', 'info');
+      showToast('No se pudo cerrar la sesión en el servidor. Vuelve a intentarlo.', 'error');
+      return;
     }
+    setApiUserToken(null);
+    setCurrentUser(null);
+    setUsersList([]);
+    setUsersError(null);
+    setSessionError(null);
+    setTotpSetupData(null);
+    setCreatedTempPassword(null);
+    showToast('Sesión operativa cerrada.', 'info');
   };
 
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!currentPwd || newPwd.length < 8) {
-      showToast('Ingresa tu contraseña actual y una nueva de al menos 8 caracteres.', 'error');
+    if (!currentPwd || !isAccountPasswordStrong(newPwd)) {
+      showToast('Ingresa tu contraseña actual y una nueva de al menos 15 caracteres con un símbolo.', 'error');
       return;
     }
     setPwdLoading(true);
@@ -265,6 +266,7 @@ export const OperatorAuthSection: React.FC = () => {
       setPwdTotp('');
       showToast('Contraseña actualizada correctamente.', 'success');
       await refreshOperatorSession();
+      window.dispatchEvent(new Event('lessso-user-session-changed'));
     } catch (err: any) {
       showToast(err.message || 'No se pudo cambiar la contraseña.', 'error');
     } finally {
@@ -273,8 +275,8 @@ export const OperatorAuthSection: React.FC = () => {
   };
 
   const handleStart2FA = async () => {
-    if (currentUser?.is_totp_enabled && !totpConfirmPwd) {
-      showToast('Confirma tu contraseña actual para regenerar tu secreto 2FA.', 'error');
+    if (!totpConfirmPwd) {
+      showToast('Confirma tu contraseña actual para configurar 2FA.', 'error');
       return;
     }
     setTotpLoading(true);
@@ -567,7 +569,7 @@ export const OperatorAuthSection: React.FC = () => {
                   <input
                     required
                     autoComplete="username"
-                    minLength={3}
+                    minLength={12}
                     maxLength={64}
                     value={bootstrapUsername}
                     onChange={(event) => setBootstrapUsername(event.target.value)}
@@ -604,7 +606,7 @@ export const OperatorAuthSection: React.FC = () => {
                     required
                     type="password"
                     autoComplete="new-password"
-                    minLength={12}
+                    minLength={15}
                     maxLength={INPUT_LIMITS.PASSWORD}
                     value={bootstrapPassword}
                     onChange={(event) => setBootstrapPassword(event.target.value)}
@@ -617,7 +619,7 @@ export const OperatorAuthSection: React.FC = () => {
                     required
                     type="password"
                     autoComplete="new-password"
-                    minLength={12}
+                    minLength={15}
                     maxLength={INPUT_LIMITS.PASSWORD}
                     value={bootstrapPasswordConfirm}
                     onChange={(event) => setBootstrapPasswordConfirm(event.target.value)}
@@ -626,6 +628,27 @@ export const OperatorAuthSection: React.FC = () => {
                 </label>
                 <p className="text-[11px] leading-relaxed text-obsidian-muted sm:col-span-2">
                   Esta cuenta se crea una sola vez. Para añadir más personas después, se requiere una cuenta autorizada.
+                </p>
+                <div className="flex flex-wrap gap-2 sm:col-span-2">
+                  <button type="button" className="ui-action-secondary" onClick={() => {
+                    const password = crypto.randomUUID().replace(/-/g, '').slice(0, 22) + '!';
+                    setBootstrapPassword(password);
+                    setBootstrapPasswordConfirm(password);
+                  }}>Generar contraseña temporal</button>
+                  <button type="button" className="ui-action-secondary" disabled={!bootstrapPassword}
+                    onClick={async () => {
+                      try {
+                        await navigator.clipboard.writeText(bootstrapPassword);
+                        showToast('Contraseña temporal copiada.', 'success');
+                      } catch {
+                        showToast('No se pudo copiar al portapapeles.', 'error');
+                      }
+                    }}>
+                    <Copy size={16} aria-hidden="true" /> Copiar
+                  </button>
+                </div>
+                <p className="text-xs leading-relaxed text-obsidian-muted sm:col-span-2">
+                  Guarda la contraseña temporal para confirmar el cambio obligatorio. Puedes generar una o escribir la tuya.
                 </p>
                 {bootstrapError && <p role="alert" className="text-xs text-rose-300 sm:col-span-2">{bootstrapError}</p>}
                 {/* [Acción principal] Crear la cuenta inicial al terminar el formulario. */}
@@ -715,7 +738,7 @@ export const OperatorAuthSection: React.FC = () => {
                   value={newPwd}
                   onChange={(e) => setNewPwd(e.target.value)}
                   maxLength={INPUT_LIMITS.PASSWORD}
-                  placeholder="Nueva contraseña (mín. 8 caracteres)"
+                  placeholder="Nueva contraseña (mín. 15 caracteres y un símbolo)"
                   className="w-full min-h-[44px] px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-obsidian-accent"
                 />
               </div>
@@ -754,10 +777,10 @@ export const OperatorAuthSection: React.FC = () => {
                 <ShieldCheck size={16} className="text-obsidian-muted" aria-hidden="true" />
                 <span>Verificación en dos pasos (2FA)</span>
               </div>
-              {currentUser.is_totp_enabled && (
+              {!currentUser.must_change_password && (
                 <div>
                   <label htmlFor="op-totp-confirm-pwd" className="sr-only">
-                    Contraseña actual para rotar 2FA
+                    Contraseña actual para configurar 2FA
                   </label>
                   <input
                     id="op-totp-confirm-pwd"
@@ -766,7 +789,7 @@ export const OperatorAuthSection: React.FC = () => {
                     value={totpConfirmPwd}
                     onChange={(e) => setTotpConfirmPwd(e.target.value)}
                     maxLength={INPUT_LIMITS.PASSWORD}
-                    placeholder="Contraseña actual para rotar 2FA"
+                    placeholder="Contraseña actual para configurar 2FA"
                     className="w-full min-h-[44px] px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-obsidian-accent"
                   />
                 </div>
@@ -775,7 +798,7 @@ export const OperatorAuthSection: React.FC = () => {
               <button
                 type="button"
                 onClick={handleStart2FA}
-                disabled={totpLoading}
+                disabled={totpLoading || currentUser.must_change_password || !totpConfirmPwd}
                 className="ui-action-secondary"
               >
                 {currentUser.is_totp_enabled ? 'Regenerar secreto 2FA' : 'Configurar 2FA'}
@@ -908,10 +931,9 @@ export const OperatorAuthSection: React.FC = () => {
                     onChange={(e) => setNewRole(e.target.value as CoreUserRole)}
                     className="w-full min-h-11 px-3 py-2 rounded-lg bg-obsidian-bg border border-obsidian-border text-white text-xs focus:outline-none focus:border-obsidian-accent"
                   >
-                    <option value="seller">Ventas</option>
-                    <option value="business_admin">Administrador</option>
-                    <option value="readonly">Solo Lectura</option>
-                    <option value="owner">Propietario</option>
+                    {Object.entries(ROLE_LABELS).map(([role, label]) => (
+                      <option key={role} value={role}>{label}</option>
+                    ))}
                   </select>
                 </div>
                 {/* [Acción principal] Crear una cuenta con los permisos elegidos. */}
@@ -995,10 +1017,9 @@ export const OperatorAuthSection: React.FC = () => {
                             onChange={(e) => handleUpdateUser(u.id, { role: e.target.value as CoreUserRole })}
                             className="min-h-[44px] px-3 py-2 rounded bg-obsidian-bg border border-obsidian-border text-white text-[11px] disabled:opacity-50"
                           >
-                            <option value="owner">Propietario</option>
-                            <option value="business_admin">Administrador</option>
-                            <option value="seller">Ventas</option>
-                            <option value="readonly">Solo Lectura</option>
+                            {Object.entries(ROLE_LABELS).map(([role, label]) => (
+                              <option key={role} value={role}>{label}</option>
+                            ))}
                           </select>
                           {/* [Estado seleccionable] Cambia si la cuenta puede iniciar sesión. */}
                           <button

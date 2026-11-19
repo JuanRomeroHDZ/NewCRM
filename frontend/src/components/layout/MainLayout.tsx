@@ -21,7 +21,7 @@ function getAccentTextColor(color: string): string {
 }
 
 export const MainLayout: React.FC = () => {
-  const { accentColor, selectedEntity, isSetup, setActiveSection } = useVault();
+  const { accentColor, selectedEntity, operator, closeInspector, isSetup, setActiveSection } = useVault();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const menuTriggerRef = useRef<HTMLButtonElement>(null);
   const wasMobileNavOpen = useRef(false);
@@ -46,6 +46,10 @@ export const MainLayout: React.FC = () => {
     if (wasMobileNavOpen.current && !mobileNavOpen) menuTriggerRef.current?.focus();
     wasMobileNavOpen.current = mobileNavOpen;
   }, [mobileNavOpen]);
+
+  useEffect(() => {
+    if (!operator || operator.must_change_password) closeInspector();
+  }, [operator, closeInspector]);
 
   return (
     <C2Provider>
@@ -78,7 +82,7 @@ export const MainLayout: React.FC = () => {
           </main>
         </div>
 
-        {selectedEntity && (
+        {selectedEntity && operator && !operator.must_change_password && (
           <Suspense fallback={null}>
             <InspectorDrawer />
           </Suspense>

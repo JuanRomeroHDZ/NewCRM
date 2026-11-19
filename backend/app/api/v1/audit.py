@@ -5,7 +5,9 @@ from app.database import get_db
 from app.models import AuditLog
 from app.security.tokens import require_vault_unlocked
 
-router = APIRouter(prefix="/audit", tags=["audit"])
+from app.services.core_auth import ADMIN_ROLES, require_role
+
+router = APIRouter(prefix="/audit", tags=["audit"], dependencies=[Depends(require_role(list(ADMIN_ROLES)))])
 
 @router.get("/logs")
 async def get_audit_logs(

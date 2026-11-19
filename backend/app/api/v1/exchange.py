@@ -9,8 +9,11 @@ from app.schemas import ExchangeRateResponse, ExchangeRateUpdate
 from app.security.tokens import require_vault_unlocked
 from app.services.currency import get_current_exchange_rate, sync_external_exchange_rate
 from app.services.audit import log_audit_event
+from app.services.core_auth import ADMIN_ROLES, WORKSPACE_ROLES, require_module_access
 
-router = APIRouter(prefix="/exchange", tags=["exchange"], dependencies=[Depends(require_vault_unlocked)])
+router = APIRouter(prefix="/exchange", tags=["exchange"], dependencies=[
+    Depends(require_vault_unlocked), Depends(require_module_access(ADMIN_ROLES, WORKSPACE_ROLES)),
+])
 
 @router.get("", response_model=ExchangeRateResponse)
 async def get_exchange_rate(db: AsyncSession = Depends(get_db)):

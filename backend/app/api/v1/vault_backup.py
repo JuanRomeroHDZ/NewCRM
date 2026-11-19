@@ -15,10 +15,12 @@ from app.models import (
     ClientIncome, DomainRenewal, OneTimeExpense, InternalProject, SecureResource
 )
 from app.security.tokens import require_vault_unlocked
+from app.services.core_auth import ADMIN_ROLES, require_module_access
 from app.services.audit import log_audit_event
 from app.config import settings
 
-router = APIRouter(prefix="/vault", tags=["vault"], dependencies=[Depends(require_vault_unlocked)])
+module_access = require_module_access(ADMIN_ROLES)
+router = APIRouter(prefix="/vault", tags=["vault"], dependencies=[Depends(require_vault_unlocked), Depends(module_access)])
 
 BACKUP_FORMAT = "emailsaver-encrypted-vault"
 BACKUP_VERSION = "2.0"

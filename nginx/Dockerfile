@@ -1,5 +1,6 @@
 FROM nginx:alpine-slim
 
+COPY lessso-security-headers.conf lessso-auth-proxy.conf /etc/nginx/
 COPY default.conf.template /etc/nginx/templates/default.conf.template
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \

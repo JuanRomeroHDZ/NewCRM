@@ -16,6 +16,16 @@ class SaleAlreadyClosedError(ValueError):
     """Indicates that a proposal or prospect already has a sale."""
 
 
+def proposal_status(proposal: Proposal) -> str:
+    if (
+        proposal.status in {"borrador", "enviada", "en_revision"}
+        and proposal.expires_at
+        and proposal.expires_at <= utc_now()
+    ):
+        return "vencida"
+    return proposal.status
+
+
 class CrmSalesService:
     @staticmethod
     async def get_next_folio(session: AsyncSession, sequence_type: str, prefix: str) -> str:
@@ -59,6 +69,8 @@ class CrmSalesService:
         prospect = await session.get(Prospect, prospect_id)
         if not prospect or prospect.is_deleted:
             raise ValueError("Prospecto no encontrado o eliminado.")
+        if prospect.status == "cliente":
+            raise ValueError("El prospecto ya se convirtió en cliente.")
 
         if prospect.status == "no_contactar":
             raise ValueError("El prospecto se encuentra en la lista de no contactar.")
@@ -99,6 +111,8 @@ class CrmSalesService:
         prospect = await session.get(Prospect, prospect_id)
         if not prospect or prospect.is_deleted:
             raise ValueError("Prospecto no encontrado.")
+        if prospect.status == "cliente":
+            raise ValueError("El prospecto ya se convirtió en cliente.")
 
         now = utc_now()
         prospect.status = "respondio"
@@ -204,11 +218,23 @@ class CrmSalesService:
         if proposal_id:
             proposal = (
                 await session.execute(
-                    select(Proposal).where(Proposal.id == proposal_id).with_for_update()
+                    select(Proposal).where(Proposal.id == proposal_id)
+                    .with_for_update().execution_options(populate_existing=True)
                 )
             ).scalar_one_or_none()
             if not proposal:
                 raise ValueError("Propuesta no encontrada.")
+            if proposal.status != "aceptada" or not proposal.responded_at or not proposal.response_evidence:
+                raise ValueError("Registra la aceptación de la propuesta antes de cerrar la venta.")
+            if (
+                total_amount != proposal.amount
+                or title != proposal.title
+                or currency != proposal.currency
+                or service_type != proposal.service_type
+                or tax_amount
+                or discount_amount
+            ):
+                raise ValueError("El título, el importe, la moneda y el servicio deben coincidir con la propuesta aceptada.")
             if prospect_id and proposal.prospect_id and proposal.prospect_id != prospect_id:
                 raise ValueError("La propuesta no corresponde al prospecto seleccionado.")
             if not prospect_id:
@@ -250,7 +276,7 @@ class CrmSalesService:
             claim_proposal = (
                 update(Proposal)
                 .where(Proposal.id == proposal_id, ~existing_proposal_sale)
-                .values(status="aceptada")
+                .values(updated_at=utc_now())
                 .returning(Proposal.id)
                 .execution_options(synchronize_session=False)
             )
@@ -258,7 +284,6 @@ class CrmSalesService:
             if claimed_id is None:
                 await session.rollback()
                 raise SaleAlreadyClosedError("Ya existe una venta para esta propuesta.")
-            proposal.status = "aceptada"
 
         # 1. Find or create Client
         client = None

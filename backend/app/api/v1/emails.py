@@ -10,11 +10,13 @@ from app.models import EmailAccount, PlatformAccount, PasswordHistory, Prospect,
 from app.schemas import EmailCreate, EmailUpdate, EmailResponse, EmailDomainPostureRequest, EmailDomainPostureResponse, BackupCodeItem, SecurityQuestionItem
 from app.security.crypto import encrypt_secret, decrypt_secret, encrypt_note, decrypt_note, calculate_entropy
 from app.security.tokens import require_vault_unlocked
+from app.services.core_auth import OPERATIONS_ROLES, require_module_access
 from app.services.audit import log_audit_event
 from app.services.email_domain_posture import check_email_domain_posture
 
 # All email routes strictly require an unlocked Level 2 vault session
-router = APIRouter(prefix="/emails", tags=["emails"], dependencies=[Depends(require_vault_unlocked)])
+module_access = require_module_access(OPERATIONS_ROLES)
+router = APIRouter(prefix="/emails", tags=["emails"], dependencies=[Depends(require_vault_unlocked), Depends(module_access)])
 
 def parse_json_safely(val: str | None, default_val=None):
     if not val:

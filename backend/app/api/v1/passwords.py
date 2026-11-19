@@ -10,8 +10,10 @@ from app.database import get_db
 from app.models import EmailAccount, PlatformAccount, PasswordHistory
 from app.security.crypto import decrypt_secret, calculate_entropy
 from app.security.tokens import require_vault_unlocked
+from app.services.core_auth import OPERATIONS_ROLES, require_module_access
 
-router = APIRouter(prefix="/passwords", tags=["passwords"], dependencies=[Depends(require_vault_unlocked)])
+module_access = require_module_access(OPERATIONS_ROLES)
+router = APIRouter(prefix="/passwords", tags=["passwords"], dependencies=[Depends(require_vault_unlocked), Depends(module_access)])
 
 # Curated word list for memorable passphrase generation
 MEMORABLE_WORDS = [

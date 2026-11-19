@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import os
 from pathlib import Path
 
 from alembic import command
@@ -23,6 +24,31 @@ _BACKEND_ROOT = Path(__file__).resolve().parents[1]
 
 def _alembic_config() -> Config:
     return Config(str(_BACKEND_ROOT / "alembic.ini"))
+
+
+async def _provision_runtime_role() -> None:
+    password = os.environ.get("POSTGRES_RUNTIME_PASSWORD")
+    if engine.dialect.name != "postgresql" or not password:
+        return
+    async with engine.begin() as connection:
+        if await connection.scalar(text("SELECT current_user")) == "lessso_runtime":
+            raise RuntimeError("Usa una cuenta administrativa distinta de lessso_runtime para las migraciones.")
+        await connection.execute(text("SELECT set_config('lessso.runtime_password', :password, true)"), {"password": password})
+        await connection.execute(text("""
+            DO $$
+            BEGIN
+                IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'lessso_runtime') THEN
+                    CREATE ROLE lessso_runtime;
+                END IF;
+                EXECUTE format('ALTER ROLE lessso_runtime LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION PASSWORD %L',
+                    current_setting('lessso.runtime_password'));
+            END $$;
+        """))
+        await connection.execute(text("REVOKE CREATE ON SCHEMA public FROM PUBLIC"))
+        await connection.execute(text("GRANT USAGE ON SCHEMA public TO lessso_runtime"))
+        await connection.execute(text("GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO lessso_runtime"))
+        await connection.execute(text("REVOKE INSERT, UPDATE, DELETE ON alembic_version FROM lessso_runtime"))
+        await connection.execute(text("GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO lessso_runtime"))
 
 
 async def _run_migrations() -> None:
@@ -57,6 +83,7 @@ async def _run_migrations() -> None:
                 await asyncio.to_thread(command.stamp, config, baseline_revision)
 
             await asyncio.to_thread(command.upgrade, config, "head")
+            await _provision_runtime_role()
 
             # Idempotent data migrations run once in this job, never in each
             # API replica's startup hook. The advisory lock prevents two

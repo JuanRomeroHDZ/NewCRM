@@ -1,14 +1,16 @@
 import secrets
 import hashlib
+from collections.abc import Collection
 from datetime import datetime, timedelta, timezone
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import HTTPException, status, Depends, Request
 from app.config import settings
+from app.security.browser_session import request_session_token
 from app.models.core import User, DbSession
 from app.security.crypto import hash_master_password, verify_master_password
 from app.security.totp import verify_totp_code
-from app.database import get_db
+from app.database import get_db, set_report_actor
 
 def utc_now() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
@@ -16,9 +18,16 @@ def utc_now() -> datetime:
 def hash_token(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
-def generate_temporary_password(length: int = 16) -> str:
-    alphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*"
-    return "".join(secrets.choice(alphabet) for _ in range(length))
+def generate_temporary_password(length: int = 20) -> str:
+    symbols = "!@#$%^&*"
+    alphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789" + symbols
+    return "".join(secrets.choice(alphabet) for _ in range(length - 1)) + secrets.choice(symbols)
+
+
+def record_failed_login(user: User) -> None:
+    user.failed_login_attempts += 1
+    if user.failed_login_attempts >= settings.MAX_FAILED_LOGIN_ATTEMPTS:
+        user.locked_until = utc_now() + timedelta(minutes=settings.LOCKOUT_MINUTES)
 
 async def authenticate_user(
     session: AsyncSession,
@@ -40,7 +49,7 @@ async def authenticate_user(
     )
     # Los datos históricos pueden contener identificadores que solo difieren
     # en mayúsculas. Nunca elegir una cuenta arbitraria para autenticarlos.
-    res = await session.execute(stmt.limit(2))
+    res = await session.execute(stmt.limit(2).with_for_update())
     matches = res.scalars().all()
     user = matches[0] if len(matches) == 1 else None
 
@@ -55,24 +64,20 @@ async def authenticate_user(
         return None, GENERIC_AUTH_ERROR
 
     # Check if account is locked
-    if user.locked_until and user.locked_until > now:
-        return None, GENERIC_AUTH_ERROR
+    if user.locked_until:
+        if user.locked_until > now:
+            return None, GENERIC_AUTH_ERROR
+        user.locked_until = None
+        user.failed_login_attempts = 0
 
     if not user.is_active:
         return None, GENERIC_AUTH_ERROR
 
     is_valid = verify_master_password(user.hashed_password, password)
     if not is_valid:
-        user.failed_login_attempts += 1
-        if user.failed_login_attempts >= settings.MAX_FAILED_LOGIN_ATTEMPTS:
-            user.locked_until = now + timedelta(minutes=settings.LOCKOUT_MINUTES)
+        record_failed_login(user)
         await session.commit()
         return None, GENERIC_AUTH_ERROR
-
-    # Reset failed attempts on success
-    user.failed_login_attempts = 0
-    user.locked_until = None
-    await session.commit()
 
     return user, None
 
@@ -113,12 +118,7 @@ async def get_current_user_from_token(
     db: AsyncSession = Depends(get_db)
 ) -> User:
     """Dependency extracting and validating user from database session token."""
-    auth_header = request.headers.get("Authorization")
-    token = None
-    if auth_header and auth_header.startswith("Bearer "):
-        token = auth_header[7:].strip()
-    elif request.cookies.get("lessso_session"):
-        token = request.cookies.get("lessso_session")
+    token = request_session_token(request)
 
     if not token:
         raise HTTPException(
@@ -154,9 +154,10 @@ async def get_current_user_from_token(
             detail="Usuario inactivo o no encontrado", headers={"X-Auth-Scope": "user"}
         )
 
+    await set_report_actor(db, user)
     return user
 
-def require_role(allowed_roles: list[str]):
+def require_role(allowed_roles: Collection[str]):
     """Role-based authorization dependency factory."""
     async def role_checker(user: User = Depends(get_current_user_from_token)) -> User:
         if user.must_change_password:
@@ -171,3 +172,21 @@ def require_role(allowed_roles: list[str]):
             )
         return user
     return role_checker
+
+
+ADMIN_ROLES = ("owner", "business_admin")
+OPERATIONS_ROLES = (*ADMIN_ROLES, "operator")
+SALES_ROLES = (*OPERATIONS_ROLES, "seller")
+WORKSPACE_ROLES = (*SALES_ROLES, "readonly")
+
+
+def require_module_access(write_roles: tuple[str, ...], read_roles: tuple[str, ...] | None = None):
+    """Check operator identity and apply the module's read or write policy."""
+    check_write = require_role(write_roles)
+    check_read = require_role(read_roles) if read_roles is not None else check_write
+
+    async def check(request: Request, user: User = Depends(get_current_user_from_token)) -> User:
+        authorize = check_read if request.method in ("GET", "HEAD") else check_write
+        return await authorize(user)
+
+    return check

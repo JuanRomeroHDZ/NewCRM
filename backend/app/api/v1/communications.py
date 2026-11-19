@@ -7,7 +7,8 @@ from sqlalchemy import select, desc
 
 from app.database import get_db
 from app.schemas import validate_nonblank_input
-from app.services.core_auth import get_current_user_from_token, require_role
+from app.security.tokens import require_vault_unlocked
+from app.services.core_auth import SALES_ROLES, require_role
 from app.models.core import User
 from app.models.communications import (
     UnifiedThread, CommunicationMessage, DoNotContactList,
@@ -15,9 +16,9 @@ from app.models.communications import (
 )
 from app.services.communications_service import CommunicationsService
 
-router = APIRouter(prefix="/comms", tags=["Communications"])
+router = APIRouter(prefix="/comms", tags=["Communications"], dependencies=[Depends(require_vault_unlocked)])
 
-COMMS_WRITE_ROLES = ["owner", "business_admin", "operator", "seller"]
+comms_access = require_role(SALES_ROLES)
 MAX_EML_FILE_BYTES = 10 * 1024 * 1024
 
 
@@ -94,7 +95,7 @@ class DoNotContactRequest(BaseModel):
 @router.get("/threads")
 async def list_threads(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user_from_token)
+    current_user: User = Depends(comms_access)
 ):
     stmt = select(UnifiedThread).order_by(desc(UnifiedThread.updated_at))
     res = await db.execute(stmt)
@@ -105,7 +106,7 @@ async def list_threads(
 async def list_thread_messages(
     thread_id: str = Path(..., max_length=36),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user_from_token)
+    current_user: User = Depends(comms_access)
 ):
     stmt = select(CommunicationMessage).where(CommunicationMessage.thread_id == thread_id).order_by(CommunicationMessage.created_at.asc())
     res = await db.execute(stmt)
@@ -116,7 +117,7 @@ async def list_thread_messages(
 async def record_manual_message(
     req: ManualMessageRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(COMMS_WRITE_ROLES))
+    current_user: User = Depends(comms_access)
 ):
     thread = await db.get(UnifiedThread, req.thread_id)
     if not thread:
@@ -141,7 +142,7 @@ async def record_manual_message(
 @router.post("/links/generate")
 async def generate_links(
     req: ManualLinksRequest,
-    current_user: User = Depends(get_current_user_from_token)
+    current_user: User = Depends(comms_access)
 ):
     return CommunicationsService.generate_manual_links(
         recipient=req.recipient,
@@ -153,7 +154,7 @@ async def generate_links(
 @router.post("/templates/render")
 async def render_template(
     req: TemplateRenderRequest,
-    current_user: User = Depends(get_current_user_from_token)
+    current_user: User = Depends(comms_access)
 ):
     try:
         rendered = CommunicationsService.render_template(req.template_str, req.variables)
@@ -165,7 +166,7 @@ async def render_template(
 @router.post("/eml/sanitize")
 async def sanitize_eml_file(
     file: UploadFile = File(...),
-    current_user: User = Depends(require_role(COMMS_WRITE_ROLES))
+    current_user: User = Depends(comms_access)
 ):
     raw_content = await file.read(MAX_EML_FILE_BYTES + 1)
     if len(raw_content) > MAX_EML_FILE_BYTES:
@@ -176,7 +177,7 @@ async def sanitize_eml_file(
 @router.get("/do-not-contact")
 async def list_do_not_contact(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user_from_token)
+    current_user: User = Depends(comms_access)
 ):
     stmt = select(DoNotContactList).order_by(desc(DoNotContactList.created_at))
     res = await db.execute(stmt)
@@ -187,7 +188,7 @@ async def list_do_not_contact(
 async def add_do_not_contact(
     req: DoNotContactRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(COMMS_WRITE_ROLES))
+    current_user: User = Depends(comms_access)
 ):
     entry = await CommunicationsService.add_to_do_not_contact(
         session=db,
@@ -203,7 +204,7 @@ async def add_do_not_contact(
 async def retry_queued_message(
     message_id: str = Path(..., max_length=36),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(COMMS_WRITE_ROLES))
+    current_user: User = Depends(comms_access)
 ):
     try:
         msg = await CommunicationsService.process_outbox_queue(session=db, message_id=message_id)
@@ -212,5 +213,5 @@ async def retry_queued_message(
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.get("/whatsapp/rates")
-async def get_whatsapp_rates(current_user: User = Depends(get_current_user_from_token)):
+async def get_whatsapp_rates(current_user: User = Depends(comms_access)):
     return CommunicationsService.get_whatsapp_rates()

@@ -28,7 +28,8 @@ function normalizeDecimalInput(value: string, maxDecimals = 2): string {
 }
 
 export const ProspectModal: React.FC = () => {
-  const { 
+  const {
+    operator,
     isProspectModalOpen, closeProspectModal, editingProspectId, 
     prospectModalDefaultEmailId, showToast, triggerDataReload, defaultEntityScope,
     supportedCurrencies, baseCurrency, systemLocale
@@ -65,6 +66,7 @@ export const ProspectModal: React.FC = () => {
   const [startedAtInput, setStartedAtInput] = useState('');
   const [slaHours, setSlaHours] = useState<string>('48');
   const [followupSlaHours, setFollowupSlaHours] = useState<number>(48);
+  const [followupDueDate, setFollowupDueDate] = useState('');
   const [maxFollowupAttempts, setMaxFollowupAttempts] = useState<number>(3);
 
   // Tags
@@ -84,6 +86,7 @@ export const ProspectModal: React.FC = () => {
         : [...supportedCurrencies, { code: currency, name: currency, symbol: '' }])
     : [{ code: fallbackCurrency, name: fallbackCurrency, symbol: '$' }];
 
+  const canManageAccounts = operator?.role === 'owner' || operator?.role === 'business_admin';
   useEffect(() => {
     if (!isProspectModalOpen) return;
     setDetailFailed(false);
@@ -93,7 +96,7 @@ export const ProspectModal: React.FC = () => {
     setShowInlineEmailCreate(false);
     setNewEmailAddress('');
     setNewTagName('');
-    api.getEmails().then((eList) => {
+    if (canManageAccounts) void api.getEmails().then((eList) => {
       if (!active) return;
       setEmails(eList);
       if (prospectModalDefaultEmailId) {
@@ -129,6 +132,7 @@ export const ProspectModal: React.FC = () => {
         setStartedAtInput(toLocalDatetimeInputValue(p.started_at));
         setSlaHours(String(p.sla_hours || 48));
         setFollowupSlaHours(p.followup_sla_hours || 48);
+        setFollowupDueDate(p.followup_due_date || '');
         setMaxFollowupAttempts(p.max_followup_attempts || 3);
         setTags(p.tags || []);
       }).catch((err: any) => {
@@ -142,6 +146,7 @@ export const ProspectModal: React.FC = () => {
       });
     } else {
       setLoadingDetail(false);
+      setFollowupDueDate('');
       setScope(defaultEntityScope);
       setCompanyName('');
       setContactName('');
@@ -308,6 +313,7 @@ export const ProspectModal: React.FC = () => {
         started_at: startedIso,
         sla_hours: slaValidation.hours ?? 24,
         followup_sla_hours: followupSlaHours,
+        followup_due_date: followupDueDate || null,
         max_followup_attempts: maxFollowupAttempts,
         tags
       };
@@ -503,9 +509,11 @@ export const ProspectModal: React.FC = () => {
                 <label htmlFor="prospectmodal-field-2" className="text-obsidian-text font-medium block mb-1">Estado Actual del Seguimiento *</label>
                 <select id="prospectmodal-field-2"
                   value={status}
+                  disabled={status === 'cliente'}
                   onChange={(e) => setStatus(e.target.value as ProspectStatus)}
                   className="w-full px-3 py-2 rounded-xl bg-obsidian-surface border border-obsidian-border text-white text-xs focus:outline-none focus:border-obsidian-accent"
                 >
+                  {status === 'cliente' && <option value="cliente">Cliente</option>}
                   {PROSPECT_STATUS_OPTIONS.map((opt) => (
                     <option key={opt.value} value={opt.value}>
                       {opt.label}
@@ -648,6 +656,18 @@ export const ProspectModal: React.FC = () => {
             </div>
           </div>
 
+          {(status !== 'cliente' && status !== 'archivado_frio') && (
+            <label className="block space-y-1.5 text-sm">
+              <span>Próximo seguimiento</span>
+              <input
+                type="date"
+                className="block w-full"
+                value={followupDueDate}
+                onChange={(event) => setFollowupDueDate(event.target.value)}
+              />
+              <span className="block text-xs text-obsidian-muted">Opcional. Aparece en los recordatorios de Prospectos.</span>
+            </label>
+          )}
           <details
             open={showFollowupConfig}
             onToggle={(event) => setShowFollowupConfig(event.currentTarget.open)}
@@ -669,7 +689,7 @@ export const ProspectModal: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div>
+              {canManageAccounts && <div>
                 <label htmlFor="prospectmodal-field-7" className="text-obsidian-muted block mb-1">Mi Correo Principal de Envío / Seguimiento</label>
                 <select id="prospectmodal-field-7"
                   value={emailId}
@@ -729,7 +749,7 @@ export const ProspectModal: React.FC = () => {
                     </div>
                   </div>
                 )}
-              </div>
+              </div>}
 
               <div>
                 <label htmlFor="prospectmodal-field-8" className="text-obsidian-muted block mb-1">Correo Electrónico del Cliente / Prospecto</label>

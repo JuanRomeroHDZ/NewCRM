@@ -8,7 +8,7 @@ web
 
 ## Users
 
-LESSSO supports accounts with the roles `owner`, `business_admin`, `seller`, and `readonly`. The repository does not establish the primary day-to-day role, the typical team size, or whether CRM operators and security operators are usually the same people; those product decisions remain open.
+LESSSO supports accounts with the roles `owner`, `business_admin`, `operator`, `seller`, and `readonly`. The repository does not establish the primary day-to-day role, the typical team size, or whether CRM operators and security operators are usually the same people; those product decisions remain open.
 
 ## Product Purpose
 
@@ -20,7 +20,7 @@ The product is deployed and operated by its owner on a local host or private net
 
 ## Operating Context
 
-The web app is used through a browser and is deployed with Docker Compose, PostgreSQL, Redis, and a local TLS proxy. An operator can limit access to the host or publish it on a private network. CRM data can be organized by business or personal scope. OpenStreetMap searches run on demand and need network access.
+The web app is used through a browser and is deployed with Docker Compose, PostgreSQL, and a local TLS proxy. An operator can limit access to the host or publish it on a private network. CRM data can be organized by business or personal scope. OpenStreetMap searches run on demand and need network access.
 
 ## Capabilities and Constraints
 

@@ -1,4 +1,5 @@
 """Pasarela autenticada al proceso C2 independiente mediante socket Unix."""
+import hmac
 import asyncio
 import json
 import os
@@ -15,6 +16,7 @@ from app.models.agenda import PentestEngagement
 from app.models.core import User, DbSession
 from app.models.crm_sales import Client
 from app.security.tokens import require_vault_unlocked, verify_vault_token_and_release
+from app.security.browser_session import SESSION_COOKIE, csrf_for_session
 from app.services.core_auth import get_current_user_from_token, hash_token, utc_now
 from app.services.c2_scope import (
     interface_scope_required,
@@ -364,6 +366,11 @@ async def events(websocket: WebSocket, db: AsyncSession = Depends(get_db)):
     protocols = websocket.scope.get("subprotocols", [])
     vault = next((p[6:] for p in protocols if p.startswith("vault.")), "")
     user = next((p[5:] for p in protocols if p.startswith("user.")), "")
+    if not user:
+        token = websocket.cookies.get(SESSION_COOKIE)
+        csrf = next((p[5:] for p in protocols if p.startswith("csrf.")), "")
+        if token and hmac.compare_digest(csrf.encode(), csrf_for_session(token).encode()):
+            user = token
     engagement_id = next((p[len("engagement."):] for p in protocols if p.startswith("engagement.")), "")
     if "lessso-v1" not in protocols:
         await websocket.close(code=4401)

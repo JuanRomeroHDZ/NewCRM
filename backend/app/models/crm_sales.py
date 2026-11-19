@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import String, Boolean, Float, Integer, Text, DateTime, ForeignKey
+from sqlalchemy import String, Boolean, Float, Integer, Text, DateTime, ForeignKey, LargeBinary
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
 
@@ -60,6 +60,17 @@ class Proposal(Base):
     status: Mapped[str] = mapped_column(String(32), default="borrador", index=True)  # borrador, enviada, en_revision, aceptada, rechazada, vencida
     is_viewed_by_user: Mapped[bool] = mapped_column(Boolean, default=False)  # "Vista" solo si el usuario la marca
     expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    issued_at: Mapped[datetime | None] = mapped_column(DateTime)
+    issued_pdf: Mapped[bytes | None] = mapped_column(LargeBinary, deferred=True)
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime)
+    sent_by: Mapped[str | None] = mapped_column(String(128))
+    send_channel: Mapped[str | None] = mapped_column(String(32))
+    sent_to: Mapped[str | None] = mapped_column(String(255))
+    responded_at: Mapped[datetime | None] = mapped_column(DateTime)
+    responded_by: Mapped[str | None] = mapped_column(String(128))
+    respondent: Mapped[str | None] = mapped_column(String(255))
+    response_channel: Mapped[str | None] = mapped_column(String(32))
+    response_evidence: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, onupdate=utc_now)
 

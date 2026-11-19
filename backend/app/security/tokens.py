@@ -274,23 +274,27 @@ async def _require_vault(
         if not x_vault_token:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
+                headers={"X-Auth-Scope": "vault"},
                 detail="La bóveda está bloqueada. Desbloquéala para continuar.",
             )
         if payload is None:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
+                headers={"X-Auth-Scope": "vault"},
                 detail="La sesión venció. Desbloquea la bóveda para continuar.",
             )
         session = await _active_session(payload, db)
         if session is None:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
+                headers={"X-Auth-Scope": "vault"},
                 detail="La sesión venció. Desbloquea la bóveda para continuar.",
             )
         key = _open_vault_key(payload["jti"], payload.get("vault_key"))
         if key is None:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
+                headers={"X-Auth-Scope": "vault"},
                 detail="La sesión no contiene una clave de bóveda válida. Desbloquéala de nuevo.",
             )
         # The ASGI middleware binds the decrypted key for the lifetime of the
@@ -299,6 +303,7 @@ async def _require_vault(
         if len(key) != 32:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
+                headers={"X-Auth-Scope": "vault"},
                 detail="La sesión no contiene una clave de bóveda válida. Desbloquéala de nuevo.",
             )
         yield True

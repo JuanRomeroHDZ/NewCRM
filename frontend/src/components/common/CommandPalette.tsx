@@ -583,7 +583,7 @@ export const CommandPalette: React.FC = () => {
 
           {/* Platforms */}
           {filteredPlatforms.length > 0 && (
-            <div role="group" aria-label="Cuentas y servicios">
+            <div role="group" aria-label="Correo y servicios">
               <div className="px-3 py-1 text-[11px] font-semibold text-obsidian-muted tracking-wider uppercase">
                 Plataformas & Servicios
               </div>

@@ -1,3 +1,4 @@
+import base64
 import hashlib
 import io
 import json
@@ -168,7 +169,16 @@ async def test_writeup_edit_lease_is_exclusive_and_release_and_expiry_reopen_edi
 
     second_vault = await client.post("/api/v1/auth/unlock", json={"master_password": "MasterPasswordTest123!"})
     assert second_vault.status_code == 200
-    other_session_headers = {"X-Vault-Token": second_vault.json()["token"]}
+    other_user = User(
+        username="other_editor", email="other-editor@example.test", full_name="Other editor",
+        hashed_password="unusable", role="business_admin", is_active=True, must_change_password=False,
+    )
+    db_session.add(other_user)
+    await db_session.commit()
+    other_token, _ = await create_user_session(db_session, other_user)
+    other_session_headers = {
+        "X-Vault-Token": second_vault.json()["token"], "Authorization": f"Bearer {other_token}",
+    }
     other_session_renew = await client.post(
         f"/api/v1/writeups/{writeup_id}/edit-lease",
         headers=other_session_headers,
@@ -787,6 +797,7 @@ async def test_writeup_rendered_mermaid_export_and_clone(client, auth_token):
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 80" width="240" height="80">'
         '<script>alert(1)</script>'
         '<rect x="10" y="10" width="220" height="60" rx="8" fill="#1e293b" onclick="alert(2)"/>'
+        '<path class="edge-animation-fast" d="M 0 0 L 30 30"/>'
         '<text x="24" y="45" fill="#f8fafc">Attacker to WAF</text>'
         '</svg>'
     )
@@ -830,6 +841,10 @@ async def test_writeup_rendered_mermaid_export_and_clone(client, auth_token):
             text_html = exp.content.decode("utf-8")
             assert "data:image/svg+xml;base64," in text_html
             assert "<script" not in text_html
+            image_b64 = text_html.split("data:image/svg+xml;base64,", 1)[1].split('"', 1)[0]
+            decoded_svg = base64.b64decode(image_b64).decode()
+            assert "@keyframes lessso-edge-motion" in decoded_svg
+            assert "prefers-reduced-motion" in decoded_svg
         elif fmt == "md_zip":
             with zipfile.ZipFile(io.BytesIO(exp.content)) as zf:
                 diag_files = [n for n in zf.namelist() if n.startswith("diagrams/diagram_")]
@@ -904,7 +919,10 @@ async def test_two_writeup_sessions_reject_stale_board_citation_and_evidence_mut
     stale_version = report["updated_at"]
 
     # Separate HTTP clients model two browsers that loaded the same report version.
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as second_session:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test",
+        headers={"Authorization": client.headers["Authorization"]},
+    ) as second_session:
         fresh = await client.patch(
             f"/api/v1/writeups/{report_id}/boards/{board_id}",
             headers=headers,

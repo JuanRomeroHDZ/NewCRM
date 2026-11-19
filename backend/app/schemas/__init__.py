@@ -3,7 +3,9 @@ from datetime import date
 import math
 import re
 from urllib.parse import urlsplit
-from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, SecretStr, field_validator, model_validator
+
+from app.security.account_policy import ACCOUNT_PASSWORD_MIN_LENGTH, validate_account_password
 
 from .validators import (
     normalize_and_validate_card_digits,
@@ -72,13 +74,21 @@ def validate_expiry_year_input(value: str | None) -> str | None:
 
 # Auth & Vault
 class MasterPasswordSetup(BaseModel):
-    master_password: str = Field(..., min_length=8, max_length=256)
+    master_password: str = Field(..., min_length=ACCOUNT_PASSWORD_MIN_LENGTH, max_length=256)
+    setup_code: SecretStr | None = Field(default=None, max_length=128)
+
+    @field_validator("master_password")
+    @classmethod
+    def check_master_password(cls, password: str) -> str:
+        validate_account_password(password)
+        return password
 
 class VaultUnlockRequest(BaseModel):
     master_password: str = Field(..., min_length=1, max_length=256)
 
 class VaultStatusResponse(BaseModel):
     is_setup: bool
+    setup_code_required: bool = False
     is_unlocked: bool
     remaining_seconds: int
     timeout_minutes: int
@@ -558,6 +568,7 @@ class EmergencyKitResponse(BaseModel):
 
 # Prospects / Demos CRM
 class ProspectBase(BaseModel):
+    followup_due_date: date | None = None
     company_name: str
     contact_name: str | None = None
     contact_email: str | None = None
@@ -618,6 +629,7 @@ class ProspectCreate(ProspectBase):
         return value
 
 class ProspectUpdate(BaseModel):
+    followup_due_date: date | None = None
     company_name: str | None = None
     contact_name: str | None = Field(default=None, max_length=128)
     contact_email: str | None = Field(default=None, max_length=255)
@@ -1044,15 +1056,20 @@ class UserResponse(BaseModel):
     created_at: Any = None
 
 class UserLoginResponse(BaseModel):
-    token: str
+    token: str | None
     user: UserResponse
     expires_in_minutes: int
 
+OperatorRole = Literal["owner", "business_admin", "operator", "seller", "readonly"]
+
+
 class UserCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     username: str = Field(..., min_length=3, max_length=64, pattern=r"^[a-zA-Z0-9._-]+$")
     email: str = Field(..., max_length=255, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
     full_name: str = Field(..., min_length=2, max_length=128)
-    role: str = Field("seller", pattern="^(owner|business_admin|seller|readonly)$")
+    role: OperatorRole = "seller"
 
     @field_validator("full_name")
     @classmethod
@@ -1063,8 +1080,10 @@ class UserCreateResponse(UserResponse):
     temporary_password: str
 
 class UserUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     full_name: str | None = Field(default=None, min_length=2, max_length=128)
-    role: str | None = Field(None, pattern="^(owner|business_admin|seller|readonly)$")
+    role: OperatorRole | None = None
     is_active: bool | None = None
     unlock: bool = False
 
@@ -1076,8 +1095,16 @@ class UserUpdateRequest(BaseModel):
         return validate_nonblank_input(value, "El nombre completo no puede estar vacío.")
 
 class UserChangePasswordRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     current_password: str = Field(..., min_length=1, max_length=256)
-    new_password: str = Field(..., min_length=8, max_length=256)
+    new_password: str = Field(..., min_length=ACCOUNT_PASSWORD_MIN_LENGTH, max_length=256)
+
+    @field_validator("new_password")
+    @classmethod
+    def check_new_password(cls, password: str) -> str:
+        validate_account_password(password)
+        return password
     totp_code: str | None = Field(default=None, min_length=4, max_length=32)
 
 class TotpSetupConfirmRequest(BaseModel):

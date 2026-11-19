@@ -11,7 +11,9 @@ import {
   ReportDocumentAsset, ReportRecoveryCiphertextResponse, ReportRecoverySourceResponse,
   ReportRecoveryDraftPayload,
   TypstStatusResponse, TypstCompileResponse,
-  ReportCanvasSummary, ReportCanvasDetail, ReportCorrelationsResponse, ReportOverview
+  ReportCanvasSummary, ReportCanvasDetail, ReportCorrelationsResponse, ReportOverview,
+  ReportCollaborationResource, ReportCollaborationBootstrap, ReportRevision,
+  ReportComment, ReportReview, ReportWorkspaceUser, ReportCollaborator,
 } from '../types';
 import { ApiError, createHttpApiError, normalizeResponseReadError, normalizeTransportError } from './apiErrors';
 
@@ -95,7 +97,13 @@ export interface WriteupRevisionFilters {
 }
 
 let currentVaultToken: string | null = localStorage.getItem('emailsaver_vault_token');
-let currentUserToken: string | null = sessionStorage.getItem('emailsaver_user_token');
+const browserSessionMarker = () => {
+  const value = typeof document === 'undefined' ? undefined : (document.cookie ?? '')
+    .split('; ').find((part) => part.startsWith('__Host-lessso-csrf='))?.split('=')[1];
+  return value ? `cookie:${value}` : null;
+};
+let observedBrowserMarker = browserSessionMarker();
+let currentUserToken: string | null = observedBrowserMarker ?? sessionStorage.getItem('emailsaver_user_token');
 const activeWriteupEditLeases = new Map<string, { token: string; clientId: string }>();
 
 // The vault token is intentionally shared by same-origin tabs through
@@ -151,14 +159,26 @@ export function getApiVaultToken(): string | null {
 
 export function setApiUserToken(token: string | null) {
   currentUserToken = token;
-  if (token) {
+  if (token && !token.startsWith('cookie:')) {
     sessionStorage.setItem('emailsaver_user_token', token);
   } else {
     sessionStorage.removeItem('emailsaver_user_token');
   }
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event('lessso-user-session-changed'));
+}
+
+export function useBrowserAccountSession(token: string | null) {
+  observedBrowserMarker = browserSessionMarker();
+  setApiUserToken(token ?? observedBrowserMarker);
 }
 
 export function getApiUserToken(): string | null {
+  const marker = browserSessionMarker();
+  if (marker !== observedBrowserMarker) {
+    observedBrowserMarker = marker;
+    currentUserToken = marker;
+    sessionStorage.removeItem('emailsaver_user_token');
+  }
   return currentUserToken;
 }
 
@@ -171,7 +191,6 @@ const CORE_USER_ENDPOINT_PREFIXES = [
   '/auth/verify-2fa',
   '/users',
   '/settings/trash-retention',
-  '/crm/sales',
   '/crm/capture/audit-url',
   '/crm/capture/duplicates',
   '/crm/capture/merge',
@@ -185,6 +204,7 @@ const CORE_USER_ENDPOINT_PREFIXES = [
   '/comms',
   '/workshop',
   '/integrations',
+  '/reports/collaboration/',
 ];
 
 function isCoreUserEndpoint(endpoint: string): boolean {
@@ -202,23 +222,29 @@ function buildAuthHeaders(extra?: Record<string, string>, includeJsonContentType
   if (currentVaultToken) {
     headers['X-Vault-Token'] = currentVaultToken;
   }
-  if (currentUserToken) {
-    headers['Authorization'] = `Bearer ${currentUserToken}`;
+  const userSession = getApiUserToken();
+  if (userSession?.startsWith('cookie:')) {
+    headers['X-LESSSO-CSRF'] = userSession.slice(7);
+  } else if (userSession) {
+    headers['Authorization'] = `Bearer ${userSession}`;
   }
   return headers;
 }
 
 async function handleApiErrorResponse(endpoint: string, response: Response, requestHeaders: Record<string, string>): Promise<never> {
-  const coreEndpoint = isCoreUserEndpoint(endpoint);
-  const userScope = response.headers?.get('X-Auth-Scope') === 'user';
-  if (coreEndpoint || userScope) {
+  const authScope = response.headers?.get('X-Auth-Scope');
+  const isUserSession = authScope === 'user' || (authScope !== 'vault' && isCoreUserEndpoint(endpoint));
+  if (isUserSession) {
+    getApiUserToken();
     if (
       response.status === 401 &&
       !endpoint.startsWith('/auth/login') &&
       !endpoint.startsWith('/auth/change-password') &&
       !endpoint.startsWith('/auth/setup-2fa') &&
       !endpoint.startsWith('/auth/verify-2fa') &&
-      (requestHeaders.Authorization || '') === (currentUserToken ? `Bearer ${currentUserToken}` : '')
+      (currentUserToken?.startsWith('cookie:')
+        ? requestHeaders['X-LESSSO-CSRF'] === currentUserToken.slice(7)
+        : (requestHeaders.Authorization || '') === (currentUserToken ? `Bearer ${currentUserToken}` : ''))
     ) {
       setApiUserToken(null);
       if (typeof window !== 'undefined') {
@@ -242,6 +268,9 @@ async function handleApiErrorResponse(endpoint: string, response: Response, requ
       throw new ApiError(result.detail, 'http', { status: response.status });
     }
   }
+  if (endpoint === '/auth/setup' && response.status === 403) {
+    throw new ApiError('Revisa el código de instalación en la terminal del servidor.', 'http', { status: 403 });
+  }
   if ((endpoint === '/auth/bootstrap-account' || endpoint === '/users') &&
       (response.status === 400 || response.status === 409)) {
     const result = await response.json().catch(() => null);
@@ -256,7 +285,7 @@ async function handleApiErrorResponse(endpoint: string, response: Response, requ
       throw new ApiError(result.detail, 'http', { status: response.status });
     }
   }
-  throw createHttpApiError(response.status, endpoint, coreEndpoint);
+  throw createHttpApiError(response.status, endpoint, isUserSession);
 }
 
 async function fetchApiResponse(url: string, options: RequestInit): Promise<Response> {
@@ -275,20 +304,30 @@ async function readApiJson<T>(response: Response): Promise<T> {
   }
 }
 
+const pendingReads = new Map<string, Promise<unknown>>();
+
 async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const headers = addWriteupEditLeaseHeaders(endpoint, buildAuthHeaders(options.headers as Record<string, string> | undefined, true));
-  const response = await fetchApiResponse(`${API_BASE}${endpoint}`, {
-    ...options,
-    headers,
-  });
+  const read = !options.method || options.method === 'GET';
+  // Only identical, concurrent reads may share a request. Mutations invalidate in-flight reads.
+  const key = read && !options.signal ? JSON.stringify([endpoint, headers, options]) : null;
+  const pending = key ? pendingReads.get(key) : undefined;
+  if (pending) return pending as Promise<T>;
+  if (!read) pendingReads.clear();
 
-  if (!response.ok) {
-    await handleApiErrorResponse(endpoint, response, headers);
+  const operation = (async () => {
+    const response = await fetchApiResponse(`${API_BASE}${endpoint}`, { ...options, headers });
+    if (!response.ok) await handleApiErrorResponse(endpoint, response, headers);
+    if (response.status === 204) return undefined as T;
+    return readApiJson<T>(response);
+  })();
+  if (key) pendingReads.set(key, operation);
+  try {
+    return await operation;
+  } finally {
+    if (key && pendingReads.get(key) === operation) pendingReads.delete(key);
+    if (!read) pendingReads.clear();
   }
-  if (response.status === 204) {
-    return undefined as T;
-  }
-  return readApiJson<T>(response);
 }
 
 async function requestUpdatedAtHeader(endpoint: string, options: RequestInit = {}): Promise<string | null> {
@@ -338,14 +377,31 @@ async function requestBlobResponse(endpoint: string, options: RequestInit = {}):
   };
 }
 
+export type ProposalChannel = 'whatsapp' | 'email' | 'call' | 'in_person' | 'other';
+export type CommercialProposal = {
+  id: string; folio: string; title: string; amount: number; currency: 'MXN' | 'USD';
+  status: string; service_type: string; content_text: string | null; expires_at: string | null;
+  issued_at: string | null; sent_at: string | null; sent_to: string | null;
+  send_channel: ProposalChannel | null; sent_by: string | null;
+  responded_at: string | null; respondent: string | null; response_channel: ProposalChannel | null;
+  responded_by: string | null; response_evidence: string | null;
+};
+
+type CommercialSummary = {
+  proposals: CommercialProposal[];
+  sale: { id: string; client_id: string; folio: string; title: string; total_amount: number; balance_amount: number; currency: 'MXN' | 'USD' } | null;
+  invoices: { id: string; folio: string; uuid: string; status: string; cancellation_reason: string | null }[];
+  can_manage_invoices: boolean;
+};
+
 export const api = {
   // Auth & Vault
   getVaultStatus: () => request<VaultStatus>('/auth/status'),
   recordVaultActivity: () => request<{ remaining_seconds: number; account_active: boolean | null }>('/auth/activity', { method: 'POST' }),
-  setupMasterPassword: (master_password: string) => 
+  setupMasterPassword: (master_password: string, setup_code?: string) =>
     request<{ message: string; token: string; timeout_minutes: number }>('/auth/setup', {
       method: 'POST',
-      body: JSON.stringify({ master_password })
+      body: JSON.stringify({ master_password, ...(setup_code ? { setup_code } : {}) })
     }),
   unlockVault: (master_password: string) =>
     request<{ message: string; token: string; timeout_minutes: number; remaining_seconds: number }>('/auth/unlock', {
@@ -539,6 +595,8 @@ export const api = {
     return request<Prospect[]>(`/prospects${qs}`);
   },
   getProspectsPage: (filters: {
+    reminder_through?: string;
+    scope?: 'business' | 'personal';
     email_id?: string;
     status?: string;
     workflow_type?: string;
@@ -555,6 +613,8 @@ export const api = {
     if (filters.sla_status) params.append('sla_status', filters.sla_status);
     if (filters.search) params.append('search', filters.search);
     if (filters.tag) params.append('tag', filters.tag);
+    if (filters.reminder_through) params.set('reminder_through', filters.reminder_through);
+    if (filters.scope) params.set('scope', filters.scope);
     params.set('limit', String(filters.limit));
     params.set('offset', String(filters.offset));
     return requestPage<Prospect>(`/prospects?${params.toString()}`, filters.offset, filters.limit);
@@ -590,6 +650,32 @@ export const api = {
   resetProspectTimer: (id: string, restartFromNow: boolean = true) =>
     request<Prospect>(`/prospects/${id}/reset-timer?restart_from_now=${restartFromNow}`, { method: 'POST' }),
   deleteProspect: (id: string) => request<{ message: string }>(`/prospects/${id}`, { method: 'DELETE' }),
+
+  getProspectCommercial: (id: string) => request<CommercialSummary>(`/crm/prospects/${id}/commercial`),
+  createCommercialProposal: (data: {
+    prospect_id: string; title: string; amount: number; currency: 'MXN' | 'USD';
+    service_type: string; content_text: string; expires_days: number;
+  }) => request<CommercialProposal>('/crm/proposals', { method: 'POST', body: JSON.stringify(data) }),
+  prepareCommercialProposalPdf: (id: string) =>
+    requestBlobResponse(`/crm/proposals/${id}/pdf`, { method: 'POST' }),
+  getCommercialApprovalPdf: (id: string) =>
+    requestBlobResponse(`/crm/proposals/${id}/approval`),
+  recordCommercialProposalDelivery: (id: string, data: { recipient: string; channel: ProposalChannel }) =>
+    request<CommercialProposal>(`/crm/proposals/${id}/send`, { method: 'POST', body: JSON.stringify(data) }),
+  recordCommercialProposalDecision: (id: string, data: {
+    decision: 'aceptada' | 'rechazada'; respondent: string; channel: ProposalChannel; evidence: string;
+  }) => request<CommercialProposal>(`/crm/proposals/${id}/decision`, { method: 'POST', body: JSON.stringify(data) }),
+  closeCommercialSale: (data: {
+    prospect_id: string; proposal_id: string; company_name: string; title: string;
+    total_amount: number; currency: 'MXN' | 'USD'; service_type: string; advance_payment: number;
+    contact_name?: string;
+  }) => request<{ sale_id: string }>('/crm/sales/close', { method: 'POST', body: JSON.stringify(data) }),
+  recordCommercialInvoice: (data: {
+    sale_id: string; client_id: string; folio: string; uuid: string; rfc: string;
+    amount: number; currency: 'MXN' | 'USD'; issue_date: string;
+  }) => request('/crm/invoices', { method: 'POST', body: JSON.stringify(data) }),
+  cancelCommercialInvoice: (id: string, reason: string) =>
+    request(`/crm/invoices/${id}/cancel`, { method: 'POST', body: JSON.stringify({ reason }) }),
 
   // OpenStreetMap prospect capture
   getCaptureZones: () => request<{ zones: OSMZone[] }>('/crm/capture/zones'),
@@ -660,9 +746,9 @@ export const api = {
 
   // Core User Auth, 2FA & RBAC Users
   userLogin: (payload: { username_or_email: string; password: string; totp_code?: string }) =>
-    request<CoreLoginResponse>('/auth/login', { method: 'POST', body: JSON.stringify(payload) }),
+    request<CoreLoginResponse>('/auth/login', { method: 'POST', headers: { 'X-LESSSO-Session-Mode': 'cookie' }, body: JSON.stringify(payload) }),
   bootstrapAccount: (payload: { username: string; email: string; full_name: string; password: string }) =>
-    request<CoreLoginResponse>('/auth/bootstrap-account', { method: 'POST', body: JSON.stringify(payload) }),
+    request<CoreLoginResponse>('/auth/bootstrap-account', { method: 'POST', headers: { 'X-LESSSO-Session-Mode': 'cookie' }, body: JSON.stringify(payload) }),
   getBootstrapStatus: () => request<{ available: boolean }>('/auth/bootstrap-status'),
   userLogout: () => request<{ message: string }>('/auth/logout', { method: 'POST' }),
   getCurrentUser: () => request<CoreUser>('/auth/me'),
@@ -1024,5 +1110,67 @@ export const api = {
     }),
   deleteReportCanvas: (canvasId: string) =>
     request<void>(`/reports/canvases/${canvasId}`, { method: 'DELETE' }),
+
+  getReportCollaborationUsers: (type: ReportCollaborationResource, id: string) =>
+    request<ReportWorkspaceUser[]>(`/reports/collaboration/${type}/${id}/users`),
+  getReportCollaborators: (type: ReportCollaborationResource, id: string) =>
+    request<ReportCollaborator[]>(`/reports/collaboration/${type}/${id}/collaborators`),
+  getReportReviewers: (type: ReportCollaborationResource, id: string) =>
+    request<ReportCollaborator[]>(`/reports/collaboration/${type}/${id}/reviewers`),
+  setReportCollaborator: (type: ReportCollaborationResource, id: string, userId: string, permission: 'viewer' | 'editor' | 'reviewer') =>
+    request<ReportCollaborator>(`/reports/collaboration/${type}/${id}/collaborators/${userId}`, {
+      method: 'PUT', body: JSON.stringify({ permission }),
+    }),
+  removeReportCollaborator: (type: ReportCollaborationResource, id: string, userId: string) =>
+    request<void>(`/reports/collaboration/${type}/${id}/collaborators/${userId}`, { method: 'DELETE' }),
+  bootstrapReportCollaboration: (type: ReportCollaborationResource, id: string, initialState: string) =>
+    request<ReportCollaborationBootstrap>(`/reports/collaboration/${type}/${id}/bootstrap`, {
+      method: 'POST', body: JSON.stringify({ initial_state: initialState }),
+    }),
+  issueReportCollaborationTicket: (type: ReportCollaborationResource, id: string) =>
+    request<{ ticket: string; expires_in: number }>(`/reports/collaboration/${type}/${id}/ticket`, { method: 'POST' }),
+  checkpointReportCollaboration: (
+    type: ReportCollaborationResource,
+    id: string,
+    payload: { state: string; content: Record<string, unknown>; through_seq: number; generation: number; create_revision?: boolean; revision_reason?: 'checkpoint' | 'manual' | 'review' },
+  ) => request<{ saved_at: string; generation: number; through_seq: number; revision: number | null; sha256: string }>(
+    `/reports/collaboration/${type}/${id}/checkpoint`, { method: 'POST', body: JSON.stringify(payload) },
+  ),
+  listReportRevisions: (type: ReportCollaborationResource, id: string) =>
+    request<ReportRevision[]>(`/reports/collaboration/${type}/${id}/revisions`),
+  getReportRevisionDiff: (type: ReportCollaborationResource, id: string, revisionId: string) =>
+    request<{ revision_id: string; revision_number: number; diff: string }>(
+      `/reports/collaboration/${type}/${id}/revisions/${revisionId}/diff`,
+    ),
+  restoreReportRevision: (type: ReportCollaborationResource, id: string, revisionId: string) =>
+    request<{ restored_revision: number; new_revision: number; generation: number }>(
+      `/reports/collaboration/${type}/${id}/revisions/${revisionId}/restore`, { method: 'POST' },
+    ),
+  listReportComments: (type: ReportCollaborationResource, id: string) =>
+    request<ReportComment[]>(`/reports/collaboration/${type}/${id}/comments`),
+  createReportComment: (type: ReportCollaborationResource, id: string, body: string, anchor?: string | null) =>
+    request<ReportComment>(`/reports/collaboration/${type}/${id}/comments`, {
+      method: 'POST', body: JSON.stringify({ body, anchor: anchor ?? null }),
+    }),
+  resolveReportComment: (type: ReportCollaborationResource, id: string, commentId: string, resolved: boolean) =>
+    request<{ id: string; resolved: boolean; resolved_at: string | null }>(
+      `/reports/collaboration/${type}/${id}/comments/${commentId}/resolution?resolved=${resolved}`, { method: 'PATCH' },
+    ),
+  listReportReviews: (type: ReportCollaborationResource, id: string) =>
+    request<ReportReview[]>(`/reports/collaboration/${type}/${id}/reviews`),
+  requestReportReview: (type: ReportCollaborationResource, id: string, revisionId: string, reviewerIds: string[]) =>
+    request<{ revision_id: string; revision_number: number; sha256: string; reviewers: string[]; status: string }>(
+      `/reports/collaboration/${type}/${id}/reviews`, {
+        method: 'POST', body: JSON.stringify({ revision_id: revisionId, reviewer_ids: reviewerIds }),
+      },
+    ),
+  respondToReportReview: (
+    type: ReportCollaborationResource, id: string, reviewId: string,
+    statusValue: 'approved' | 'changes_requested', note?: string,
+  ) => request<{ id: string; status: string; responded_at: string }>(
+    `/reports/collaboration/${type}/${id}/reviews/${reviewId}`, {
+      method: 'PATCH', body: JSON.stringify({ status: statusValue, note: note ?? null }),
+    },
+  ),
 };
 

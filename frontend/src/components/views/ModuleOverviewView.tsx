@@ -277,11 +277,11 @@ export const GlobalModuleDirectory: React.FC<GlobalModuleDirectoryProps> = ({ me
   const { setActiveSection } = useVault();
   const c2 = useC2();
   const globalLinks: ChildLink[] = [
+    { id: 'overview_reports', label: 'Reportes', description: metrics.overview_reports || 'Documentos Typst, lienzos Excalidraw y correlaciones.', icon: FileText },
     { id: 'overview_prospection', label: 'Prospección', description: metrics.overview_prospection || 'Oportunidades, captación y seguimiento.', icon: Briefcase },
     { id: 'overview_communications', label: 'Correo y servicios', description: metrics.overview_communications || 'Cuentas principales, servicios y relaciones.', icon: Mail },
     { id: 'overview_finances', label: 'Finanzas', description: metrics.overview_finances || 'Ingresos, vencimientos, gastos y métodos de pago.', icon: CreditCard },
     { id: 'overview_security', label: 'Seguridad', description: metrics.overview_security || 'Credenciales y auditoría de seguridad.', icon: ShieldCheck },
-    { id: 'overview_reports', label: 'Reportes', description: metrics.overview_reports || 'Documentos Typst, lienzos Excalidraw y correlaciones.', icon: FileText },
     { id: 'overview_c2', label: 'Red y Lab (C2)', description: `${count(c2.activeModuleCount)} módulos activos · ${c2.activeEngagementId ? 'Entorno seleccionado' : 'Sin entorno seleccionado'}`, icon: Radar },
     { id: 'overview_activity', label: 'Actividad y papelera', description: metrics.overview_activity || 'Historial de cambios y elementos eliminados.', icon: Activity },
     { id: 'overview_settings', label: 'Ajustes', description: metrics.overview_settings || 'Preferencias, acceso, sesión y respaldos.', icon: Settings },

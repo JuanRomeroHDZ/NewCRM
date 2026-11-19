@@ -8,7 +8,7 @@ from app.models.core import User
 from app.models.crm_sales import Client, FolioSequence, Proposal, Sale, PaymentInstallment, PaymentRecord, Invoice
 from app.security.crypto import hash_master_password
 from app.services.core_auth import create_user_session
-from app.services.crm_sales import CrmSalesService, SaleAlreadyClosedError
+from app.services.crm_sales import CrmSalesService, SaleAlreadyClosedError, utc_now
 
 @pytest.mark.asyncio
 async def test_prospect_cadence_transitions_to_sin_respuesta_preserving_history(db_session):
@@ -156,13 +156,17 @@ async def test_close_sale_atomic_creates_full_entity_graph(db_session):
     await CrmSalesService.mark_proposal_viewed(db_session, prop.id, user_id="test-user")
     await db_session.refresh(prop)
     assert prop.is_viewed_by_user is True
+    prop.status = "aceptada"
+    prop.responded_at = utc_now()
+    prop.response_evidence = "Confirmación recibida por correo"
+    await db_session.commit()
 
     # Close sale atomically: 15,000 total, 5,000 advance payment
     sale, client, installments = await CrmSalesService.close_sale_atomic(
         session=db_session,
         user_id="test-user",
         company_name="Restaurante La Fogata",
-        title="Desarrollo Web y Reservas",
+        title=prop.title,
         total_amount=15000.0,
         prospect_id=prospect.id,
         proposal_id=prop.id,
@@ -284,6 +288,9 @@ async def test_close_sale_via_proposal_claims_its_prospect(db_session):
         prospect_id=prospect.id,
         title="Sitio web",
         amount=12000.0,
+        status="aceptada",
+        responded_at=utc_now(),
+        response_evidence="Confirmación recibida por correo",
     )
     db_session.add(proposal)
     await db_session.commit()
@@ -310,7 +317,7 @@ async def test_close_sale_via_proposal_claims_its_prospect(db_session):
 
 
 @pytest.mark.asyncio
-async def test_close_sale_route_maps_duplicate_reference_to_conflict(client, db_session):
+async def test_close_sale_route_maps_duplicate_reference_to_conflict(client, db_session, vault_only_token):
     prospect = Prospect(company_name="Clínica del Río")
     owner = User(
         username="sales_test_owner",
@@ -331,7 +338,7 @@ async def test_close_sale_route_maps_duplicate_reference_to_conflict(client, db_
         "total_amount": 12000,
         "prospect_id": prospect.id,
     }
-    headers = {"Authorization": f"Bearer {token}"}
+    headers = {"Authorization": f"Bearer {token}", "X-Vault-Token": vault_only_token}
     first_response = await client.post("/api/v1/crm/sales/close", headers=headers, json=payload)
     second_response = await client.post("/api/v1/crm/sales/close", headers=headers, json=payload)
 

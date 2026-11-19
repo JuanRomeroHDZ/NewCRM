@@ -25,6 +25,7 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     env:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@127.0.0.1:5432/emailcrm_disposable_test
       TEST_DATABASE_URL: postgresql+asyncpg://postgres:postgres@127.0.0.1:5432/emailcrm_disposable_test
       EMAILCRM_DISPOSABLE_DATABASE: "1"
 
@@ -42,6 +43,16 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r backend/requirements.txt -r backend/requirements-test.txt
+
+      - name: Prepare report verification tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y poppler-utils fonts-dejavu-core
+          docker build --file backend/Dockerfile --target runtime-base --tag lessso-typst-ci backend
+          typst_container=$(docker create lessso-typst-ci)
+          trap 'docker rm "$typst_container" >/dev/null' EXIT
+          docker cp "$typst_container:/usr/local/bin/typst" "$RUNNER_TEMP/typst"
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
 
       - name: Run Pytest test suite
         env:
@@ -87,7 +98,7 @@ jobs:
           npm test
 
   migration-smoke:
-    name: Alembic fresh and legacy upgrade
+    name: Alembic fresh, versioned and legacy upgrade
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -183,13 +194,13 @@ jobs:
                   revision = await connection.execute(text("SELECT version_num FROM alembic_version"))
                   assert note.scalar_one().startswith("enc:v1:")
                   assert marker.scalar_one() == "legacy_plaintext_notes_v1"
-                  assert revision.scalar_one() == "20261118_0003"
+                  assert revision.scalar_one() == "20261118_0005"
               await engine.dispose()
 
           asyncio.run(verify())
           PY
 
-      - name: Refuse destructive downgrade of the adopted baseline
+      - name: Refuse destructive downgrade of the adopted schema
         working-directory: backend
         env:
           DATABASE_URL: postgresql+asyncpg://postgres:postgres@127.0.0.1:5432/lessso_legacy_ci
@@ -205,7 +216,7 @@ jobs:
           except RuntimeError as exc:
               assert "irreversible" in str(exc).lower()
           else:
-              raise AssertionError("The adopted schema baseline must refuse destructive downgrade.")
+              raise AssertionError("The adopted schema must refuse destructive downgrade.")
           PY
           python - <<'PY'
           import asyncio
@@ -217,7 +228,69 @@ jobs:
                   email = await connection.execute(text("SELECT address FROM email_accounts WHERE id='legacy-record'"))
                   revision = await connection.execute(text("SELECT version_num FROM alembic_version"))
                   assert email.scalar_one() == "preserve@example.test"
-                  assert revision.scalar_one() == "20261118_0003"
+                  assert revision.scalar_one() == "20261118_0005"
+              await engine.dispose()
+
+          asyncio.run(verify())
+          PY
+
+      - name: Upgrade a database already at revision 0003
+        working-directory: backend
+        env:
+          DATABASE_URL: postgresql+asyncpg://postgres:postgres@127.0.0.1:5432/lessso_versioned_ci
+          SERVER_SECRET_KEY: ci-migration-secret-key-minimum-thirty-two-characters
+          FALLBACK_USD_MXN_RATE: "20.5"
+        run: |
+          python - <<'PY'
+          import asyncio
+          import asyncpg
+
+          async def create_database():
+              admin = await asyncpg.connect("postgresql://postgres:postgres@127.0.0.1:5432/lessso_ci")
+              try:
+                  await admin.execute("CREATE DATABASE lessso_versioned_ci")
+              finally:
+                  await admin.close()
+
+          asyncio.run(create_database())
+          PY
+          python -m alembic upgrade 20261118_0003
+          python - <<'PY'
+          import asyncio
+          from sqlalchemy import text
+          from app.database import engine
+
+          async def seed():
+              async with engine.begin() as connection:
+                  await connection.execute(text("""
+                      INSERT INTO crm_proposals
+                      (id, folio, version, title, service_type, amount, currency, status,
+                      is_viewed_by_user, created_at, updated_at)
+                      VALUES ('existing-proposal', 'TEST-0001', 1, 'Existing quote',
+                      'proyecto_unico', 100, 'MXN', 'borrador', false, now(), now())
+                  """))
+              await engine.dispose()
+
+          asyncio.run(seed())
+          PY
+          python -m app.migrate
+          python -m app.migrate
+          python - <<'PY'
+          import asyncio
+          from sqlalchemy import inspect, text
+          from app.database import engine
+
+          async def verify():
+              async with engine.connect() as connection:
+                  result = await connection.execute(text("""
+                      SELECT title, status, issued_pdf, response_evidence
+                      FROM crm_proposals WHERE id = 'existing-proposal'
+                  """))
+                  assert result.one() == ("Existing quote", "borrador", None, None)
+                  revision = await connection.execute(text("SELECT version_num FROM alembic_version"))
+                  assert revision.scalar_one() == "20261118_0005"
+                  indexes = await connection.run_sync(lambda conn: inspect(conn).get_indexes("prospects"))
+                  assert any(index["column_names"] == ["followup_due_date"] for index in indexes)
               await engine.dispose()
 
           asyncio.run(verify())
@@ -246,6 +319,9 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+
+      - name: Verify backup and certificate tooling
+        run: python3 -m unittest discover -s scripts/tests
 
       - name: Create temporary Compose environment
         run: |
@@ -279,3 +355,41 @@ jobs:
           docker run --rm --network host --env-file .env \
             -e TEST_DATABASE_URL=postgresql+asyncpg://postgres:postgres@127.0.0.1:5432/emailcrm_disposable_test \
             -e EMAILCRM_DISPOSABLE_DATABASE=1 lessso-backend-test
+
+      - name: Verify a fresh stable installation over HTTPS
+        env:
+          COMPOSE_PROJECT_NAME: lessso-release-smoke
+          POSTGRES_VOLUME_NAME: lessso-release-smoke-db
+          VAULT_MEDIA_VOLUME_NAME: lessso-release-smoke-media
+          BACKUP_VOLUME_NAME: lessso-release-smoke-backups
+          HOST_BIND_IP: 127.0.0.1
+          PORT: "18080"
+          HTTPS_PORT: "18443"
+        run: |
+          trap 'docker compose down -v' EXIT
+          umask 077
+          bash scripts/generate_certs.sh
+          docker compose up -d
+          for attempt in {1..30}; do
+            if bash lessso --check; then exit 0; fi
+            sleep 2
+          done
+          docker compose ps -a
+          docker compose logs --tail=30 migrate backend frontend proxy
+          exit 1
+
+  security-scan:
+    name: Trivy source checks
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      TRIVY_IMAGE: aquasec/trivy@sha256:8f6bb947dbc528902e11f2f5be52f7b519f6a39d5d148f41166f2040499768fb
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check dependencies, application source, and container configuration
+        run: |
+          docker run --rm -v "$PWD:/src:ro" "$TRIVY_IMAGE" fs \
+            --scanners vuln,secret --severity HIGH,CRITICAL --exit-code 1 /src
+          docker run --rm -v "$PWD:/src:ro" "$TRIVY_IMAGE" fs \
+            --scanners misconfig --severity HIGH,CRITICAL /src

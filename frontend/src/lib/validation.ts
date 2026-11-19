@@ -169,3 +169,6 @@ export function validateCardFields(
   return null;
 }
 
+
+export const isAccountPasswordStrong = (password: string) =>
+  Array.from(password).length >= 15 && /[^\p{L}\p{N}\s\p{C}]/u.test(password);

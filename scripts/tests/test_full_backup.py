@@ -24,6 +24,14 @@ import restore_full_backup_test as restore_test
 
 
 class FullBackupUnitTests(unittest.TestCase):
+    def test_restore_accepts_every_deployment_path_allowlisted_for_backup(self):
+        for name in backup.ALLOWED_DEPLOYMENT_FILES:
+            with self.subTest(path=name):
+                self.assertTrue(restore_test._deployment_path_is_allowlisted(Path(name), False))
+        for name in backup.ALLOWED_DEPLOYMENT_DIRECTORIES:
+            with self.subTest(directory=name):
+                self.assertTrue(restore_test._deployment_path_is_allowlisted(Path(name), True))
+
     @staticmethod
     def _populate_required_sources(deployment: Path) -> None:
         required = [*backup.REQUIRED_DEPLOYMENT_PATHS,

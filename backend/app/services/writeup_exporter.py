@@ -165,6 +165,24 @@ def _svg_data_uri(svg_xml: str) -> str:
     return f"data:image/svg+xml;base64,{b64}"
 
 
+def _with_mermaid_motion(svg: str) -> str:
+    # Only application-owned CSS is injected. The SVG stays an image document.
+    if "edge-animation-fast" not in svg and "edge-animation-slow" not in svg:
+        return svg
+    style = """<style>
+      @keyframes lessso-edge-motion { to { stroke-dashoffset: 0; } }
+      .edge-animation-fast, .edge-animation-slow {
+        stroke-dasharray: 9 5; stroke-dashoffset: 900;
+        animation: lessso-edge-motion 20s linear infinite;
+      }
+      .edge-animation-slow { animation-duration: 50s; }
+      @media (prefers-reduced-motion: reduce), print {
+        .edge-animation-fast, .edge-animation-slow { animation: none; }
+      }
+    </style>"""
+    return re.sub(r"(<svg\b[^>]*>)", lambda match: match.group(1) + style, svg, count=1)
+
+
 def _svg_to_png_bytes(svg_xml: str, width: int = 1200) -> bytes | None:
     """Rasterizes sanitized SVG into metadata-stripped PNG via rsvg-convert + Pillow for DOCX."""
     clean_svg = sanitize_svg_content(svg_xml)
@@ -366,7 +384,7 @@ def _render_math_html(markdown: str) -> str:
     return _MATH_OR_CODE.sub(replace, markdown)
 
 
-def _preprocess_markdown_for_html(ctx: ExportBundleContext, *, embed_video: bool = True) -> str:
+def _preprocess_markdown_for_html(ctx: ExportBundleContext, *, embed_video: bool = True, animate_diagrams: bool = False) -> str:
     text = apply_redaction_markers(ctx.markdown_content, ctx.redact_for_client)
     text = _render_writeup_labels_html(text)
     text = _markdown_object_caption_markers(text)
@@ -385,6 +403,8 @@ def _preprocess_markdown_for_html(ctx: ExportBundleContext, *, embed_video: bool
             safe_svg = sanitize_svg_content(svg_xml)
             if not safe_svg:
                 return match.group(0)
+            if animate_diagrams:
+                safe_svg = _with_mermaid_motion(safe_svg)
             return (
                 f'<figure class="mermaid-diagram">'
                 f'<img src="{_svg_data_uri(safe_svg)}" alt="Diagrama Mermaid" />'
@@ -720,9 +740,10 @@ def _compile_sanitized_html_parts(
     *,
     embed_video: bool = True,
     always_toc: bool = False,
+    animate_diagrams: bool = False,
 ) -> tuple[list[str], str]:
     """Compiles safe standalone index pages and the sanitized Markdown body."""
-    processed_md = _preprocess_markdown_for_html(ctx, embed_video=embed_video)
+    processed_md = _preprocess_markdown_for_html(ctx, embed_video=embed_video, animate_diagrams=animate_diagrams)
     if ctx.include_toc and "[TOC]" not in processed_md and (always_toc or len(processed_md) > 400):
         processed_md = "[TOC]\n\n" + processed_md
     raw_html = md_lib.markdown(
@@ -945,9 +966,10 @@ def build_standalone_html_document(
     page_refs: dict[str, int] | None = None,
     compiled_parts: tuple[list[str], str] | None = None,
     paper_preview: bool = False,
+    animate_diagrams: bool = False,
 ) -> str:
     """Produces a zero-external-dependency HTML5 report document."""
-    index_pages, markdown_body = compiled_parts if compiled_parts is not None else _compile_sanitized_html_parts(ctx, embed_video=embed_video, always_toc=True)
+    index_pages, markdown_body = compiled_parts if compiled_parts is not None else _compile_sanitized_html_parts(ctx, embed_video=embed_video, always_toc=True, animate_diagrams=animate_diagrams)
     indexes_html = "".join(index_pages)
     if pdf_section == "frontmatter" and page_refs:
         def add_page_ref(match: re.Match[str]) -> str:
@@ -1377,7 +1399,7 @@ def _build_md_zip_artifact(ctx: ExportBundleContext) -> tuple[bytes, str, str]:
 
 
 def _build_html_artifact(ctx: ExportBundleContext) -> tuple[bytes, str, str]:
-    return build_standalone_html_document(ctx).encode("utf-8"), "text/html; charset=utf-8", f"{ctx.slug}.html"
+    return build_standalone_html_document(ctx, animate_diagrams=True).encode("utf-8"), "text/html; charset=utf-8", f"{ctx.slug}.html"
 
 
 def _build_pdf_artifact(ctx: ExportBundleContext) -> tuple[bytes, str, str]:

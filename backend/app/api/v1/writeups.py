@@ -52,7 +52,7 @@ from app.config import settings
 from app.middleware.request_limits import read_upload_limited
 from app.security.tokens import require_vault_unlocked
 from app.services.activity_service import record_event
-from app.services.core_auth import get_current_user_from_token
+from app.services.core_auth import OPERATIONS_ROLES, require_role
 from app.services.writeup_exporter import ExportBundleContext, build_standalone_html_document, compile_writeup_export, render_sanitized_html_fragment
 from app.services.writeup_media import (
     convert_video_bytes_to_gif,
@@ -78,7 +78,6 @@ from app.services.writeup_service import (
 )
 
 
-WRITEUP_ROLES = {"owner", "business_admin", "operator"}
 WRITEUP_EDIT_LEASE_SECONDS = 90
 
 
@@ -123,19 +122,7 @@ async def _lock_writeup_for_resource_mutation(
     return writeup
 
 
-async def require_writeup_access(request: Request, db: AsyncSession = Depends(get_db)) -> User | None:
-    """Enforces role check when an operator Bearer/cookie session is attached alongside the unlocked vault."""
-    auth_header = request.headers.get("Authorization")
-    session_cookie = request.cookies.get("lessso_session")
-    if (auth_header and auth_header.startswith("Bearer sess_")) or session_cookie:
-        user = await get_current_user_from_token(request, db)
-        if user.role not in WRITEUP_ROLES:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Permisos insuficientes para operar sobre writeups de pentesting.",
-            )
-        return user
-    return None
+require_writeup_access = require_role(list(OPERATIONS_ROLES))
 
 
 async def _validate_workbench_links(
@@ -196,7 +183,7 @@ def _lease_request_matches(lock: WriteupEditLock, request: Request, user: User |
 async def enforce_writeup_edit_lock(
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User | None = Depends(require_writeup_access),
+    current_user: User = Depends(require_writeup_access),
 ) -> None:
     """Protect mutations server-side while leaving reads, previews and exports available."""
     if request.method in {"GET", "HEAD", "OPTIONS"}:
@@ -281,7 +268,7 @@ async def list_writeups(
     limit: int | None = Query(default=None, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     db: AsyncSession = Depends(get_db),
-    current_user: User | None = Depends(require_writeup_access),
+    current_user: User = Depends(require_writeup_access),
 ):
     stmt = select(Writeup).where(Writeup.is_deleted == False)  # noqa: E712
     count_stmt = select(func.count(Writeup.id)).where(Writeup.is_deleted == False)  # noqa: E712
@@ -353,7 +340,7 @@ async def list_writeups(
 @router.get("/overview", response_model=WriteupOverviewOut)
 async def get_writeup_overview(
     db: AsyncSession = Depends(get_db),
-    current_user: User | None = Depends(require_writeup_access),
+    current_user: User = Depends(require_writeup_access),
 ):
     """Return aggregate document statistics without returning report content."""
     rows = (await db.execute(
@@ -429,7 +416,7 @@ async def get_writeup_overview(
 @router.get("/snippets", response_model=list[WriteupSnippetOut])
 async def list_writeup_snippets(
     db: AsyncSession = Depends(get_db),
-    current_user: User | None = Depends(require_writeup_access),
+    current_user: User = Depends(require_writeup_access),
 ):
     rows = (await db.execute(select(WriteupSnippet).order_by(WriteupSnippet.name.asc()).limit(500))).scalars().all()
     return [{
@@ -445,7 +432,7 @@ async def list_writeup_snippets(
 async def create_writeup_snippet(
     payload: WriteupSnippetCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User | None = Depends(require_writeup_access),
+    current_user: User = Depends(require_writeup_access),
 ):
     name, template = payload.name.strip(), payload.template.strip()
     if not name or not template:
@@ -465,7 +452,7 @@ async def update_writeup_snippet(
     snippet_id: str,
     payload: WriteupSnippetUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User | None = Depends(require_writeup_access),
+    current_user: User = Depends(require_writeup_access),
 ):
     row = await db.get(WriteupSnippet, snippet_id)
     if not row:
@@ -488,7 +475,7 @@ async def update_writeup_snippet(
 async def delete_writeup_snippet(
     snippet_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User | None = Depends(require_writeup_access),
+    current_user: User = Depends(require_writeup_access),
 ):
     row = await db.get(WriteupSnippet, snippet_id)
     if not row:
@@ -502,7 +489,7 @@ async def delete_writeup_snippet(
 async def create_writeup(
     payload: WriteupCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User | None = Depends(require_writeup_access),
+    current_user: User = Depends(require_writeup_access),
 ):
     await validate_optional_links(db, payload.prospect_id, payload.project_id, payload.engagement_id)
     await _validate_workbench_links(
@@ -566,7 +553,7 @@ async def create_writeup(
 async def get_writeup(
     writeup_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User | None = Depends(require_writeup_access),
+    current_user: User = Depends(require_writeup_access),
 ):
     writeup = await get_writeup_or_404(db, writeup_id)
     return await build_writeup_detail_dict(db, writeup)
@@ -577,7 +564,7 @@ async def set_writeup_manual_lock(
     writeup_id: str,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User | None = Depends(require_writeup_access),
+    current_user: User = Depends(require_writeup_access),
 ):
     """Set a persistent read-only lock. Reading and exporting stay available."""
     await get_writeup_or_404(db, writeup_id)
@@ -605,7 +592,7 @@ async def set_writeup_manual_lock(
 async def clear_writeup_manual_lock(
     writeup_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User | None = Depends(require_writeup_access),
+    current_user: User = Depends(require_writeup_access),
 ):
     lock = await _get_writeup_lock_record(db, writeup_id)
     if not lock or not lock.manual_locked_at:
@@ -627,7 +614,7 @@ async def acquire_writeup_edit_lease(
     payload: WriteupEditLeaseAcquire,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User | None = Depends(require_writeup_access),
+    current_user: User = Depends(require_writeup_access),
 ):
     """Acquire or renew a per-tab editing reservation with a short expiry."""
     await get_writeup_or_404(db, writeup_id)
@@ -678,7 +665,7 @@ async def release_writeup_edit_lease(
     writeup_id: str,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User | None = Depends(require_writeup_access),
+    current_user: User = Depends(require_writeup_access),
 ):
     lock = await _get_writeup_lock_record(db, writeup_id)
     if not lock:
@@ -701,7 +688,7 @@ async def update_writeup(
     writeup_id: str,
     payload: WriteupUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User | None = Depends(require_writeup_access),
+    current_user: User = Depends(require_writeup_access),
 ):
     # Lock + compare-and-swap before reading mutable data, including on SQLite where
     # SELECT FOR UPDATE is ignored.
@@ -772,7 +759,7 @@ async def delete_writeup(
     writeup_id: str,
     expected_updated_at: datetime | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
-    current_user: User | None = Depends(require_writeup_access),
+    current_user: User = Depends(require_writeup_access),
 ):
     writeup = await _lock_writeup_for_resource_mutation(db, writeup_id, expected_updated_at)
     writeup.is_deleted = True
@@ -798,7 +785,7 @@ async def delete_writeup(
 async def list_revision_authors(
     writeup_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User | None = Depends(require_writeup_access),
+    current_user: User = Depends(require_writeup_access),
 ):
     await get_writeup_or_404(db, writeup_id)
     rows = (
@@ -840,7 +827,7 @@ async def list_revisions(
     created_before: datetime | None = Query(None),
     include_content: bool = Query(True),
     db: AsyncSession = Depends(get_db),
-    current_user: User | None = Depends(require_writeup_access),
+    current_user: User = Depends(require_writeup_access),
 ):
     await get_writeup_or_404(db, writeup_id)
     if created_after and created_before:
@@ -925,7 +912,7 @@ async def get_revision(
     writeup_id: str,
     revision_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User | None = Depends(require_writeup_access),
+    current_user: User = Depends(require_writeup_access),
 ):
     await get_writeup_or_404(db, writeup_id)
     row = (
@@ -960,7 +947,7 @@ async def restore_revision(
     revision_id: str,
     expected_updated_at: str | None = Query(None),
     db: AsyncSession = Depends(get_db),
-    current_user: User | None = Depends(require_writeup_access),
+    current_user: User = Depends(require_writeup_access),
 ):
     expected: datetime | None = None
     if expected_updated_at is not None:
@@ -1024,7 +1011,7 @@ async def upload_writeup_asset(
     convert_to_gif: bool = Form(default=False),
     expected_updated_at: datetime | None = Form(default=None),
     db: AsyncSession = Depends(get_db),
-    current_user: User | None = Depends(require_writeup_access),
+    current_user: User = Depends(require_writeup_access),
 ):
     writeup = await _lock_writeup_for_resource_mutation(db, writeup_id, expected_updated_at)
     upload_limit = max(settings.WRITEUP_MAX_IMAGE_BYTES, settings.WRITEUP_MAX_VIDEO_BYTES)
@@ -1058,7 +1045,7 @@ async def convert_writeup_video_to_gif(
     max_width: int | None = Query(default=None, ge=160, le=1920),
     expected_updated_at: datetime | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
-    current_user: User | None = Depends(require_writeup_access),
+    current_user: User = Depends(require_writeup_access),
 ):
     writeup = await _lock_writeup_for_resource_mutation(db, writeup_id, expected_updated_at)
     source = (
@@ -1095,7 +1082,7 @@ async def get_writeup_asset_binary(
     writeup_id: str,
     asset_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User | None = Depends(require_writeup_access),
+    current_user: User = Depends(require_writeup_access),
 ):
     await get_writeup_or_404(db, writeup_id)
     asset = (
@@ -1121,7 +1108,7 @@ async def delete_writeup_asset(
     asset_id: str,
     expected_updated_at: datetime | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
-    current_user: User | None = Depends(require_writeup_access),
+    current_user: User = Depends(require_writeup_access),
 ):
     writeup = await _lock_writeup_for_resource_mutation(db, writeup_id, expected_updated_at)
     asset = (
@@ -1171,7 +1158,7 @@ async def create_writeup_board(
     writeup_id: str,
     payload: WriteupBoardCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User | None = Depends(require_writeup_access),
+    current_user: User = Depends(require_writeup_access),
 ):
     writeup = await _lock_writeup_for_resource_mutation(db, writeup_id, payload.expected_updated_at)
     clean_svg = sanitize_board_svg(payload.svg_snapshot)
@@ -1195,7 +1182,7 @@ async def update_writeup_board(
     board_id: str,
     payload: WriteupBoardUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User | None = Depends(require_writeup_access),
+    current_user: User = Depends(require_writeup_access),
 ):
     writeup = await _lock_writeup_for_resource_mutation(db, writeup_id, payload.expected_updated_at)
     board = (
@@ -1227,7 +1214,7 @@ async def delete_writeup_board(
     board_id: str,
     expected_updated_at: datetime | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
-    current_user: User | None = Depends(require_writeup_access),
+    current_user: User = Depends(require_writeup_access),
 ):
     writeup = await _lock_writeup_for_resource_mutation(db, writeup_id, expected_updated_at)
     board = (
@@ -1249,7 +1236,7 @@ async def create_writeup_citation(
     writeup_id: str,
     payload: WriteupCitationCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User | None = Depends(require_writeup_access),
+    current_user: User = Depends(require_writeup_access),
 ):
     writeup = await _lock_writeup_for_resource_mutation(db, writeup_id, payload.expected_updated_at)
     board = (
@@ -1283,7 +1270,7 @@ async def update_writeup_citation(
     citation_id: str,
     payload: WriteupCitationUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User | None = Depends(require_writeup_access),
+    current_user: User = Depends(require_writeup_access),
 ):
     writeup = await _lock_writeup_for_resource_mutation(db, writeup_id, payload.expected_updated_at)
     citation = (
@@ -1316,7 +1303,7 @@ async def delete_writeup_citation(
     citation_id: str,
     expected_updated_at: datetime | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
-    current_user: User | None = Depends(require_writeup_access),
+    current_user: User = Depends(require_writeup_access),
 ):
     writeup = await _lock_writeup_for_resource_mutation(db, writeup_id, expected_updated_at)
     citation = (
@@ -1340,7 +1327,7 @@ async def preview_writeup_html(
     writeup_id: str,
     redact_for_client: bool = Query(default=False),
     db: AsyncSession = Depends(get_db),
-    current_user: User | None = Depends(require_writeup_access),
+    current_user: User = Depends(require_writeup_access),
 ):
     writeup = await get_writeup_or_404(db, writeup_id)
     ctx = await build_export_context(db, writeup, redact_for_client=redact_for_client, include_toc=True)
@@ -1379,7 +1366,7 @@ async def preview_writeup_export(
     writeup_id: str,
     payload: WriteupExportPreviewRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User | None = Depends(require_writeup_access),
+    current_user: User = Depends(require_writeup_access),
 ):
     writeup = await get_writeup_or_404(db, writeup_id)
     ctx = await _export_context(db, writeup, payload)
@@ -1389,6 +1376,7 @@ async def preview_writeup_export(
             ctx,
             embed_video=payload.format in {"html", "md_zip"},
             paper_preview=payload.format in {"pdf", "docx"},
+            animate_diagrams=payload.format == "html",
         ),
         media_type="text/html",
         headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"},
@@ -1400,7 +1388,7 @@ async def export_writeup(
     writeup_id: str,
     payload: WriteupExportRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User | None = Depends(require_writeup_access),
+    current_user: User = Depends(require_writeup_access),
 ):
     writeup = await get_writeup_or_404(db, writeup_id)
     ctx = await _export_context(db, writeup, payload)
@@ -1442,7 +1430,7 @@ async def clone_writeup(
     writeup_id: str,
     payload: WriteupCloneRequest | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User | None = Depends(require_writeup_access),
+    current_user: User = Depends(require_writeup_access),
 ):
     source = await get_writeup_or_404(db, writeup_id)
     source_detail = await build_writeup_detail_dict(db, source)

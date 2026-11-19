@@ -8,7 +8,8 @@ from sqlalchemy import select, desc
 from app.database import get_db
 from app.schemas import validate_nonblank_input
 from app.schemas.validators import validate_calendar_date
-from app.services.core_auth import get_current_user_from_token, require_role
+from app.security.tokens import require_vault_unlocked
+from app.services.core_auth import ADMIN_ROLES, SALES_ROLES, require_role
 from app.models.core import User
 from app.models.agenda import AgendaEvent, OperationTask, ClientAsset, PentestEngagement, PentestFinding
 from app.services.c2_scope import parse_authorized_ipv6_targets
@@ -18,7 +19,7 @@ from app.services.agenda_service import AgendaService
 
 router = APIRouter(prefix="/agenda", tags=["Agenda & Operations"])
 
-AGENDA_WRITE_ROLES = ["owner", "business_admin", "operator", "seller"]
+agenda_access = require_role(SALES_ROLES)
 PENTEST_ROLES = ["owner", "business_admin", "operator"]
 MAX_EVENT_DURATION = timedelta(days=31)
 MAX_PENTEST_WINDOW = timedelta(days=365)
@@ -111,14 +112,14 @@ class PentestFindingCreate(BaseModel):
         return validate_nonblank_input(value)
 
 
-@router.get("/events")
+@router.get("/events", dependencies=[Depends(require_vault_unlocked)])
 async def list_events(
     event_type: str | None = Query(default=None, max_length=32, pattern="^(reunion|llamada|mantenimiento|pentest|finanzas|tarea|otro)$"),
     include_financial: bool = False,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user_from_token)
+    current_user: User = Depends(agenda_access)
 ):
-    if include_financial and current_user.role not in ("owner", "business_admin"):
+    if include_financial and current_user.role not in ADMIN_ROLES:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="No cuentas con permisos para consultar eventos financieros."
@@ -133,12 +134,14 @@ async def list_events(
     return res.scalars().all()
 
 
-@router.post("/events")
+@router.post("/events", dependencies=[Depends(require_vault_unlocked)])
 async def create_event(
     req: EventCreateRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(AGENDA_WRITE_ROLES))
+    current_user: User = Depends(agenda_access)
 ):
+    if req.event_type == "finanzas" and current_user.role not in ADMIN_ROLES:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No puedes crear eventos financieros.")
     related_records = (
         (Client, req.client_id, "El cliente asociado no existe."),
         (Prospect, req.prospect_id, "El prospecto asociado no existe."),
@@ -161,7 +164,8 @@ async def create_event(
             client_id=req.client_id,
             prospect_id=req.prospect_id,
             sale_id=req.sale_id,
-            recurrence_interval_days=req.recurrence_interval_days
+            recurrence_interval_days=req.recurrence_interval_days,
+            include_financial_overlaps=current_user.role in ADMIN_ROLES,
         )
         return {
             "event": event,
@@ -172,17 +176,18 @@ async def create_event(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.post("/events/{event_id}/complete")
+@router.post("/events/{event_id}/complete", dependencies=[Depends(require_vault_unlocked)])
 async def complete_event(
     event_id: str = Path(..., max_length=36),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(AGENDA_WRITE_ROLES))
+    current_user: User = Depends(agenda_access)
 ):
     try:
         event, next_event = await AgendaService.complete_event(
             session=db,
             event_id=event_id,
-            user_id=current_user.id
+            user_id=current_user.id,
+            include_financial=current_user.role in ADMIN_ROLES,
         )
         return {
             "completed_event_id": event.id,
@@ -193,13 +198,13 @@ async def complete_event(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/availability")
+@router.get("/availability", dependencies=[Depends(require_vault_unlocked)])
 async def get_availability(
     target_date: str = Query(..., pattern=r"^\d{4}-\d{2}-\d{2}$"),
     duration_minutes: int = Query(default=60, ge=15, le=480),
     buffer_minutes: int = Query(default=15, ge=0, le=120),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user_from_token)
+    current_user: User = Depends(agenda_access)
 ):
     try:
         validate_calendar_date(target_date)
@@ -207,19 +212,20 @@ async def get_availability(
             session=db,
             target_date=target_date,
             duration_minutes=duration_minutes,
-            buffer_minutes=buffer_minutes
+            buffer_minutes=buffer_minutes,
+            include_financial=current_user.role in ADMIN_ROLES,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/export/ics")
+@router.get("/export/ics", dependencies=[Depends(require_vault_unlocked)])
 async def export_ics(
     include_financial: bool = False,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user_from_token)
+    current_user: User = Depends(agenda_access)
 ):
-    if include_financial and current_user.role not in ("owner", "business_admin"):
+    if include_financial and current_user.role not in ADMIN_ROLES:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="No cuentas con permisos para exportar eventos financieros."
@@ -228,8 +234,8 @@ async def export_ics(
     return Response(content=ics_text, media_type="text/calendar", headers={"Content-Disposition": "attachment; filename=agenda_contact_lessso.ics"})
 
 
-@router.get("/google-calendar/status")
-async def google_calendar_status(current_user: User = Depends(get_current_user_from_token)):
+@router.get("/google-calendar/status", dependencies=[Depends(require_vault_unlocked)])
+async def google_calendar_status(current_user: User = Depends(agenda_access)):
     return AgendaService.get_google_calendar_status()
 
 

@@ -13,12 +13,15 @@ from app.schemas import (
 )
 from app.security.crypto import encrypt_secret, decrypt_secret, encrypt_note, decrypt_note
 from app.security.tokens import require_vault_unlocked
+from app.services.core_auth import ADMIN_ROLES, OPERATIONS_ROLES, require_module_access, require_role
 from app.security.totp import generate_totp_code
 from app.services.favicon import extract_favicon_url, generate_initials_svg
 from app.services.audit import log_audit_event
 
 # All platform routes strictly require an unlocked Level 2 vault session
-router = APIRouter(prefix="/platforms", tags=["platforms"], dependencies=[Depends(require_vault_unlocked)])
+module_access = require_module_access(OPERATIONS_ROLES)
+billing_access = require_role(ADMIN_ROLES)
+router = APIRouter(prefix="/platforms", tags=["platforms"], dependencies=[Depends(require_vault_unlocked), Depends(module_access)])
 
 def parse_json_safely(val: str | None, default_val=None):
     if not val:
@@ -197,7 +200,7 @@ async def _build_platform_response(
         updated_at=p.updated_at
     )
 
-@router.get("/billing-history", response_model=list[BillingRecordResponse])
+@router.get("/billing-history", response_model=list[BillingRecordResponse], dependencies=[Depends(billing_access)])
 async def get_billing_history(
     response: Response,
     limit: int = Query(100, ge=1, le=500),
@@ -229,7 +232,7 @@ async def get_billing_history(
         for r in rows
     ]
 
-@router.post("/process-subscriptions")
+@router.post("/process-subscriptions", dependencies=[Depends(billing_access)])
 async def trigger_process_due_subscriptions(db: AsyncSession = Depends(get_db)):
     """Explicitly advances and records due recurring platform subscriptions (idempotent, safe)."""
     stmt = select(PlatformAccount).where(PlatformAccount.is_deleted == False)

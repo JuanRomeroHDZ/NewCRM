@@ -1,7 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Excalidraw, exportToCanvas } from '@excalidraw/excalidraw';
+import { CaptureUpdateAction, Excalidraw, exportToCanvas } from '@excalidraw/excalidraw';
+import type { AppState, BinaryFiles, Collaborator, ExcalidrawImperativeAPI, SocketId } from '@excalidraw/excalidraw/types';
+import type { ExcalidrawElement } from '@excalidraw/excalidraw/element/types';
 import '@excalidraw/excalidraw/index.css';
 import './excalidraw-obsidian.css';
+import * as Y from 'yjs';
 
 if (typeof window !== 'undefined') {
   (window as Window & { EXCALIDRAW_ASSET_PATH?: string }).EXCALIDRAW_ASSET_PATH = '/excalidraw-assets/';
@@ -19,6 +22,8 @@ import {
   Save,
   Search,
   Trash2,
+  Users,
+  MessageSquarePlus,
 } from 'lucide-react';
 import { api } from '../../lib/api';
 import { ApiError } from '../../lib/apiErrors';
@@ -26,11 +31,49 @@ import { formatApiDateTime } from '../../lib/dates';
 import { useVault } from '../../context/VaultContext';
 import { ReportCanvasDetail, ReportCanvasSummary, ReportDocumentSummary } from '../../types';
 import { EmptyState } from '../common/EmptyState';
+import { ReportLoadingSkeleton } from './ReportLoadingSkeleton';
+import { ReportCollaborationPanel } from './ReportCollaborationPanel';
+import { describeReportSync, useReportCollaboration, ReportCollaborationSession } from './useReportCollaboration';
+import { applyExcalidrawElementFields, elementFieldsToPlainObject } from './reportCanvasCollaboration.mjs';
 
 interface ParsedExcalidrawScene {
-  elements?: readonly Record<string, unknown>[];
+  elements?: readonly ExcalidrawElement[];
   appState?: Record<string, unknown>;
   files?: Record<string, unknown>;
+}
+
+function collaborativeCanvasScene(
+  elementsMap: Y.Map<Y.Map<unknown>>,
+  filesMap: Y.Map<unknown>,
+  appStateMap: Y.Map<unknown>,
+) {
+  const ordered = Array.from(elementsMap.entries()).map(([id, fields]) => ({
+    id,
+    index: typeof fields.get('index') === 'string' ? fields.get('index') as string : '',
+    element: elementFieldsToPlainObject(fields) as unknown as ExcalidrawElement,
+  }));
+  ordered.sort((left, right) => left.index.localeCompare(right.index) || left.id.localeCompare(right.id));
+  const elements = ordered.map((item) => item.element);
+  const appState = appStateMap.toJSON() as Record<string, unknown>;
+  const files = filesMap.toJSON() as Record<string, unknown>;
+  return {
+    elements,
+    appState: {
+      viewBackgroundColor: typeof appState.viewBackgroundColor === 'string' ? appState.viewBackgroundColor : '#080A0A',
+      ...(typeof appState.gridSize === 'number' ? { gridSize: appState.gridSize } : {}),
+      gridModeEnabled: appState.gridModeEnabled === true,
+      theme: 'dark',
+    },
+    files,
+  };
+}
+
+function sceneElementSignature(elements: readonly ExcalidrawElement[]) {
+  return JSON.stringify(elements.map((element) => [element.id, element.index, element.version, element.versionNonce, element.isDeleted, 'text' in element ? element.text : null]));
+}
+
+function sameJson(left: unknown, right: unknown) {
+  return JSON.stringify(left) === JSON.stringify(right);
 }
 
 function parseCanvasScene(raw: string): ParsedExcalidrawScene {
@@ -88,14 +131,23 @@ function sceneSignature(raw: string): string {
   const scene = parseCanvasScene(raw);
   return JSON.stringify([
     scene.elements?.filter((element) => !element.isDeleted)
-      .map(({ id, version, versionNonce }) => [id, version, versionNonce]),
+      .map(({ id, index, version, versionNonce, ...rest }) => [id, index, version, versionNonce, 'text' in rest ? rest.text : null]),
     scene.appState?.viewBackgroundColor,
     scene.appState?.gridModeEnabled ? scene.appState.gridSize : null,
+    Object.entries(scene.files || {}).sort(([left], [right]) => left.localeCompare(right)).map(([id, rawFile]) => {
+      const file = rawFile && typeof rawFile === 'object' ? rawFile as Record<string, unknown> : {};
+      const dataUrl = typeof file.dataURL === 'string' ? file.dataURL : '';
+      return [id, file.mimeType, dataUrl.length];
+    }),
   ]);
 }
 
+function sameBytes(left: Uint8Array, right: Uint8Array): boolean {
+  return left.length === right.length && left.every((byte, index) => byte === right[index]);
+}
+
 export const ReportsCanvasesView: React.FC = () => {
-  const { isUnlocked, openUnlockModal, showToast, confirm, prompt } = useVault();
+  const { isUnlocked, draftRecoveryKey, operator, openUnlockModal, showToast, confirm, prompt } = useVault();
 
   const [canvases, setCanvases] = useState<ReportCanvasSummary[]>([]);
   const [documents, setDocuments] = useState<ReportDocumentSummary[]>([]);
@@ -105,6 +157,8 @@ export const ReportsCanvasesView: React.FC = () => {
   const [linkedDocumentId, setLinkedDocumentId] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState('');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isCollaborationOpen, setIsCollaborationOpen] = useState(false);
+  const [collaborationAnchor, setCollaborationAnchor] = useState<string | null>(null);
 
   const [isLoadingList, setIsLoadingList] = useState(true);
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
@@ -115,11 +169,6 @@ export const ReportsCanvasesView: React.FC = () => {
   const actionsRef = useRef<HTMLDivElement>(null);
   const actionTriggerRef = useRef<HTMLButtonElement>(null);
   const savingRef = useRef(false);
-  const hasUnsavedChanges = !!activeCanvas && (
-    sceneDirty || (titleDraft.trim() || activeCanvas.title) !== activeCanvas.title ||
-    linkedDocumentId !== (activeCanvas.linked_document_id || '')
-  );
-
   useEffect(() => {
     if (!actionsOpen) return;
     const dismiss = (event: PointerEvent) => {
@@ -132,6 +181,78 @@ export const ReportsCanvasesView: React.FC = () => {
 
   const savedSceneSignature = useMemo(() => sceneSignature(activeCanvas?.scene_json || "{}"), [activeCanvas?.scene_json]);
   const latestSceneRef = useRef<{ json: string; elementCount: number } | null>(null);
+  const canvasApiRef = useRef<ExcalidrawImperativeAPI | null>(null);
+  const lastSnapshotSceneSignatureRef = useRef<string | null>(null);
+  const snapshotQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const lastSelectionRef = useRef('[]');
+
+  const getCollaborativeCanvasContent = useCallback((doc: Y.Doc) => {
+    const metadata = doc.getMap<unknown>('metadata');
+    const scene = collaborativeCanvasScene(
+      doc.getMap<Y.Map<unknown>>('elements'),
+      doc.getMap<unknown>('files'),
+      doc.getMap<unknown>('app-state'),
+    );
+    return {
+      title: String(metadata.get('title') ?? activeCanvas?.title ?? ''),
+      scene_json: JSON.stringify(scene),
+      element_count: scene.elements.filter((element) => !element.isDeleted).length,
+      linked_document_id: (metadata.get('linked_document_id') as string | null | undefined) ?? null,
+    };
+  }, [activeCanvas?.title]);
+  const collaboration = useReportCollaboration({
+    resourceType: 'canvas',
+    resourceId: activeCanvas?.id ?? null,
+    initialContent: activeCanvas ? {
+      title: activeCanvas.title,
+      scene_json: activeCanvas.scene_json,
+      element_count: activeCanvas.element_count,
+      linked_document_id: activeCanvas.linked_document_id,
+    } : null,
+    recoveryKey: draftRecoveryKey,
+    operator,
+    getContent: getCollaborativeCanvasContent,
+  });
+  const persistCanvasSnapshot = useCallback((canvasId: string, force = false) => {
+    const session = collaboration.session;
+    if (!session) return Promise.reject(new Error('El lienzo aún no terminó de sincronizarse.'));
+    const persist = async () => {
+      let regenerate = force;
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        const stateVector = Y.encodeStateVector(session.doc);
+        const content = getCollaborativeCanvasContent(session.doc);
+        const signature = sceneSignature(content.scene_json);
+        if (!regenerate && lastSnapshotSceneSignatureRef.current === signature) return;
+        const snapshot = await createReportSnapshot(content.scene_json);
+        if (!sameBytes(stateVector, Y.encodeStateVector(session.doc))) {
+          regenerate = true;
+          continue;
+        }
+        const updated = await api.updateReportCanvas(canvasId, { svg_snapshot: snapshot });
+        if (!sameBytes(stateVector, Y.encodeStateVector(session.doc))) {
+          regenerate = true;
+          continue;
+        }
+        lastSnapshotSceneSignatureRef.current = signature;
+        setActiveCanvas((current) => current?.id === canvasId
+          ? { ...current, has_svg_snapshot: updated.has_svg_snapshot, updated_at: updated.updated_at }
+          : current);
+        setCanvases((current) => current.map((item) => item.id === canvasId
+          ? { ...item, has_svg_snapshot: updated.has_svg_snapshot, updated_at: updated.updated_at }
+          : item));
+        return;
+      }
+      throw new Error('El lienzo sigue recibiendo cambios. Espera la sincronización y vuelve a guardar.');
+    };
+    const queued = snapshotQueueRef.current.then(persist, persist);
+    snapshotQueueRef.current = queued.catch(() => undefined);
+    return queued;
+  }, [collaboration.session, getCollaborativeCanvasContent]);
+  const hasUnsavedChanges = !!activeCanvas && (
+    collaboration.isDirty || sceneDirty || (titleDraft.trim() || activeCanvas.title) !== activeCanvas.title ||
+    linkedDocumentId !== (activeCanvas.linked_document_id || '')
+  );
+  const syncLabel = describeReportSync(collaboration, isSaving, hasUnsavedChanges);
 
   useEffect(() => {
     if (!isUnlocked) {
@@ -173,22 +294,22 @@ export const ReportsCanvasesView: React.FC = () => {
   const selectCanvasWithGuard = useCallback(
     async (nextId: string) => {
       if (nextId === selectedId || savingRef.current) return;
-      if (hasUnsavedChanges) {
-        const discard = await confirm({
-          title: 'Cambios sin guardar',
-          message: 'Tienes cambios pendientes en el lienzo actual. ¿Descartarlos y continuar?',
-          confirmLabel: 'Descartar',
-          tone: 'warning',
-        });
-        if (!discard) return;
+      if (hasUnsavedChanges && collaboration.canEdit && collaboration.status === 'connected') {
+        try {
+          await collaboration.checkpoint(false, 'manual');
+        } catch (error) {
+          showToast(error instanceof Error ? error.message : 'No se pudo sincronizar el lienzo.', 'error');
+          return;
+        }
       }
       setSelectedId(nextId);
     },
-    [confirm, hasUnsavedChanges, selectedId]
+    [collaboration.canEdit, collaboration.checkpoint, collaboration.status, hasUnsavedChanges, selectedId, showToast]
   );
 
   useEffect(() => {
     if (!isUnlocked || !selectedId) {
+      canvasApiRef.current = null;
       setActiveCanvas(null);
       setTitleDraft('');
       latestSceneRef.current = null;
@@ -206,6 +327,7 @@ export const ReportsCanvasesView: React.FC = () => {
       .then((detail) => {
         if (cancelled) return;
         setActiveCanvas(detail);
+        lastSnapshotSceneSignatureRef.current = detail.has_svg_snapshot ? sceneSignature(detail.scene_json || '{}') : null;
         setTitleDraft(detail.title);
         setLinkedDocumentId(detail.linked_document_id || '');
         latestSceneRef.current = {
@@ -227,6 +349,86 @@ export const ReportsCanvasesView: React.FC = () => {
       cancelled = true;
     };
   }, [detailLoadAttempt, isUnlocked, selectedId]);
+
+  useEffect(() => {
+    const session = collaboration.session;
+    if (!activeCanvas || !session) return;
+    const metadata = session.metadata;
+    const scene = collaborativeCanvasScene(session.elements, session.files, session.appState);
+    const sceneJson = JSON.stringify(scene);
+    const count = scene.elements.filter((element) => !element.isDeleted).length;
+    const title = String(metadata.get('title') ?? activeCanvas.title);
+    const linkedId = (metadata.get('linked_document_id') as string | null | undefined) ?? '';
+    setTitleDraft((current) => current === title ? current : title);
+    setLinkedDocumentId((current) => current === linkedId ? current : linkedId);
+    latestSceneRef.current = { json: sceneJson, elementCount: count };
+
+    const excalidraw = canvasApiRef.current;
+    if (excalidraw) {
+      const currentElements = excalidraw.getSceneElementsIncludingDeleted();
+      if (sceneElementSignature(currentElements) !== sceneElementSignature(scene.elements)) {
+        const files = Object.values(scene.files).filter((file): file is Record<string, unknown> => Boolean(file && typeof file === 'object'));
+        if (files.length) excalidraw.addFiles(files as never);
+        excalidraw.updateScene({
+          elements: scene.elements as never,
+          appState: scene.appState as never,
+          captureUpdate: CaptureUpdateAction.NEVER,
+        });
+      }
+    }
+
+    const nextSceneDirty = sceneSignature(sceneJson) !== savedSceneSignature;
+    setSceneDirty(nextSceneDirty);
+    if (collaboration.lastSavedAt && !collaboration.isDirty) {
+      setActiveCanvas((current) => {
+        if (!current || current.id !== activeCanvas.id) return current;
+        if (current.scene_json === sceneJson && current.title === title && current.linked_document_id === (linkedId || null)) return current;
+        return {
+          ...current,
+          title,
+          scene_json: sceneJson,
+          element_count: count,
+          linked_document_id: linkedId || null,
+          updated_at: collaboration.lastSavedAt!,
+        };
+      });
+      setCanvases((current) => current.map((item) => item.id === activeCanvas.id ? {
+        ...item,
+        title,
+        element_count: count,
+        linked_document_id: linkedId || null,
+        updated_at: collaboration.lastSavedAt!,
+      } : item));
+      setSceneDirty(false);
+    }
+  }, [
+    activeCanvas?.id,
+    collaboration.isDirty,
+    collaboration.lastSavedAt,
+    collaboration.revision,
+    collaboration.session,
+    savedSceneSignature,
+  ]);
+
+  useEffect(() => {
+    if (!activeCanvas || !collaboration.session || !collaboration.canEdit
+      || collaboration.status !== 'connected' || collaboration.isDirty || sceneDirty) return;
+    const signature = sceneSignature(activeCanvas.scene_json || '{}');
+    if (lastSnapshotSceneSignatureRef.current === signature) return;
+    void persistCanvasSnapshot(activeCanvas.id).catch((error) => {
+      setErrorMessage(error instanceof Error ? error.message : 'No se pudo actualizar la vista previa del lienzo.');
+    });
+  }, [
+    activeCanvas?.id,
+    activeCanvas?.scene_json,
+    collaboration.canEdit,
+    collaboration.isDirty,
+    collaboration.lastSavedAt,
+    collaboration.session,
+    collaboration.status,
+    persistCanvasSnapshot,
+    sceneDirty,
+  ]);
 
   const handleCreateCanvas = async () => {
     const entered = await prompt({
@@ -257,23 +459,19 @@ export const ReportsCanvasesView: React.FC = () => {
   };
 
   const handleSaveCanvas = useCallback(async (refreshSnapshot = false) => {
-    if (!activeCanvas || savingRef.current || (!hasUnsavedChanges && !refreshSnapshot)) return;
+    if (!activeCanvas || !collaboration.session || !collaboration.canEdit || collaboration.status !== 'connected'
+      || savingRef.current || (!hasUnsavedChanges && !refreshSnapshot)) return;
     savingRef.current = true;
-    const cleanTitle = titleDraft.trim() || activeCanvas.title;
-    const scenePayload = latestSceneRef.current;
-    const sceneJson = scenePayload?.json ?? activeCanvas.scene_json;
+    const content = getCollaborativeCanvasContent(collaboration.session.doc);
+    const sceneJson = content.scene_json;
 
     setIsSaving(true);
     setErrorMessage(null);
     try {
-      const svgSnapshot = await createReportSnapshot(sceneJson);
-      const updated = await api.updateReportCanvas(activeCanvas.id, {
-        title: cleanTitle,
-        scene_json: sceneJson,
-        svg_snapshot: svgSnapshot,
-        element_count: scenePayload?.elementCount ?? activeCanvas.element_count,
-        linked_document_id: linkedDocumentId || null,
-      });
+      await collaboration.checkpoint(hasUnsavedChanges, 'manual');
+      await persistCanvasSnapshot(activeCanvas.id, refreshSnapshot);
+      const updated = await api.getReportCanvas(activeCanvas.id);
+      lastSnapshotSceneSignatureRef.current = updated.has_svg_snapshot ? sceneSignature(updated.scene_json || '{}') : null;
       setActiveCanvas(updated);
       setTitleDraft(updated.title);
       setLinkedDocumentId(updated.linked_document_id || '');
@@ -294,14 +492,14 @@ export const ReportsCanvasesView: React.FC = () => {
       setSceneDirty(sceneSignature(latestSceneRef.current?.json ?? sceneJson) !== sceneSignature(updated.scene_json));
       showToast('Lienzo guardado.', 'success');
     } catch (err) {
-      const msg = err instanceof ApiError ? err.message : 'No se pudo guardar el lienzo.';
+      const msg = err instanceof ApiError ? err.message : err instanceof Error ? err.message : 'No se pudo guardar el lienzo.';
       setErrorMessage(msg);
       showToast(msg, 'error');
     } finally {
       savingRef.current = false;
       setIsSaving(false);
     }
-  }, [activeCanvas, hasUnsavedChanges, linkedDocumentId, showToast, titleDraft]);
+  }, [activeCanvas, collaboration.canEdit, collaboration.checkpoint, collaboration.session, collaboration.status, getCollaborativeCanvasContent, hasUnsavedChanges, persistCanvasSnapshot, showToast]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -345,32 +543,91 @@ export const ReportsCanvasesView: React.FC = () => {
   }, [canvases, searchQuery]);
 
   const initialExcalidrawData = useMemo(() => {
-    if (!activeCanvas) return undefined;
-    return parseCanvasScene(activeCanvas.scene_json);
-  }, [activeCanvas]);
+    if (!activeCanvas || !collaboration.session) return undefined;
+    return collaborativeCanvasScene(collaboration.session.elements, collaboration.session.files, collaboration.session.appState);
+  }, [activeCanvas?.id, collaboration.session]);
 
   const handleExcalidrawChange = useCallback(
-    (elements: readonly Record<string, unknown>[], appState: Record<string, unknown>, files: Record<string, unknown>) => {
-      if (!activeCanvas) return;
-      const nonDeletedCount = elements.filter((el) => !el.isDeleted).length;
+    (elements: readonly ExcalidrawElement[], appState: AppState, files: BinaryFiles) => {
+      const session = collaboration.session;
+      if (!activeCanvas || !session || !collaboration.canEdit) return;
       const serializableAppState = {
         viewBackgroundColor: appState.viewBackgroundColor,
         gridSize: appState.gridSize,
         gridModeEnabled: appState.gridModeEnabled,
         theme: 'dark',
       };
-      const serialized = JSON.stringify({
-        elements,
-        appState: serializableAppState,
-        files,
+      const ids = new Set(elements.map((element) => element.id));
+      const changedElements = elements.filter((element) => {
+        const fields = session.elements.get(element.id);
+        return !fields
+          || fields.get('version') !== element.version
+          || fields.get('versionNonce') !== element.versionNonce
+          || fields.get('index') !== element.index
+          || fields.get('isDeleted') !== element.isDeleted;
       });
-      if (latestSceneRef.current?.json !== serialized) {
-        latestSceneRef.current = { json: serialized, elementCount: nonDeletedCount };
+      const stateVector = Y.encodeStateVector(session.doc);
+      session.doc.transact(() => {
+        for (const [id, fields] of session.elements.entries()) {
+          if (!ids.has(id) && fields.get('isDeleted') !== true) {
+            fields.set('isDeleted', true);
+            fields.set('version', Number(fields.get('version') || 0) + 1);
+          }
+        }
+        changedElements.forEach((element) => {
+          let fields = session.elements.get(element.id);
+          if (!fields) {
+            fields = new Y.Map<unknown>();
+            session.elements.set(element.id, fields);
+          }
+          const incoming = JSON.parse(JSON.stringify(element)) as Record<string, unknown>;
+          applyExcalidrawElementFields(fields, incoming);
+        });
+        for (const [id, file] of Object.entries(files)) {
+          if (!session.files.has(id)) session.files.set(id, JSON.parse(JSON.stringify(file)));
+        }
+        for (const [key, value] of Object.entries(serializableAppState)) {
+          if (value !== undefined && !sameJson(session.appState.get(key), value)) session.appState.set(key, value);
+        }
+      });
+      if (!sameBytes(stateVector, Y.encodeStateVector(session.doc))) {
+        const scene = collaborativeCanvasScene(session.elements, session.files, session.appState);
+        const serialized = JSON.stringify(scene);
+        latestSceneRef.current = { json: serialized, elementCount: scene.elements.filter((element) => !element.isDeleted).length };
         setSceneDirty(sceneSignature(serialized) !== savedSceneSignature);
       }
+      const selectedIds = Object.entries((appState.selectedElementIds || {}) as Record<string, boolean>)
+        .filter(([, selected]) => selected).map(([id]) => id);
+      const selection = JSON.stringify(selectedIds);
+      if (selection !== lastSelectionRef.current) {
+        lastSelectionRef.current = selection;
+        collaboration.setPresenceField('selectedElementIds', Object.fromEntries(selectedIds.map((id) => [id, true])));
+      }
     },
-    [activeCanvas, savedSceneSignature]
+    [activeCanvas, collaboration.canEdit, collaboration.session, collaboration.setPresenceField, savedSceneSignature]
   );
+
+  const collaborators = useMemo(() => new Map<SocketId, Collaborator>(
+    collaboration.presentUsers.filter((person) => person.pointer).map((person) => [person.clientId as SocketId, {
+      id: person.id,
+      socketId: person.clientId as SocketId,
+      username: person.name,
+      pointer: { ...person.pointer!, renderCursor: true },
+      button: person.button,
+      color: { background: `${person.color}33`, stroke: person.color },
+      selectedElementIds: Object.fromEntries((person.selectedElementIds ? Object.keys(person.selectedElementIds) : []).map((id) => [id, true])),
+    }]),
+  ), [collaboration.presentUsers]);
+
+  useEffect(() => {
+    if (!canvasApiRef.current) return;
+    canvasApiRef.current.updateScene({ collaborators, captureUpdate: CaptureUpdateAction.NEVER });
+  }, [collaborators]);
+
+  const handlePointerUpdate = useCallback((payload: { pointer: { x: number; y: number; tool: 'pointer' | 'laser' }; button: 'down' | 'up' }) => {
+    collaboration.setPresenceField('pointer', payload.pointer);
+    collaboration.setPresenceField('button', payload.button);
+  }, [collaboration.setPresenceField]);
 
   if (!isUnlocked) {
     return (
@@ -426,7 +683,7 @@ export const ReportsCanvasesView: React.FC = () => {
 
           <div className="flex-1 overflow-y-auto divide-y divide-obsidian-border">
             {isLoadingList ? (
-              <p className="p-4 text-sm text-obsidian-muted">Cargando lienzos…</p>
+              <ReportLoadingSkeleton label="Cargando lienzos…" />
             ) : filteredCanvases.length === 0 ? (
               <div className="p-4 text-sm text-obsidian-muted">
                 {canvases.length === 0 ? 'Aún no hay lienzos creados.' : 'Sin coincidencias.'}
@@ -459,7 +716,7 @@ export const ReportsCanvasesView: React.FC = () => {
         </aside>
       )}
 
-      <section className="flex min-w-0 flex-1 flex-col rounded-xl border border-obsidian-border bg-obsidian-panel min-h-0">
+      <section className="relative flex min-w-0 flex-1 flex-col rounded-xl border border-obsidian-border bg-obsidian-panel min-h-0">
         <header className="flex flex-wrap items-center justify-between gap-2 border-b border-obsidian-border px-3 py-2">
           <div className="flex min-w-0 flex-1 basis-60 items-center gap-2">
             <button
@@ -477,9 +734,10 @@ export const ReportsCanvasesView: React.FC = () => {
                   type="text"
                   value={titleDraft}
                   maxLength={200}
-                  disabled={isSaving}
+                  disabled={isSaving || !collaboration.canEdit}
                   onChange={(e) => {
                     setTitleDraft(e.target.value);
+                    collaboration.session?.metadata.set('title', e.target.value);
                   }}
                   aria-label="Título del lienzo"
                   className="min-w-0 flex-1 rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 text-sm font-medium text-white focus:border-obsidian-accent focus:outline-none"
@@ -490,9 +748,10 @@ export const ReportsCanvasesView: React.FC = () => {
                 <select
                   id="canvas-doc-link"
                   value={linkedDocumentId}
-                  disabled={isSaving}
+                  disabled={isSaving || !collaboration.canEdit}
                   onChange={(e) => {
                     setLinkedDocumentId(e.target.value);
+                    collaboration.session?.metadata.set('linked_document_id', e.target.value || null);
                   }}
                   className="h-11 w-2/5 max-w-56 rounded-lg border border-obsidian-border bg-obsidian-surface px-3 text-sm text-white focus:border-obsidian-accent focus:outline-none"
                 >
@@ -511,13 +770,26 @@ export const ReportsCanvasesView: React.FC = () => {
 
           {activeCanvas && (
             <div className="flex items-center gap-2">
-              <span role="status" className="flex items-center justify-center px-1"
-                title={isSaving ? 'Guardando…' : hasUnsavedChanges ? 'Cambios pendientes' : 'Guardado'}>
-                <span className="sr-only">{isSaving ? 'Guardando…' : hasUnsavedChanges ? 'Cambios pendientes' : 'Guardado'}</span>
-                {isSaving ? <RefreshCw className="h-4 w-4 motion-safe:animate-spin" aria-hidden="true" />
-                  : hasUnsavedChanges ? <AlertTriangle className="h-4 w-4 text-obsidian-amber" aria-hidden="true" />
-                    : <CheckCircle2 className="h-4 w-4 text-obsidian-emerald" aria-hidden="true" />}
+              <span role="status" className="grid size-8 shrink-0 place-items-center" title={syncLabel}>
+                <span className="sr-only">{syncLabel}</span>
+                {isSaving || collaboration.status === 'connecting' ? <RefreshCw className="size-4 motion-safe:animate-spin" aria-hidden="true" />
+                  : collaboration.status !== 'connected' || collaboration.error || hasUnsavedChanges ? <AlertTriangle className="size-4 text-obsidian-amber" aria-hidden="true" />
+                    : collaboration.canEdit ? <CheckCircle2 className="size-4 text-obsidian-emerald" aria-hidden="true" />
+                      : <span aria-hidden="true" className="text-xs text-obsidian-muted">—</span>}
               </span>
+              <button type="button" className="ui-action-secondary !min-h-11 shrink-0 gap-2 !px-2 sm:!px-3" onClick={() => setIsCollaborationOpen(!isCollaborationOpen)}
+                aria-expanded={isCollaborationOpen} aria-label="Colaboración del lienzo" title="Colaboración del lienzo">
+                <Users className="size-4" aria-hidden="true" />
+                <span className="hidden xl:inline">Colaboración</span>
+              </button>
+              <button type="button" className="ui-action-icon !h-11 !w-11" onClick={() => {
+                const selected = canvasApiRef.current?.getAppState().selectedElementIds || {};
+                const ids = Object.entries(selected).filter(([, value]) => value).map(([id]) => id);
+                setCollaborationAnchor(ids.length ? JSON.stringify({ kind: 'excalidraw-elements', ids }) : null);
+                setIsCollaborationOpen(true);
+              }} aria-label="Comentar elementos seleccionados" title="Comentar elementos seleccionados">
+                <MessageSquarePlus className="h-4 w-4" aria-hidden="true" />
+              </button>
               <div ref={actionsRef} className="relative"
                 onBlur={(event) => {
                   if (!event.currentTarget.contains(event.relatedTarget)) setActionsOpen(false);
@@ -537,9 +809,9 @@ export const ReportsCanvasesView: React.FC = () => {
                 {actionsOpen && (
                   <div id="canvas-actions" className="absolute right-0 top-full z-50 mt-2 w-60 rounded-lg border border-obsidian-borderLight bg-obsidian-panel p-1 shadow-lg">
                     {([
-                      [Save, 'Guardar', !hasUnsavedChanges || isSaving, () => void handleSaveCanvas()],
-                      [RefreshCw, 'Actualizar imagen del informe', hasUnsavedChanges || isSaving || activeCanvas.element_count === 0, () => void handleSaveCanvas(true)],
-                      [Trash2, 'Eliminar', isSaving, () => void handleDeleteCanvas(activeCanvas)],
+                      [Save, 'Guardar', !hasUnsavedChanges || isSaving || !collaboration.canEdit || collaboration.status !== 'connected', () => void handleSaveCanvas()],
+                      [RefreshCw, 'Actualizar imagen del informe', hasUnsavedChanges || isSaving || activeCanvas.element_count === 0 || !collaboration.canEdit || collaboration.status !== 'connected', () => void handleSaveCanvas(true)],
+                      [Trash2, 'Eliminar', isSaving || collaboration.permission !== 'owner', () => void handleDeleteCanvas(activeCanvas)],
                     ] as const).map(([Icon, label, disabled, action]) => (
                       <button key={label} type="button" disabled={disabled}
                         className={`flex min-h-11 w-full items-center gap-2 rounded px-3 text-left text-sm hover:bg-obsidian-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent disabled:opacity-50 ${label === 'Eliminar' ? 'text-obsidian-errorText' : ''}`}
@@ -572,8 +844,10 @@ export const ReportsCanvasesView: React.FC = () => {
               />
             </div>
           ) : isLoadingDetail ? (
-            <div className="flex h-full items-center justify-center text-sm text-obsidian-muted">
-              Cargando lienzo…
+            <ReportLoadingSkeleton detail label="Cargando lienzo…" />
+          ) : activeCanvas && !collaboration.session ? (
+            <div className="flex h-full items-center justify-center px-4 text-center text-sm leading-relaxed text-obsidian-muted" role="status">
+              {syncLabel}
             </div>
           ) : !activeCanvas ? (
             <div className="flex h-full items-center justify-center p-6">
@@ -588,11 +862,48 @@ export const ReportsCanvasesView: React.FC = () => {
                 theme="dark"
                 langCode="es-ES"
                 initialData={initialExcalidrawData as never}
-                onChange={handleExcalidrawChange as never}
+                excalidrawAPI={(api) => { canvasApiRef.current = api; }}
+                onChange={handleExcalidrawChange}
+                onPointerUpdate={handlePointerUpdate}
+                isCollaborating={collaboration.presentUsers.length > 0}
+                viewModeEnabled={!collaboration.canEdit}
               />
             </div>
           )}
         </div>
+        {isCollaborationOpen && activeCanvas && (
+          <ReportCollaborationPanel
+            resourceType="canvas"
+            resourceId={activeCanvas.id}
+            controller={collaboration}
+            operator={operator}
+            anchor={collaborationAnchor}
+            onClearAnchor={() => setCollaborationAnchor(null)}
+            onNavigateToAnchor={(anchor) => {
+              const canvas = canvasApiRef.current;
+              if (!canvas) return false;
+              try {
+                const parsed = JSON.parse(anchor) as { kind?: string; ids?: unknown };
+                if (parsed.kind !== 'excalidraw-elements' || !Array.isArray(parsed.ids)) return false;
+                const ids = new Set(parsed.ids.filter((id): id is string => typeof id === 'string'));
+                const elements = canvas.getSceneElements().filter((element) => ids.has(element.id));
+                if (!elements.length) return false;
+                canvas.updateScene({
+                  appState: { selectedElementIds: Object.fromEntries(elements.map((element) => [element.id, true])) },
+                  captureUpdate: CaptureUpdateAction.NEVER,
+                });
+                canvas.scrollToContent(elements, { fitToViewport: true });
+                setIsCollaborationOpen(false);
+                return true;
+              } catch {
+                return false;
+              }
+            }}
+            onClose={() => setIsCollaborationOpen(false)}
+            confirm={confirm}
+            showToast={showToast}
+          />
+        )}
       </section>
     </div>
   );

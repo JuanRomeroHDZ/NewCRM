@@ -92,8 +92,9 @@ def test_agenda_accepts_valid_window_boundaries():
 
 
 @pytest.mark.asyncio
-async def test_agenda_rejects_nonexistent_linked_records_with_safe_404(client, db_session):
+async def test_agenda_rejects_nonexistent_linked_records_with_safe_404(client, db_session, vault_only_token):
     headers = await _owner_headers(db_session, "agenda_limits_owner")
+    headers["X-Vault-Token"] = vault_only_token
     start = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=2)
     response = await client.post(
         "/api/v1/agenda/events",
@@ -126,8 +127,9 @@ async def test_agenda_rejects_nonexistent_linked_records_with_safe_404(client, d
 
 
 @pytest.mark.asyncio
-async def test_agenda_event_id_path_has_a_safe_maximum_length(client, db_session):
+async def test_agenda_event_id_path_has_a_safe_maximum_length(client, db_session, vault_only_token):
     headers = await _owner_headers(db_session, "agenda_event_path_limits_owner")
+    headers["X-Vault-Token"] = vault_only_token
     response = await client.post(
         f"/api/v1/agenda/events/{'a' * 37}/complete",
         headers=headers,
@@ -159,8 +161,9 @@ def test_template_render_is_literal_and_caps_expansion():
 
 
 @pytest.mark.asyncio
-async def test_template_route_returns_bounded_validation_error(client, db_session):
+async def test_template_route_returns_bounded_validation_error(client, db_session, vault_only_token):
     headers = await _owner_headers(db_session, "comms_limits_owner")
+    headers["X-Vault-Token"] = vault_only_token
     response = await client.post(
         "/api/v1/comms/templates/render",
         headers=headers,

@@ -9,9 +9,11 @@ from app.models import EmailAccount, PlatformAccount, UserSettings, PasswordHist
 from app.schemas import SecurityAuditResponse, PasswordReuseGroup, EmergencyKitResponse, PwnedCheckRequest, PwnedCheckResponse
 from app.security.crypto import decrypt_secret, calculate_entropy
 from app.security.tokens import require_vault_unlocked
+from app.services.core_auth import OPERATIONS_ROLES, require_module_access
 from app.security.pwned import check_pwned_password
 
-router = APIRouter(prefix="/security", tags=["security"], dependencies=[Depends(require_vault_unlocked)])
+module_access = require_module_access(OPERATIONS_ROLES)
+router = APIRouter(prefix="/security", tags=["security"], dependencies=[Depends(require_vault_unlocked), Depends(module_access)])
 
 def _parse_json_list(val: str | None) -> list:
     if not val:

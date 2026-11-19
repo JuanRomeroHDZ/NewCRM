@@ -11,6 +11,7 @@ import { InfoTooltip } from '../../common/InfoTooltip';
 import { SecretField } from '../../common/SecretField';
 import { PlatformIcon } from '../../common/PlatformIcon';
 import { RealProfitSummary } from '../../../lib/financeUtils';
+import { formatLocalDate, parseCalendarDate } from '../../../lib/dates';
 import type { ForecastEvent } from '../../../lib/cashflowForecast';
 import { SectionType } from '../../../context/VaultContext';
 
@@ -95,6 +96,19 @@ export const SubscriptionsLists: React.FC<SubscriptionsListsProps> = ({
   handleDeleteExpense,
   handleDeletePaymentMethod,
 }) => {
+  const [renewalFilter, setRenewalFilter] = React.useState<'all' | 'attention'>('all');
+  const today = parseCalendarDate(formatLocalDate());
+  const datedRenewals = filteredRenewals.map((renewal) => {
+    const date = parseCalendarDate(renewal.renewal_date);
+    const days = date && today ? (date.getTime() - today.getTime()) / 86_400_000 : null;
+    const cancelled = renewal.status === 'cancelado';
+    const overdue = !cancelled && (renewal.status === 'vencido' || (days !== null && days < 0));
+    const soon = !cancelled && !overdue && days !== null && days <= 30;
+    return { renewal, days, cancelled, overdue, soon };
+  }).sort((a, b) => Number(a.cancelled) - Number(b.cancelled)
+    || a.renewal.renewal_date.localeCompare(b.renewal.renewal_date));
+  const renewalsNeedingAttention = datedRenewals.filter(({ overdue, soon }) => overdue || soon);
+  const visibleRenewals = renewalFilter === 'attention' ? renewalsNeedingAttention : datedRenewals;
   const isProfitBase = profitCurrencyView === 'MXN';
   const canConvertCurrency = Number.isFinite(usdRate) && usdRate > 0;
   const canShowRenewalTotals = canConvertCurrency
@@ -260,6 +274,17 @@ export const SubscriptionsLists: React.FC<SubscriptionsListsProps> = ({
             <Plus size={16} aria-hidden="true" />
             <span>Agregar servicio</span>
           </button>
+          <label className="block max-w-full space-y-1 text-xs text-obsidian-muted">
+            <span>Mostrar vencimientos</span>
+            <select
+              className="block w-full pl-3"
+              value={renewalFilter}
+              onChange={(event) => setRenewalFilter(event.target.value === 'attention' ? 'attention' : 'all')}
+            >
+              <option value="all">Todos ({filteredRenewals.length})</option>
+              <option value="attention">Vencidos y próximos 30 días ({renewalsNeedingAttention.length})</option>
+            </select>
+          </label>
           <details className="group basis-full border-t border-obsidian-border/50 pt-2 text-[11px]">
             {/* [Menú y selector] Despliega la estimación anual de costos. */}
             <summary data-caret="manual" className="ui-nav-action w-full cursor-pointer list-none text-[11px] [&::-webkit-details-marker]:hidden">
@@ -278,23 +303,24 @@ export const SubscriptionsLists: React.FC<SubscriptionsListsProps> = ({
           </details>
         </div>
 
-        {filteredRenewals.length > 0 ? (
+        {visibleRenewals.length > 0 ? (
           <div className="divide-y divide-obsidian-border/70">
-            {filteredRenewals.map((ren) => {
+            {visibleRenewals.map(({ renewal: ren, days, cancelled, overdue, soon }) => {
               const serviceLabel = RENEWAL_SERVICE_TYPES.find((service) => service.value === ren.service_type)?.label ?? 'Servicio';
-              const isUrgent = ren.expiry_semaphore === 'urgente' || ren.expiry_semaphore === 'vencido';
-              const isSoon = ren.expiry_semaphore === 'proximo';
+              const isUrgent = overdue || (soon && days !== null && days <= 7);
               const paidByMe = ren.paid_by === 'me';
-              const daysText = ren.days_remaining < 0
-                ? `Venció hace ${Math.abs(ren.days_remaining)} ${Math.abs(ren.days_remaining) === 1 ? 'día' : 'días'}`
-                : ren.days_remaining === 0
-                ? 'Vence hoy'
-                : `Vence en ${ren.days_remaining} ${ren.days_remaining === 1 ? 'día' : 'días'}`;
+              const daysText = cancelled
+                ? 'Cancelado'
+                : days !== null && days < 0
+                  ? `Venció hace ${Math.abs(days)} ${days === -1 ? 'día' : 'días'}`
+                  : overdue ? 'Vencido'
+                    : days === null ? 'Fecha no disponible'
+                      : days === 0 ? 'Vence hoy' : `Vence en ${days} ${days === 1 ? 'día' : 'días'}`;
 
               return (
                 <article key={ren.id} className="min-w-0 py-3 first:pt-1 last:pb-1">
-                  <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
-                    <div className="min-w-0 flex-1">
+                  <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0 sm:flex-1">
                       <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
                         <h4 className="max-w-full truncate text-xs font-semibold text-white" title={ren.domain_or_service}>
                           {ren.domain_or_service}
@@ -305,9 +331,9 @@ export const SubscriptionsLists: React.FC<SubscriptionsListsProps> = ({
                         {ren.scope === 'personal' ? 'Personal' : ren.client_name}
                       </p>
                     </div>
-                    <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+                    <div className="flex min-w-0 flex-wrap items-center gap-2 sm:justify-end">
                       <span className={`rounded-md px-2 py-1 text-[10px] font-semibold ${
-                        isUrgent ? 'bg-rose-500/15 text-rose-300' : isSoon ? 'bg-amber-500/15 text-amber-300' : 'bg-obsidian-surface text-obsidian-muted'
+                        isUrgent ? 'bg-rose-500/15 text-rose-300' : soon ? 'bg-amber-500/15 text-amber-300' : 'bg-obsidian-surface text-obsidian-muted'
                       }`}>
                         {daysText}
                       </span>
@@ -364,7 +390,9 @@ export const SubscriptionsLists: React.FC<SubscriptionsListsProps> = ({
           </div>
         ) : (
           <p className="py-5 text-center text-xs text-obsidian-muted">
-            Aún no hay servicios con fecha de renovación.
+            {renewalFilter === 'attention'
+              ? 'No hay servicios vencidos ni con renovación en los próximos 30 días.'
+              : 'Aún no hay servicios con fecha de renovación.'}
           </p>
         )}
       </section>

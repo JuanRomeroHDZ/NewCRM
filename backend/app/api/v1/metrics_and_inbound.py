@@ -3,31 +3,31 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.services.core_auth import get_current_user_from_token
-from app.models.core import User
+from app.security.tokens import require_vault_unlocked
+from app.services.core_auth import ADMIN_ROLES, SALES_ROLES, require_role
 from app.services.metrics_service import MetricsService
 from app.services.inbound_whatsapp import InboundWhatsAppService
 
-router = APIRouter(tags=["Metrics & WhatsApp Inbound"])
+router = APIRouter(tags=["Metrics & WhatsApp Inbound"], dependencies=[Depends(require_vault_unlocked)])
+metrics_access = require_role(ADMIN_ROLES)
+inbound_access = require_role(SALES_ROLES)
 
 class InboundSimulateRequest(BaseModel):
     provider_message_id: str = Field(..., min_length=5, max_length=128)
     sender_phone: str = Field(..., min_length=7, max_length=64)
     payload_json: str = Field(..., min_length=2)
 
-@router.get("/metrics/executive")
+@router.get("/metrics/executive", dependencies=[Depends(metrics_access)])
 async def get_executive_metrics(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user_from_token)
 ):
     return await MetricsService.get_executive_metrics(session=db)
 
-@router.get("/metrics/export-monthly")
+@router.get("/metrics/export-monthly", dependencies=[Depends(metrics_access)])
 async def export_monthly_report(
     month: str = Query(..., pattern=r"^\d{4}-\d{2}$"),
     format: str = Query("json", pattern="^(json|csv)$"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user_from_token)
 ):
     if format == "csv":
         csv_data = await MetricsService.export_monthly_report_csv(session=db, month_str=month)
@@ -39,18 +39,16 @@ async def export_monthly_report(
     metrics = await MetricsService.get_executive_metrics(session=db)
     return {"month": month, "metrics": metrics}
 
-@router.get("/comms/inbound/whatsapp/status")
+@router.get("/comms/inbound/whatsapp/status", dependencies=[Depends(inbound_access)])
 async def get_whatsapp_inbound_status(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user_from_token)
 ):
     return await InboundWhatsAppService.get_adapter_status(session=db)
 
-@router.post("/comms/inbound/whatsapp/receive")
+@router.post("/comms/inbound/whatsapp/receive", dependencies=[Depends(inbound_access)])
 async def receive_inbound_message(
     req: InboundSimulateRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user_from_token)
 ):
     record, is_new = await InboundWhatsAppService.process_inbound_message(
         session=db,

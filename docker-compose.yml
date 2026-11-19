@@ -5,12 +5,23 @@ services:
       context: ./nginx
       dockerfile: Dockerfile
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - NET_BIND_SERVICE
+      - KILL
+      - SETGID
+      - SETUID
     ports:
       - "${HOST_BIND_IP:-127.0.0.1}:${PORT:-8080}:80"
       - "${HOST_BIND_IP:-127.0.0.1}:${HTTPS_PORT:-8443}:443"
     environment:
       HTTPS_PORT_SUFFIX: ":${HTTPS_PORT:-8443}"
-      FRONTEND_UPSTREAM: frontend:80
+      FRONTEND_UPSTREAM: frontend:8080
       NGINX_ENVSUBST_FILTER: "HTTPS_PORT_SUFFIX|FRONTEND_UPSTREAM"
     volumes:
       - ./nginx/certs:/etc/nginx/certs:ro
@@ -31,7 +42,7 @@ services:
     networks:
       - frontend_net
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:80/ || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/ || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -75,7 +86,9 @@ services:
     env_file:
       - .env
     environment:
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:?Configura POSTGRES_USER en .env}:${POSTGRES_PASSWORD:?Genera POSTGRES_PASSWORD en .env}@db:5432/${POSTGRES_DB:?Configura POSTGRES_DB en .env}
+      DATABASE_URL: postgresql+asyncpg://lessso_runtime:${POSTGRES_RUNTIME_PASSWORD:?Ejecuta ./lessso para generar la contraseña de ejecución}@db:5432/${POSTGRES_DB:?Configura POSTGRES_DB en .env}
+      POSTGRES_PASSWORD: ""
+      POSTGRES_RUNTIME_PASSWORD: ""
       DB_POOL_SIZE: ${DB_POOL_SIZE:-5}
       DB_MAX_OVERFLOW: ${DB_MAX_OVERFLOW:-5}
       SERVER_NAME: ${SERVER_NAME:-lessso-srv}

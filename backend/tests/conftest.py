@@ -52,7 +52,7 @@ async def db_session(test_engine):
         yield session
 
 @pytest_asyncio.fixture
-async def auth_token(client):
+async def vault_only_token(client):
     """Returns an active vault token for tests."""
     status_res = await client.get("/api/v1/auth/status")
     data = status_res.json()
@@ -64,3 +64,20 @@ async def auth_token(client):
     else:
         unlock_res = await client.post("/api/v1/auth/unlock", json={"master_password": master_pw})
         return unlock_res.json()["token"]
+
+@pytest_asyncio.fixture
+async def auth_token(client, db_session, vault_only_token):
+    """Use an authorized operator for tests of ordinary protected workflows."""
+    from app.models.core import User
+    from app.services.core_auth import create_user_session
+
+    owner = User(
+        username="fixture_operator", email="fixture-operator@example.test",
+        full_name="Fixture operator", hashed_password="unusable", role="owner",
+        is_active=True, must_change_password=False,
+    )
+    db_session.add(owner)
+    await db_session.commit()
+    token, _ = await create_user_session(db_session, owner)
+    client.headers["Authorization"] = f"Bearer {token}"
+    return vault_only_token

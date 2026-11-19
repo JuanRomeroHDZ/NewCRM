@@ -1,6 +1,6 @@
 import uuid
-from datetime import datetime, timezone
-from sqlalchemy import String, Boolean, Float, Integer, Text, DateTime, ForeignKey
+from datetime import date, datetime, timezone
+from sqlalchemy import String, Boolean, Float, Integer, Text, Date, DateTime, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
 from app.config import settings
@@ -236,6 +236,7 @@ class Prospect(Base):
     met_sla: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
 
     # Follow-up & Cadence Timer
+    followup_due_date: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
     last_contacted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     followup_count: Mapped[int] = mapped_column(Integer, default=0)
     last_contact_channel: Mapped[str | None] = mapped_column(String(32), nullable=True)
@@ -406,4 +407,15 @@ from app.models.writeups import (
     WriteupRevision,
     WriteupExportLog,
     WriteupSnippet,
+)
+from app.models.reports import ReportDocument, ReportDocumentAsset, ReportCanvas
+from app.models.report_collaboration import (
+    ReportCollaborator,
+    ReportCollaborationState,
+    ReportCollaborationUpdate,
+    ReportRevision,
+    ReportComment,
+    ReportReview,
+    ReportCollaborationTicket,
+    ReportCollaborationPresence,
 )

@@ -51,6 +51,11 @@ export const PROSPECT_STATUS_OPTIONS: {
 ];
 
 export const getStatusMeta = (status: string) => {
+  if (status === 'cliente') return {
+    value: 'cliente' as const, label: 'Cliente',
+    badgeClass: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/25',
+    dotClass: 'bg-emerald-400',
+  };
   return (
     PROSPECT_STATUS_OPTIONS.find((s) => s.value === status) || {
       value: status as ProspectStatus,
@@ -136,7 +141,7 @@ export function formatSlaHoursLabel(hours: number): string {
 
 export function computeLiveSla(prospect: Prospect, nowMs: number = Date.now()) {
   const slaSeconds = Math.max(60, Math.round((prospect.sla_hours || 48) * 3600));
-  const isResponded = Boolean(prospect.responded_at) || prospect.status === 'respondido';
+  const isResponded = Boolean(prospect.responded_at) || ['respondido', 'cliente'].includes(prospect.status);
 
   let elapsedSeconds = prospect.elapsed_seconds || 0;
 
@@ -190,7 +195,7 @@ export function computeLiveSla(prospect: Prospect, nowMs: number = Date.now()) {
 export function computeLiveFollowUpSla(prospect: Prospect, nowMs: number = Date.now()) {
   const fSlaHours = prospect.followup_sla_hours || 48;
   const fSlaSeconds = Math.max(60, Math.round(fSlaHours * 3600));
-  const isResponded = Boolean(prospect.responded_at) || prospect.status === 'respondido';
+  const isResponded = Boolean(prospect.responded_at) || ['respondido', 'cliente'].includes(prospect.status);
 
   if (isResponded) {
     return {
@@ -238,7 +243,7 @@ export function computeLiveFollowUpSla(prospect: Prospect, nowMs: number = Date.
 }
 
 export function isProspectNeedingRecontact(prospect: Prospect, nowMs: number = Date.now()): boolean {
-  if (prospect.status === 'respondido' || prospect.status === 'archivado_frio' || Boolean(prospect.responded_at)) {
+  if (['respondido', 'cliente'].includes(prospect.status) || prospect.status === 'archivado_frio' || Boolean(prospect.responded_at)) {
     return false;
   }
   const live = computeLiveSla(prospect, nowMs);
@@ -295,7 +300,7 @@ export function computeCommercialPipelineSummary(
       continue;
     }
 
-    if (p.status === 'respondido' || Boolean(p.responded_at)) {
+    if (['respondido', 'cliente'].includes(p.status) || Boolean(p.responded_at)) {
       closedWonMXN += valMXN;
       if (val > 0) closedDealsCount++;
       if (p.billing_type === 'monthly_retainer') {

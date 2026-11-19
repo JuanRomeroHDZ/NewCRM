@@ -45,7 +45,14 @@ fi
 if [ ! -f "$CERTS_DIR/ca.crt" ]; then
     openssl req -x509 -new -nodes -key "$CERTS_DIR/ca.key" -sha256 -days 3650 \
         -out "$CERTS_DIR/ca.crt" \
+        -addext 'basicConstraints=critical,CA:TRUE' \
+        -addext 'keyUsage=critical,keyCertSign,cRLSign' \
         -subj "/C=MX/ST=Baja California/L=Tijuana/O=LESSSO Security/OU=Certificados Locales/CN=Contact LESSSO Root CA"
+fi
+
+if ! openssl x509 -in "$CERTS_DIR/ca.crt" -checkend 0 -noout >/dev/null; then
+    echo 'La CA local no está vigente. Recupera o sustituye la CA antes de renovar.' >&2
+    exit 1
 fi
 
 # 3. Generar clave privada del servidor
@@ -81,6 +88,7 @@ openssl req -new -key "$CERTS_DIR/server.key" -out "$TEMP_DIR/server.csr" \
 openssl x509 -req -in "$TEMP_DIR/server.csr" -CA "$CERTS_DIR/ca.crt" -CAkey "$CERTS_DIR/ca.key" \
     -CAcreateserial -out "$TEMP_DIR/server.crt" -days 730 -sha256 \
     -extfile "$TEMP_DIR/server.ext"
+openssl verify -verify_ip "$HOST_BIND_IP" -CAfile "$CERTS_DIR/ca.crt" "$TEMP_DIR/server.crt"
 mv "$TEMP_DIR/server.crt" "$CERTS_DIR/server.crt"
 
 chmod 600 "$CERTS_DIR"/*.key

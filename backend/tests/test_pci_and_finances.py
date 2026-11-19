@@ -113,6 +113,24 @@ async def test_zero_business_share_is_preserved_in_expenses(client, auth_token):
 
 
 @pytest.mark.asyncio
+async def test_expense_keeps_link_to_registered_service(client, auth_token):
+    headers = {"X-Vault-Token": auth_token}
+    service = await client.post("/api/v1/platforms", headers=headers, json={"name": "Servicio de prueba"})
+    assert service.status_code == 200, service.text
+    service_id = service.json()["id"]
+
+    expense = await client.post("/api/v1/finances/expenses", headers=headers, json={
+        "concept": "Cargo de servicio", "amount": 25, "expense_date": "2026-05-15",
+        "platform_id": service_id,
+    })
+    assert expense.status_code == 200, expense.text
+    expense_id = expense.json()["id"]
+    expenses = await client.get("/api/v1/finances/expenses", headers=headers)
+    assert expenses.status_code == 200, expenses.text
+    assert next(item for item in expenses.json() if item["id"] == expense_id)["platform_id"] == service_id
+
+
+@pytest.mark.asyncio
 async def test_financial_input_rejects_invalid_amounts_dates_and_percentages(client, auth_token):
     headers = {"X-Vault-Token": auth_token}
     base = {"concept": "Gasto ficticio", "amount": 25, "expense_date": "2026-05-15"}

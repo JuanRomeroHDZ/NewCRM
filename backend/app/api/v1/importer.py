@@ -11,10 +11,12 @@ from app.models.core import User
 from app.schemas import validate_email_input, validate_nonblank_input, validate_web_url_input
 from app.security.crypto import encrypt_secret, encrypt_note, calculate_entropy
 from app.security.tokens import require_vault_unlocked
+from app.services.core_auth import ADMIN_ROLES, require_module_access
 from app.services.audit import log_audit_event
 from app.services.favicon import extract_favicon_url
 
-router = APIRouter(prefix="/importer", tags=["importer"], dependencies=[Depends(require_vault_unlocked)])
+module_access = require_module_access(ADMIN_ROLES)
+router = APIRouter(prefix="/importer", tags=["importer"], dependencies=[Depends(require_vault_unlocked), Depends(module_access)])
 
 class ImportItem(BaseModel):
     name: str = Field(..., min_length=1, max_length=128)

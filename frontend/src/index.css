@@ -1203,3 +1203,29 @@ details[open] > summary:is(.ui-action-toggle, .ui-action-secondary, .ui-action-i
   padding-inline: 0.5rem;
   color: #fff;
 }
+
+
+/* Report controls use the standard palette with balanced inset and a shared baseline. */
+.brand-theme :is(input.report-form-control, select.report-form-control):not([multiple]) {
+  min-height: 44px;
+  max-width: 100%;
+  padding-block: 0;
+  padding-inline: 0.75rem;
+  font-size: 0.875rem;
+  line-height: 1.3;
+}
+.brand-theme select.report-form-control:not([multiple]) {
+  padding-inline-end: 2.25rem;
+  background-position: right 0.625rem center;
+}
+.brand-theme select.report-form-control.report-preview-select:not([multiple]) {
+  min-height: 36px;
+  padding-inline: 0.625rem 1.75rem;
+  background-position: right 0.5rem center;
+  background-size: 14px;
+  font-size: 0.75rem;
+}
+.report-pdf-layout { container-type: inline-size; }
+@container (min-width: 464px) {
+  .report-pdf-spread { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

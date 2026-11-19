@@ -234,12 +234,92 @@ ensure_certificate() {
   local certs=nginx/certs/local
   CERT_RENEWED=false
   if [[ -s "$certs/server.key" ]] &&
+     openssl x509 -in "$certs/server.crt" -checkend 2592000 -noout >/dev/null 2>&1 &&
      openssl verify -verify_ip "$HOST_BIND_IP" -CAfile "$certs/ca.crt" "$certs/server.crt" >/dev/null 2>&1; then
     return 0
   fi
   ./scripts/generate_certs.sh || return 1
   CERT_RENEWED=true
 }
+
+certificate_menu() (
+  require_installation || exit 1
+  local certs=nginx/certs/local choice proxy
+  printf '\nVencimiento del certificado del servidor\n'
+  openssl x509 -in "$certs/server.crt" -noout -enddate || exit 1
+  printf '\nVencimiento de la CA local\n'
+  openssl x509 -in "$certs/ca.crt" -noout -enddate || exit 1
+  printf '\n1) Renovar certificado del servidor\n0) Volver\n'
+  read -r -p 'Opción: ' choice || exit 0
+  case "$choice" in
+    0) exit 0 ;;
+    1) ;;
+    *) echo 'Opción no válida.'; exit 1 ;;
+  esac
+  check_dependencies && lock_project || exit 1
+  read_connection
+  validate_connection || exit 1
+  if [[ ! -s "$certs/ca.key" || ! -s "$certs/ca.crt" ]]; then
+    echo 'Recupera la CA local antes de renovar el certificado.' >&2
+    exit 1
+  fi
+  proxy="$(docker compose ps --status running --quiet proxy)" || exit 1
+  ./scripts/generate_certs.sh || exit 1
+  if [[ -n "$proxy" ]]; then
+    docker compose exec -T proxy nginx -t &&
+      docker compose exec -T proxy nginx -s reload || exit 1
+  fi
+  openssl x509 -in "$certs/server.crt" -noout -enddate
+)
+
+check_crm_https() {
+  python3 - "$HOST_BIND_IP" "$HTTPS_PORT" <<'PY'
+import http.client
+import json
+import ssl
+import sys
+
+host, port = sys.argv[1:]
+try:
+    tls = ssl.create_default_context(cafile="nginx/certs/local/ca.crt")
+except OSError:
+    sys.exit("No se pudo cargar el certificado de la CA local.")
+# Las CA locales de versiones anteriores no declaraban keyUsage.
+# Se sigue verificando la cadena contra esta CA y la IP del servidor.
+tls.verify_flags &= ~ssl.VERIFY_X509_STRICT
+
+for path, label in (("/", "Interfaz"), ("/health", "API y base de datos")):
+    connection = http.client.HTTPSConnection(host, int(port), timeout=5, context=tls)
+    try:
+        connection.request("GET", path)
+        response = connection.getresponse()
+        if response.status != 200:
+            sys.exit(f"{label}: HTTPS devolvió código {response.status}.")
+        body = response.read(131072)
+        if path == "/" and b'id="root"' not in body:
+            sys.exit(f"{label}: la respuesta no contiene la aplicación LESSSO.")
+        if path == "/health":
+            status = json.loads(body)
+            if not isinstance(status, dict) or status.get("status") != "healthy" or status.get("database") != "connected":
+                sys.exit(f"{label}: el servicio todavía no está listo.")
+        print(f"{label}: HTTPS verificado.")
+    except (OSError, http.client.HTTPException, ValueError) as error:
+        sys.exit(f"{label}: no se pudo verificar HTTPS ({error}).")
+    finally:
+        connection.close()
+PY
+}
+
+verify_installation() (
+  require_installation || exit 1
+  read_connection
+  if ! browser_safe_port "$HTTPS_PORT" || ! python3 scripts/lan_address.py --validate "$HOST_BIND_IP"; then
+    echo 'Revisa la IP y el puerto HTTPS en Configuración.' >&2
+    exit 1
+  fi
+  HTTPS_PORT="$((10#$HTTPS_PORT))"
+  check_crm_https
+)
 
 install_crm() (
   check_dependencies && lock_project || exit 1
@@ -258,7 +338,7 @@ import os
 import secrets
 
 template = Path(".env.example").read_text(encoding="utf-8")
-for key in ("SERVER_SECRET_KEY", "POSTGRES_PASSWORD"):
+for key in ("SERVER_SECRET_KEY", "POSTGRES_PASSWORD", "POSTGRES_RUNTIME_PASSWORD", "INITIAL_VAULT_SETUP_CODE"):
     template = template.replace(f"\n{key}=\n", f"\n{key}={secrets.token_hex(32)}\n", 1)
 fd = os.open(".env", os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
 with os.fdopen(fd, "w", encoding="utf-8") as target:
@@ -266,6 +346,7 @@ with os.fdopen(fd, "w", encoding="utf-8") as target:
 PYENV
   fi
 
+  ensure_runtime_db_password || exit 1
   read_connection
   docker compose config --quiet || exit 1
   mkdir -p -m 750 c2-runtime || exit 1
@@ -277,6 +358,9 @@ PYENV
     ensure_certificate || exit 1
   fi
   echo 'Configuración y dependencias listas. Elige un modo en Inicio para construir y levantar los servicios.'
+  if [[ -n "$(dotenv_value INITIAL_VAULT_SETUP_CODE .env)" ]]; then
+    echo 'Para ver el código de instalación de la bóveda en tu terminal, ejecuta ./lessso --setup-code.'
+  fi
 )
 
 configure_connection() (
@@ -295,9 +379,30 @@ configure_connection() (
   echo "Configuración guardada. Se aplicará al elegir un modo en Inicio."
 )
 
+ensure_runtime_db_password() {
+  local saved
+  saved="$(dotenv_value POSTGRES_RUNTIME_PASSWORD .env)"
+  if [[ -n "$saved" ]]; then return 0; fi
+  python3 - <<'PYENV'
+import os
+import secrets
+import tempfile
+from pathlib import Path
+
+path = Path(".env")
+with tempfile.NamedTemporaryFile(mode="w", dir=".", prefix=".env.runtime-db.", delete=False) as staging:
+    staged_path = staging.name
+    lines = path.read_text(encoding="utf-8").splitlines()
+    retained = [line for line in lines if line.partition("=")[0].strip() != "POSTGRES_RUNTIME_PASSWORD"]
+    staging.write("\n".join(retained).rstrip() + "\nPOSTGRES_RUNTIME_PASSWORD=" + secrets.token_hex(32) + "\n")
+os.replace(staged_path, path)
+PYENV
+}
+
 start_crm() (
   local mode="$1"
   check_dependencies && require_installation && lock_project || exit 1
+  ensure_runtime_db_password || exit 1
   read_connection
   local -a compose=(docker compose)
   if [[ "$mode" == desarrollo ]]; then
@@ -307,7 +412,12 @@ start_crm() (
   validate_connection && ensure_certificate || exit 1
   mkdir -p -m 750 c2-runtime || exit 1
 
-  if ! "${compose[@]}" build backend frontend; then
+  local -a build_services=(backend frontend proxy)
+  if [[ -n "${BACKUP_AGE_RECIPIENT:-$(dotenv_value BACKUP_AGE_RECIPIENT .env)}" ]]; then
+    compose+=(--profile full-backup)
+    build_services+=(full_backup)
+  fi
+  if ! "${compose[@]}" build "${build_services[@]}"; then
     report_start_failure
     exit 1
   fi
@@ -327,7 +437,7 @@ start_crm() (
     exit 1
   fi
 
-  save_connection || exit 1
+  check_crm_https && save_connection || exit 1
   printf '\nCRM en modo %s\n  HTTP:  http://%s:%s\n  HTTPS: https://%s:%s\n' \
     "$mode" "$HOST_BIND_IP" "$PORT" "$HOST_BIND_IP" "$HTTPS_PORT"
   if [[ "$HOST_BIND_IP" != 127.0.0.1 ]]; then
@@ -344,12 +454,14 @@ manage_crm() (
 
 config_menu() {
   local choice
-  printf '\nConfiguración\n1) Cambiar IP y puertos\n2) Ver estado\n3) Detener CRM\n0) Volver\n'
+  printf '\nConfiguración\n1) Cambiar IP y puertos\n2) Ver estado\n3) Detener CRM\n4) Verificar HTTPS y base de datos\n5) Certificado HTTPS\n0) Volver\n'
   read -r -p 'Opción: ' choice || return 0
   case "$choice" in
     1) configure_connection ;;
     2) manage_crm ps ;;
     3) manage_crm stop ;;
+    4) verify_installation ;;
+    5) certificate_menu ;;
     0) return 0 ;;
     *) echo 'Opción no válida.' ;;
   esac
@@ -367,6 +479,19 @@ start_menu() {
   esac
 }
 
+if [[ $# == 1 && "$1" == --setup-code ]]; then
+  code="$(dotenv_value INITIAL_VAULT_SETUP_CODE .env)"
+  if [[ ! -t 1 || -z "$code" ]]; then
+    echo 'El código se muestra solo en una terminal local con una instalación que lo tenga configurado.' >&2
+    exit 1
+  fi
+  printf '%s\n' "$code"
+  exit 0
+fi
+if [[ $# == 1 && "$1" == --check ]]; then
+  verify_installation
+  exit $?
+fi
 if [[ $# != 0 || ! -t 0 ]]; then
   echo 'Ejecuta ./lessso sin argumentos en una terminal para abrir el menú.'
   exit 1

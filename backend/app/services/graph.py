@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import EmailAccount, PlatformAccount, PaymentMethod, Prospect
 
-async def generate_relational_graph(db: AsyncSession) -> dict:
+async def generate_relational_graph(db: AsyncSession, *, include_payment_methods: bool = True) -> dict:
     """Generates the interactive graph model with cycle detection and SPOF detection."""
     # 1. Fetch active emails
     stmt_emails = select(EmailAccount).where(EmailAccount.is_deleted == False)
@@ -17,9 +17,12 @@ async def generate_relational_graph(db: AsyncSession) -> dict:
     platforms = res_platforms.scalars().all()
 
     # 3. Fetch active payments
-    stmt_payments = select(PaymentMethod).where(PaymentMethod.is_deleted == False)
-    res_payments = await db.execute(stmt_payments)
-    payments = res_payments.scalars().all()
+    payments = []
+    if include_payment_methods:
+        stmt_payments = select(PaymentMethod).where(PaymentMethod.is_deleted == False)
+        res_payments = await db.execute(stmt_payments)
+        payments = res_payments.scalars().all()
+    visible_payment_ids = {payment.id for payment in payments}
 
     # 4. Fetch active prospects
     stmt_prospects = select(Prospect).where(Prospect.is_deleted == False)
@@ -167,7 +170,7 @@ async def generate_relational_graph(db: AsyncSession) -> dict:
 
     # Link platforms to payments
     for p in platforms:
-        if p.payment_method_id:
+        if p.payment_method_id in visible_payment_ids:
             links.append({
                 "source": f"payment_{p.payment_method_id}",
                 "target": f"platform_{p.id}",

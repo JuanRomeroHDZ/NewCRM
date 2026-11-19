@@ -3,8 +3,8 @@ import secrets
 import hashlib
 import hmac
 from datetime import datetime, timedelta, timezone
-from fastapi import APIRouter, Body, Depends, HTTPException, Header, Request, status
-from pydantic import BaseModel, Field, SecretStr, field_validator
+from fastapi import APIRouter, Body, Depends, HTTPException, Header, Request, Response, status
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
 from sqlalchemy import delete, func, select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,7 +24,13 @@ from app.schemas import (
     VaultStatusResponse,
     VaultUnlockRequest,
 )
-from app.security.crypto import hash_master_password, verify_master_password, derive_vault_key
+from app.security.browser_session import clear_browser_session, deliver_session, request_session_token, verify_cookie_login_origin
+from app.security.account_policy import (
+    ACCOUNT_PASSWORD_MIN_LENGTH, INITIAL_USERNAME_MIN_LENGTH, validate_account_password, validate_initial_username,
+)
+from app.security.crypto import (
+    decrypt_note, derive_vault_key, encrypt_note, get_server_seed_key, hash_master_password, verify_master_password,
+)
 from app.security.tokens import (
     create_vault_token,
     verify_vault_token,
@@ -40,6 +46,7 @@ from app.services.core_auth import (
     create_user_session,
     get_current_user_from_token,
     hash_token,
+    record_failed_login,
 )
 from app.services.activity_service import record_event
 
@@ -51,10 +58,10 @@ async def vault_activity(request: Request, x_vault_token: str | None = Header(No
     if not remaining:
         raise HTTPException(status_code=401, detail="La sesión venció. Desbloquea la bóveda para continuar.")
     account_active = None
-    authorization = request.headers.get("Authorization", "")
-    if authorization.startswith("Bearer "):
+    session_token = request_session_token(request)
+    if session_token:
         now = datetime.now(timezone.utc).replace(tzinfo=None)
-        token_hash = hash_token(authorization[7:].strip())
+        token_hash = hash_token(session_token)
         timeout = await db.scalar(select(UserSettings.vault_timeout_minutes).limit(1))
         result = await db.execute(
             update(DbSession)
@@ -67,15 +74,23 @@ async def vault_activity(request: Request, x_vault_token: str | None = Header(No
     return {"remaining_seconds": remaining, "account_active": account_active}
 
 class InitialAccountRequest(BaseModel):
-    username: str = Field(..., min_length=3, max_length=64, pattern=r"^[a-zA-Z0-9._-]+$")
+    model_config = ConfigDict(extra="forbid")
+
+    username: str = Field(..., min_length=INITIAL_USERNAME_MIN_LENGTH, max_length=64, pattern=r"^[a-zA-Z0-9._-]+$")
     email: str = Field(..., min_length=6, max_length=255, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
     full_name: str = Field(..., min_length=2, max_length=128)
-    password: SecretStr = Field(..., min_length=12, max_length=256)
+    password: SecretStr = Field(..., min_length=ACCOUNT_PASSWORD_MIN_LENGTH, max_length=256)
 
     @field_validator("username", mode="before")
     @classmethod
     def normalize_username(cls, value: str) -> str:
-        return value.strip().lower() if isinstance(value, str) else value
+        return validate_initial_username(value) if isinstance(value, str) else value
+
+    @field_validator("password")
+    @classmethod
+    def check_password(cls, value: SecretStr) -> SecretStr:
+        validate_account_password(value.get_secret_value())
+        return value
 
     @field_validator("email", mode="before")
     @classmethod
@@ -169,6 +184,7 @@ async def get_vault_status(
 
     return VaultStatusResponse(
         is_setup=is_setup,
+        setup_code_required=not is_setup and bool(app_settings.INITIAL_VAULT_SETUP_CODE.get_secret_value()),
         is_unlocked=is_unlocked,
         remaining_seconds=remaining,
         timeout_minutes=user_settings.vault_timeout_minutes if user_settings else app_settings.VAULT_SESSION_TIMEOUT_MINUTES,
@@ -186,14 +202,23 @@ async def get_vault_status(
     )
 
 @router.post("/setup")
-async def setup_master_password(payload: MasterPasswordSetup, db: AsyncSession = Depends(get_db)):
+async def setup_master_password(payload: MasterPasswordSetup, request: Request, db: AsyncSession = Depends(get_db)):
+    setup_code = app_settings.INITIAL_VAULT_SETUP_CODE.get_secret_value()
+    if setup_code:
+        client_key = f"setup:{_client_key(request)}"
+        if await _is_vault_locked_out(db, client_key):
+            raise HTTPException(status_code=429, detail="Demasiados intentos de instalación. Espera unos minutos.")
+        supplied_code = payload.setup_code.get_secret_value() if payload.setup_code else ""
+        if not hmac.compare_digest(setup_code.encode(), supplied_code.encode()):
+            await _record_vault_unlock_failure(db, client_key)
+            raise HTTPException(status_code=403, detail="Código de instalación incorrecto.")
+
+    if db.bind is not None and db.bind.dialect.name == "postgresql":
+        await db.execute(text("SELECT pg_advisory_xact_lock(19521, 0)"))
     stmt = select(UserSettings).limit(1)
     res = await db.execute(stmt)
     if res.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="La contraseña de acceso ya fue configurada previamente.")
-
-    if len(payload.master_password) < 8:
-        raise HTTPException(status_code=400, detail="La contraseña de acceso debe tener al menos 8 caracteres.")
 
     # Generate a unique cryptographic salt for this vault instance
     vault_salt = secrets.token_bytes(32).hex()
@@ -308,10 +333,13 @@ async def lock_vault(x_vault_token: str | None = Header(None), db: AsyncSession 
 @router.post("/bootstrap-account", response_model=UserLoginResponse, status_code=status.HTTP_201_CREATED)
 async def bootstrap_initial_account(
     payload: InitialAccountRequest,
+    request: Request,
+    response: Response,
     db: AsyncSession = Depends(get_db),
     _: bool = Depends(require_vault_unlocked),
 ):
     """Create the initial owner after vault authentication, exactly once."""
+    verify_cookie_login_origin(request)
     claim_key = "auth.initial_owner_claimed"
     if not await _initial_account_is_available(db):
         raise HTTPException(status_code=409, detail="La creación inicial de cuenta ya no está disponible.")
@@ -388,7 +416,7 @@ async def bootstrap_initial_account(
         raise
 
     return UserLoginResponse(
-        token=token,
+        token=deliver_session(request, response, token),
         user=UserResponse(
             id=user.id,
             username=user.username,
@@ -418,9 +446,11 @@ async def get_initial_account_status(
 async def user_login(
     payload: UserLoginRequest,
     request: Request,
+    response: Response,
     db: AsyncSession = Depends(get_db)
 ):
     
+    verify_cookie_login_origin(request)
     ip_addr = request.client.host if request.client else None
     user, err = await authenticate_user(
         db,
@@ -443,7 +473,8 @@ async def user_login(
             )
         
         valid_totp = False
-        if user.totp_secret and verify_totp_code(user.totp_secret, payload.totp_code):
+        totp_secret = decrypt_note(user.totp_secret, key=get_server_seed_key())
+        if totp_secret and verify_totp_code(totp_secret, payload.totp_code):
             valid_totp = True
         elif user.recovery_codes:
             try:
@@ -453,16 +484,19 @@ async def user_login(
                     rec_list.remove(code_hash)
                     user.recovery_codes = json.dumps(rec_list)
                     valid_totp = True
-                    await db.commit()
             except Exception:
                 pass
                 
         if not valid_totp:
+            record_failed_login(user)
+            await db.commit()
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Código de verificación en dos pasos inválido."
             )
 
+    user.failed_login_attempts = 0
+    user.locked_until = None
     user_agent = request.headers.get("User-Agent")
     session_timeout = await db.scalar(select(UserSettings.vault_timeout_minutes).limit(1)) or app_settings.VAULT_SESSION_TIMEOUT_MINUTES
     token_str, db_sess = await create_user_session(
@@ -486,7 +520,7 @@ async def user_login(
     )
 
     return UserLoginResponse(
-        token=token_str,
+        token=deliver_session(request, response, token_str),
         user=user_resp,
         expires_in_minutes=session_timeout
     )
@@ -494,14 +528,10 @@ async def user_login(
 @router.post("/logout")
 async def user_logout(
     request: Request,
+    response: Response,
     db: AsyncSession = Depends(get_db)
 ):
-    auth_header = request.headers.get("Authorization")
-    token = None
-    if auth_header and auth_header.startswith("Bearer "):
-        token = auth_header[7:].strip()
-    elif request.cookies.get("lessso_session"):
-        token = request.cookies.get("lessso_session")
+    token = request_session_token(request)
 
     if token:
         thash = hash_token(token)
@@ -512,6 +542,7 @@ async def user_logout(
         )
         await db.commit()
 
+    clear_browser_session(response)
     return {"message": "Sesión cerrada exitosamente."}
 
 @router.get("/me", response_model=UserResponse)
@@ -542,15 +573,15 @@ async def change_user_password(
     if payload.current_password == payload.new_password:
         raise HTTPException(status_code=400, detail="La nueva contraseña debe ser diferente a la actual.")
     if current_user.is_totp_enabled:
-        if not payload.totp_code or not current_user.totp_secret or not verify_totp_code(current_user.totp_secret, payload.totp_code):
+        totp_secret = decrypt_note(current_user.totp_secret, key=get_server_seed_key())
+        if not payload.totp_code or not totp_secret or not verify_totp_code(totp_secret, payload.totp_code):
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Se requiere un código 2FA válido.")
 
     current_user.hashed_password = hash_master_password(payload.new_password)
     current_user.must_change_password = False
 
     # Revoke other sessions so only the active caller session remains valid
-    auth_header = request.headers.get("Authorization")
-    current_token = auth_header[7:].strip() if auth_header and auth_header.startswith("Bearer ") else request.cookies.get("lessso_session")
+    current_token = request_session_token(request)
     current_hash = hash_token(current_token) if current_token else None
     revoke_stmt = update(DbSession).where(DbSession.user_id == current_user.id, DbSession.is_revoked == False)
     if current_hash:
@@ -574,18 +605,16 @@ async def setup_two_factor(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user_from_token)
 ):
-    if current_user.is_totp_enabled:
-        if not payload or not payload.current_password or not verify_master_password(current_user.hashed_password, payload.current_password):
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Confirma tu contraseña actual para regenerar la verificación en dos pasos."
-            )
+    if current_user.must_change_password:
+        raise HTTPException(status_code=403, detail="Cambia tu contraseña temporal antes de configurar 2FA.")
+    if not payload or not payload.current_password or not verify_master_password(current_user.hashed_password, payload.current_password):
+        raise HTTPException(status_code=401, detail="Confirma tu contraseña actual para configurar 2FA.")
 
     secret = generate_random_totp_secret()
     raw_recovery_codes = [secrets.token_hex(4).upper() for _ in range(8)]
     hashed_codes = [hash_token(c) for c in raw_recovery_codes]
 
-    current_user.totp_secret = secret
+    current_user.totp_secret = encrypt_note(secret, key=get_server_seed_key())
     current_user.recovery_codes = json.dumps(hashed_codes)
     await db.commit()
 
@@ -600,10 +629,11 @@ async def verify_two_factor(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user_from_token)
 ):
-    if not current_user.totp_secret:
+    totp_secret = decrypt_note(current_user.totp_secret, key=get_server_seed_key())
+    if not totp_secret:
         raise HTTPException(status_code=400, detail="Debe solicitar primero la configuración 2FA.")
 
-    if not verify_totp_code(current_user.totp_secret, payload.code):
+    if not verify_totp_code(totp_secret, payload.code):
         raise HTTPException(status_code=400, detail="Código 2FA incorrecto.")
 
     current_user.is_totp_enabled = True

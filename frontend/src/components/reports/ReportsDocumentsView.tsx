@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   Bold,
@@ -11,7 +11,6 @@ import {
   FileCode2,
   FileText,
   GitCompare,
-  History,
   ImagePlus,
   Italic,
   Link,
@@ -39,8 +38,10 @@ import {
   Trash2,
   Underline,
   Undo2,
+  Users,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import * as Y from 'yjs';
 import { api } from '../../lib/api';
 import { ApiError } from '../../lib/apiErrors';
 import { formatApiDateTime } from '../../lib/dates';
@@ -57,21 +58,33 @@ import {
 } from '../../types';
 import { EmptyState } from '../common/EmptyState';
 import { TypstCodeEditor, TypstCodeEditorHandle } from './TypstCodeEditor';
+import { useAuditedDialog } from '../common/useAuditedDialog';
+import { ReportLoadingSkeleton } from './ReportLoadingSkeleton';
+import { ReportCollaborationPanel } from './ReportCollaborationPanel';
+import { describeReportSync, useReportCollaboration } from './useReportCollaboration';
 import { TYPST_QUICK_SNIPPETS } from './typstSnippets';
 import { getTypstDocumentTemplate, TYPST_DOCUMENT_TEMPLATES } from './typstTemplates';
 import {
   deleteTypstRecoverySnapshots,
-  fromReportRecoveryResponse,
-  listTypstRecoverySnapshots,
-  saveTypstRecoverySnapshot,
-  serializeTypstRecoveryDraft,
-  toReportRecoveryPayload,
-  TypstRecoveryDraft,
-  TypstRecoverySnapshot,
 } from './typstRecovery';
 
+const ReportPdfPreview = lazy(() => import('./ReportPdfPreview'));
+
+const REPORT_EXPORT_EXTENSIONS = { pdf: 'pdf', html: 'html', typ: 'typ', typst_zip: 'typst.zip' } as const;
+
+function validateExportName(name: string, extension: string) {
+  const value = name.trim();
+  const suffix = `.${extension}`;
+  const stem = value.toLowerCase().endsWith(suffix) ? value.slice(0, -suffix.length) : value;
+  if (value && (!stem || stem.length > 120 || /^[.]|[. ]$/.test(stem) ||
+      /[\u0000-\u001F\u007F<>:"/\\|?*]/.test(stem) ||
+      /^(con|prn|aux|nul|com[1-9¹²³]|lpt[1-9¹²³])(?:\.|$)/i.test(stem))) {
+    return { error: 'Usa un nombre válido sin caracteres reservados ni punto al inicio o al final.', stem: '' };
+  }
+  return { error: null, stem };
+}
+
 type DocumentPaneMode = 'split' | 'edit' | 'preview';
-type RecoveryStatus = 'idle' | 'saving' | 'saved' | 'error';
 
 interface ToolbarButtonProps {
   label: string;
@@ -102,29 +115,10 @@ const STATUS_LABELS: Record<ReportDocumentStatus, string> = {
   entregado: 'Entregado',
 };
 
-const toTypstRecoveryDraft = (
-  values: { titleDraft: string; statusDraft: ReportDocumentStatus; prospectIdDraft: string; projectIdDraft: string; sourceDraft: string },
-  fallbackTitle: string,
-): TypstRecoveryDraft => ({
-  title: values.titleDraft.trim() || fallbackTitle,
-  status: values.statusDraft,
-  prospectId: values.prospectIdDraft,
-  projectId: values.projectIdDraft,
-  source: values.sourceDraft,
-});
-
-const savedTypstRecoveryDraft = (document: ReportDocumentDetail): TypstRecoveryDraft => ({
-  title: document.title,
-  status: document.status,
-  prospectId: document.prospect_id || '',
-  projectId: document.project_id || '',
-  source: document.source,
-});
-
 const DOCUMENT_ACTION_CLASS = 'flex min-h-11 w-full items-center gap-2 rounded px-3 text-left text-sm hover:bg-obsidian-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent disabled:cursor-not-allowed disabled:opacity-50';
 
 export const ReportsDocumentsView: React.FC = () => {
-  const { isUnlocked, openUnlockModal, setActiveSection, showToast, confirm } = useVault();
+  const { isUnlocked, draftRecoveryKey, operator, openUnlockModal, setActiveSection, showToast, confirm } = useVault();
 
   const [documents, setDocuments] = useState<ReportDocumentSummary[]>([]);
   const [canvases, setCanvases] = useState<ReportCanvasSummary[]>([]);
@@ -149,10 +143,8 @@ export const ReportsDocumentsView: React.FC = () => {
   const [quickSnippetId, setQuickSnippetId] = useState('');
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [imageUploadError, setImageUploadError] = useState<string | null>(null);
-  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
-  const [recoverySnapshots, setRecoverySnapshots] = useState<TypstRecoverySnapshot[]>([]);
-  const [recoveryStatus, setRecoveryStatus] = useState<RecoveryStatus>('idle');
-  const [recoveryError, setRecoveryError] = useState<string | null>(null);
+  const [isCollaborationOpen, setIsCollaborationOpen] = useState(false);
+  const [collaborationAnchor, setCollaborationAnchor] = useState<string | null>(null);
 
   const [isLoadingList, setIsLoadingList] = useState(true);
   const [listLoadError, setListLoadError] = useState<string | null>(null);
@@ -161,8 +153,18 @@ export const ReportsDocumentsView: React.FC = () => {
   const [detailLoadAttempt, setDetailLoadAttempt] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const [exportFormat, setExportFormat] = useState<'pdf' | 'html' | 'typ' | 'typst_zip'>('pdf');
+  const [pdfControls, setPdfControls] = useState<HTMLDivElement | null>(null);
+  const [previewToolbar, setPreviewToolbar] = useState<HTMLDivElement | null>(null);
+  const [previewFormat, setPreviewFormat] = useState<'svg' | 'pdf' | 'html'>('svg');
+  const [formatPreview, setFormatPreview] = useState<{ value: string | Blob; error: boolean } | null>(null);
+  const exportOperation = useRef<number>(0);
   const [actionsOpen, setActionsOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
+  const exportDialogRef = useAuditedDialog(exportOpen, () => setExportOpen(false));
+  const [exportName, setExportName] = useState('');
+  const [exportFieldError, setExportFieldError] = useState<string | null>(null);
   const actionsRef = useRef<HTMLDivElement>(null);
   const actionsButtonRef = useRef<HTMLButtonElement>(null);
   const [correlations, setCorrelations] = useState<ReportCorrelationsResponse | null>(null);
@@ -175,8 +177,6 @@ export const ReportsDocumentsView: React.FC = () => {
   const [compileError, setCompileError] = useState<string | null>(null);
 
   const compileRequestSeq = useRef(0);
-  const recoveryRequestSeq = useRef(0);
-  const lastRecoveryDraftRef = useRef<string | null>(null);
   const editorRef = useRef<TypstCodeEditorHandle | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const savingDocumentIdsRef = useRef(new Set<string>());
@@ -187,6 +187,37 @@ export const ReportsDocumentsView: React.FC = () => {
   selectedIdRef.current = selectedId;
   activeDocIdRef.current = activeDoc?.id ?? null;
   draftValuesRef.current = { titleDraft, statusDraft, prospectIdDraft, projectIdDraft, sourceDraft };
+
+  const getCollaborativeDocumentContent = useCallback((doc: Y.Doc) => {
+    const metadata = doc.getMap<unknown>('metadata');
+    return {
+      title: String(metadata.get('title') ?? activeDoc?.title ?? ''),
+      status: String(metadata.get('status') ?? activeDoc?.status ?? 'borrador'),
+      source: doc.getText('typst-source').toString(),
+      prospect_id: (metadata.get('prospect_id') as string | null | undefined) ?? null,
+      project_id: (metadata.get('project_id') as string | null | undefined) ?? null,
+      engagement_id: (metadata.get('engagement_id') as string | null | undefined) ?? null,
+    };
+  }, [activeDoc?.status, activeDoc?.title]);
+  const collaboration = useReportCollaboration({
+    resourceType: 'document',
+    resourceId: activeDoc?.id ?? null,
+    initialContent: activeDoc ? {
+      title: activeDoc.title,
+      status: activeDoc.status,
+      source: activeDoc.source,
+      prospect_id: activeDoc.prospect_id,
+      project_id: activeDoc.project_id,
+      engagement_id: activeDoc.engagement_id,
+    } : null,
+    recoveryKey: draftRecoveryKey,
+    operator,
+    getContent: getCollaborativeDocumentContent,
+  });
+
+  const updateCollaborativeMetadata = useCallback((field: string, value: unknown) => {
+    if (collaboration.canEdit) collaboration.session?.metadata.set(field, value);
+  }, [collaboration.canEdit, collaboration.session]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -240,28 +271,29 @@ export const ReportsDocumentsView: React.FC = () => {
   }, [loadDocuments]);
 
   const hasUnsavedChanges = activeDoc !== null && (
+    collaboration.isDirty ||
     (titleDraft.trim() || activeDoc.title) !== activeDoc.title ||
     statusDraft !== activeDoc.status ||
     prospectIdDraft !== (activeDoc.prospect_id || '') ||
     projectIdDraft !== (activeDoc.project_id || '') ||
     sourceDraft !== activeDoc.source
   );
+  const syncLabel = describeReportSync(collaboration, isSaving, hasUnsavedChanges);
 
   const selectDocumentWithGuard = useCallback(
     async (nextId: string) => {
       if (nextId === selectedId) return;
-      if (hasUnsavedChanges) {
-        const discard = await confirm({
-          title: 'Cambios sin guardar',
-          message: 'Tienes cambios pendientes en el documento actual. ¿Descartarlos y continuar?',
-          confirmLabel: 'Descartar',
-          tone: 'warning',
-        });
-        if (!discard) return;
+      if (hasUnsavedChanges && collaboration.canEdit && collaboration.status === 'connected') {
+        try {
+          await collaboration.checkpoint(false, 'manual');
+        } catch (error) {
+          showToast(error instanceof Error ? error.message : 'No se pudo sincronizar el documento.', 'error');
+          return;
+        }
       }
       setSelectedId(nextId);
     },
-    [confirm, hasUnsavedChanges, selectedId]
+    [collaboration.canEdit, collaboration.checkpoint, collaboration.status, hasUnsavedChanges, selectedId, showToast]
   );
 
   const runCompile = useCallback(async (source: string, documentId?: string) => {
@@ -325,7 +357,6 @@ export const ReportsDocumentsView: React.FC = () => {
         setProspectIdDraft(detail.prospect_id || '');
         setProjectIdDraft(detail.project_id || '');
         setSourceDraft(detail.source);
-        void runCompile(detail.source, detail.id);
         api.getReportDocumentCorrelations(detail.id)
           .then((result) => { if (!cancelled) setCorrelations(result); })
           .catch(() => { if (!cancelled) setCorrelations(null); });
@@ -341,15 +372,80 @@ export const ReportsDocumentsView: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [selectedId, runCompile, detailLoadAttempt]);
+  }, [selectedId, detailLoadAttempt]);
 
   useEffect(() => {
-    if (!activeDoc || isLoadingDetail || paneMode === 'edit') return;
+    const session = collaboration.session;
+    if (!session || !activeDoc || session.doc.isDestroyed) return;
+    const content = getCollaborativeDocumentContent(session.doc);
+    const nextSource = session.text.toString();
+    setSourceDraft((current) => current === nextSource ? current : nextSource);
+    setTitleDraft((current) => current === content.title ? current : content.title);
+    setStatusDraft((current) => current === content.status ? current : content.status as ReportDocumentStatus);
+    setProspectIdDraft((current) => current === (content.prospect_id || '') ? current : content.prospect_id || '');
+    setProjectIdDraft((current) => current === (content.project_id || '') ? current : content.project_id || '');
+    if (collaboration.lastSavedAt && !collaboration.isDirty) {
+      setActiveDoc((current) => {
+        if (!current || current.id !== activeDoc.id) return current;
+        if (current.title === content.title && current.status === content.status && current.source === nextSource
+          && current.prospect_id === content.prospect_id && current.project_id === content.project_id) return current;
+        return {
+          ...current,
+          title: content.title,
+          status: content.status as ReportDocumentStatus,
+          source: nextSource,
+          prospect_id: content.prospect_id,
+          project_id: content.project_id,
+          updated_at: collaboration.lastSavedAt!,
+        };
+      });
+      setDocuments((current) => current.map((item) => item.id === activeDoc.id ? {
+        ...item,
+        title: content.title,
+        status: content.status as ReportDocumentStatus,
+        prospect_id: content.prospect_id,
+        project_id: content.project_id,
+        updated_at: collaboration.lastSavedAt!,
+      } : item));
+    }
+  }, [
+    activeDoc?.id,
+    collaboration.isDirty,
+    collaboration.lastSavedAt,
+    collaboration.revision,
+    collaboration.session,
+    getCollaborativeDocumentContent,
+  ]);
+
+  const previewDocumentId = activeDoc?.id;
+  useEffect(() => {
+    if (!previewDocumentId || isLoadingDetail || paneMode === 'edit' || previewFormat !== 'svg') return;
     const timer = window.setTimeout(() => {
-      void runCompile(sourceDraft, activeDoc.id);
+      void runCompile(sourceDraft, previewDocumentId);
     }, 450);
     return () => window.clearTimeout(timer);
-  }, [sourceDraft, activeDoc, isLoadingDetail, paneMode, runCompile]);
+  }, [sourceDraft, previewDocumentId, isLoadingDetail, paneMode, previewFormat, runCompile]);
+
+  useEffect(() => {
+    setFormatPreview(null);
+    if (!previewDocumentId || paneMode === 'edit' || previewFormat === 'svg') return;
+    let cancelled = false;
+    const timeout = window.setTimeout(async () => {
+      try {
+        const { blob } = await api.exportReportDocument(previewDocumentId, previewFormat, sourceDraft);
+        const value = previewFormat === 'html' ? await blob.text() : blob;
+        if (cancelled) return;
+        if (previewFormat === 'pdf' && blob.type !== 'application/pdf') throw new Error('Formato de vista previa inválido.');
+        setFormatPreview({ value, error: false });
+      } catch {
+        if (!cancelled) setFormatPreview({ value: 'No se pudo generar la vista previa en este formato.', error: true });
+      }
+    }, 650);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeout);
+    };
+  }, [previewDocumentId, paneMode, previewFormat, sourceDraft]);
 
   const handleCreateDocument = async () => {
     const cleanTitle = newDocumentTitle.trim();
@@ -384,13 +480,12 @@ export const ReportsDocumentsView: React.FC = () => {
 
   const closeActions = useCallback((restoreFocus = false) => {
     setActionsOpen(false);
-    setExportOpen(false);
     if (restoreFocus) actionsButtonRef.current?.focus();
   }, []);
 
   useEffect(() => {
     closeActions();
-    setIsHistoryOpen(false);
+    setExportOpen(false);
     setRedactForClient(false);
   }, [selectedId, closeActions]);
 
@@ -420,6 +515,22 @@ export const ReportsDocumentsView: React.FC = () => {
     setIsSaving(true);
     setErrorMessage(null);
     try {
+      if (collaboration.session) {
+        if (!collaboration.canEdit || collaboration.status !== 'connected') {
+          throw new Error('Espera a que el reporte termine de sincronizarse para guardarlo.');
+        }
+        await collaboration.checkpoint(true, 'manual');
+        const updated = await api.getReportDocument(targetDocumentId);
+        setActiveDoc(updated);
+        setTitleDraft(updated.title);
+        setStatusDraft(updated.status);
+        setProspectIdDraft(updated.prospect_id || '');
+        setProjectIdDraft(updated.project_id || '');
+        setSourceDraft(updated.source);
+        setDocuments((prev) => prev.map((item) => item.id === updated.id ? { ...item, ...updated } : item));
+        showToast(`Documento guardado como versión: ${updated.title}`, 'success');
+        return true;
+      }
       const updated = await api.updateReportDocument(targetDocumentId, {
         title: cleanTitle,
         status: statusDraft,
@@ -474,7 +585,20 @@ export const ReportsDocumentsView: React.FC = () => {
       savingDocumentIdsRef.current.delete(targetDocumentId);
       setIsSaving(false);
     }
-  }, [activeDoc, hasUnsavedChanges, projectIdDraft, prospectIdDraft, showToast, sourceDraft, statusDraft, titleDraft]);
+  }, [
+    activeDoc,
+    collaboration.canEdit,
+    collaboration.checkpoint,
+    collaboration.session,
+    collaboration.status,
+    hasUnsavedChanges,
+    projectIdDraft,
+    prospectIdDraft,
+    showToast,
+    sourceDraft,
+    statusDraft,
+    titleDraft,
+  ]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -489,30 +613,52 @@ export const ReportsDocumentsView: React.FC = () => {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [activeDoc, handleSaveDocument]);
 
+  useEffect(() => {
+    exportOperation.current += 1;
+    setIsExporting(false);
+    setExportError(null);
+  }, [selectedId, isUnlocked]);
+
   const handleExport = async (exportFormat: 'pdf' | 'html' | 'typ' | 'typst_zip') => {
     if (!activeDoc || isExporting) return;
+    const requestId = ++exportOperation.current;
+    const documentId = activeDoc.id;
+    const isCurrent = () => mountedRef.current && selectedIdRef.current === documentId
+      && exportOperation.current === requestId;
     setIsExporting(true);
+    setExportError(null);
     try {
-      const { blob, filename } = await api.exportReportDocument(
-        activeDoc.id,
-        exportFormat,
-        sourceDraft,
-        redactForClient && exportFormat !== 'typ',
+      if (collaboration.isDirty && collaboration.canEdit && collaboration.status === 'connected') {
+        await collaboration.checkpoint(true, 'manual');
+      }
+      const result = await api.exportReportDocument(
+        documentId, exportFormat, sourceDraft, redactForClient && exportFormat !== 'typ',
       );
-      const url = URL.createObjectURL(blob);
+      if (!isCurrent()) return;
+      if (!result.blob.size) throw new Error('El servidor devolvió un archivo vacío.');
+      const extension = REPORT_EXPORT_EXTENSIONS[exportFormat];
+      const customName = validateExportName(exportName, extension).stem;
+      const filename = (customName && `${customName}.${extension}`)
+        || (result.filename === 'export' ? `documento.${extension}` : result.filename);
+      const url = URL.createObjectURL(result.blob);
       const anchor = document.createElement('a');
       anchor.href = url;
-      const fallbackExtension = exportFormat === 'typst_zip' ? 'typst.zip' : exportFormat;
-      anchor.download = filename || `${titleDraft.trim() || 'documento'}.${fallbackExtension}`;
+      anchor.download = filename;
       document.body.appendChild(anchor);
       anchor.click();
       anchor.remove();
-      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-      showToast(`Archivo exportado: ${anchor.download}`, 'success');
-    } catch (err) {
-      showToast(err instanceof ApiError ? err.message : `No se pudo exportar en ${exportFormat.toUpperCase()}.`, 'error');
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (cause) {
+      if (!isCurrent()) return;
+      let message = cause instanceof Error ? cause.message : 'No se pudo preparar el archivo.';
+      if (cause instanceof ApiError && cause.status === 422) {
+        message = exportFormat === 'html'
+          ? 'Typst no pudo generar el HTML de este documento. Revisa la sintaxis o elige PDF.'
+          : 'No se pudo exportar el documento. Compila la vista previa para revisar la sintaxis y los adjuntos.';
+      }
+      setExportError(message);
     } finally {
-      setIsExporting(false);
+      if (isCurrent()) setIsExporting(false);
     }
   };
 
@@ -555,12 +701,12 @@ export const ReportsDocumentsView: React.FC = () => {
   }, []);
 
   const handleImageFiles = useCallback(async (files: File[]) => {
-    if (!activeDoc || files.length === 0) return;
+    if (!activeDoc || !collaboration.canEdit || files.length === 0) return;
     const targetDocumentId = activeDoc.id;
-    const supportedTypes = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif']);
+    const supportedTypes = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/avif', 'image/gif']);
     const images = files.filter((file) => supportedTypes.has(file.type));
     if (images.length === 0) {
-      setImageUploadError('Selecciona una imagen PNG, JPEG, WebP o GIF.');
+      setImageUploadError('Selecciona una imagen PNG, JPEG, WebP, AVIF o GIF.');
       return;
     }
     const unsupportedCount = files.length - images.length;
@@ -600,47 +746,7 @@ export const ReportsDocumentsView: React.FC = () => {
     } finally {
       setIsUploadingImage(false);
     }
-  }, [activeDoc, insertSnippet, showToast]);
-
-  const handleRestoreRecovery = useCallback(async (snapshot: TypstRecoverySnapshot) => {
-    if (!activeDoc) return;
-    const targetDocumentId = activeDoc.id;
-    const draftBeforeConfirm = serializeTypstRecoveryDraft(
-      toTypstRecoveryDraft(draftValuesRef.current, activeDoc.title),
-    );
-    const accepted = await confirm({
-      title: 'Restaurar copia local',
-      message: 'Se reemplazará el borrador abierto. El documento guardado no cambia hasta que pulses Guardar.',
-      confirmLabel: 'Restaurar borrador',
-      tone: 'warning',
-    });
-    if (!accepted || selectedIdRef.current !== targetDocumentId || activeDocIdRef.current !== targetDocumentId) return;
-    try {
-      const response = await api.decryptReportRecovery(targetDocumentId, snapshot.ciphertext);
-      const currentDraft = serializeTypstRecoveryDraft(
-        toTypstRecoveryDraft(draftValuesRef.current, activeDoc.title),
-      );
-      if (
-        selectedIdRef.current !== targetDocumentId
-        || activeDocIdRef.current !== targetDocumentId
-        || currentDraft !== draftBeforeConfirm
-      ) return;
-      const serverDraft = savedTypstRecoveryDraft(activeDoc);
-      const recoveredDraft = fromReportRecoveryResponse(response, serverDraft);
-      setTitleDraft(recoveredDraft.title);
-      setStatusDraft(recoveredDraft.status);
-      setProspectIdDraft(recoveredDraft.prospectId);
-      setProjectIdDraft(recoveredDraft.projectId);
-      setSourceDraft(recoveredDraft.source);
-      lastRecoveryDraftRef.current = serializeTypstRecoveryDraft(recoveredDraft);
-      setIsHistoryOpen(false);
-      showToast('Copia local cargada en el borrador.', 'info');
-    } catch (err) {
-      const message = err instanceof ApiError ? err.message : 'No se pudo abrir la copia con la clave actual de la bóveda.';
-      setRecoveryError(message);
-      setRecoveryStatus('error');
-    }
-  }, [activeDoc, confirm, showToast]);
+  }, [activeDoc, collaboration.canEdit, insertSnippet, showToast]);
 
   const handleOpenCanvases = async () => {
     if (hasUnsavedChanges) {
@@ -658,111 +764,7 @@ export const ReportsDocumentsView: React.FC = () => {
   };
 
   useEffect(() => {
-    if (!activeDoc || isLoadingDetail) {
-      setRecoverySnapshots([]);
-      if (!isLoadingDetail) setRecoveryStatus('idle');
-      return;
-    }
-    let cancelled = false;
-    const serverDraft = savedTypstRecoveryDraft(activeDoc);
-    const serverDraftSerialized = serializeTypstRecoveryDraft(serverDraft);
-    lastRecoveryDraftRef.current = serverDraftSerialized;
-    setRecoveryError(null);
-    setRecoverySnapshots([]);
-    setRecoveryStatus('idle');
-    listTypstRecoverySnapshots(activeDoc.id)
-      .then(async (snapshots) => {
-        if (cancelled) return;
-        setRecoverySnapshots(snapshots);
-        const latest = snapshots[0];
-        if (!latest) return;
-        setRecoveryStatus('saved');
-        const serverUpdatedAt = new Date(activeDoc.updated_at).getTime();
-        if (latest.createdAt <= serverUpdatedAt) return;
-        try {
-          const response = await api.decryptReportRecovery(activeDoc.id, latest.ciphertext);
-          if (cancelled) return;
-          const recoveredDraft = fromReportRecoveryResponse(response, serverDraft);
-          if (serializeTypstRecoveryDraft(recoveredDraft) === serverDraftSerialized) return;
-          const draftBeforePrompt = serializeTypstRecoveryDraft(
-            toTypstRecoveryDraft(draftValuesRef.current, activeDoc.title),
-          );
-          const restore = await confirm({
-            title: 'Hay una copia local más reciente',
-            message: 'Se encontró un borrador cifrado con cambios que no están en el servidor. ¿Cargarlo en el editor? El documento guardado no cambia hasta que pulses Guardar.',
-            confirmLabel: 'Cargar copia local',
-            tone: 'warning',
-          });
-          const currentDraft = serializeTypstRecoveryDraft(
-            toTypstRecoveryDraft(draftValuesRef.current, activeDoc.title),
-          );
-          if (!cancelled && restore && currentDraft === draftBeforePrompt) {
-            setTitleDraft(recoveredDraft.title);
-            setStatusDraft(recoveredDraft.status);
-            setProspectIdDraft(recoveredDraft.prospectId);
-            setProjectIdDraft(recoveredDraft.projectId);
-            setSourceDraft(recoveredDraft.source);
-            lastRecoveryDraftRef.current = serializeTypstRecoveryDraft(recoveredDraft);
-          }
-        } catch (err) {
-          if (cancelled) return;
-          const message = err instanceof ApiError ? err.message : 'La copia local no se pudo abrir con la clave actual de la bóveda.';
-          setRecoveryError(message);
-          setRecoveryStatus('error');
-        }
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        setRecoveryError(err instanceof Error ? err.message : 'No se pudo leer el historial local.');
-        setRecoveryStatus('error');
-      });
-    return () => { cancelled = true; };
-  }, [activeDoc, confirm, isLoadingDetail]);
-
-  useEffect(() => {
-    if (!activeDoc || isLoadingDetail || !hasUnsavedChanges) return;
-    const recoveryDraft = toTypstRecoveryDraft(
-      { titleDraft, statusDraft, prospectIdDraft, projectIdDraft, sourceDraft },
-      activeDoc.title,
-    );
-    const serializedDraft = serializeTypstRecoveryDraft(recoveryDraft);
-    if (serializedDraft === lastRecoveryDraftRef.current) return;
-    const sequence = ++recoveryRequestSeq.current;
-    const requestedAt = Date.now();
-    const timer = window.setTimeout(async () => {
-      setRecoveryStatus('saving');
-      setRecoveryError(null);
-      try {
-        const { ciphertext } = await api.encryptReportRecovery(activeDoc.id, toReportRecoveryPayload(recoveryDraft));
-        if (sequence !== recoveryRequestSeq.current) return;
-        const snapshots = await saveTypstRecoverySnapshot(activeDoc.id, ciphertext, requestedAt);
-        if (sequence !== recoveryRequestSeq.current) return;
-        lastRecoveryDraftRef.current = serializedDraft;
-        setRecoverySnapshots(snapshots);
-        setRecoveryStatus('saved');
-      } catch (err) {
-        if (sequence !== recoveryRequestSeq.current) return;
-        setRecoveryError(err instanceof ApiError ? err.message : err instanceof Error ? err.message : 'No se pudo guardar la copia cifrada.');
-        setRecoveryStatus('error');
-      }
-    }, 1200);
-    return () => {
-      // Keep the final debounced write alive when this view unmounts during
-      // in-app navigation. Draft edits still cancel older timers on rerender.
-      if (mountedRef.current) {
-        window.clearTimeout(timer);
-        if (recoveryRequestSeq.current === sequence) recoveryRequestSeq.current += 1;
-      }
-    };
-  }, [activeDoc, hasUnsavedChanges, isLoadingDetail, projectIdDraft, prospectIdDraft, sourceDraft, statusDraft, titleDraft]);
-
-  useEffect(() => {
-    if (!activeDoc || !hasUnsavedChanges) return;
-    const draft = toTypstRecoveryDraft(
-      { titleDraft, statusDraft, prospectIdDraft, projectIdDraft, sourceDraft },
-      activeDoc.title,
-    );
-    if (serializeTypstRecoveryDraft(draft) === lastRecoveryDraftRef.current) return;
+    if (!activeDoc || (!hasUnsavedChanges && !collaboration.isDirty)) return;
 
     const warnBeforeLeaving = (event: BeforeUnloadEvent) => {
       event.preventDefault();
@@ -770,7 +772,7 @@ export const ReportsDocumentsView: React.FC = () => {
     };
     window.addEventListener('beforeunload', warnBeforeLeaving);
     return () => window.removeEventListener('beforeunload', warnBeforeLeaving);
-  }, [activeDoc, hasUnsavedChanges, projectIdDraft, prospectIdDraft, recoveryStatus, sourceDraft, statusDraft, titleDraft]);
+  }, [activeDoc, collaboration.isDirty, hasUnsavedChanges]);
 
   const filteredDocuments = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -886,7 +888,7 @@ export const ReportsDocumentsView: React.FC = () => {
 
           <div className="flex-1 overflow-y-auto divide-y divide-obsidian-border">
             {isLoadingList ? (
-              <p role="status" aria-live="polite" className="p-4 text-sm text-obsidian-muted">Cargando documentos…</p>
+              <ReportLoadingSkeleton label="Cargando documentos…" />
             ) : listLoadError ? (
               <div role="alert" className="space-y-3 p-4 text-sm text-obsidian-errorText">
                 <p>{listLoadError}</p>
@@ -930,7 +932,7 @@ export const ReportsDocumentsView: React.FC = () => {
         </aside>
       )}
 
-      <section className="flex min-w-0 flex-1 flex-col rounded-xl border border-obsidian-border bg-obsidian-panel min-h-0">
+      <section className="relative flex min-w-0 flex-1 flex-col rounded-xl border border-obsidian-border bg-obsidian-panel min-h-0">
         <header className="flex flex-wrap items-center justify-between gap-2 border-b border-obsidian-border px-3 py-2">
           <div className="flex min-w-0 flex-1 basis-60 items-center gap-2">
             <button
@@ -947,8 +949,10 @@ export const ReportsDocumentsView: React.FC = () => {
                 <input
                   type="text"
                   value={titleDraft}
+                  disabled={!collaboration.canEdit}
                   onChange={(e) => {
                     setTitleDraft(e.target.value);
+                    updateCollaborativeMetadata('title', e.target.value);
                   }}
                   aria-label="Título del documento"
                   maxLength={200}
@@ -960,8 +964,11 @@ export const ReportsDocumentsView: React.FC = () => {
                 <select
                   id="doc-status-select"
                   value={statusDraft}
+                  disabled={!collaboration.canEdit}
                   onChange={(e) => {
-                    setStatusDraft(e.target.value as ReportDocumentStatus);
+                    const next = e.target.value as ReportDocumentStatus;
+                    setStatusDraft(next);
+                    updateCollaborativeMetadata('status', next);
                   }}
                   className="h-11 w-28 shrink-0 rounded-lg border border-obsidian-border bg-obsidian-surface px-2 text-xs text-white focus:border-obsidian-accent focus:outline-none"
                 >
@@ -999,13 +1006,18 @@ export const ReportsDocumentsView: React.FC = () => {
                 ))}
               </div>
 
-              <span role="status" className="flex items-center justify-center px-1"
-                title={isSaving ? 'Guardando…' : hasUnsavedChanges ? 'Cambios pendientes' : 'Guardado'}>
-                <span className="sr-only">{isSaving ? 'Guardando…' : hasUnsavedChanges ? 'Cambios pendientes' : 'Guardado'}</span>
-                {isSaving ? <RefreshCw className="h-4 w-4 motion-safe:animate-spin" aria-hidden="true" />
-                  : hasUnsavedChanges ? <AlertTriangle className="h-4 w-4 text-obsidian-amber" aria-hidden="true" />
-                    : <CheckCircle2 className="h-4 w-4 text-obsidian-emerald" aria-hidden="true" />}
+              <span role="status" className="grid size-8 shrink-0 place-items-center" title={syncLabel}>
+                <span className="sr-only">{syncLabel}</span>
+                {isSaving || collaboration.status === 'connecting' ? <RefreshCw className="size-4 motion-safe:animate-spin" aria-hidden="true" />
+                  : collaboration.status !== 'connected' || collaboration.error || hasUnsavedChanges ? <AlertTriangle className="size-4 text-obsidian-amber" aria-hidden="true" />
+                    : collaboration.canEdit ? <CheckCircle2 className="size-4 text-obsidian-emerald" aria-hidden="true" />
+                      : <span aria-hidden="true" className="text-xs text-obsidian-muted">—</span>}
               </span>
+              <button type="button" className="ui-action-secondary !min-h-11 shrink-0 gap-2 !px-2 sm:!px-3" onClick={() => setIsCollaborationOpen(!isCollaborationOpen)}
+                aria-expanded={isCollaborationOpen} aria-label="Colaboración del reporte" title="Colaboración del reporte">
+                <Users className="size-4" aria-hidden="true" />
+                <span className="hidden xl:inline">Colaboración</span>
+              </button>
 
               <div
                 ref={actionsRef}
@@ -1016,12 +1028,7 @@ export const ReportsDocumentsView: React.FC = () => {
                 onKeyDown={(event) => {
                   if (event.key !== 'Escape' || !actionsOpen) return;
                   event.stopPropagation();
-                  if (exportOpen) {
-                    setExportOpen(false);
-                    actionsRef.current?.querySelector<HTMLButtonElement>('#report-export-toggle')?.focus();
-                  } else {
-                    closeActions(true);
-                  }
+                  closeActions(true);
                 }}
               >
                 <button
@@ -1038,43 +1045,18 @@ export const ReportsDocumentsView: React.FC = () => {
                 </button>
                 {actionsOpen && (
                   <div id="report-actions" className="absolute right-0 top-full z-30 mt-2 max-h-[min(60dvh,24rem)] w-60 max-w-[calc(100vw-2rem)] overflow-y-auto rounded-lg border border-obsidian-borderLight bg-obsidian-panel p-1 shadow-lg">
-                    <button type="button" className={DOCUMENT_ACTION_CLASS} disabled={!hasUnsavedChanges || isSaving}
+                    <button type="button" className={DOCUMENT_ACTION_CLASS} disabled={!hasUnsavedChanges || isSaving || !collaboration.canEdit || collaboration.status !== 'connected'}
                       onClick={() => { closeActions(true); void handleSaveDocument(); }}>
                       <Save className="h-4 w-4" aria-hidden="true" /> Guardar
                     </button>
-                    <button type="button" className={DOCUMENT_ACTION_CLASS} aria-expanded={isHistoryOpen}
-                      onClick={() => { setIsHistoryOpen((open) => !open); closeActions(true); }}>
-                      <History className="h-4 w-4" aria-hidden="true" /> Historial local ({recoverySnapshots.length})
+                    <button type="button" className={DOCUMENT_ACTION_CLASS}
+                      onClick={() => { setIsCollaborationOpen(true); closeActions(true); }}>
+                      <Users className="h-4 w-4" aria-hidden="true" /> Colaboración, historial y revisión
                     </button>
-                    <button id="report-export-toggle" type="button" className={DOCUMENT_ACTION_CLASS} aria-expanded={exportOpen}
-                      disabled={isExporting} onClick={() => setExportOpen((open) => !open)}>
+                    <button type="button" className={DOCUMENT_ACTION_CLASS} disabled={isExporting}
+                      onClick={() => { closeActions(true); setExportName(''); setExportFieldError(null); setExportOpen(true); }}>
                       <Download className="h-4 w-4" aria-hidden="true" /> {isExporting ? 'Exportando…' : 'Exportar'}
                     </button>
-                    {exportOpen && (
-                      <div className="border-y border-obsidian-border py-1 pl-3">
-                        <label className="flex min-h-11 items-center gap-2 px-2 text-xs text-obsidian-muted">
-                          <input type="checkbox" checked={redactForClient}
-                            onChange={(event) => setRedactForClient(event.target.checked)}
-                            className="h-4 w-4 accent-obsidian-accent" />
-                          Copia para cliente (PDF, HTML, ZIP)
-                        </label>
-                        {redactForClient && (
-                          <p className="px-2 pb-2 text-xs text-obsidian-muted">Censura IP, credenciales comunes y marcas de censura. Revisa las imágenes antes de compartir.</p>
-                        )}
-                        {([
-                          ['pdf', 'PDF'],
-                          ['html', 'HTML (experimental)'],
-                          ['typ', 'Código Typst (.typ)'],
-                          ['typst_zip', 'Proyecto Typst (.zip)'],
-                        ] as const).map(([format, label]) => (
-                          <button key={format} type="button" className={DOCUMENT_ACTION_CLASS}
-                            disabled={format === 'typ' ? redactForClient : (format === 'pdf' || format === 'html') && typstStatus?.available === false}
-                            onClick={() => { closeActions(true); void handleExport(format); }}>
-                            {label}
-                          </button>
-                        ))}
-                      </div>
-                    )}
                     <button type="button" className={`${DOCUMENT_ACTION_CLASS} text-obsidian-errorText`} disabled={isSaving}
                       onClick={() => { closeActions(true); void handleDeleteDocument(activeDoc); }}>
                       <Trash2 className="h-4 w-4" aria-hidden="true" /> Eliminar
@@ -1086,6 +1068,71 @@ export const ReportsDocumentsView: React.FC = () => {
           )}
         </header>
 
+        {activeDoc && exportError && (
+          <p role="alert" className="break-words border-b border-obsidian-border px-4 py-2 text-xs text-obsidian-errorText">
+            {exportError}
+          </p>
+        )}
+
+        {activeDoc && exportOpen && (
+          <div className="fixed inset-0 z-50 grid place-items-center bg-black/65 p-4"
+            onClick={(event) => { if (event.target === event.currentTarget) setExportOpen(false); }}>
+            <div ref={exportDialogRef} role="dialog" aria-modal="true" aria-labelledby="report-export-title" tabIndex={-1}
+              className="max-h-[90dvh] w-full max-w-[26rem] overflow-y-auto rounded-xl border border-obsidian-border bg-obsidian-panel p-4 sm:p-5">
+              <h2 id="report-export-title" className="font-heading text-lg text-white">Exportar documento</h2>
+              <p className="mt-1 break-words text-sm text-obsidian-muted">{activeDoc.title}</p>
+              <form className="mt-4 space-y-3" onSubmit={(event) => {
+                event.preventDefault();
+                if (!Object.prototype.hasOwnProperty.call(REPORT_EXPORT_EXTENSIONS, exportFormat) || (exportFormat === 'typ' && redactForClient)) {
+                  setExportFieldError('Elige un formato disponible para esta exportación.');
+                  return;
+                }
+                const name = validateExportName(exportName, REPORT_EXPORT_EXTENSIONS[exportFormat]);
+                if (name.error) {
+                  setExportFieldError(name.error);
+                  return;
+                }
+                setExportOpen(false);
+                void handleExport(exportFormat);
+              }}>
+                <label className="grid items-center gap-1.5 text-sm text-obsidian-muted sm:grid-cols-[8rem_minmax(0,1fr)]">Formato
+                  <select value={exportFormat} className="report-form-control w-full"
+                    onChange={(event) => { setExportFormat(event.target.value as typeof exportFormat); setExportFieldError(null); }}>
+                    <option value="pdf">PDF</option>
+                    <option value="html">HTML (experimental)</option>
+                    <option value="typ" disabled={redactForClient}>Código Typst (.typ)</option>
+                    <option value="typst_zip">Proyecto Typst (.zip)</option>
+                  </select>
+                </label>
+                {exportFormat === 'html' && <p className="text-xs text-obsidian-muted">Conserva la estructura del documento. La maquetación puede diferir del PDF.</p>}
+                <label className="grid items-center gap-1.5 text-sm text-obsidian-muted sm:grid-cols-[8rem_minmax(0,1fr)]">Nombre del archivo
+                  <input type="text" maxLength={130} value={exportName} className="report-form-control min-w-0 w-full"
+                    aria-invalid={Boolean(exportFieldError)} aria-describedby={exportFieldError ? 'report-export-error' : undefined}
+                    onChange={(event) => { setExportName(event.target.value); setExportFieldError(null); }} placeholder="Usar título del documento" />
+                </label>
+                {exportFieldError && <p id="report-export-error" role="alert" className="text-xs text-obsidian-errorText">{exportFieldError}</p>}
+                <label className="flex min-h-11 items-center gap-2 text-sm text-obsidian-muted">
+                  <input type="checkbox" checked={redactForClient} disabled={exportFormat === 'typ'}
+                    onChange={(event) => setRedactForClient(event.target.checked)} />
+                  Copia para cliente
+                </label>
+                {redactForClient && <p className="text-xs text-obsidian-muted">Censura texto marcado y credenciales comunes. Revisa las imágenes antes de compartir.</p>}
+                <div className="flex justify-end gap-2 border-t border-obsidian-border pt-4">
+                  <button type="button" className="ui-action-secondary" onClick={() => setExportOpen(false)}>Cancelar</button>
+                  <button type="submit" className="ui-action-primary" disabled={isExporting ||
+                    ((exportFormat === 'pdf' || exportFormat === 'html') && typstStatus?.available === false)}>
+                    <Download className="size-4" aria-hidden="true" /> Exportar
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {activeDoc && (collaboration.error || collaboration.status === 'offline' || !collaboration.canEdit) && (
+          <p className="border-b border-obsidian-border px-4 py-2 text-xs leading-relaxed text-obsidian-muted">{syncLabel}</p>
+        )}
+
         {activeDoc && (prospects.length > 0 || projects.length > 0) && (
           <div className="flex flex-wrap items-center gap-3 border-b border-obsidian-border px-4 py-2 text-xs">
             {prospects.length > 0 && (
@@ -1096,8 +1143,10 @@ export const ReportsDocumentsView: React.FC = () => {
                 <select
                   id="doc-prospect-select"
                   value={prospectIdDraft}
+                  disabled={!collaboration.canEdit}
                   onChange={(e) => {
                     setProspectIdDraft(e.target.value);
+                    updateCollaborativeMetadata('prospect_id', e.target.value || null);
                   }}
                   className="h-11 max-w-[200px] rounded-lg border border-obsidian-border bg-obsidian-surface px-2.5 text-xs text-white focus:border-obsidian-accent focus:outline-none"
                 >
@@ -1118,8 +1167,10 @@ export const ReportsDocumentsView: React.FC = () => {
                 <select
                   id="doc-project-select"
                   value={projectIdDraft}
+                  disabled={!collaboration.canEdit}
                   onChange={(e) => {
                     setProjectIdDraft(e.target.value);
+                    updateCollaborativeMetadata('project_id', e.target.value || null);
                   }}
                   className="h-11 max-w-[200px] rounded-lg border border-obsidian-border bg-obsidian-surface px-2.5 text-xs text-white focus:border-obsidian-accent focus:outline-none"
                 >
@@ -1176,39 +1227,6 @@ export const ReportsDocumentsView: React.FC = () => {
           </div>
         )}
 
-        {activeDoc && recoveryError && (
-          <p role="alert" className="border-b border-obsidian-border px-3 py-2 text-xs text-obsidian-errorText">{recoveryError}</p>
-        )}
-
-        {activeDoc && isHistoryOpen && (
-          <div id="typst-recovery-history" className="max-h-60 overflow-y-auto border-b border-obsidian-border px-3 py-2">
-            <p className="mb-2 text-xs text-obsidian-muted">
-              Las copias guardan solo texto cifrado. Para restaurarlas necesitas la misma clave de bóveda.
-            </p>
-            {recoverySnapshots.length === 0 ? (
-              <p className="py-2 text-sm text-obsidian-muted">Todavía no hay copias locales de este documento.</p>
-            ) : (
-              <ul className="divide-y divide-obsidian-border">
-                {recoverySnapshots.map((snapshot) => (
-                  <li key={snapshot.id} className="flex min-h-12 items-center justify-between gap-3 py-1.5">
-                    <time dateTime={new Date(snapshot.createdAt).toISOString()} className="text-sm text-obsidian-muted">
-                      {formatApiDateTime(new Date(snapshot.createdAt).toISOString())}
-                    </time>
-                    <button
-                      type="button"
-                      onClick={() => void handleRestoreRecovery(snapshot)}
-                      className="ui-action-secondary min-h-11 !px-3 text-xs"
-                      aria-label={`Restaurar copia del ${formatApiDateTime(new Date(snapshot.createdAt).toISOString())}`}
-                    >
-                      Restaurar
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        )}
-
         {compileError && (
           <div className="shrink-0 border-b border-obsidian-border bg-obsidian-dangerBg px-3 py-2 text-xs">
             <div className="flex min-w-0 flex-wrap items-center gap-x-3">
@@ -1251,9 +1269,7 @@ export const ReportsDocumentsView: React.FC = () => {
               />
             </div>
           ) : isLoadingDetail ? (
-            <div role="status" aria-live="polite" className="flex flex-1 items-center justify-center text-sm text-obsidian-muted">
-              Cargando documento…
-            </div>
+            <ReportLoadingSkeleton detail label="Cargando documento…" />
           ) : detailLoadError ? (
             <div role="alert" className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
               <p className="text-sm text-obsidian-errorText">{detailLoadError}</p>
@@ -1349,7 +1365,11 @@ export const ReportsDocumentsView: React.FC = () => {
                         </div>
                         <span aria-hidden="true" className="h-7 w-px shrink-0 bg-obsidian-border" />
                         <div className="flex items-center gap-1" role="group" aria-label="Notas y censura">
-                          <ToolbarButton label="Insertar nota" icon={MessageSquarePlus} onClick={() => insertSnippet('\n// Nota: ')} />
+                          <ToolbarButton label="Insertar nota Typst" icon={MessageSquarePlus} onClick={() => insertSnippet('\n// Nota: ')} />
+                          <ToolbarButton label="Comentar selección compartida" icon={Users} onClick={() => {
+                            setCollaborationAnchor(editorRef.current?.getSelectionAnchor() ?? null);
+                            setIsCollaborationOpen(true);
+                          }} />
                           <ToolbarButton label="Marcar selección para censura" icon={EyeOff} onClick={() => editorRef.current?.wrapSelection('{{redact:', '}}', 'dato_sensible')} />
                         </div>
                         <span aria-hidden="true" className="h-7 w-px shrink-0 bg-obsidian-border" />
@@ -1377,14 +1397,14 @@ export const ReportsDocumentsView: React.FC = () => {
                       disabled={isCompiling}
                       className="ui-action-secondary min-h-11 shrink-0 !px-3 text-xs"
                     >
-                      <RefreshCw className={`h-4 w-4 ${isCompiling ? 'animate-spin' : ''}`} aria-hidden="true" />
+                      <RefreshCw className={`h-4 w-4 ${isCompiling ? 'motion-safe:animate-spin' : ''}`} aria-hidden="true" />
                       <span>{isCompiling ? 'Compilando…' : 'Compilar'}</span>
                     </button>
                   </div>
                   <input
                     ref={fileInputRef}
                     type="file"
-                    accept="image/png,image/jpeg,image/webp,image/gif"
+                    accept="image/png,image/jpeg,image/webp,image/avif,image/gif"
                     multiple
                     tabIndex={-1}
                     aria-label="Seleccionar capturas para insertar"
@@ -1403,6 +1423,9 @@ export const ReportsDocumentsView: React.FC = () => {
                   <TypstCodeEditor
                     ref={editorRef}
                     value={sourceDraft}
+                    sharedText={collaboration.session?.text}
+                    awareness={collaboration.session?.awareness}
+                    readOnly={!collaboration.canEdit}
                     label="Código fuente Typst"
                     onChange={(value) => {
                       setSourceDraft(value);
@@ -1413,15 +1436,37 @@ export const ReportsDocumentsView: React.FC = () => {
 
               {paneMode !== 'edit' && (
                 <div className="flex min-w-0 flex-1 flex-col bg-obsidian-bg">
-                  <div className="flex items-center justify-between border-b border-obsidian-border px-4 py-2 text-xs text-obsidian-muted">
+                  <div ref={setPreviewToolbar} className="flex flex-wrap items-center gap-2 border-b border-obsidian-border px-3 py-1.5 text-xs text-obsidian-muted">
                     <span>
-                      Vista previa ({previewPages.length} {previewPages.length === 1 ? 'página' : 'páginas'})
+                      Vista previa
                     </span>
-                    {typstStatus?.version && <span className="font-mono">{typstStatus.version}</span>}
+                    <select aria-label="Formato de vista previa" className="report-form-control report-preview-select" value={previewFormat}
+                      onChange={(event) => setPreviewFormat(event.target.value as typeof previewFormat)}>
+                      <option value="svg">SVG</option>
+                      <option value="pdf">PDF</option>
+                      <option value="html" title="Formato experimental de Typst">HTML</option>
+                    </select>
                   </div>
 
-                  <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
-                    {previewPages.length === 0 ? (
+                  <div ref={setPdfControls} className="shrink-0 empty:hidden" />
+                  <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
+                    {previewFormat !== 'svg' ? (
+                      !formatPreview || formatPreview.error ? (
+                        <p role={formatPreview?.error ? 'alert' : 'status'} className="text-sm text-obsidian-muted">
+                          {typeof formatPreview?.value === 'string' ? formatPreview.value : 'Preparando vista previa…'}
+                        </p>
+                      ) : formatPreview.value instanceof Blob ? (
+                        <Suspense fallback={<p role="status" className="text-sm text-obsidian-muted">Cargando visor PDF…</p>}>
+                          {previewToolbar && pdfControls && (
+                            <ReportPdfPreview blob={formatPreview.value} toolbar={previewToolbar} controls={pdfControls} />
+                          )}
+                        </Suspense>
+                      ) : (
+                        <iframe title="Vista previa HTML" sandbox="" referrerPolicy="no-referrer"
+                          srcDoc={`<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; form-action 'none'">${formatPreview.value}`}
+                          className="h-full min-h-96 w-full border-0 bg-white" />
+                      )
+                    ) : previewPages.length === 0 ? (
                       <div className="flex h-full items-center justify-center text-sm text-obsidian-muted">
                         {isCompiling ? 'Compilando vista previa…' : 'Sin páginas renderizadas.'}
                       </div>
@@ -1443,6 +1488,24 @@ export const ReportsDocumentsView: React.FC = () => {
             </div>
           )}
         </div>
+        {isCollaborationOpen && activeDoc && (
+          <ReportCollaborationPanel
+            resourceType="document"
+            resourceId={activeDoc.id}
+            controller={collaboration}
+            operator={operator}
+            anchor={collaborationAnchor}
+            onClearAnchor={() => setCollaborationAnchor(null)}
+            onNavigateToAnchor={(anchor) => {
+              const located = editorRef.current?.goToCommentAnchor(anchor) ?? false;
+              if (located) setIsCollaborationOpen(false);
+              return located;
+            }}
+            onClose={() => setIsCollaborationOpen(false)}
+            confirm={confirm}
+            showToast={showToast}
+          />
+        )}
       </section>
     </div>
   );

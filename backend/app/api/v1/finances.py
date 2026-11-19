@@ -26,9 +26,13 @@ from app.schemas import (
 )
 from app.security.crypto import encrypt_note, decrypt_note
 from app.security.tokens import require_vault_unlocked
+from app.services.core_auth import ADMIN_ROLES, OPERATIONS_ROLES, require_module_access
 from app.services.audit import log_audit_event
 
+module_access = require_module_access(ADMIN_ROLES)
 router = APIRouter(prefix="/finances", tags=["finances"], dependencies=[Depends(require_vault_unlocked)])
+finance_router = APIRouter(dependencies=[Depends(module_access)])
+resources_router = APIRouter(dependencies=[Depends(require_module_access(OPERATIONS_ROLES))])
 
 
 def _business_share(row) -> float:
@@ -233,7 +237,7 @@ def _build_resource_response(row: SecureResource) -> SecureResourceResponse:
 # 1. CONTROL DE INGRESOS / PAGOS RECIBIDOS
 # ==========================================
 
-@router.get("/incomes", response_model=list[ClientIncomeResponse])
+@finance_router.get("/incomes", response_model=list[ClientIncomeResponse])
 async def list_incomes(db: AsyncSession = Depends(get_db)):
     stmt = (
         select(ClientIncome)
@@ -244,7 +248,7 @@ async def list_incomes(db: AsyncSession = Depends(get_db)):
     return [_build_income_response(r) for r in rows]
 
 
-@router.post("/incomes", response_model=ClientIncomeResponse)
+@finance_router.post("/incomes", response_model=ClientIncomeResponse)
 async def create_income(payload: ClientIncomeCreate, db: AsyncSession = Depends(get_db)):
     if not payload.concept.strip():
         raise HTTPException(status_code=400, detail="El concepto del pago es obligatorio.")
@@ -286,7 +290,7 @@ async def create_income(payload: ClientIncomeCreate, db: AsyncSession = Depends(
     return _build_income_response(item)
 
 
-@router.post("/incomes/{income_id}/clone-next-month", response_model=ClientIncomeResponse)
+@finance_router.post("/incomes/{income_id}/clone-next-month", response_model=ClientIncomeResponse)
 async def clone_income_next_month(income_id: str, db: AsyncSession = Depends(get_db)):
     """Atomically clones a recurring income/retainer record to the next month."""
     stmt = select(ClientIncome).where(ClientIncome.id == income_id, ClientIncome.is_deleted == False)
@@ -348,7 +352,7 @@ async def clone_income_next_month(income_id: str, db: AsyncSession = Depends(get
     return _build_income_response(cloned)
 
 
-@router.put("/incomes/{income_id}", response_model=ClientIncomeResponse)
+@finance_router.put("/incomes/{income_id}", response_model=ClientIncomeResponse)
 async def update_income(income_id: str, payload: ClientIncomeUpdate, db: AsyncSession = Depends(get_db)):
     stmt = select(ClientIncome).where(ClientIncome.id == income_id, ClientIncome.is_deleted == False)
     item = (await db.execute(stmt)).scalar_one_or_none()
@@ -400,7 +404,7 @@ async def update_income(income_id: str, payload: ClientIncomeUpdate, db: AsyncSe
     return _build_income_response(item)
 
 
-@router.delete("/incomes/{income_id}")
+@finance_router.delete("/incomes/{income_id}")
 async def delete_income(income_id: str, db: AsyncSession = Depends(get_db)):
     stmt = select(ClientIncome).where(ClientIncome.id == income_id, ClientIncome.is_deleted == False)
     item = (await db.execute(stmt)).scalar_one_or_none()
@@ -428,7 +432,7 @@ async def delete_income(income_id: str, db: AsyncSession = Depends(get_db)):
 # 2. MONITOR DE VENCIMIENTOS (DOMINIOS / HOSTING)
 # ==========================================
 
-@router.get("/renewals", response_model=list[DomainRenewalResponse])
+@finance_router.get("/renewals", response_model=list[DomainRenewalResponse])
 async def list_renewals(db: AsyncSession = Depends(get_db)):
     stmt = (
         select(DomainRenewal)
@@ -439,7 +443,7 @@ async def list_renewals(db: AsyncSession = Depends(get_db)):
     return [_build_renewal_response(r) for r in rows]
 
 
-@router.post("/renewals", response_model=DomainRenewalResponse)
+@finance_router.post("/renewals", response_model=DomainRenewalResponse)
 async def create_renewal(payload: DomainRenewalCreate, db: AsyncSession = Depends(get_db)):
     if not payload.domain_or_service.strip():
         raise HTTPException(status_code=400, detail="El nombre del dominio o servicio de hosting es obligatorio.")
@@ -485,7 +489,7 @@ async def create_renewal(payload: DomainRenewalCreate, db: AsyncSession = Depend
     return _build_renewal_response(item)
 
 
-@router.put("/renewals/{renewal_id}", response_model=DomainRenewalResponse)
+@finance_router.put("/renewals/{renewal_id}", response_model=DomainRenewalResponse)
 async def update_renewal(renewal_id: str, payload: DomainRenewalUpdate, db: AsyncSession = Depends(get_db)):
     stmt = select(DomainRenewal).where(DomainRenewal.id == renewal_id, DomainRenewal.is_deleted == False)
     item = (await db.execute(stmt)).scalar_one_or_none()
@@ -545,7 +549,7 @@ async def update_renewal(renewal_id: str, payload: DomainRenewalUpdate, db: Asyn
     return _build_renewal_response(item)
 
 
-@router.post("/renewals/{renewal_id}/advance-cycle", response_model=DomainRenewalResponse)
+@finance_router.post("/renewals/{renewal_id}/advance-cycle", response_model=DomainRenewalResponse)
 async def advance_renewal_cycle(
     renewal_id: str,
     payload: AdvanceRenewalRequest | None = Body(default=None),
@@ -636,7 +640,7 @@ async def advance_renewal_cycle(
     return _build_renewal_response(item, created_income_id=created_income_id, margin_amount=margin_amount)
 
 
-@router.delete("/renewals/{renewal_id}")
+@finance_router.delete("/renewals/{renewal_id}")
 async def delete_renewal(renewal_id: str, db: AsyncSession = Depends(get_db)):
     stmt = select(DomainRenewal).where(DomainRenewal.id == renewal_id, DomainRenewal.is_deleted == False)
     item = (await db.execute(stmt)).scalar_one_or_none()
@@ -664,7 +668,7 @@ async def delete_renewal(renewal_id: str, db: AsyncSession = Depends(get_db)):
 # 3. GASTOS ÚNICOS / COMPRAS VARIABLES
 # ==========================================
 
-@router.get("/expenses", response_model=list[OneTimeExpenseResponse])
+@finance_router.get("/expenses", response_model=list[OneTimeExpenseResponse])
 async def list_expenses(db: AsyncSession = Depends(get_db)):
     stmt = (
         select(OneTimeExpense)
@@ -675,7 +679,7 @@ async def list_expenses(db: AsyncSession = Depends(get_db)):
     return [_build_expense_response(r) for r in rows]
 
 
-@router.post("/expenses", response_model=OneTimeExpenseResponse)
+@finance_router.post("/expenses", response_model=OneTimeExpenseResponse)
 async def create_expense(payload: OneTimeExpenseCreate, db: AsyncSession = Depends(get_db)):
     if not payload.concept.strip():
         raise HTTPException(status_code=400, detail="El concepto del gasto único es obligatorio.")
@@ -732,7 +736,7 @@ async def create_expense(payload: OneTimeExpenseCreate, db: AsyncSession = Depen
     return _build_expense_response(item)
 
 
-@router.put("/expenses/{expense_id}", response_model=OneTimeExpenseResponse)
+@finance_router.put("/expenses/{expense_id}", response_model=OneTimeExpenseResponse)
 async def update_expense(expense_id: str, payload: OneTimeExpenseUpdate, db: AsyncSession = Depends(get_db)):
     stmt = select(OneTimeExpense).where(OneTimeExpense.id == expense_id, OneTimeExpense.is_deleted == False)
     item = (await db.execute(stmt)).scalar_one_or_none()
@@ -798,7 +802,7 @@ async def update_expense(expense_id: str, payload: OneTimeExpenseUpdate, db: Asy
     return _build_expense_response(item)
 
 
-@router.delete("/expenses/{expense_id}")
+@finance_router.delete("/expenses/{expense_id}")
 async def delete_expense(expense_id: str, db: AsyncSession = Depends(get_db)):
     stmt = select(OneTimeExpense).where(OneTimeExpense.id == expense_id, OneTimeExpense.is_deleted == False)
     item = (await db.execute(stmt)).scalar_one_or_none()
@@ -826,7 +830,7 @@ async def delete_expense(expense_id: str, db: AsyncSession = Depends(get_db)):
 # 4. PROYECTOS PROPIOS E INFRAESTRUCTURA
 # ==========================================
 
-@router.get("/projects", response_model=list[InternalProjectResponse])
+@finance_router.get("/projects", response_model=list[InternalProjectResponse])
 async def list_projects(db: AsyncSession = Depends(get_db)):
     stmt = (
         select(InternalProject)
@@ -839,7 +843,7 @@ async def list_projects(db: AsyncSession = Depends(get_db)):
     return [_build_project_response(r, email_map) for r in rows]
 
 
-@router.post("/projects", response_model=InternalProjectResponse)
+@finance_router.post("/projects", response_model=InternalProjectResponse)
 async def create_project(payload: InternalProjectCreate, db: AsyncSession = Depends(get_db)):
     if not payload.name.strip():
         raise HTTPException(status_code=400, detail="El nombre del proyecto es obligatorio.")
@@ -879,7 +883,7 @@ async def create_project(payload: InternalProjectCreate, db: AsyncSession = Depe
     return _build_project_response(item, email_map)
 
 
-@router.put("/projects/{project_id}", response_model=InternalProjectResponse)
+@finance_router.put("/projects/{project_id}", response_model=InternalProjectResponse)
 async def update_project(project_id: str, payload: InternalProjectUpdate, db: AsyncSession = Depends(get_db)):
     stmt = select(InternalProject).where(InternalProject.id == project_id, InternalProject.is_deleted == False)
     item = (await db.execute(stmt)).scalar_one_or_none()
@@ -931,7 +935,7 @@ async def update_project(project_id: str, payload: InternalProjectUpdate, db: As
     return _build_project_response(item, email_map)
 
 
-@router.delete("/projects/{project_id}")
+@finance_router.delete("/projects/{project_id}")
 async def delete_project(project_id: str, db: AsyncSession = Depends(get_db)):
     stmt = select(InternalProject).where(InternalProject.id == project_id, InternalProject.is_deleted == False)
     item = (await db.execute(stmt)).scalar_one_or_none()
@@ -959,7 +963,7 @@ async def delete_project(project_id: str, db: AsyncSession = Depends(get_db)):
 # 5. BÓVEDA DE RECURSOS LIBRES Y NOTAS SEGURAS
 # ==========================================
 
-@router.get("/resources", response_model=list[SecureResourceResponse])
+@resources_router.get("/resources", response_model=list[SecureResourceResponse])
 async def list_resources(db: AsyncSession = Depends(get_db)):
     stmt = (
         select(SecureResource)
@@ -970,7 +974,7 @@ async def list_resources(db: AsyncSession = Depends(get_db)):
     return [_build_resource_response(r) for r in rows]
 
 
-@router.post("/resources", response_model=SecureResourceResponse)
+@resources_router.post("/resources", response_model=SecureResourceResponse)
 async def create_resource(payload: SecureResourceCreate, db: AsyncSession = Depends(get_db)):
     if not payload.title.strip():
         raise HTTPException(status_code=400, detail="El título del recurso seguro es obligatorio.")
@@ -1005,7 +1009,7 @@ async def create_resource(payload: SecureResourceCreate, db: AsyncSession = Depe
     return _build_resource_response(item)
 
 
-@router.put("/resources/{resource_id}", response_model=SecureResourceResponse)
+@resources_router.put("/resources/{resource_id}", response_model=SecureResourceResponse)
 async def update_resource(resource_id: str, payload: SecureResourceUpdate, db: AsyncSession = Depends(get_db)):
     stmt = select(SecureResource).where(SecureResource.id == resource_id, SecureResource.is_deleted == False)
     item = (await db.execute(stmt)).scalar_one_or_none()
@@ -1049,7 +1053,7 @@ async def update_resource(resource_id: str, payload: SecureResourceUpdate, db: A
     return _build_resource_response(item)
 
 
-@router.delete("/resources/{resource_id}")
+@resources_router.delete("/resources/{resource_id}")
 async def delete_resource(resource_id: str, db: AsyncSession = Depends(get_db)):
     stmt = select(SecureResource).where(SecureResource.id == resource_id, SecureResource.is_deleted == False)
     item = (await db.execute(stmt)).scalar_one_or_none()
@@ -1071,3 +1075,7 @@ async def delete_resource(resource_id: str, db: AsyncSession = Depends(get_db)):
     )
     await db.commit()
     return {"message": "Recurso seguro enviado a la papelera."}
+
+
+router.include_router(finance_router)
+router.include_router(resources_router)

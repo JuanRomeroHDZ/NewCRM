@@ -15,7 +15,10 @@ from app.security.crypto import hash_master_password, verify_master_password, de
 from app.security.rekey import RekeyError, rekey_vault
 from app.security.tokens import require_vault_unlocked, require_vault_unlocked_exclusive, revoke_all_vault_sessions
 from app.services.audit import log_audit_event
-from app.services.core_auth import require_role
+from app.services.core_auth import ADMIN_ROLES, WORKSPACE_ROLES, require_role
+
+read_preferences = require_role(WORKSPACE_ROLES)
+admin_access = require_role(ADMIN_ROLES)
 
 # All settings routes strictly require an unlocked Level 2 vault session
 router = APIRouter(prefix="/settings", tags=["settings"])
@@ -31,7 +34,7 @@ class TrashRetentionUpdate(BaseModel):
             raise ValueError("Elige sin límite o un plazo de 30, 60 o 90 días.")
         return value
 
-@router.get("", response_model=SettingsResponse, dependencies=[Depends(require_vault_unlocked)])
+@router.get("", response_model=SettingsResponse, dependencies=[Depends(require_vault_unlocked), Depends(admin_access)])
 async def get_settings(db: AsyncSession = Depends(get_db)):
     stmt = select(UserSettings).limit(1)
     res = await db.execute(stmt)
@@ -66,7 +69,7 @@ async def get_settings(db: AsyncSession = Depends(get_db)):
         max_followup_attempts=int(getattr(s, "max_followup_attempts", app_settings.DEFAULT_MAX_FOLLOWUP_ATTEMPTS) or app_settings.DEFAULT_MAX_FOLLOWUP_ATTEMPTS)
     )
 
-@router.put("", response_model=SettingsResponse, dependencies=[Depends(require_vault_unlocked_exclusive)])
+@router.put("", response_model=SettingsResponse, dependencies=[Depends(require_vault_unlocked_exclusive), Depends(admin_access)])
 async def update_settings(payload: SettingsUpdate, db: AsyncSession = Depends(get_db)):
     if payload.trash_retention_days is not None:
         raise HTTPException(
@@ -167,7 +170,7 @@ async def update_settings(payload: SettingsUpdate, db: AsyncSession = Depends(ge
 async def update_trash_retention(
     payload: TrashRetentionUpdate,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_role(["owner", "business_admin"])),
+    _: User = Depends(admin_access),
 ):
     result = await db.execute(select(UserSettings).limit(1))
     row = result.scalar_one_or_none()
@@ -186,13 +189,13 @@ async def update_trash_retention(
     return await get_settings(db)
 
 
-@router.get("/runtime-config", dependencies=[Depends(require_vault_unlocked)])
+@router.get("/runtime-config", dependencies=[Depends(require_vault_unlocked), Depends(read_preferences)])
 async def get_settings_runtime_config(db: AsyncSession = Depends(get_db)):
     from app.services.config_service import get_runtime_config
     return await get_runtime_config(db)
 
 
-@router.put("/runtime-config", dependencies=[Depends(require_vault_unlocked)])
+@router.put("/runtime-config", dependencies=[Depends(require_vault_unlocked), Depends(admin_access)])
 async def update_settings_runtime_config(payload: RuntimeConfigUpdate, db: AsyncSession = Depends(get_db)):
     from app.services.config_service import update_runtime_config
     try:
@@ -210,7 +213,7 @@ async def update_settings_runtime_config(payload: RuntimeConfigUpdate, db: Async
         await db.rollback()
         raise
 
-@router.get("/export", dependencies=[Depends(require_vault_unlocked)])
+@router.get("/export", dependencies=[Depends(require_vault_unlocked), Depends(admin_access)])
 async def export_vault(db: AsyncSession = Depends(get_db)):
     """Exports entire encrypted vault snapshot."""
     emails = (await db.execute(select(EmailAccount))).scalars().all()

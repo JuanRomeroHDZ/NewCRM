@@ -6,10 +6,12 @@ from app.models import PaymentMethod, PlatformAccount, utc_now
 from app.schemas import PaymentMethodCreate, PaymentMethodUpdate, PaymentMethodResponse
 from app.security.crypto import encrypt_secret, decrypt_secret, encrypt_note, decrypt_note
 from app.security.tokens import require_vault_unlocked
+from app.services.core_auth import ADMIN_ROLES, require_module_access
 from app.services.audit import log_audit_event
 
 # All payment method routes strictly require an unlocked Level 2 vault session
-router = APIRouter(prefix="/payments", tags=["payments"], dependencies=[Depends(require_vault_unlocked)])
+module_access = require_module_access(ADMIN_ROLES)
+router = APIRouter(prefix="/payments", tags=["payments"], dependencies=[Depends(require_vault_unlocked), Depends(module_access)])
 
 @router.get("", response_model=list[PaymentMethodResponse])
 async def list_payment_methods(

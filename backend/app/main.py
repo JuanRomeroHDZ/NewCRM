@@ -3,7 +3,11 @@ import logging
 from pathlib import Path
 from alembic.config import Config
 from alembic.script import ScriptDirectory
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.exception_handlers import http_exception_handler
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from app.config import settings
@@ -13,7 +17,8 @@ from app.api.v1 import (
     graph, trash, exchange, settings as settings_api, health,
     security, importer, prospects, audit, vault_backup, finances,
     users, system_config, jobs, activity, personal_finances, workshop, crm_capture,
-    crm_sales, agenda, communications, integrations, metrics_and_inbound, writeups, reports, c2_proxy
+    crm_sales, agenda, communications, integrations, metrics_and_inbound, writeups, reports,
+    report_collaboration, c2_proxy
 )
 from app.middleware.request_limits import UploadRequestLimitMiddleware
 from app.security.tokens import VaultKeyContextMiddleware
@@ -51,6 +56,27 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+@app.exception_handler(RequestValidationError)
+async def validation_error(_request: Request, exc: RequestValidationError):
+    public_errors = [
+        {"loc": [part for part in error["loc"][:1 if error["type"] == "extra_forbidden" else 2]
+                 if isinstance(part, int) or
+                 (isinstance(part, str) and part.isidentifier() and len(part) <= 64)],
+         "type": error["type"],
+         "msg": "Revisa el valor o el formato del campo."}
+        for error in exc.errors()
+    ]
+    return JSONResponse(status_code=422, content={"detail": public_errors})
+
+
+@app.exception_handler(StarletteHTTPException)
+async def sanitize_http_error(request: Request, exc: StarletteHTTPException):
+    if exc.status_code >= 500:
+        return JSONResponse(status_code=exc.status_code, headers=exc.headers,
+                            content={"detail": "El servicio no pudo completar la solicitud."})
+    return await http_exception_handler(request, exc)
+
+
 app.add_middleware(
     UploadRequestLimitMiddleware,
     api_prefix=settings.API_V1_PREFIX,
@@ -63,10 +89,10 @@ app.add_middleware(VaultKeyContextMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["X-Total-Count", "X-Has-More"],
+    expose_headers=["X-Total-Count", "X-Has-More", "X-Auth-Scope"],
 )
 
 # Include API Routers
@@ -100,6 +126,7 @@ app.include_router(integrations.router, prefix=settings.API_V1_PREFIX)
 app.include_router(metrics_and_inbound.router, prefix=settings.API_V1_PREFIX)
 app.include_router(writeups.router, prefix=settings.API_V1_PREFIX)
 app.include_router(reports.router, prefix=settings.API_V1_PREFIX)
+app.include_router(report_collaboration.router, prefix=settings.API_V1_PREFIX)
 app.include_router(c2_proxy.router, prefix=settings.API_V1_PREFIX)
 
 @app.get("/")

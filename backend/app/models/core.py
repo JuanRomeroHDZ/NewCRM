@@ -17,12 +17,12 @@ class User(Base):
     username: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
     full_name: Mapped[str] = mapped_column(String(128), nullable=False)
-    role: Mapped[str] = mapped_column(String(32), default="owner", index=True)  # owner, business_admin, seller, readonly
+    role: Mapped[str] = mapped_column(String(32), default="owner", index=True)  # owner, business_admin, operator, seller, readonly
     hashed_password: Mapped[str] = mapped_column(Text, nullable=False)
     
     # 2FA / TOTP
     is_totp_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
-    totp_secret: Mapped[str | None] = mapped_column(String(64), nullable=True)  # Base32 secret
+    totp_secret: Mapped[str | None] = mapped_column(Text, nullable=True)  # AES-GCM encrypted Base32 seed
     recovery_codes: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON array of hashed recovery codes
     
     # Account status & lockout

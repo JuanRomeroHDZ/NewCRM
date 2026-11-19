@@ -1,4 +1,5 @@
 import React, { lazy, Suspense } from 'react';
+import { OperatorAuthSection } from '../settings/OperatorAuthSection';
 import { SectionType, useVault } from '../../context/VaultContext';
 
 const SettingsView = lazy(() => import('../views/SettingsView').then((module) => ({ default: module.SettingsView })));
@@ -85,14 +86,51 @@ class SectionErrorBoundary extends React.Component<
 }
 
 export const SectionRenderer: React.FC = () => {
-  const { activeSection, setActiveSection } = useVault();
+  const { activeSection, isUnlocked, operator, setActiveSection } = useVault();
   const ActiveView = sectionViews[activeSection];
   const isC2Section = activeSection.startsWith('c2_');
+  const settingsSection = activeSection === 'settings' || activeSection.startsWith('settings_') || activeSection === 'overview_settings';
+  const isAdmin = operator?.role === 'owner' || operator?.role === 'business_admin';
+  const commercialOnly = operator?.role === 'seller' || operator?.role === 'readonly';
+
+  if (isUnlocked && settingsSection && !isAdmin) {
+    return <div className="mx-auto max-w-4xl p-4 sm:p-6"><OperatorAuthSection /></div>;
+  }
+  if (isUnlocked && operator === undefined && activeSection !== 'help') {
+    return <p role="status" className="p-6 text-obsidian-muted">Comprobando la sesión…</p>;
+  }
+  if (isUnlocked && (!operator || operator.must_change_password) && activeSection !== 'help') {
+    return (
+      <section className="mx-auto max-w-xl space-y-4 p-6">
+        <h2 className="font-heading text-lg font-semibold">
+          {operator?.must_change_password ? 'Cambia tu contraseña temporal' : 'Inicia sesión con tu cuenta'}
+        </h2>
+        <p className="text-sm text-obsidian-muted">La bóveda está abierta. Usa tu cuenta de equipo para acceder a los apartados de tu rol.</p>
+        <button type="button" className="ui-action-primary" onClick={() => setActiveSection('settings_team')}>
+          Ir a accesos del equipo
+        </button>
+      </section>
+    );
+  }
+
+
+  const prospectSection = activeSection === 'overview_prospection' || activeSection === 'prospects';
+  const limited = commercialOnly && !prospectSection && activeSection !== 'help'
+    && !(activeSection === 'capture' && operator.role === 'seller');
+  if (isUnlocked && operator && (limited || (!isAdmin && (activeSection.startsWith('finance_')
+    || activeSection === 'overview_finances' || activeSection === 'audit_logs' || activeSection === 'overview_activity')))) {
+    return (
+      <section className="mx-auto max-w-xl space-y-4 p-6">
+        <h2 className="font-heading text-lg font-semibold">{activeSection === 'dashboard' ? 'Tu espacio de trabajo' : 'Tu rol no tiene acceso a este apartado'}</h2>
+        <button type="button" className="ui-action-secondary" onClick={() => setActiveSection('prospects')}>Abrir prospectos</button>
+      </section>
+    );
+  }
 
   return (
     <Suspense fallback={<div className="p-6 text-sm text-obsidian-muted" role="status">Cargando vista…</div>}>
       {isC2Section ? <ActiveView /> : (
-        <SectionErrorBoundary key={activeSection} onBack={() => setActiveSection('dashboard')}>
+        <SectionErrorBoundary key={ActiveView === SettingsView ? 'settings-form' : activeSection} onBack={() => setActiveSection('dashboard')}>
           <ActiveView />
         </SectionErrorBoundary>
       )}

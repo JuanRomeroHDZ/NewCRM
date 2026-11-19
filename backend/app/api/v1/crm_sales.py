@@ -1,24 +1,33 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, Field
+import logging
+from hashlib import sha256
+from typing import Literal
+
+from fastapi import APIRouter, Depends, HTTPException, Response
+from starlette.concurrency import run_in_threadpool
+from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc
+from sqlalchemy.exc import IntegrityError
 
 from app.database import get_db
-from app.services.core_auth import get_current_user_from_token, require_role
-from app.models.core import User
+from app.services.core_auth import ADMIN_ROLES, SALES_ROLES, require_role
+from app.security.tokens import require_vault_unlocked
+from app.models.core import ActivityEvent, User
 from app.models import Prospect
-from app.models.crm_sales import Client, Proposal, Sale, PaymentInstallment, PaymentRecord, Invoice
-from app.services.crm_sales import CrmSalesService, SaleAlreadyClosedError
+from app.models.crm_sales import Client, Proposal, Sale, Invoice
+from app.services.crm_sales import CrmSalesService, SaleAlreadyClosedError, proposal_status, utc_now
+from app.services.proposal_pdf import proposal_pdf
 
-router = APIRouter(prefix="/crm", tags=["CRM Sales & Operations"])
-
-from pydantic import field_validator, model_validator
 from app.schemas.validators import (
     validate_calendar_date,
     validate_rfc_input,
     validate_single_phone,
 )
 from app.schemas import SupportedCurrency, validate_email_input, validate_nonblank_input
+
+router = APIRouter(prefix="/crm", tags=["CRM Sales & Operations"], dependencies=[Depends(require_vault_unlocked)])
+logger = logging.getLogger(__name__)
+ProposalChannel = Literal["whatsapp", "email", "call", "in_person", "other"]
 
 
 class CadenceRequest(BaseModel):
@@ -41,6 +50,28 @@ class ProposalCreate(BaseModel):
     expires_days: int = Field(15, ge=1, le=90)
 
     _valid_title = field_validator("title")(validate_nonblank_input)
+
+    @field_validator("amount")
+    @classmethod
+    def amount_in_cents(cls, amount: float) -> float:
+        if amount != round(amount, 2):
+            raise ValueError("Usa hasta dos decimales en el importe.")
+        return amount
+
+
+class ProposalDelivery(BaseModel):
+    recipient: str = Field(min_length=2, max_length=255)
+    channel: ProposalChannel
+    _valid_recipient = field_validator("recipient")(validate_nonblank_input)
+
+
+class ProposalDecision(BaseModel):
+    decision: Literal["aceptada", "rechazada"]
+    respondent: str = Field(min_length=2, max_length=255)
+    channel: ProposalChannel
+    evidence: str = Field(min_length=5, max_length=4000)
+    _valid_evidence = field_validator("respondent", "evidence")(validate_nonblank_input)
+
 
 class SaleCloseRequest(BaseModel):
     company_name: str = Field(..., min_length=2, max_length=180)
@@ -106,7 +137,7 @@ async def advance_cadence(
     prospect_id: str,
     req: CadenceRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["owner", "business_admin", "seller", "operator"]))
+    current_user: User = Depends(require_role(list(SALES_ROLES)))
 ):
     try:
         p = await CrmSalesService.advance_prospect_cadence(
@@ -129,7 +160,7 @@ async def record_response(
     prospect_id: str,
     req: ResponseRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["owner", "business_admin", "seller", "operator"]))
+    current_user: User = Depends(require_role(list(SALES_ROLES)))
 ):
     try:
         p = await CrmSalesService.record_prospect_response(
@@ -149,25 +180,101 @@ async def record_response(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+@router.get("/prospects/{prospect_id}/commercial")
+async def prospect_commercial_summary(
+    prospect_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_role(list(SALES_ROLES))),
+):
+    prospect = await db.get(Prospect, prospect_id)
+    if not prospect or prospect.is_deleted:
+        raise HTTPException(status_code=404, detail="Prospecto no encontrado.")
+    proposals = (await db.scalars(
+        select(Proposal).where(Proposal.prospect_id == prospect_id).order_by(desc(Proposal.created_at))
+    )).all()
+    sale = await db.scalar(
+        select(Sale).where(Sale.prospect_id == prospect_id).order_by(desc(Sale.created_at)).limit(1)
+    )
+    invoices = []
+    can_manage_invoices = user.role in ADMIN_ROLES
+    if sale and can_manage_invoices:
+        invoices = (await db.scalars(
+            select(Invoice).where(Invoice.sale_id == sale.id).order_by(desc(Invoice.created_at))
+        )).all()
+    return {
+        "proposals": [proposal_summary(proposal) for proposal in proposals],
+        "sale": sale,
+        "invoices": invoices,
+        "can_manage_invoices": can_manage_invoices,
+    }
+
+
 # Proposals
+def proposal_summary(proposal: Proposal) -> dict:
+    data = {field: getattr(proposal, field) for field in (
+        "id", "folio", "version", "prospect_id", "title", "amount", "currency",
+        "service_type", "content_text", "is_viewed_by_user", "created_at", "updated_at",
+        "issued_at", "sent_at", "sent_by", "send_channel", "sent_to", "responded_at",
+        "responded_by", "respondent", "response_channel", "response_evidence", "expires_at",
+    )}
+    # All proposal timestamps are stored as UTC; make that explicit to clients.
+    for field in ("created_at", "updated_at", "issued_at", "sent_at", "responded_at", "expires_at"):
+        if data[field] is not None:
+            data[field] = data[field].isoformat() + "Z"
+    return {**data, "status": proposal_status(proposal)}
+
+
+async def get_proposal(db: AsyncSession, proposal_id: str, *, lock: bool = False) -> Proposal:
+    query = select(Proposal).where(Proposal.id == proposal_id)
+    if lock:
+        query = query.with_for_update()
+    proposal = await db.scalar(query)
+    if not proposal:
+        raise HTTPException(status_code=404, detail="Propuesta no encontrada.")
+    return proposal
+
+
+def proposal_event(db: AsyncSession, proposal: Proposal, user: User, summary: str) -> None:
+    db.add(ActivityEvent(
+        module="crm", action="update", entity_type="proposal", entity_id=proposal.id,
+        user_id=user.id, user_name=user.username, summary=f"{proposal.folio}: {summary}",
+    ))
+
+
+def proposal_download(pdf: bytes, filename: str) -> Response:
+    return Response(pdf, media_type="application/pdf", headers={
+        "Content-Disposition": f'attachment; filename="{filename}"',
+        "Cache-Control": "private, no-store",
+        "X-Export-SHA256": sha256(pdf).hexdigest(),
+    })
+
+
+async def compile_proposal(proposal: Proposal, **options) -> bytes:
+    try:
+        return await run_in_threadpool(proposal_pdf, proposal, **options)
+    except (OSError, RuntimeError) as exc:
+        logger.warning("Error al compilar el PDF comercial %s con Typst", proposal.id)
+        raise HTTPException(status_code=503, detail="No se pudo generar el PDF de la propuesta.") from exc
+
+
 @router.get("/proposals")
 async def list_proposals(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user_from_token)
+    current_user: User = Depends(require_role(list(SALES_ROLES)))
 ):
     stmt = select(Proposal).order_by(desc(Proposal.created_at))
     res = await db.execute(stmt)
-    return res.scalars().all()
+    return [proposal_summary(proposal) for proposal in res.scalars().all()]
 
 @router.post("/proposals")
 async def create_proposal(
     req: ProposalCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["owner", "business_admin", "seller", "operator"]))
+    current_user: User = Depends(require_role(list(SALES_ROLES)))
 ):
     if req.prospect_id:
         prospect = await db.get(Prospect, req.prospect_id)
-        if not prospect:
+        if not prospect or prospect.is_deleted:
             raise HTTPException(status_code=404, detail="Prospecto no encontrado.")
     prop = await CrmSalesService.create_proposal(
         session=db,
@@ -179,13 +286,96 @@ async def create_proposal(
         content_text=req.content_text,
         expires_days=req.expires_days
     )
-    return prop
+    return proposal_summary(prop)
+
+
+@router.post("/proposals/{proposal_id}/pdf")
+async def prepare_proposal_pdf(
+    proposal_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_role(list(SALES_ROLES))),
+):
+    proposal = await get_proposal(db, proposal_id, lock=True)
+    await db.refresh(proposal, ["issued_pdf"])
+    pdf = proposal.issued_pdf
+    if pdf is None:
+        if proposal_status(proposal) != "borrador":
+            raise HTTPException(status_code=409, detail="Solo puedes preparar el PDF de un borrador vigente.")
+        prospect = await db.get(Prospect, proposal.prospect_id) if proposal.prospect_id else None
+        if prospect and prospect.is_deleted:
+            raise HTTPException(status_code=409, detail="El prospecto vinculado está en la papelera.")
+        proposal.issued_at = utc_now()
+        pdf = await compile_proposal(proposal, recipient=prospect.company_name if prospect else "Sin destinatario asignado")
+        proposal.issued_pdf = pdf
+        proposal_event(db, proposal, user, "PDF de la propuesta preparado.")
+        await db.commit()
+    return proposal_download(pdf, f"{proposal.folio}.pdf")
+
+
+@router.post("/proposals/{proposal_id}/send")
+async def record_proposal_delivery(
+    proposal_id: str,
+    req: ProposalDelivery,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_role(list(SALES_ROLES))),
+):
+    proposal = await get_proposal(db, proposal_id, lock=True)
+    if proposal_status(proposal) != "borrador" or not proposal.issued_at:
+        raise HTTPException(status_code=409, detail="Prepara el PDF de un borrador vigente antes de registrar el envío.")
+    proposal.status = "enviada"
+    proposal.sent_at = utc_now()
+    proposal.sent_by = user.username
+    proposal.send_channel = req.channel
+    proposal.sent_to = req.recipient
+    proposal_event(db, proposal, user, "Envío externo registrado.")
+    await db.commit()
+    await db.refresh(proposal)
+    return proposal_summary(proposal)
+
+
+@router.post("/proposals/{proposal_id}/decision")
+async def record_proposal_decision(
+    proposal_id: str,
+    req: ProposalDecision,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_role(list(SALES_ROLES))),
+):
+    proposal = await get_proposal(db, proposal_id, lock=True)
+    if proposal_status(proposal) not in {"enviada", "en_revision"} or not proposal.sent_at:
+        raise HTTPException(status_code=409, detail="La propuesta debe estar enviada y vigente para registrar una respuesta.")
+    proposal.status = req.decision
+    proposal.responded_at = utc_now()
+    proposal.responded_by = user.username
+    proposal.respondent = req.respondent
+    proposal.response_channel = req.channel
+    proposal.response_evidence = req.evidence
+    summary = "Aceptación externa registrada." if req.decision == "aceptada" else "Rechazo externo registrado."
+    proposal_event(db, proposal, user, summary)
+    await db.commit()
+    await db.refresh(proposal)
+    return proposal_summary(proposal)
+
+
+@router.get("/proposals/{proposal_id}/approval")
+async def download_proposal_approval(
+    proposal_id: str,
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(require_role(list(SALES_ROLES))),
+):
+    proposal = await get_proposal(db, proposal_id)
+    await db.refresh(proposal, ["issued_pdf"])
+    if proposal.status != "aceptada" or not (
+        proposal.issued_pdf and proposal.sent_at and proposal.responded_at and proposal.response_evidence
+    ):
+        raise HTTPException(status_code=409, detail="La propuesta no tiene una aceptación documentada.")
+    pdf = await compile_proposal(proposal, approval=True)
+    return proposal_download(pdf, f"{proposal.folio}-aprobacion.pdf")
 
 @router.post("/proposals/{proposal_id}/viewed")
 async def mark_proposal_viewed(
     proposal_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["owner", "business_admin", "seller", "operator"]))
+    current_user: User = Depends(require_role(list(SALES_ROLES)))
 ):
     try:
         prop = await CrmSalesService.mark_proposal_viewed(
@@ -201,7 +391,7 @@ async def mark_proposal_viewed(
 @router.get("/clients")
 async def list_clients(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user_from_token)
+    current_user: User = Depends(require_role(list(SALES_ROLES)))
 ):
     stmt = select(Client).order_by(desc(Client.created_at))
     res = await db.execute(stmt)
@@ -211,7 +401,7 @@ async def list_clients(
 @router.get("/sales")
 async def list_sales(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user_from_token)
+    current_user: User = Depends(require_role(list(SALES_ROLES)))
 ):
     stmt = select(Sale).order_by(desc(Sale.created_at))
     res = await db.execute(stmt)
@@ -221,7 +411,7 @@ async def list_sales(
 async def close_sale(
     req: SaleCloseRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["owner", "business_admin", "seller", "operator"]))
+    current_user: User = Depends(require_role(list(SALES_ROLES)))
 ):
     if req.prospect_id and not await db.get(Prospect, req.prospect_id):
         raise HTTPException(status_code=404, detail="Prospecto no encontrado.")
@@ -260,8 +450,7 @@ async def close_sale(
         raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+
 
 # Payments
 @router.post("/payments/{payment_id}/reverse")
@@ -269,7 +458,7 @@ async def reverse_payment(
     payment_id: str,
     req: PaymentReverseRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["owner", "business_admin"]))
+    current_user: User = Depends(require_role(list(ADMIN_ROLES)))
 ):
     try:
         pay = await CrmSalesService.reverse_payment(
@@ -291,7 +480,7 @@ async def reverse_payment(
 @router.get("/invoices")
 async def list_invoices(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user_from_token)
+    current_user: User = Depends(require_role(list(ADMIN_ROLES)))
 ):
     stmt = select(Invoice).order_by(desc(Invoice.created_at))
     res = await db.execute(stmt)
@@ -301,29 +490,37 @@ async def list_invoices(
 async def record_invoice(
     req: InvoiceRecordRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["owner", "business_admin"]))
+    current_user: User = Depends(require_role(list(ADMIN_ROLES)))
 ):
     if not await db.get(Client, req.client_id):
         raise HTTPException(status_code=404, detail="Cliente no encontrado.")
-    if req.sale_id and not await db.get(Sale, req.sale_id):
-        raise HTTPException(status_code=404, detail="Venta no encontrada.")
+    if req.sale_id:
+        sale = await db.get(Sale, req.sale_id)
+        if not sale:
+            raise HTTPException(status_code=404, detail="Venta no encontrada.")
+        if sale.client_id != req.client_id:
+            raise HTTPException(status_code=422, detail="La venta no corresponde al cliente seleccionado.")
     normalized_uuid = req.uuid.strip().upper()
     existing_inv = (await db.execute(select(Invoice).where(Invoice.uuid == normalized_uuid))).scalar_one_or_none()
     if existing_inv:
         raise HTTPException(status_code=409, detail="Ya existe una factura registrada con este UUID fiscal.")
-    inv = await CrmSalesService.record_invoice(
-        session=db,
-        sale_id=req.sale_id,
-        client_id=req.client_id,
-        folio=req.folio,
-        uuid=normalized_uuid,
-        rfc=req.rfc,
-        amount=req.amount,
-        issue_date=req.issue_date,
-        cfdi_usage=req.cfdi_usage,
-        currency=req.currency,
-        service_ref=req.service_ref
-    )
+    try:
+        inv = await CrmSalesService.record_invoice(
+            session=db,
+            sale_id=req.sale_id,
+            client_id=req.client_id,
+            folio=req.folio,
+            uuid=normalized_uuid,
+            rfc=req.rfc,
+            amount=req.amount,
+            issue_date=req.issue_date,
+            cfdi_usage=req.cfdi_usage,
+            currency=req.currency,
+            service_ref=req.service_ref
+        )
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail="No se pudo registrar el folio fiscal. Comprueba si ya existe.")
     return inv
 
 @router.post("/invoices/{invoice_id}/cancel")
@@ -331,7 +528,7 @@ async def cancel_invoice(
     invoice_id: str,
     req: InvoiceCancelRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["owner", "business_admin"]))
+    current_user: User = Depends(require_role(list(ADMIN_ROLES)))
 ):
     try:
         inv = await CrmSalesService.cancel_invoice(

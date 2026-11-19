@@ -4,18 +4,20 @@ FROM python:3.12-slim AS builder
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     build-essential \
     libpq-dev \
     gcc \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir --default-timeout=100 --retries 5 --user -r requirements.txt
+RUN PIP_DISABLE_PIP_VERSION_CHECK=1 pip install --no-cache-dir --default-timeout=100 --retries 5 \
+    --user --no-warn-script-location --root-user-action=ignore -r requirements.txt
 
 FROM builder AS test-dependencies
 COPY requirements-test.txt .
-RUN pip install --no-cache-dir --default-timeout=100 --retries 5 --user -r requirements-test.txt
+RUN PIP_DISABLE_PIP_VERSION_CHECK=1 pip install --no-cache-dir --default-timeout=100 --retries 5 \
+    --user --no-warn-script-location --root-user-action=ignore -r requirements-test.txt
 
 # Shared runtime base for production and the isolated test image.
 FROM python:3.12-slim AS runtime-base
@@ -24,17 +26,19 @@ WORKDIR /app
 
 # Install runtime dependencies only
 ARG TYPST_VERSION=0.15.1
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     libpq5 \
     curl \
     ca-certificates \
     xz-utils \
+    zlib1g \
     libpango-1.0-0 \
     libpangocairo-1.0-0 \
     libpangoft2-1.0-0 \
     libcairo2 \
     libffi8 \
     shared-mime-info \
+    libharfbuzz-subset0 \
     fonts-dejavu-core \
     ffmpeg \
     librsvg2-bin \
@@ -63,7 +67,7 @@ ENV PATH=/home/appuser/.local/bin:$PATH
 # Test-only image. Poppler is used by PDF assertions; production stays smaller.
 FROM runtime-base AS test
 USER root
-RUN apt-get update && apt-get install -y --no-install-recommends poppler-utils \
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends poppler-utils \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=test-dependencies --chown=appuser:appgroup /root/.local /home/appuser/.local
 COPY --chown=appuser:appgroup --chmod=u=rwX,go=rX . /app
@@ -86,4 +90,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
 
 # Una API worker por contenedor mantiene acotado el pool local de PostgreSQL.
 # Escala horizontalmente con réplicas del servicio backend en Compose.
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1", "--ws-max-size", "52428800"]

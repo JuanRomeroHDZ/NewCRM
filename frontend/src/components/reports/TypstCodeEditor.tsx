@@ -4,6 +4,9 @@ import React, {
   useImperativeHandle,
   useRef,
 } from 'react';
+import * as Y from 'yjs';
+import type { Awareness } from 'y-protocols/awareness';
+import { yCollab } from 'y-codemirror.next';
 import { acceptCompletion, autocompletion, closeBrackets, completionKeymap } from '@codemirror/autocomplete';
 import {
   defaultKeymap,
@@ -24,6 +27,7 @@ import { EditorSelection, EditorState } from '@codemirror/state';
 import { searchKeymap, openSearchPanel } from '@codemirror/search';
 import { EditorView, highlightActiveLine, highlightActiveLineGutter, keymap, lineNumbers } from '@codemirror/view';
 import { tags } from '@lezer/highlight';
+import { createTypstRangeAnchor, resolveTypstRangeAnchor } from './reportCommentAnchors.mjs';
 import { typstCompletionSource } from './typstSnippets';
 
 export interface TypstCodeEditorHandle {
@@ -35,6 +39,8 @@ export interface TypstCodeEditorHandle {
   undo: () => void;
   redo: () => void;
   openSearch: () => void;
+  getSelectionAnchor: () => string | null;
+  goToCommentAnchor: (anchor: string) => boolean;
 }
 
 interface TypstCodeEditorProps {
@@ -42,6 +48,9 @@ interface TypstCodeEditorProps {
   label: string;
   onChange: (value: string) => void;
   onPasteImages?: (files: File[]) => void | Promise<void>;
+  sharedText?: Y.Text;
+  awareness?: Awareness;
+  readOnly?: boolean;
 }
 
 interface TypstModeState {
@@ -114,13 +123,14 @@ const typstTheme = EditorView.theme({
 }, { dark: true });
 
 export const TypstCodeEditor = forwardRef<TypstCodeEditorHandle, TypstCodeEditorProps>(function TypstCodeEditor(
-  { value, label, onChange, onPasteImages },
+  { value, label, onChange, onPasteImages, sharedText, awareness, readOnly = false },
   ref,
 ) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
   const onChangeRef = useRef(onChange);
   const onPasteImagesRef = useRef(onPasteImages);
+  const sharedUndoManagerRef = useRef<Y.UndoManager | null>(null);
   onChangeRef.current = onChange;
   onPasteImagesRef.current = onPasteImages;
 
@@ -128,7 +138,7 @@ export const TypstCodeEditor = forwardRef<TypstCodeEditorHandle, TypstCodeEditor
     focus: () => viewRef.current?.focus(),
     setHeading: (level) => {
       const view = viewRef.current;
-      if (!view) return;
+      if (!view || view.state.readOnly) return;
       const line = view.state.doc.lineAt(view.state.selection.main.head);
       const marker = /^\s*=+[ \t]+/.exec(line.text)?.[0] ?? '';
       const prefix = '='.repeat(level) + ' ';
@@ -151,7 +161,7 @@ export const TypstCodeEditor = forwardRef<TypstCodeEditorHandle, TypstCodeEditor
     },
     insert: (snippet) => {
       const view = viewRef.current;
-      if (!view) return;
+      if (!view || view.state.readOnly) return;
       const { from, to } = view.state.selection.main;
       view.dispatch({
         changes: { from, to, insert: snippet },
@@ -162,7 +172,7 @@ export const TypstCodeEditor = forwardRef<TypstCodeEditorHandle, TypstCodeEditor
     },
     wrapSelection: (prefix, suffix, placeholder = 'texto') => {
       const view = viewRef.current;
-      if (!view) return;
+      if (!view || view.state.readOnly) return;
       const { from, to } = view.state.selection.main;
       const selected = view.state.sliceDoc(from, to);
       const content = selected || placeholder;
@@ -173,20 +183,53 @@ export const TypstCodeEditor = forwardRef<TypstCodeEditorHandle, TypstCodeEditor
       view.dispatch({ changes: { from, to, insert }, selection, scrollIntoView: true });
       view.focus();
     },
-    undo: () => { const view = viewRef.current; if (view) undo(view); },
-    redo: () => { const view = viewRef.current; if (view) redo(view); },
+    undo: () => {
+      if (sharedUndoManagerRef.current) sharedUndoManagerRef.current.undo();
+      else { const view = viewRef.current; if (view) undo(view); }
+    },
+    redo: () => {
+      if (sharedUndoManagerRef.current) sharedUndoManagerRef.current.redo();
+      else { const view = viewRef.current; if (view) redo(view); }
+    },
     openSearch: () => { const view = viewRef.current; if (view) { openSearchPanel(view); view.focus(); } },
+    getSelectionAnchor: () => {
+      const view = viewRef.current;
+      if (!view || !sharedText) return null;
+      const { from, to } = view.state.selection.main;
+      return createTypstRangeAnchor(sharedText, from, to);
+    },
+    goToCommentAnchor: (anchor) => {
+      const view = viewRef.current;
+      if (!view || !sharedText?.doc) return false;
+      const range = resolveTypstRangeAnchor(anchor, sharedText.doc, sharedText);
+      if (!range) return false;
+      view.dispatch({
+        selection: EditorSelection.range(range.from, range.to),
+        effects: EditorView.scrollIntoView(range.from, { y: 'center' }),
+      });
+      view.focus();
+      return true;
+    },
   }), []);
 
   useEffect(() => {
     if (!hostRef.current) return;
+    const sharedUndoManager = sharedText ? new Y.UndoManager(sharedText) : null;
+    sharedUndoManagerRef.current = sharedUndoManager;
+    const editingKeymap = sharedUndoManager
+      ? [
+          { key: 'Mod-z', run: () => { sharedUndoManager.undo(); return true; } },
+          { key: 'Mod-Shift-z', run: () => { sharedUndoManager.redo(); return true; } },
+          { key: 'Mod-y', run: () => { sharedUndoManager.redo(); return true; } },
+        ]
+      : historyKeymap;
     const state = EditorState.create({
-      doc: value,
+      doc: sharedText?.toString() ?? value,
       extensions: [
         lineNumbers(),
         highlightActiveLineGutter(),
         highlightActiveLine(),
-        history(),
+        ...(sharedUndoManager ? [] : [history()]),
         indentOnInput(),
         bracketMatching(),
         closeBrackets(),
@@ -197,11 +240,14 @@ export const TypstCodeEditor = forwardRef<TypstCodeEditorHandle, TypstCodeEditor
           { key: 'Tab', run: acceptCompletion },
           ...completionKeymap,
           ...searchKeymap,
-          ...historyKeymap,
+          ...editingKeymap,
           indentWithTab,
           ...defaultKeymap,
         ]),
         EditorView.lineWrapping,
+        EditorView.editable.of(!readOnly),
+        EditorState.readOnly.of(readOnly),
+        ...(sharedText && awareness ? [yCollab(sharedText, awareness, { undoManager: sharedUndoManager! })] : []),
         EditorView.contentAttributes.of({
           'aria-label': label,
           'aria-multiline': 'true',
@@ -212,6 +258,7 @@ export const TypstCodeEditor = forwardRef<TypstCodeEditorHandle, TypstCodeEditor
         }),
         EditorView.domEventHandlers({
           paste(event) {
+            if (readOnly) return true;
             const items = Array.from(event.clipboardData?.items ?? []);
             const files = items
               .filter((item) => item.kind === 'file' && item.type.startsWith('image/'))
@@ -230,9 +277,11 @@ export const TypstCodeEditor = forwardRef<TypstCodeEditorHandle, TypstCodeEditor
     viewRef.current = view;
     return () => {
       view.destroy();
+      sharedUndoManager?.destroy();
+      sharedUndoManagerRef.current = null;
       viewRef.current = null;
     };
-  }, [label]);
+  }, [awareness, label, readOnly, sharedText]);
 
   useEffect(() => {
     const view = viewRef.current;

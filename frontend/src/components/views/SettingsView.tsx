@@ -24,7 +24,7 @@ const sectionTargets: Partial<Record<SectionType, string>> = {
 
 export const SettingsView: React.FC = () => {
   const {
-    activeSection, setActiveSection, isUnlocked, openUnlockModal, timeoutMinutes,
+    activeSection, isUnlocked, openUnlockModal, timeoutMinutes,
     clipboardClearSeconds, allowRevealPasswords, searchHotkey,
     accentColor, setAccentColor, setCanvasStyle,
     openImportModal, openEnvExport, openEmergencyKit, openPasswordGen, refreshVaultStatus, showToast, triggerDataReload, systemLocale,
@@ -52,41 +52,31 @@ export const SettingsView: React.FC = () => {
   const [vaultSettingsError, setVaultSettingsError] = useState<string | null>(null);
   const vaultSettingsGeneration = useRef(0);
 
-  const scrollSelection = useRef(false);
-  const navigationUntil = useRef(0);
-
   useEffect(() => {
-    if (scrollSelection.current) { scrollSelection.current = false; return; }
     const targetId = sectionTargets[activeSection];
-    if (!targetId) return;
-    navigationUntil.current = Date.now() + 1000;
-    window.requestAnimationFrame(() => {
+    if (!targetId || !isUnlocked) return;
+    const navigate = () => {
       const target = document.getElementById(targetId);
-      if (!target) return;
-      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      if (!target) return false;
+      target.scrollIntoView({ behavior: 'instant', block: 'start' });
       target.focus({ preventScroll: true });
-    });
-  }, [activeSection, isUnlocked]);
-
-  useEffect(() => {
-    if (!isUnlocked) return;
+      return true;
+    };
+    if (navigate()) return;
+    // Report settings arrive asynchronously. Stop waiting if the user starts scrolling.
     const main = document.getElementById('settings-appearance')?.closest('main');
     if (!main) return;
-    const update = () => {
-      if (Date.now() < navigationUntil.current) return;
-      const threshold = main.getBoundingClientRect().top + 80;
-      const entries = Object.entries(sectionTargets) as [SectionType, string][];
-      let current: SectionType = 'settings_appearance';
-      for (const [section, id] of entries) {
-        const element = document.getElementById(id);
-        if (element && element.getBoundingClientRect().top <= threshold) current = section;
-      }
-      if (main.scrollTop + main.clientHeight >= main.scrollHeight - 4) current = 'settings_team';
-      if (current !== activeSection) { scrollSelection.current = true; setActiveSection(current); }
+    const observer = new MutationObserver(() => {
+      if (navigate()) observer.disconnect();
+    });
+    const cancel = () => observer.disconnect();
+    observer.observe(main, { childList: true, subtree: true });
+    main.addEventListener('scroll', cancel, { passive: true, once: true });
+    return () => {
+      cancel();
+      main.removeEventListener('scroll', cancel);
     };
-    main.addEventListener('scroll', update, { passive: true });
-    return () => main.removeEventListener('scroll', update);
-  }, [activeSection, isUnlocked, setActiveSection]);
+  }, [activeSection, isUnlocked]);
 
   useEffect(() => {
     setLocalTimeout(timeoutMinutes);
@@ -398,7 +388,7 @@ export const SettingsView: React.FC = () => {
         </div>
 
         {/* Reglas de Rotación, Papelera Híbrida, Presupuesto y Seguimiento */}
-        <div id="settings-limits" tabIndex={-1} style={{ outline: activeSection === 'settings_limits' ? '2px solid var(--brand-accent, #0F766E)' : undefined, outlineOffset: '2px' }} className="min-w-0 scroll-mt-4 space-y-5 rounded-xl border border-obsidian-border bg-obsidian-panel p-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent sm:p-6">
+        <div id="settings-limits" tabIndex={-1} className="min-w-0 scroll-mt-4 space-y-5 rounded-xl border border-obsidian-border bg-obsidian-panel p-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent sm:p-6">
           <div className="flex items-center gap-2">
             <Clock size={16} className="text-obsidian-muted" aria-hidden="true" />
             <h3 className="text-sm font-bold text-white">
@@ -578,6 +568,13 @@ export const SettingsView: React.FC = () => {
 
       <section id="settings-network" tabIndex={-1} className="scroll-mt-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent">
         <RuntimeConfigSection />
+        <div className="mt-4 space-y-2 border-t border-obsidian-border pt-4">
+          <h3 className="text-sm font-semibold text-obsidian-text">Certificado HTTPS</h3>
+          <p className="max-w-prose text-sm text-obsidian-muted">
+            En el servidor, abre <code>./lessso</code> y entra en <strong>Configuración → Certificado HTTPS</strong>.
+            Ahí puedes consultar el vencimiento y renovar el certificado del servidor usando la misma autoridad local.
+          </p>
+        </div>
       </section>
 
       <section id="settings-tools" tabIndex={-1} aria-labelledby="settings-tools-heading" className="scroll-mt-4 rounded-xl border border-obsidian-border bg-obsidian-panel p-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent">

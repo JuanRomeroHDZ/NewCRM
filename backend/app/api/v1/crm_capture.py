@@ -4,7 +4,7 @@ from sqlalchemy import select
 import httpx
 
 from app.database import get_db
-from app.services.core_auth import get_current_user_from_token, require_role
+from app.services.core_auth import SALES_ROLES, require_role
 from app.security.tokens import require_vault_unlocked
 from app.models.core import User
 from app.models.crm_capture import LeadCacheCell, LeadAuditScore, LeadDuplicateCandidate, PermanentDiscard
@@ -15,7 +15,8 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from app.schemas.validators import validate_single_phone
 from app.schemas import validate_nonblank_input
 
-router = APIRouter(prefix="/crm/capture", tags=["CRM Capture"])
+router = APIRouter(prefix="/crm/capture", tags=["CRM Capture"], dependencies=[Depends(require_vault_unlocked)])
+capture_access = require_role(SALES_ROLES)
 
 class SearchBounds(BaseModel):
     min_lat: float = Field(..., ge=-90, le=90, allow_inf_nan=False)
@@ -64,26 +65,23 @@ class GoogleEstimateRequest(BaseModel):
     query_count: int = Field(..., ge=1, le=1000)
     field_mask: list[str] = Field(default_factory=list, max_length=50)
 
-@router.get("/zones")
+@router.get("/zones", dependencies=[Depends(capture_access)])
 async def get_zones(
     db: AsyncSession = Depends(get_db),
-    _: bool = Depends(require_vault_unlocked),
 ):
     return {"zones": await CrmCaptureService.get_zones(db)}
 
 
-@router.get("/map-config")
+@router.get("/map-config", dependencies=[Depends(capture_access)])
 async def get_map_config(
     db: AsyncSession = Depends(get_db),
-    _: bool = Depends(require_vault_unlocked),
 ):
     return await CrmCaptureService.get_map_config(db)
 
-@router.post("/search")
+@router.post("/search", dependencies=[Depends(capture_access)])
 async def search_leads(
     req: SearchRequest,
     db: AsyncSession = Depends(get_db),
-    _: bool = Depends(require_vault_unlocked)
 ):
     try:
         result = await CrmCaptureService.search_osm_leads(
@@ -108,7 +106,7 @@ async def search_leads(
 async def audit_website(
     req: AuditRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["owner", "business_admin", "seller", "operator"]))
+    current_user: User = Depends(capture_access)
 ):
     try:
         audit = await CrmCaptureService.audit_website(
@@ -138,7 +136,7 @@ async def audit_website(
 @router.get("/duplicates")
 async def get_duplicate_candidates(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user_from_token)
+    current_user: User = Depends(capture_access)
 ):
     stmt = select(LeadDuplicateCandidate).where(LeadDuplicateCandidate.status == "pending")
     res = await db.execute(stmt)
@@ -148,7 +146,7 @@ async def get_duplicate_candidates(
 async def merge_candidates(
     req: MergeRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["owner", "business_admin", "seller", "operator"]))
+    current_user: User = Depends(capture_access)
 ):
     try:
         cand = await CrmCaptureService.merge_prospects(
@@ -169,7 +167,7 @@ async def merge_candidates(
 async def undo_merge(
     candidate_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["owner", "business_admin", "seller", "operator"]))
+    current_user: User = Depends(capture_access)
 ):
     try:
         await CrmCaptureService.undo_merge(session=db, candidate_id=candidate_id, user_id=current_user.id)
@@ -180,7 +178,7 @@ async def undo_merge(
 @router.get("/discards")
 async def get_discards(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user_from_token)
+    current_user: User = Depends(capture_access)
 ):
     stmt = select(PermanentDiscard).order_by(PermanentDiscard.created_at.desc())
     res = await db.execute(stmt)
@@ -190,7 +188,7 @@ async def get_discards(
 async def add_discard(
     req: DiscardRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["owner", "business_admin", "seller", "operator"]))
+    current_user: User = Depends(capture_access)
 ):
     discard = await CrmCaptureService.add_permanent_discard(
         session=db,
@@ -207,13 +205,13 @@ async def add_discard(
     }
 
 @router.get("/google-places/status")
-async def google_places_status(current_user: User = Depends(get_current_user_from_token)):
+async def google_places_status(current_user: User = Depends(capture_access)):
     return CrmCaptureService.get_google_places_status()
 
 @router.post("/google-places/estimate")
 async def google_places_estimate(
     req: GoogleEstimateRequest,
-    current_user: User = Depends(require_role(["owner", "business_admin", "seller", "operator"]))
+    current_user: User = Depends(capture_access)
 ):
     return CrmCaptureService.estimate_google_places_cost(
         query_count=req.query_count,

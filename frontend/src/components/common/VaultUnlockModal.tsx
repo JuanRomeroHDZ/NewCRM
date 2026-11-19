@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Lock, ShieldAlert, KeyRound, ArrowRight, X, Eye, EyeOff } from 'lucide-react';
 import { useAuditedDialog } from './useAuditedDialog';
 import { useVault } from '../../context/VaultContext';
-import { INPUT_LIMITS } from '../../lib/validation';
+import { INPUT_LIMITS, isAccountPasswordStrong } from '../../lib/validation';
 
 export const VaultUnlockModal: React.FC = () => {
   const {
@@ -10,6 +10,7 @@ export const VaultUnlockModal: React.FC = () => {
     closeUnlockModal,
     unlockVault,
     isSetup,
+    setupCodeRequired,
     setupMasterPassword,
     vaultStatusError,
     refreshVaultStatus,
@@ -17,6 +18,7 @@ export const VaultUnlockModal: React.FC = () => {
   } = useVault();
 
   const [password, setPassword] = useState('');
+  const [setupCode, setSetupCode] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -26,6 +28,7 @@ export const VaultUnlockModal: React.FC = () => {
   useEffect(() => {
     if (isUnlockModalOpen) {
       setPassword('');
+      setSetupCode('');
       setConfirmPassword('');
       setShowPassword(false);
       setError(null);
@@ -49,8 +52,8 @@ export const VaultUnlockModal: React.FC = () => {
       setError('Ingresa tu contraseña de acceso para continuar.');
       return;
     }
-    if (!isSetup && password.trim().length < 8) {
-      setError('La contraseña de acceso debe tener al menos 8 caracteres.');
+    if (!isSetup && !isAccountPasswordStrong(password)) {
+      setError('Usa al menos 15 caracteres e incluye un símbolo.');
       return;
     }
     if (!isSetup && password !== confirmPassword) {
@@ -62,7 +65,7 @@ export const VaultUnlockModal: React.FC = () => {
     setError(null);
     try {
       if (!isSetup) {
-        await setupMasterPassword(password);
+        await setupMasterPassword(password, setupCode.trim());
       } else {
         await unlockVault(password);
       }
@@ -139,9 +142,17 @@ export const VaultUnlockModal: React.FC = () => {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          {!isSetup && setupCodeRequired && (
+            <label className="block text-xs text-obsidian-muted">
+              Código de instalación
+              <input type="password" autoComplete="off" required maxLength={128} value={setupCode}
+                onChange={(event) => setSetupCode(event.target.value)} className="mt-1 w-full" />
+              <span className="mt-1 block">Consúltalo en la terminal del servidor con <code>./lessso --setup-code</code>.</span>
+            </label>
+          )}
           <div>
             <label htmlFor="vault-unlock-password" className="block text-xs font-medium text-obsidian-text/80 mb-1.5">
-              {isSetup ? 'Contraseña de acceso de la bóveda' : 'Define tu contraseña maestra (mínimo 8 caracteres)'}
+              {isSetup ? 'Contraseña de acceso de la bóveda' : 'Define tu contraseña maestra (mínimo 15 caracteres y un símbolo)'}
             </label>
             <div className="relative flex items-center">
               <KeyRound size={16} className="absolute left-3.5 text-obsidian-muted pointer-events-none" aria-hidden="true" />
@@ -156,7 +167,7 @@ export const VaultUnlockModal: React.FC = () => {
                   setPassword(e.target.value);
                   if (error) setError(null);
                 }}
-                placeholder={isSetup ? 'Ingresa tu contraseña de bóveda...' : 'Crea una contraseña de al menos 8 caracteres...'}
+                placeholder={isSetup ? 'Ingresa tu contraseña de bóveda...' : 'Crea una contraseña de al menos 15 caracteres...'}
                 className="w-full min-h-[44px] pl-10 pr-12 py-2.5 rounded-xl bg-obsidian-bg border border-obsidian-border text-white placeholder-obsidian-muted/50 focus:outline-none focus:border-obsidian-accent focus:ring-1 focus:ring-obsidian-accent text-sm font-mono tracking-wider transition-all"
                 autoComplete={isSetup ? 'current-password' : 'new-password'}
                 disabled={isLoading}

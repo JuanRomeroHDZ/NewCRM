@@ -1,16 +1,20 @@
 import json
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
+from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models import Prospect, EmailAccount
+from app.models.core import User
 from app.schemas import ProspectCreate, ProspectUpdate, ProspectResponse, ProspectContactAttemptRequest, TagItem
 from app.security.crypto import encrypt_note, decrypt_note
 from app.security.tokens import require_vault_unlocked
+from app.services.core_auth import SALES_ROLES, require_module_access
 from app.services.audit import log_audit_event
 
-router = APIRouter(prefix="/prospects", tags=["prospects"], dependencies=[Depends(require_vault_unlocked)])
+module_access = require_module_access(SALES_ROLES, (*SALES_ROLES, "readonly"))
+router = APIRouter(prefix="/prospects", tags=["prospects"], dependencies=[Depends(require_vault_unlocked), Depends(module_access)])
 
 def parse_json_safely(val: str | None, default_val=None):
     if not val:
@@ -106,7 +110,7 @@ async def evaluate_auto_archive_cold_prospects(prospects: list[Prospect], db: As
     """
     mutated = False
     for p in prospects:
-        if p.responded_at is not None or p.status in ("respondido", "archivado_frio"):
+        if p.followup_due_date or p.responded_at is not None or p.status in ("respondido", "archivado_frio", "cliente"):
             continue
         max_attempts = int(getattr(p, "max_followup_attempts", 3) or 3)
         followup_count = int(getattr(p, "followup_count", 0) or 0)
@@ -155,7 +159,7 @@ def build_prospect_response(
     effective_status = p.status
     unresponded_active = (
         p.responded_at is None
-        and effective_status not in ("respondido", "archivado_frio")
+        and effective_status not in ("respondido", "archivado_frio", "cliente")
     )
     # Needs re-contact if active & unresponded AND (follow-up SLA expired OR initial SLA expired OR > 50% initial SLA without contact)
     needs_recontact = bool(
@@ -205,6 +209,7 @@ def build_prospect_response(
         followup_remaining_seconds=f_remaining,
         followup_status=f_status,
         max_followup_attempts=max_attempts,
+        followup_due_date=p.followup_due_date,
         needs_recontact=needs_recontact,
         is_deleted=p.is_deleted,
         created_at=ensure_utc(p.created_at).isoformat() if p.created_at else None,
@@ -220,16 +225,20 @@ async def list_prospects(
     sla_status: str | None = Query(default=None, max_length=32),
     search: str | None = Query(default=None, max_length=120),
     tag: str | None = Query(default=None, max_length=80),
+    reminder_through: date | None = Query(default=None),
+    scope: Literal["business", "personal"] | None = Query(default=None),
     limit: int | None = Query(default=None, ge=1, le=500),
     offset: int = Query(default=0, ge=0, le=100_000),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    operator: User = Depends(module_access),
 ):
     candidate_cursor: str | None = None
-    while True:
+    while operator.role != "readonly":
         candidates_stmt = select(Prospect).where(
             Prospect.is_deleted == False,
             Prospect.responded_at.is_(None),
-            Prospect.status.not_in(("respondido", "archivado_frio")),
+            Prospect.followup_due_date.is_(None),
+            Prospect.status.not_in(("respondido", "archivado_frio", "cliente")),
             func.coalesce(Prospect.followup_count, 0)
             >= func.coalesce(Prospect.max_followup_attempts, 3),
         )
@@ -244,6 +253,17 @@ async def list_prospects(
 
     stmt = select(Prospect).where(Prospect.is_deleted == False)
     count_stmt = select(func.count(Prospect.id)).where(Prospect.is_deleted == False)
+    if scope:
+        scope_filter = func.coalesce(Prospect.scope, "business").in_((scope, "shared"))
+        stmt = stmt.where(scope_filter)
+        count_stmt = count_stmt.where(scope_filter)
+    if reminder_through:
+        reminder_filter = (
+            Prospect.followup_due_date <= reminder_through,
+            Prospect.status.not_in(("archivado_frio", "cliente")),
+        )
+        stmt = stmt.where(*reminder_filter)
+        count_stmt = count_stmt.where(*reminder_filter)
     if email_id:
         stmt = stmt.where(Prospect.email_id == email_id)
         count_stmt = count_stmt.where(Prospect.email_id == email_id)
@@ -277,6 +297,8 @@ async def list_prospects(
     email_res = await db.execute(select(EmailAccount.id, EmailAccount.address, EmailAccount.provider))
     email_map = {row[0]: (row[1], row[2]) for row in email_res.all()}
 
+    if reminder_through:
+        stmt = stmt.order_by(Prospect.followup_due_date.asc())
     stmt = stmt.order_by(Prospect.created_at.desc(), Prospect.id.desc())
     output: list[ProspectResponse] = []
     if tag or sla_status:
@@ -347,14 +369,22 @@ async def list_prospects(
 @router.get("/{prospect_id}", response_model=ProspectResponse)
 async def get_prospect_detail(
     prospect_id: str,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    operator: User = Depends(module_access),
 ):
+    return await _get_prospect_detail(prospect_id, db, refresh_status=operator.role != "readonly")
+
+
+async def _get_prospect_detail(
+    prospect_id: str, db: AsyncSession, *, refresh_status: bool = True
+) -> ProspectResponse:
     stmt = select(Prospect).where(Prospect.id == prospect_id, Prospect.is_deleted == False)
     p = (await db.execute(stmt)).scalar_one_or_none()
     if not p:
         raise HTTPException(status_code=404, detail="Prospecto no encontrado.")
 
-    await evaluate_auto_archive_cold_prospects([p], db)
+    if refresh_status:
+        await evaluate_auto_archive_cold_prospects([p], db)
 
     email_map = {}
     if p.email_id:
@@ -370,6 +400,8 @@ async def create_prospect(
     payload: ProspectCreate,
     db: AsyncSession = Depends(get_db)
 ):
+    if payload.status == "cliente":
+        raise HTTPException(status_code=422, detail="Cierra una venta para convertir al prospecto en cliente.")
     clean_email_id = payload.email_id if payload.email_id and payload.email_id.strip() != "" else None
     if clean_email_id:
         e_stmt = select(EmailAccount).where(EmailAccount.id == clean_email_id, EmailAccount.is_deleted == False)
@@ -418,6 +450,7 @@ async def create_prospect(
         followup_count=1 if payload.status in ("primer_contacto", "en_cotizacion") else 0,
         last_contact_channel="initial" if payload.status in ("primer_contacto", "en_cotizacion") else None,
         followup_sla_hours=followup_sla_hours,
+        followup_due_date=payload.followup_due_date,
         max_followup_attempts=max_attempts
     )
     db.add(prospect)
@@ -432,7 +465,7 @@ async def create_prospect(
         details=f"Prospecto / Demo '{prospect.company_name}' registrado con plazo de {sla_hours:g}h"
     )
     await db.commit()
-    return await get_prospect_detail(prospect.id, db=db)
+    return await _get_prospect_detail(prospect.id, db=db)
 
 @router.put("/{prospect_id}", response_model=ProspectResponse)
 async def update_prospect(
@@ -444,6 +477,11 @@ async def update_prospect(
     p = (await db.execute(stmt)).scalar_one_or_none()
     if not p:
         raise HTTPException(status_code=404, detail="Prospecto no encontrado.")
+
+    if p.status == "cliente" and payload.status not in (None, "cliente"):
+        raise HTTPException(status_code=409, detail="El prospecto ya se convirtió en cliente.")
+    if p.status != "cliente" and payload.status == "cliente":
+        raise HTTPException(status_code=422, detail="Cierra una venta para convertir al prospecto en cliente.")
 
     if payload.company_name is not None:
         p.company_name = payload.company_name.strip()
@@ -508,6 +546,8 @@ async def update_prospect(
         p.followup_sla_hours = max(1.0, float(payload.followup_sla_hours))
     if payload.max_followup_attempts is not None:
         p.max_followup_attempts = max(1, min(10, int(payload.max_followup_attempts)))
+    if "followup_due_date" in payload.model_fields_set:
+        p.followup_due_date = payload.followup_due_date
 
     if payload.status is not None:
         old_status = p.status
@@ -533,7 +573,7 @@ async def update_prospect(
         details=f"Actualización de ficha de prospecto '{p.company_name}' (Estado: {p.status})"
     )
     await db.commit()
-    return await get_prospect_detail(p.id, db=db)
+    return await _get_prospect_detail(p.id, db=db)
 
 @router.post("/{prospect_id}/contact-attempt", response_model=ProspectResponse)
 async def record_prospect_contact_attempt(
@@ -549,6 +589,8 @@ async def record_prospect_contact_attempt(
     p = (await db.execute(stmt)).scalar_one_or_none()
     if not p:
         raise HTTPException(status_code=404, detail="Prospecto no encontrado.")
+    if p.status == "cliente":
+        raise HTTPException(status_code=409, detail="El prospecto ya se convirtió en cliente.")
 
     now = datetime.now(timezone.utc)
     p.last_contacted_at = to_naive_utc(now)
@@ -586,7 +628,7 @@ async def record_prospect_contact_attempt(
         details=f"Intento de contacto #{p.followup_count} vía {ch_label} para '{p.company_name}' (Próximo seguimiento: +{p.followup_sla_hours:g}h)"
     )
     await db.commit()
-    return await get_prospect_detail(p.id, db=db)
+    return await _get_prospect_detail(p.id, db=db)
 
 @router.post("/{prospect_id}/reactivate", response_model=ProspectResponse)
 async def reactivate_cold_prospect(
@@ -599,6 +641,8 @@ async def reactivate_cold_prospect(
     p = (await db.execute(stmt)).scalar_one_or_none()
     if not p:
         raise HTTPException(status_code=404, detail="Prospecto no encontrado.")
+    if p.status == "cliente":
+        raise HTTPException(status_code=409, detail="El prospecto ya se convirtió en cliente.")
 
     now = datetime.now(timezone.utc)
     p.status = "primer_contacto" if p.workflow_type == "demo_first" else "en_cotizacion"
@@ -616,7 +660,7 @@ async def reactivate_cold_prospect(
         details=f"Prospecto '{p.company_name}' reactivado desde archivo frío con ventana de seguimiento de +{followup_sla_hours:g}h"
     )
     await db.commit()
-    return await get_prospect_detail(p.id, db=db)
+    return await _get_prospect_detail(p.id, db=db)
 
 @router.post("/{prospect_id}/recycle-demo", response_model=ProspectResponse)
 async def recycle_prospect_demo(
@@ -628,6 +672,8 @@ async def recycle_prospect_demo(
     p = (await db.execute(stmt)).scalar_one_or_none()
     if not p:
         raise HTTPException(status_code=404, detail="Prospecto no encontrado.")
+    if p.status == "cliente":
+        raise HTTPException(status_code=409, detail="El prospecto ya se convirtió en cliente.")
 
     now = datetime.now(timezone.utc)
     old_url = p.demo_url or "Sin URL asignada"
@@ -647,7 +693,7 @@ async def recycle_prospect_demo(
         details=f"Plantilla Demo liberada/reciclada del prospecto '{p.company_name}' ({old_url})"
     )
     await db.commit()
-    return await get_prospect_detail(p.id, db=db)
+    return await _get_prospect_detail(p.id, db=db)
 
 @router.post("/{prospect_id}/respond", response_model=ProspectResponse)
 async def mark_prospect_responded(
@@ -663,6 +709,8 @@ async def mark_prospect_responded(
     p = (await db.execute(stmt)).scalar_one_or_none()
     if not p:
         raise HTTPException(status_code=404, detail="Prospecto no encontrado.")
+    if p.status == "cliente":
+        raise HTTPException(status_code=409, detail="El prospecto ya se convirtió en cliente.")
 
     now = datetime.now(timezone.utc)
     started_utc = ensure_utc(p.started_at) or ensure_utc(p.created_at) or now
@@ -688,7 +736,7 @@ async def mark_prospect_responded(
         details=f"Cliente '{p.company_name}' respondió en {hours}h {mins}m — {sla_verdict}"
     )
     await db.commit()
-    return await get_prospect_detail(p.id, db=db)
+    return await _get_prospect_detail(p.id, db=db)
 
 @router.post("/{prospect_id}/reset-timer", response_model=ProspectResponse)
 async def reset_prospect_timer(
@@ -701,6 +749,8 @@ async def reset_prospect_timer(
     p = (await db.execute(stmt)).scalar_one_or_none()
     if not p:
         raise HTTPException(status_code=404, detail="Prospecto no encontrado.")
+    if p.status == "cliente":
+        raise HTTPException(status_code=409, detail="El prospecto ya se convirtió en cliente.")
 
     if restart_from_now:
         p.started_at = to_naive_utc(datetime.now(timezone.utc))
@@ -719,7 +769,7 @@ async def reset_prospect_timer(
         details=f"Contador SLA reiniciado para '{p.company_name}'"
     )
     await db.commit()
-    return await get_prospect_detail(p.id, db=db)
+    return await _get_prospect_detail(p.id, db=db)
 
 @router.delete("/{prospect_id}")
 async def delete_prospect_soft(

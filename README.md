@@ -22,6 +22,24 @@ En Ubuntu o Debian necesitas Docker Engine con Compose v2, Python 3, OpenSSL y `
 
 En **Configuración** puedes consultar el estado, detener los contenedores o guardar otra IP y otros puertos. Los cambios de dirección se aplican al elegir un modo en **Inicio**. Usa `127.0.0.1` para acceso exclusivo desde el equipo o una IPv4 privada asignada para acceso desde la LAN.
 
+El arranque comprueba la interfaz y la API por HTTPS con la CA local. Puedes repetir esa comprobación desde **Configuración → Verificar HTTPS y base de datos** o con `./lessso --check`. La comprobación funciona también en automatización y devuelve un código distinto de cero si falla.
+
+### Windows
+
+Puedes usar LESSSO desde un navegador en Windows. Para alojarlo en Windows, usa Docker Desktop en modo contenedores Linux con Ubuntu en WSL 2. Activa la integración con esa distribución, guarda el repositorio en su sistema de archivos Linux y ejecuta `./lessso` desde Ubuntu. [Guía de Docker para WSL 2](https://docs.docker.com/desktop/features/wsl/)
+
+Para uso desde ese mismo equipo, prueba primero con `127.0.0.1`. Para compartirlo en la LAN, comprueba que WSL y Docker puedan publicar el puerto en la IPv4 privada elegida y que Windows permita conexiones entrantes desde la red local. Valida desde otro dispositivo antes de entregar el equipo. [Red y firewall de WSL](https://learn.microsoft.com/en-us/windows/wsl/networking)
+
+## Acceso del equipo
+
+Abre la bóveda e inicia sesión en **Ajustes → Accesos del equipo**. La cuenta de propietario y la administración de negocio pueden operar las áreas del CRM. Ventas puede captar prospectos, registrar seguimiento y cerrar propuestas. Solo lectura puede consultar prospectos. La API comprueba ambos accesos y reserva cuentas, credenciales y finanzas para los roles autorizados.
+
+En **Prospección → Prospectos**, abre un prospecto y usa **Propuestas y venta**. Al cerrar una propuesta, LESSSO registra al cliente, la venta y el saldo pendiente. La administración puede registrar los datos de un CFDI que ya se emitió en otro sistema y anotar su baja local.
+
+## Edición compartida de reportes
+
+Varios operadores pueden editar el mismo documento Typst o lienzo Excalidraw desde sus propias cuentas. El acceso se comparte por reporte, las ediciones se sincronizan en vivo y el servidor guarda las versiones cifradas en PostgreSQL. El equipo puede seguir trabajando aunque el propietario cierre su navegador, mientras el host Docker permanezca activo. Consulta [Colaboración en reportes](docs/colaboracion-reportes.md) para permisos, sincronización, restauración y validación.
+
 ## Actualizar una instalación previa
 
 No reemplaces `.env` por el ejemplo antes de identificar las credenciales que corresponden al volumen PostgreSQL existente. Cambiar `POSTGRES_USER`, `POSTGRES_PASSWORD` o `POSTGRES_DB` en Compose no renombra ni cambia los datos del rol que ya vive dentro del volumen `emailsaver_postgres_data`; define en `.env` los valores que ya usa esa base. La contraseña por defecto de instalaciones anteriores quedó expuesta en el código histórico: si dependes de ella, úsala solo para recuperar el acceso y rótala dentro de PostgreSQL antes de dejar la instalación en servicio.
@@ -51,7 +69,7 @@ No compartas `.env`, `nginx/certs/local/ca.key` ni `nginx/certs/local/server.key
 
 ## Captación en mapa
 
-En **CRM → Captación en mapa** puedes buscar por giro en una zona de Tijuana o en el área visible. La lista conserva nombre, coordenadas y datos de contacto que OpenStreetMap tenga publicados. Puedes abrir cada referencia original y guardar negocios individualmente como prospectos nuevos. Un teléfono publicado no se interpreta automáticamente como WhatsApp.
+En **Prospección → Captación en mapa** puedes buscar por giro en una zona de Tijuana o en el área visible. La lista conserva nombre, coordenadas y datos de contacto que OpenStreetMap tenga publicados. Puedes abrir cada referencia original y guardar negocios individualmente como prospectos nuevos. Un teléfono publicado no se interpreta automáticamente como WhatsApp.
 
 Los resultados consultados se guardan en caché por área y búsqueda. Si Overpass limita o no responde, la pantalla muestra el error y permite reintentar. La aplicación no precarga ni guarda mosaicos del mapa para uso fuera de línea.
 
@@ -65,4 +83,4 @@ nginx/                   Proxy TLS y directorio local de certificados
 scripts/                 Ayudas de operación
 ```
 
-Consulta [RUNBOOK.md](RUNBOOK.md) para arranque, certificados y recuperación, y [SEGURIDAD.md](SEGURIDAD.md) para el manejo de claves y datos.
+Consulta [RUNBOOK.md](RUNBOOK.md) para arranque, certificados y recuperación, [SEGURIDAD.md](SEGURIDAD.md) para el manejo de claves y datos, [Colaboración en reportes](docs/colaboracion-reportes.md) para la edición compartida, y la [guía de distribución](docs/distribucion.md) para el inventario de terceros.

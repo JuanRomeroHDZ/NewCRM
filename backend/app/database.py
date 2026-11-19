@@ -1,6 +1,7 @@
 from collections.abc import AsyncGenerator
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy import event, text
+from sqlalchemy.orm import DeclarativeBase, Session
 from app.config import settings
 
 class Base(DeclarativeBase):
@@ -31,3 +32,23 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
             yield session
         finally:
             await session.close()
+
+
+_ACTOR_SQL = text("SELECT set_config('lessso.actor_id', :actor, true), set_config('lessso.actor_role', :role, true)")
+
+
+@event.listens_for(Session, "after_begin")
+def _restore_transaction_actor(session, _transaction, connection):
+    actor = session.info.get("report_actor")
+    if actor and connection.dialect.name == "postgresql":
+        connection.execute(_ACTOR_SQL, actor)
+
+
+async def set_report_actor(db: AsyncSession, user) -> None:
+    if db.bind is None or db.bind.dialect.name != "postgresql":
+        return
+    actor = {"actor": user.id, "role": user.role}
+    if db.info.get("report_actor") != actor:
+        db.info["report_actor"] = actor
+        if db.in_transaction():
+            await db.execute(_ACTOR_SQL, actor)

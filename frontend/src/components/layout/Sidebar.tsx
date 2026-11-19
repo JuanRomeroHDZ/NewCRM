@@ -42,6 +42,17 @@ const navGroups: NavGroup[] = [
     items: [{ id: 'help', label: 'Guía y primeros pasos', icon: BookOpen }],
   },
   {
+    id: 'reportes',
+    label: 'Reportes',
+    icon: FileText,
+    overview: 'overview_reports',
+    overviewRequiresVault: true,
+    items: [
+      { id: 'reports_documents', label: 'Documentos', icon: FileText, requiresVault: true },
+      { id: 'reports_canvases', label: 'Lienzos', icon: PenTool, requiresVault: true },
+    ],
+  },
+  {
     id: 'prospeccion',
     label: 'Prospección',
     icon: Briefcase,
@@ -86,17 +97,6 @@ const navGroups: NavGroup[] = [
     items: [
       { id: 'passwords', label: 'Contraseñas y notas', icon: Key, requiresVault: true },
       { id: 'security_audit', label: 'Auditoría de seguridad', icon: ShieldCheck, requiresVault: true },
-    ],
-  },
-  {
-    id: 'reportes',
-    label: 'Reportes',
-    icon: FileText,
-    overview: 'overview_reports',
-    overviewRequiresVault: true,
-    items: [
-      { id: 'reports_documents', label: 'Documentos', icon: FileText, requiresVault: true },
-      { id: 'reports_canvases', label: 'Lienzos', icon: PenTool, requiresVault: true },
     ],
   },
   {

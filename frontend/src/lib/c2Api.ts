@@ -35,7 +35,9 @@ function buildC2Headers(includeJsonContentType = true): Record<string, string> {
     headers['X-Vault-Token'] = vaultToken;
   }
   const userToken = getApiUserToken();
-  if (userToken) {
+  if (userToken?.startsWith('cookie:')) {
+    headers['X-LESSSO-CSRF'] = userToken.slice(7);
+  } else if (userToken) {
     headers['Authorization'] = `Bearer ${userToken}`;
   }
   if (activeC2EngagementId) {
@@ -592,7 +594,7 @@ export function buildC2WsProtocols(): string[] {
   return [
     'lessso-v1',
     ...(vault ? [`vault.${vault}`] : []),
-    ...(user ? [`user.${user}`] : []),
+    ...(user ? [user.startsWith('cookie:') ? `csrf.${user.slice(7)}` : `user.${user}`] : []),
     ...(activeC2EngagementId ? [`engagement.${activeC2EngagementId}`] : []),
   ];
 }

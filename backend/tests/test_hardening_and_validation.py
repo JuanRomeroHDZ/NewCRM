@@ -193,8 +193,12 @@ async def test_vault_unlock_lockout_and_core_user_security(client, db_session):
     old_session = await client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {other_token}"})
     assert old_session.status_code == 401
 
-    # Setup 2FA when already enabled requires current_password
-    first_2fa = await client.post("/api/v1/auth/setup-2fa", json={}, headers={"Authorization": f"Bearer {owner_token}"})
+    # Starting two-factor enrollment always verifies the account password.
+    first_2fa = await client.post(
+        "/api/v1/auth/setup-2fa",
+        json={"current_password": "NewOwnerPassword99!"},
+        headers={"Authorization": f"Bearer {owner_token}"},
+    )
     assert first_2fa.status_code == 200
 
     await db_session.refresh(owner)
@@ -213,7 +217,7 @@ async def test_vault_unlock_lockout_and_core_user_security(client, db_session):
     assert allowed_2fa.status_code == 200
 
     # Readonly user is blocked from CRM sales / agenda / capture / comms mutations
-    ro_headers = {"Authorization": f"Bearer {readonly_token}"}
+    ro_headers = {"Authorization": f"Bearer {readonly_token}", "X-Vault-Token": setup_res.json()["token"]}
     assert (await client.post("/api/v1/crm/proposals", json={"title": "Prop", "amount": 100}, headers=ro_headers)).status_code == 403
     assert (await client.post("/api/v1/agenda/events", json={
         "title": "Reunion",
@@ -223,9 +227,9 @@ async def test_vault_unlock_lockout_and_core_user_security(client, db_session):
     assert (await client.post("/api/v1/crm/capture/discard", json={"company_name": "Acme", "reason": "No"}, headers=ro_headers)).status_code == 403
 
 
-async def test_crm_sales_personal_finances_agenda_and_comms_validation(client, db_session):
+async def test_crm_sales_personal_finances_agenda_and_comms_validation(client, db_session, vault_only_token):
     _, owner_token = await _make_user(db_session, username="ops_owner", role="owner")
-    headers = {"Authorization": f"Bearer {owner_token}"}
+    headers = {"Authorization": f"Bearer {owner_token}", "X-Vault-Token": vault_only_token}
 
     # CRM Sales arithmetic & UUID & RFC checks
     bad_sale = await client.post(

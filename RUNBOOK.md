@@ -4,7 +4,7 @@
 
 Desde la raíz de NewCRM, ejecuta `./lessso` con tu cuenta habitual. **Inicio** ofrece **CRM estable** y **CRM en desarrollo**. El menú construye primero las imágenes modificadas, detiene la API anterior antes de migrar y luego espera a que la base, el job de migración, la API, el frontend y el proxy queden listos.
 
-El servicio único `migrate` aplica revisiones Alembic y tareas de datos idempotentes antes de iniciar las réplicas de API. La imagen estable ejecuta el código incluido en la imagen, sin montar el árbol del backend del host. Desarrollo monta el código como solo lectura y activa la recarga automática. No borres volúmenes para actualizar.
+El servicio único `migrate` aplica revisiones Alembic y tareas de datos idempotentes antes de iniciar las réplicas de API. Las revisiones `20261118_0004` y `20261118_0005` añaden el historial de envío y respuesta de propuestas, la copia del PDF emitido y la fecha de próximo seguimiento del prospecto. La revisión `20261119_0006` agrega permisos, sincronización, revisiones, comentarios, solicitudes de aprobación y presencia de Reportes. Los registros existentes se conservan. La imagen estable ejecuta el código incluido en la imagen, sin montar el árbol del backend del host. Desarrollo monta el código como solo lectura y activa la recarga automática. No borres volúmenes para actualizar.
 
 En desarrollo, React Refresh carga su módulo de inicio desde el mismo origen y la recarga automática se conecta por WebSocket al puerto HTTPS del proxy. Si la pestaña estaba abierta al cambiar de modo, recárgala para cargar la versión elegida.
 
@@ -42,11 +42,23 @@ docker compose up -d --scale backend=2
 
 Las sesiones de bóveda y los bloqueos de re-cifrado se comparten mediante PostgreSQL; la clave derivada no se guarda en la base. Nginx vuelve a resolver el servicio backend para detectar réplicas. El límite de conexiones del pool principal es `réplicas × (DB_POOL_SIZE + DB_MAX_OVERFLOW)`; reserva capacidad adicional en PostgreSQL para el job de migración, respaldos, conexiones administrativas y mantenimiento. Las solicitudes protegidas se limitan por proceso a la mitad de la capacidad del pool, ya que cada una mantiene una conexión para el bloqueo distribuido y otra para su sesión de base de datos. La capacidad combinada debe ser de al menos dos conexiones. No aumentes el pool sin revisar `max_connections` y las solicitudes simultáneas esperadas.
 
+La edición simultánea de Typst y Excalidraw usa PostgreSQL como registro común y WebSocket a través del proxy TLS. No requiere un contenedor aparte ni un proveedor externo. Antes de invitar operadores, actualiza a la revisión `20261119_0006`, prueba cada permiso con cuentas separadas y sigue la [guía de colaboración en Reportes](docs/colaboracion-reportes.md). No configures el canal WebSocket para omitir el proxy HTTPS ni expongas directamente el puerto interno de la API.
+
+## Entrega de una instalación a un cliente
+
+La primera entrega se opera como una instancia propia del cliente en una red privada. Registra la revisión entregada, el equipo responsable y el acceso seguro a las claves, sin incluirlas en el acta de entrega.
+
+1. Arranca en modo estable y ejecuta `./lessso --check`. Desde un dispositivo cliente, abre la misma dirección HTTPS con la CA local instalada y termina el alta desde una red controlada.
+2. Con una cuenta de operación, comprueba el alta y seguimiento de un prospecto, el vínculo de un servicio con su registro financiero y la exportación de un PDF representativo con un lienzo o imagen. Con una cuenta de solo lectura, verifica el acceso que le corresponde.
+3. Crea un respaldo cifrado completo, copia un snapshot fuera del servidor y restaura esa copia en PostgreSQL aislado. Registra la fecha y el resultado, y deja acordado quién atiende fallos y aplica actualizaciones.
+
 ## Certificados locales
 
 `./lessso` genera automáticamente una CA privada y el certificado del servidor dentro de `nginx/certs/local/`. Copia únicamente `ca.crt` a los dispositivos cliente e instálalo como autoridad de confianza. Nunca compartas `ca.key` ni `server.key`. Los certificados se vuelven a generar en el servidor y no se incluyen en la imagen ni en Git.
 
 En **Configuración → Cambiar IP y puertos**, elige una IPv4 privada asignada al servidor o `127.0.0.1` para acceso local. El menú guarda las preferencias en `.env.runtime`. Al iniciar de nuevo, el proxy aplica la dirección y los puertos elegidos y renueva el certificado del servidor si hace falta, usando la CA existente.
+
+En **Configuración → Certificado HTTPS**, consulta las fechas de vencimiento del servidor y de la CA y solicita la renovación del certificado del servidor. Si el proxy está activo, comprueba su configuración y recárgalo desde el mismo menú. Ejecuta `./lessso --check` para confirmar el acceso. El arranque renueva el certificado del servidor si quedan menos de 30 días. Si vence la CA, su sustitución requiere instalar la nueva CA en los equipos cliente.
 
 Si cambia `SERVER_NAME`, vuelve a generar el certificado del servidor y asegúrate de que el nombre resuelva al equipo dentro de la red local.
 
@@ -61,8 +73,8 @@ Si cambia `SERVER_NAME`, vuelve a generar el certificado del servidor y asegúra
 - El sidecar necesita leer las claves TLS que permanecen con permisos `600`. Corre como UID 0 con solo `DAC_READ_SEARCH` además de su sistema de archivos de solo lectura; los mounts de origen siguen siendo `:ro` y no se cambian permisos de certificados. El volumen nuevo se inicializa como `root:root`, modo `0700`; si `full_backup_data` ya existe y no es escribible, el servicio se detiene con un error claro. No cambies permisos de CA ni claves del servidor para corregirlo.
 - La comprobación de huellas solo confirma que los árboles de archivos montados no cambiaron durante la ventana de captura; no coordina una transacción entre PostgreSQL y un sistema de archivos. En la implementación actual, los bytes de las evidencias de informes se guardan en PostgreSQL (`writeup_assets.encrypted_blob`); `vault_media` se incluye por compatibilidad. Si una versión futura guarda datos referenciados fuera de PostgreSQL, hará falta un protocolo de snapshot coordinado antes de afirmar consistencia entre ambos almacenes.
 - Para listar snapshots cifrados desde el host donde corre Compose, ejecuta `docker compose exec full_backup find /var/backups/full -mindepth 1 -maxdepth 1 -type d -name 'full-*' -printf '%f\n'`. Copia uno al directorio seguro que elijas fuera del proyecto con `docker compose cp full_backup:/var/backups/full/<snapshot> <directorio-seguro>/<snapshot>`; este comando copia únicamente los archivos cifrados. En un equipo confiable con Docker local, `age` y `pg_restore`, ejecuta `python3 scripts/restore_full_backup_test.py --backup-dir <directorio-seguro>/<snapshot> --identity-file <identidad-privada> --confirm-isolated-docker`. El script extrae a un directorio temporal, restaura a un contenedor PostgreSQL aislado con red deshabilitada y un directorio temporal propio; no carga Compose ni monta volúmenes del CRM. El directorio temporal puede contener datos descifrados durante la prueba y se elimina al salir; una interrupción forzada puede dejarlo en `/tmp` para limpieza manual en ese equipo.
-- El manifiesto versión 2 verifica la aplicación, las pruebas, la documentación de operación, los archivos cifrados y la estructura restaurada. En la instalación de pruebas se verificó una restauración completa con PostgreSQL aislado y siete tablas críticas. Ni una exportación `.emailsaver` ni la existencia del volumen `backup_data` equivalen a una copia completa.
-- En esta instalación de pruebas, la identidad se guardó en `~/.local/share/lessso-test-recovery/test-identity.txt` con permisos `600`, fuera del repositorio y de los orígenes que lee el respaldo. Para conservar el arranque programado al usar `./lessso`, se habilitó `COMPOSE_PROFILES=full-backup` en `.env`. Custodia en otro equipo la identidad de una instalación con información real.
+- El manifiesto versión 2 verifica la aplicación, las pruebas, la documentación de operación, los archivos cifrados y la estructura restaurada. En la instalación de pruebas, el snapshot del 19 de noviembre de 2026 a las 04:18 UTC se restauró en PostgreSQL aislado. Se verificaron siete tablas críticas y el inventario de 761 elementos. La base recuperada se actualizó de la revisión `20261118_0003` a `20261118_0005` y conservó sus siete informes. Ni una exportación `.emailsaver` ni la existencia del volumen `backup_data` equivalen a una copia completa.
+- En esta instalación de pruebas, la identidad se guardó en `~/.local/share/lessso-test-recovery/test-identity.txt` con permisos `600`, fuera del repositorio y de los orígenes que lee el respaldo. El menú `./lessso` arranca el programador cuando `BACKUP_AGE_RECIPIENT` está configurado. Custodia en otro equipo la identidad de una instalación con información real.
 - La exportación cifrada de la bóveda requiere su contraseña de exportación. Guárdala separada del archivo.
 - El respaldo completo se cifra en tránsito hacia el volumen aislado. Conserva una copia cifrada fuera del servidor y custodia la identidad privada age por separado.
 - Antes de restaurar, conserva una copia del volumen actual y comprueba que tienes la clave maestra y `SERVER_SECRET_KEY`.
@@ -75,3 +87,7 @@ Si cambia `SERVER_NAME`, vuelve a generar el certificado del servidor y asegúra
 - **Contraseña del propietario:** cambia `INITIAL_OWNER_PASSWORD` en `.env` para instalaciones nuevas. El arranque no reemplaza las credenciales de un propietario que ya existe en la base.
 
 Después de un reinicio o cambio, confirma `docker compose ps`, revisa los logs del backend y abre la aplicación desde un navegador autorizado.
+
+## Auditoría operativa
+
+Usa `./scripts/audit.sh guide` y sigue la rama que corresponda al hallazgo en la [auditoría operativa](docs/auditoria-lessso.md).

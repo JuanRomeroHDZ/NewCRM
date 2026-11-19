@@ -140,6 +140,7 @@ export interface PaymentMethod {
 
 export interface VaultStatus {
   is_setup: boolean;
+  setup_code_required?: boolean;
   is_unlocked: boolean;
   remaining_seconds: number;
   timeout_minutes: number;
@@ -333,13 +334,15 @@ export type ProspectStatus =
   | 'en_cotizacion'
   | 'respondido'
   | 'tiempo_agotado'
-  | 'archivado_frio';
+  | 'archivado_frio'
+  | 'cliente';
 
 export type ProspectSlaStatus = 'en_tiempo' | 'cumplido' | 'vencido';
 
 export type ProspectFollowupStatus = 'en_tiempo' | 'vencido' | 'sin_iniciar' | 'completado';
 
 export interface Prospect {
+  followup_due_date?: string | null;
   id: string;
   company_name: string;
   contact_name?: string;
@@ -526,7 +529,7 @@ export interface SecureResource {
   updated_at?: string;
 }
 
-export type CoreUserRole = 'owner' | 'business_admin' | 'seller' | 'readonly';
+export type CoreUserRole = 'owner' | 'business_admin' | 'operator' | 'seller' | 'readonly';
 
 export interface CoreUser {
   id: string;
@@ -541,7 +544,7 @@ export interface CoreUser {
 }
 
 export interface CoreLoginResponse {
-  token: string;
+  token: string | null;
   user: CoreUser;
   expires_in_minutes: number;
 }
@@ -922,6 +925,71 @@ export interface ReportCanvasSummary {
 
 export interface ReportCanvasDetail extends ReportCanvasSummary {
   scene_json: string;
+}
+
+export type ReportCollaborationResource = 'document' | 'canvas';
+export type ReportCollaborationPermission = 'viewer' | 'editor' | 'reviewer';
+
+export interface ReportCollaborationBootstrap {
+  initialized: boolean;
+  state: string;
+  checkpoint_seq: number;
+  latest_seq: number;
+  generation: number;
+  permission: ReportCollaborationPermission | 'owner';
+  updates: Array<{ seq: number; update_id: string; update: string }>;
+}
+
+export interface ReportRevision {
+  id: string;
+  revision_number: number;
+  title: string;
+  status: string | null;
+  sha256: string;
+  reason: string;
+  created_by_id: string;
+  created_by: string;
+  created_at: string;
+}
+
+export interface ReportComment {
+  id: string;
+  anchor: string | null;
+  body: string;
+  created_by_id: string;
+  created_by: string;
+  resolved: boolean;
+  resolved_by_id?: string | null;
+  created_at: string;
+  resolved_at?: string | null;
+}
+
+export interface ReportReview {
+  id: string;
+  revision_id: string;
+  revision_number: number;
+  revision_sha256: string;
+  reviewer_id: string;
+  reviewer: string;
+  status: 'pending' | 'approved' | 'changes_requested';
+  note?: string | null;
+  requested_by_id: string;
+  created_at: string;
+  responded_at?: string | null;
+}
+
+export interface ReportWorkspaceUser {
+  id: string;
+  username: string;
+  full_name: string;
+  role: string;
+}
+
+export interface ReportCollaborator {
+  user_id: string;
+  username: string | null;
+  full_name: string;
+  permission: ReportCollaborationPermission | 'owner';
 }
 
 export interface ReportCorrelationMatch {

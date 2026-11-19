@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { useVault } from '../../context/VaultContext';
 import { api } from '../../lib/api';
+import { formatLocalDate, parseCalendarDate } from '../../lib/dates';
 import { getSlaBadgeMeta, getStatusMeta, PROSPECT_STATUS_OPTIONS } from '../../lib/prospectUtils';
 import { INPUT_LIMITS } from '../../lib/validation';
 import { EmptyState } from '../common/EmptyState';
@@ -22,12 +23,14 @@ import type { Prospect } from '../../types';
 
 export const ProspectsView: React.FC = () => {
   const {
+    operator,
     setActiveSection,
     isUnlocked,
     openUnlockModal,
     openProspectModal,
     openInspector,
     dataVersion,
+    activeScope,
     matchesScope,
     supportedCurrencies,
     baseCurrency,
@@ -37,7 +40,8 @@ export const ProspectsView: React.FC = () => {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [status, setStatus] = useState('todos');
-  const [onlyOverdue, setOnlyOverdue] = useState(false);
+  const [followupFilter, setFollowupFilter] = useState('all');
+  const [today, setToday] = useState(() => formatLocalDate());
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
@@ -47,6 +51,24 @@ export const ProspectsView: React.FC = () => {
   const [attempt, setAttempt] = useState(0);
   const requestVersion = useRef(0);
   const nextOffset = useRef(0);
+  const scope = activeScope === 'all' ? undefined : activeScope;
+  const reminderThrough = useMemo(() => {
+    if (followupFilter !== 'reminders') return undefined;
+    const date = parseCalendarDate(today);
+    if (!date) return undefined;
+    date.setUTCDate(date.getUTCDate() + 7);
+    return date.toISOString().slice(0, 10);
+  }, [followupFilter, today]);
+
+  useEffect(() => {
+    const update = () => setToday(formatLocalDate());
+    const timer = window.setInterval(update, 60_000);
+    window.addEventListener('focus', update);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('focus', update);
+    };
+  }, []);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedSearch(search.trim()), 250);
@@ -58,7 +80,7 @@ export const ProspectsView: React.FC = () => {
       requestVersion.current += 1;
       nextOffset.current = 0;
       setProspects([]);
-      setOnlyOverdue(false);
+      setFollowupFilter('all');
       setTotal(0);
       setHasMore(false);
       setLoadingMore(false);
@@ -77,6 +99,8 @@ export const ProspectsView: React.FC = () => {
       .getProspectsPage({
         status: status === 'todos' ? undefined : status,
         search: debouncedSearch || undefined,
+        reminder_through: reminderThrough,
+        scope,
         limit: 50,
         offset: 0,
       })
@@ -103,7 +127,7 @@ export const ProspectsView: React.FC = () => {
     return () => {
       active = false;
     };
-  }, [isUnlocked, dataVersion, attempt, status, debouncedSearch]);
+  }, [isUnlocked, dataVersion, attempt, status, debouncedSearch, reminderThrough, scope]);
 
   const handleLoadMore = async () => {
     if (loadingMore || !hasMore) return;
@@ -114,6 +138,8 @@ export const ProspectsView: React.FC = () => {
       const page = await api.getProspectsPage({
         status: status === 'todos' ? undefined : status,
         search: debouncedSearch || undefined,
+        reminder_through: reminderThrough,
+        scope,
         limit: 50,
         offset: nextOffset.current,
       });
@@ -138,15 +164,10 @@ export const ProspectsView: React.FC = () => {
     return prospects.filter((prospect) => matchesScope(prospect.scope));
   }, [prospects, matchesScope]);
 
-  const overdueCount = useMemo(
-    () => scopedProspects.filter((prospect) => prospect.sla_status === 'vencido').length,
-    [scopedProspects],
-  );
-
   const visibleProspects = useMemo(() => {
-    if (!onlyOverdue) return scopedProspects;
+    if (followupFilter !== 'sla') return scopedProspects;
     return scopedProspects.filter((prospect) => prospect.sla_status === 'vencido');
-  }, [scopedProspects, onlyOverdue]);
+  }, [scopedProspects, followupFilter]);
 
   const formatEstimatedValue = (amount?: number, currencyCode?: string) => {
     const code = currencyCode || baseCurrency;
@@ -168,7 +189,7 @@ export const ProspectsView: React.FC = () => {
             <p className="mt-0.5 text-xs text-obsidian-muted">Oportunidades y seguimiento.</p>
           </div>
         </div>
-        <div className="flex max-w-full flex-wrap gap-2">
+        {operator?.role !== 'readonly' && <div className="flex max-w-full flex-wrap gap-2">
           {/* [Navegación] Abre la captura desde el contexto de prospectos. */}
           <button
             type="button"
@@ -184,7 +205,7 @@ export const ProspectsView: React.FC = () => {
           >{/* [Acción principal] Inicia o confirma la tarea de este espacio. */}
             <Plus size={16} aria-hidden="true" /> Nuevo prospecto
           </button>
-        </div>
+        </div>}
       </header>
 
       <section aria-labelledby="prospectos-lista" className="overflow-hidden rounded-xl border border-obsidian-border bg-obsidian-panel">
@@ -197,7 +218,7 @@ export const ProspectsView: React.FC = () => {
               {visibleProspects.length} {visibleProspects.length === 1 ? 'prospecto visible' : 'prospectos visibles'}
             </p>
           </div>
-          <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(11rem,0.4fr)_auto] sm:items-end">
+          <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,0.5fr)_minmax(0,0.75fr)] md:items-end">
             <label className="min-w-0 text-xs font-medium text-obsidian-muted">
               Buscar
               <span className="relative mt-2 block">
@@ -211,7 +232,7 @@ export const ProspectsView: React.FC = () => {
                   maxLength={INPUT_LIMITS.SEARCH}
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Empresa, contacto, correo, teléfono o sitio web"
+                  placeholder="Empresa, contacto o teléfono"
                   aria-label="Buscar prospectos por empresa, contacto, correo, teléfono o sitio web"
                   className="min-h-11 w-full rounded-lg border border-obsidian-border bg-obsidian-surface pl-9 pr-3 text-sm text-white placeholder:text-obsidian-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent"
                 />
@@ -225,6 +246,7 @@ export const ProspectsView: React.FC = () => {
                 className="mt-2 min-h-11 w-full rounded-lg border border-obsidian-border bg-obsidian-surface px-3 text-sm text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent"
               >
                 <option value="todos">Todas las etapas</option>
+                <option value="cliente">Clientes</option>
                 {PROSPECT_STATUS_OPTIONS.map((option) => (
                   <option key={option.value} value={option.value}>
                     {option.label}
@@ -232,15 +254,22 @@ export const ProspectsView: React.FC = () => {
                 ))}
               </select>
             </label>
-            <button
-              type="button"
-              aria-pressed={onlyOverdue}
-              onClick={() => setOnlyOverdue((value) => !value)}
-              className="ui-action-toggle min-h-11 shrink-0 whitespace-nowrap"
-            >{/* [Estado seleccionable] Filtra solo prospectos con seguimiento vencido. */}
-              Seguimiento vencido ({overdueCount})
-            </button>
+            <label className="min-w-0 text-xs font-medium text-obsidian-muted">
+              Seguimiento
+              <select
+                value={followupFilter}
+                onChange={(event) => setFollowupFilter(event.target.value)}
+                className="mt-2 w-full pl-3"
+              >
+                <option value="all">Todos</option>
+                <option value="reminders">Recordatorios vencidos y próximos</option>
+                <option value="sla">Plazo de respuesta vencido</option>
+              </select>
+            </label>
           </div>
+          {reminderThrough && (
+            <p className="mt-2 text-xs text-obsidian-muted">Incluye recordatorios vencidos y los próximos 7 días.</p>
+          )}
         </div>
 
         {!isUnlocked ? (
@@ -273,24 +302,26 @@ export const ProspectsView: React.FC = () => {
         ) : visibleProspects.length === 0 ? (
           <div className="flex flex-col items-start gap-3 p-5 sm:p-7">
             <p className="text-sm text-obsidian-muted">
-              {onlyOverdue
-                ? 'No hay prospectos con seguimiento vencido en la selección actual.'
+              {followupFilter === 'reminders'
+                ? 'No hay recordatorios para este periodo.'
+                : followupFilter === 'sla'
+                  ? 'No hay prospectos con el plazo de respuesta vencido en la selección actual.'
                 : total > 0
                   ? 'No hay prospectos visibles que coincidan con esta selección.'
                   : search.trim() || status !== 'todos'
                     ? 'No hay prospectos que coincidan con los filtros.'
                     : 'Todavía no hay prospectos en tu seguimiento.'}
             </p>
-            {onlyOverdue && (
+            {followupFilter !== 'all' && (
               <button
                 type="button"
-                onClick={() => setOnlyOverdue(false)}
+                onClick={() => setFollowupFilter('all')}
                 className="ui-action-secondary"
               >
                 Mostrar todos
               </button>
             )}
-            {total === 0 && !onlyOverdue && !search.trim() && status === 'todos' && (
+            {operator?.role !== 'readonly' && total === 0 && followupFilter === 'all' && !search.trim() && status === 'todos' && (
               <button
                 type="button"
                 onClick={() => setActiveSection('capture')}
@@ -342,6 +373,10 @@ export const ProspectsView: React.FC = () => {
               const contactPreview = prospect.whatsapp || prospect.phones;
               const followupCount = prospect.followup_count ?? 0;
               const maxFollowups = prospect.max_followup_attempts ?? 3;
+              const dueDate = prospect.status !== 'cliente' && prospect.status !== 'archivado_frio'
+                ? prospect.followup_due_date
+                : undefined;
+              const parsedDueDate = parseCalendarDate(dueDate);
 
               return (
                 <li key={prospect.id}>
@@ -371,6 +406,12 @@ export const ProspectsView: React.FC = () => {
                             Seguimientos: {followupCount}/{maxFollowups}
                           </span>
                         </span>
+                        {dueDate && parsedDueDate && (
+                          <span className={dueDate < today ? 'text-rose-300' : 'text-obsidian-muted'}>
+                            {dueDate < today ? 'Recordatorio vencido' : dueDate === today ? 'Recordatorio hoy' : 'Recordatorio'} ·{' '}
+                            <time dateTime={dueDate}>{parsedDueDate.toLocaleDateString(systemLocale, { timeZone: 'UTC' })}</time>
+                          </span>
+                        )}
                         {contactPreview && (
                           <span className="inline-flex max-w-full items-center gap-1 truncate font-mono text-obsidian-muted">
                             {prospect.whatsapp ? (

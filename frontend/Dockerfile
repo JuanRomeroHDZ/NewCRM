@@ -22,7 +22,9 @@ CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "5173", "--strict
 FROM nginx:alpine-slim AS runner
 
 # Remove default nginx website
-RUN rm -rf /usr/share/nginx/html/*
+RUN rm -rf /usr/share/nginx/html/* \
+    && sed -i '/^user /d; s|/run/nginx.pid|/tmp/nginx.pid|' /etc/nginx/nginx.conf \
+    && chown -R nginx:nginx /var/cache/nginx
 
 # Copy built static assets
 COPY --from=builder /app/dist /usr/share/nginx/html
@@ -30,8 +32,8 @@ COPY --from=builder /app/dist /usr/share/nginx/html
 # Custom nginx configuration for SPA routing
 RUN cat <<'EOF' > /etc/nginx/conf.d/default.conf
 server {
-    listen 80;
-    listen [::]:80;
+    listen 8080;
+    listen [::]:8080;
     server_name localhost;
 
     root /usr/share/nginx/html;
@@ -50,17 +52,24 @@ server {
         add_header Cache-Control "no-store, no-cache, must-revalidate" always;
     }
 
-    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff2)$ {
+    location ~* \.mjs$ {
+        types { application/javascript mjs; }
+        try_files $uri =404;
+        expires 1y;
+    }
+
+    location ~* \.(js|css|png|jpg|jpeg|gif|webp|avif|ico|svg|woff2)$ {
         expires 1y;
         add_header Cache-Control "public, immutable";
     }
 }
 EOF
 
-EXPOSE 80
+USER nginx
+EXPOSE 8080
 
 # Healthcheck
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-  CMD wget -q --spider http://127.0.0.1:80/ || exit 1
+  CMD wget -q --spider http://127.0.0.1:8080/ || exit 1
 
 CMD ["nginx", "-g", "daemon off;"]

@@ -10,7 +10,7 @@ from app.models import (
 )
 from app.models.core import User
 from app.security.tokens import require_vault_unlocked
-from app.services.core_auth import require_role
+from app.services.core_auth import ADMIN_ROLES, require_role
 from app.services.audit import log_audit_event
 
 router = APIRouter(prefix="/trash", tags=["trash"], dependencies=[Depends(require_vault_unlocked)])
@@ -24,7 +24,7 @@ def _get_deleted_dt(item, now_naive: datetime) -> datetime:
 @router.get("")
 async def list_trash(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["owner", "business_admin", "seller", "readonly"])),
+    current_user: User = Depends(require_role(list(ADMIN_ROLES))),
 ):
     """Lists all soft-deleted items across emails, platforms, prospects, payments, incomes, renewals, expenses, projects, and resources."""
     s_row = (await db.execute(select(UserSettings).limit(1))).scalar_one_or_none()
@@ -118,9 +118,11 @@ async def restore_item(
     item_type: str,
     item_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["owner", "business_admin", "seller"])),
+    current_user: User = Depends(require_role([*ADMIN_ROLES, "seller"])),
 ):
     """Restores once and commits the state change with its audit event."""
+    if current_user.role == "seller" and item_type != "prospect":
+        raise HTTPException(status_code=403, detail="Ventas solo puede restaurar prospectos.")
     restore_targets = {
         "email": (EmailAccount, lambda item: item.address),
         "platform": (PlatformAccount, lambda item: item.name),
@@ -262,7 +264,7 @@ async def purge_item_permanent(
 async def list_audit_logs(
     limit: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_role(["owner", "business_admin", "seller", "readonly"])),
+    current_user: User = Depends(require_role(list(ADMIN_ROLES))),
 ):
     """Retrieves immutable audit logs."""
     stmt = select(AuditLog).order_by(AuditLog.timestamp.desc()).limit(limit)

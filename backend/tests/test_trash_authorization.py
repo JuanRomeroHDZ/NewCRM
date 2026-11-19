@@ -32,8 +32,8 @@ def _headers(vault_token: str, user_token: str | None = None) -> dict[str, str]:
 
 
 @pytest.mark.asyncio
-async def test_trash_requires_vault_and_user_session(client, auth_token):
-    vault_headers = _headers(auth_token)
+async def test_trash_requires_vault_and_user_session(client, vault_only_token):
+    vault_headers = _headers(vault_only_token)
 
     no_vault = await client.get("/api/v1/trash")
     no_user = await client.get("/api/v1/trash", headers=vault_headers)
@@ -73,10 +73,10 @@ async def test_trash_role_matrix(client, db_session, auth_token):
     await db_session.commit()
     restore_target_id = restore_target.id
 
-    for role_token in [owner_token, admin_token, seller_token, readonly_token]:
+    for role_token, expected in ((owner_token, 200), (admin_token, 200), (seller_token, 403), (readonly_token, 403)):
         headers = _headers(auth_token, role_token)
-        assert (await client.get("/api/v1/trash", headers=headers)).status_code == 200
-        assert (await client.get("/api/v1/trash/audit", headers=headers)).status_code == 200
+        assert (await client.get("/api/v1/trash", headers=headers)).status_code == expected
+        assert (await client.get("/api/v1/trash/audit", headers=headers)).status_code == expected
 
     temporary_headers = _headers(auth_token, temporary_owner_token)
     assert (await client.get("/api/v1/trash", headers=temporary_headers)).status_code == 403
@@ -105,10 +105,12 @@ async def test_trash_role_matrix(client, db_session, auth_token):
         f"/api/v1/trash/purge/email/{admin_purge_target.id}",
         headers=seller_headers,
     )
-    assert restored.status_code == 200
+    assert restored.status_code == 403
     assert seller_purge.status_code == 403
 
     admin_headers = _headers(auth_token, admin_token)
+    restored_by_admin = await client.post(f"/api/v1/trash/restore/email/{restore_target.id}", headers=admin_headers)
+    assert restored_by_admin.status_code == 200
     admin_purge = await client.delete(
         f"/api/v1/trash/purge/email/{admin_purge_target.id}",
         headers=admin_headers,

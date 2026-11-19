@@ -1,6 +1,7 @@
 from typing import Literal
+from urllib.parse import urlsplit
 
-from pydantic import Field, model_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -20,6 +21,7 @@ class Settings(BaseSettings):
 
     # Required installation secrets. There are deliberately no in-code fallbacks.
     SERVER_SECRET_KEY: str = Field(min_length=32)
+    INITIAL_VAULT_SETUP_CODE: SecretStr = SecretStr("")
     # Opcionales para reconocer una cuenta provisional de instalaciones previas.
     INITIAL_OWNER_USERNAME: str = ""
     INITIAL_OWNER_EMAIL: str = ""
@@ -103,6 +105,17 @@ class Settings(BaseSettings):
     LESSSO_DEMO: bool = False
     C2_STATE_DIR: str = "/var/lib/lessso"
     C2_CAPTURE_DIR: str = "/tmp/lessso_captures"
+
+    @field_validator("CORS_ORIGINS")
+    @classmethod
+    def validate_cors_origins(cls, origins: list[str]) -> list[str]:
+        for origin in origins:
+            parts = urlsplit(origin)
+            if ("*" in origin or parts.scheme not in {"http", "https"} or not parts.hostname
+                    or parts.username or parts.password or parts.path or parts.query or parts.fragment):
+                raise ValueError("CORS_ORIGINS admite solo orígenes explícitos HTTP(S), sin rutas ni comodines.")
+            _ = parts.port
+        return origins
 
     @model_validator(mode="after")
     def validate_database_pool_capacity(self):

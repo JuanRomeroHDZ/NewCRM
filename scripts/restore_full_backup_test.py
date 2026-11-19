@@ -76,15 +76,16 @@ ALLOWED_DEPLOYMENT_DIRECTORIES = (
     "backend/migrations",
     "backend/tests",
     "frontend/src",
+    "frontend/scripts",
     "frontend/public",
     "frontend/tests",
     "docs",
 )
 ALLOWED_DEPLOYMENT_FILES = frozenset(
     {
-        "docker-compose.yml", "docker-compose.dev.yml", ".env.example", "README.md", "RUNBOOK.md",
+        "docker-compose.yml", "docker-compose.dev.yml", "lessso", ".env.example", "README.md", "RUNBOOK.md",
         "PRODUCT.md", "SEGURIDAD.md", "Recomendations.md", "pytest.ini",
-        "backend/Dockerfile", "backend/alembic.ini", "backend/requirements.txt",
+        "backend/Dockerfile", "backend/alembic.ini", "backend/requirements.txt", "backend/requirements-test.txt",
         "backend/pytest.ini",
         "frontend/Dockerfile", "frontend/index.html", "frontend/package.json",
         "frontend/package-lock.json", "frontend/postcss.config.js", "frontend/tailwind.config.js",

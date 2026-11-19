@@ -35,7 +35,7 @@ import { ProspectInspectorSection } from './inspector/ProspectInspectorSection';
 import { PlatformCredentialsTab } from './inspector/PlatformCredentialsTab';
 
 export const InspectorDrawer: React.FC = () => {
-  const {
+  const { operator,
     selectedEntity,
     activeSection,
     openInspector,
@@ -366,6 +366,7 @@ export const InspectorDrawer: React.FC = () => {
           <div className="flex flex-shrink-0 items-center gap-1">
             <button
               type="button"
+              hidden={operator?.role === 'readonly'}
               onClick={handleEdit}
               title="Editar datos"
               aria-label="Editar datos"
@@ -375,6 +376,7 @@ export const InspectorDrawer: React.FC = () => {
             </button>
             <button
               type="button"
+              hidden={operator?.role === 'readonly'}
               onClick={handleDelete}
               title="Enviar a papelera"
               aria-label="Enviar a papelera"

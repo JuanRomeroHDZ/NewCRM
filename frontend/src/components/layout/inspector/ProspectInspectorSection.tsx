@@ -1,3 +1,4 @@
+import { ProspectCommercialSection } from './ProspectCommercialSection';
 import React, { useEffect, useState } from 'react';
 import {
   ChevronDown,
@@ -90,7 +91,7 @@ export const ProspectInspectorSection: React.FC<ProspectInspectorSectionProps> =
   onRenewalUpdated,
   onOpenEmailInspector,
 }) => {
-  const {
+  const { operator,
     copyToClipboard,
     showToast,
     triggerDataReload,
@@ -143,6 +144,18 @@ export const ProspectInspectorSection: React.FC<ProspectInspectorSectionProps> =
     supportedCurrencies.find((c) => c.code === estimatedCurrency)?.symbol || '$';
   const slaProgressPercent = toProgressPercent(prospectLive.progressPercent);
 
+  if (operator?.role === 'readonly') {
+    return (
+      <dl className="space-y-2 break-words">
+        <dt className="text-obsidian-muted">Estado</dt>
+        <dd>{getStatusMeta(prospectData.status).label}</dd>
+        <dt className="text-obsidian-muted">Contacto</dt>
+        <dd>{prospectData.contact_name || 'Sin contacto registrado'}</dd>
+        {prospectData.notes && <><dt className="text-obsidian-muted">Notas</dt><dd className="whitespace-pre-wrap">{prospectData.notes}</dd></>}
+      </dl>
+    );
+  }
+
   return (
     <>
       {/* Flow, Status & Commercial Value control */}
@@ -163,6 +176,7 @@ export const ProspectInspectorSection: React.FC<ProspectInspectorSectionProps> =
           <select
             id="prospect-status-select"
             value={prospectData.status}
+            disabled={prospectData.status === 'cliente'}
             onChange={async (e) => {
               const newSt = e.target.value as ProspectStatus;
               try {
@@ -176,6 +190,7 @@ export const ProspectInspectorSection: React.FC<ProspectInspectorSectionProps> =
             }}
             className="min-h-[44px] cursor-pointer rounded-lg border border-obsidian-border bg-obsidian-surface px-3 py-2 text-xs font-medium text-obsidian-text"
           >
+            {prospectData.status === 'cliente' && <option value="cliente">Cliente</option>}
             {PROSPECT_STATUS_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value} className="bg-obsidian-panel text-white">
                 {opt.label}
@@ -259,6 +274,11 @@ export const ProspectInspectorSection: React.FC<ProspectInspectorSectionProps> =
           </div>
         )}
       </section>
+
+      <ProspectCommercialSection key={prospectData.id} prospect={prospectData} onClosed={() => {
+        void api.getProspectDetail(prospectData.id).then(onProspectUpdated).catch(() => undefined);
+        triggerDataReload();
+      }} />
 
       <InspectorDisclosure
         title="Correos"
@@ -777,7 +797,7 @@ export const ProspectInspectorSection: React.FC<ProspectInspectorSectionProps> =
         </div>
       </InspectorDisclosure>
 
-      <InspectorDisclosure
+      {(operator?.role === 'owner' || operator?.role === 'business_admin') && <InspectorDisclosure
         title="Pagos y servicios"
         detail={`${clientIncomes.length} pagos · ${clientRenewals.length} servicios`}
       >
@@ -789,7 +809,7 @@ export const ProspectInspectorSection: React.FC<ProspectInspectorSectionProps> =
           onRenewalCreated={onRenewalCreated}
           onRenewalUpdated={onRenewalUpdated}
         />
-      </InspectorDisclosure>
+      </InspectorDisclosure>}
     </>
   );
 };

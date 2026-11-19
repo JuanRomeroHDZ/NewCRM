@@ -16,7 +16,9 @@ class AgendaService:
         session: AsyncSession,
         start_time: datetime,
         end_time: datetime,
-        exclude_event_id: str | None = None
+        exclude_event_id: str | None = None,
+        *,
+        include_financial: bool = True,
     ) -> list[AgendaEvent]:
         stmt = select(AgendaEvent).where(
             AgendaEvent.status != "cancelado",
@@ -25,6 +27,8 @@ class AgendaService:
         )
         if exclude_event_id:
             stmt = stmt.where(AgendaEvent.id != exclude_event_id)
+        if not include_financial:
+            stmt = stmt.where(AgendaEvent.is_financial.is_(False))
 
         res = await session.execute(stmt)
         return list(res.scalars().all())
@@ -42,12 +46,16 @@ class AgendaService:
         client_id: str | None = None,
         prospect_id: str | None = None,
         sale_id: str | None = None,
-        recurrence_interval_days: int | None = None
+        recurrence_interval_days: int | None = None,
+        *,
+        include_financial_overlaps: bool = True,
     ) -> tuple[AgendaEvent, list[AgendaEvent]]:
         if end_time <= start_time:
             raise ValueError("La hora de término debe ser posterior a la de inicio.")
 
-        overlaps = await AgendaService.detect_overlaps(session, start_time, end_time)
+        overlaps = await AgendaService.detect_overlaps(
+            session, start_time, end_time, include_financial=include_financial_overlaps,
+        )
         is_financial = (event_type == "finanzas")
 
         event = AgendaEvent(
@@ -82,12 +90,17 @@ class AgendaService:
         return event, overlaps
 
     @staticmethod
-    async def complete_event(session: AsyncSession, event_id: str, user_id: str) -> tuple[AgendaEvent, AgendaEvent | None]:
+    async def complete_event(
+        session: AsyncSession, event_id: str, user_id: str, *, include_financial: bool = True,
+    ) -> tuple[AgendaEvent, AgendaEvent | None]:
         """
         Marks event as completed. If recurrence is configured (e.g. maintenance),
         automatically creates the next scheduled event without manual intervention.
         """
-        event = await session.get(AgendaEvent, event_id)
+        stmt = select(AgendaEvent).where(AgendaEvent.id == event_id).with_for_update()
+        if not include_financial:
+            stmt = stmt.where(AgendaEvent.is_financial.is_(False))
+        event = await session.scalar(stmt)
         if not event:
             raise ValueError("Evento no encontrado.")
 
@@ -140,7 +153,9 @@ class AgendaService:
         duration_minutes: int = 60,
         buffer_minutes: int = 15,
         work_start_hour: int | None = None,
-        work_end_hour: int | None = None
+        work_end_hour: int | None = None,
+        *,
+        include_financial: bool = True,
     ) -> dict:
         """
         Calculates open slots factoring in work hours, buffer times, holidays catalog,
@@ -178,6 +193,8 @@ class AgendaService:
             AgendaEvent.start_time < day_end,
             AgendaEvent.end_time > day_start
         ).order_by(AgendaEvent.start_time.asc())
+        if not include_financial:
+            stmt = stmt.where(AgendaEvent.is_financial.is_(False))
         res = await session.execute(stmt)
         existing = list(res.scalars().all())
 

@@ -3,7 +3,7 @@ import json
 import ipaddress
 import re
 import zipfile
-from fastapi import APIRouter, Depends, File, HTTPException, Request, Response, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile, status
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.concurrency import run_in_threadpool
@@ -12,6 +12,7 @@ from app.database import get_db
 from app.models import utc_now
 from app.models.core import User
 from app.models.reports import ReportCanvas, ReportDocument, ReportDocumentAsset
+from app.models.report_collaboration import ReportCollaborator, ReportCollaborationState
 from app.schemas.reports import (
     ReportCanvasCreate,
     ReportCanvasDetailOut,
@@ -32,7 +33,8 @@ from app.schemas.reports import (
 from app.security.crypto import decrypt_bytes, decrypt_note, encrypt_note
 from app.security.tokens import require_vault_unlocked
 from app.config import settings
-from app.services.core_auth import get_current_user_from_token
+from app.services.core_auth import OPERATIONS_ROLES, WORKSPACE_ROLES, require_role
+from app.services.report_collaboration import require_resource_permission
 from app.services.typst_compiler import (
     DEFAULT_TYPST_TEMPLATE,
     compile_typst_source,
@@ -42,23 +44,21 @@ from app.services.writeup_media import optimize_and_encrypt_image
 
 router = APIRouter(prefix="/reports", tags=["reports"], dependencies=[Depends(require_vault_unlocked)])
 
-REPORT_ROLES = {"owner", "business_admin", "operator"}
 MAX_TYPST_PROJECT_BYTES = 100 * 1024 * 1024
 
 
-async def require_report_access(request: Request, db: AsyncSession = Depends(get_db)) -> User | None:
-    """Enforce operator role when a user session is attached alongside the unlocked vault."""
-    auth_header = request.headers.get("Authorization")
-    session_cookie = request.cookies.get("lessso_session")
-    if (auth_header and auth_header.startswith("Bearer sess_")) or session_cookie:
-        user = await get_current_user_from_token(request, db)
-        if user.role not in REPORT_ROLES:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Permisos insuficientes para operar sobre Reportes.",
-            )
-        return user
-    return None
+require_report_access = require_role(list(WORKSPACE_ROLES))
+require_report_edit_access = require_role(list(OPERATIONS_ROLES))
+
+
+def _visible_resource_filter(model, resource_type: str, user: User):
+    if user.role in {"owner", "business_admin"}:
+        return model.is_deleted == False  # noqa: E712
+    shared_ids = select(ReportCollaborator.resource_id).where(
+        ReportCollaborator.resource_type == resource_type,
+        ReportCollaborator.user_id == user.id,
+    )
+    return (model.is_deleted == False) & ((model.created_by_id == user.id) | model.id.in_(shared_ids))
 
 
 def _safe_pdf_filename(title: str) -> str:
@@ -127,26 +127,26 @@ def _canvas_detail(canvas: ReportCanvas) -> ReportCanvasDetailOut:
 
 
 @router.get("/typst-status")
-async def typst_status(_user: User | None = Depends(require_report_access)):
+async def typst_status(_user: User = Depends(require_report_access)):
     return await run_in_threadpool(get_typst_status)
 
 
 @router.get("/overview")
 async def reports_overview(
     db: AsyncSession = Depends(get_db),
-    _user: User | None = Depends(require_report_access),
+    _user: User = Depends(require_report_access),
 ):
     docs = (
         await db.execute(
             select(ReportDocument)
-            .where(ReportDocument.is_deleted == False)  # noqa: E712
+            .where(_visible_resource_filter(ReportDocument, "document", _user))
             .order_by(desc(ReportDocument.updated_at))
         )
     ).scalars().all()
     canvases = (
         await db.execute(
             select(ReportCanvas)
-            .where(ReportCanvas.is_deleted == False)  # noqa: E712
+            .where(_visible_resource_filter(ReportCanvas, "canvas", _user))
             .order_by(desc(ReportCanvas.updated_at))
         )
     ).scalars().all()
@@ -184,12 +184,12 @@ async def reports_overview(
 @router.get("/documents", response_model=list[ReportDocumentSummaryOut])
 async def list_documents(
     db: AsyncSession = Depends(get_db),
-    _user: User | None = Depends(require_report_access),
+    _user: User = Depends(require_report_access),
 ):
     rows = (
         await db.execute(
             select(ReportDocument)
-            .where(ReportDocument.is_deleted == False)  # noqa: E712
+            .where(_visible_resource_filter(ReportDocument, "document", _user))
             .order_by(desc(ReportDocument.updated_at))
         )
     ).scalars().all()
@@ -200,7 +200,7 @@ async def list_documents(
 async def create_document(
     payload: ReportDocumentCreate,
     db: AsyncSession = Depends(get_db),
-    user: User | None = Depends(require_report_access),
+    user: User = Depends(require_report_edit_access),
 ):
     source = payload.source if payload.source is not None else DEFAULT_TYPST_TEMPLATE
     doc = ReportDocument(
@@ -257,9 +257,9 @@ async def upload_document_asset(
     doc_id: str,
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
-    _user: User | None = Depends(require_report_access),
+    _user: User = Depends(require_report_access),
 ):
-    await _get_document_or_404(db, doc_id)
+    await require_resource_permission(db, "document", doc_id, _user, "edit")
     raw_bytes = await file.read(settings.WRITEUP_MAX_IMAGE_BYTES + 1)
     if len(raw_bytes) > settings.WRITEUP_MAX_IMAGE_BYTES:
         raise HTTPException(
@@ -290,9 +290,9 @@ async def get_document_asset(
     doc_id: str,
     asset_id: str,
     db: AsyncSession = Depends(get_db),
-    _user: User | None = Depends(require_report_access),
+    _user: User = Depends(require_report_access),
 ):
-    await _get_document_or_404(db, doc_id)
+    await require_resource_permission(db, "document", doc_id, _user, "view")
     asset = (
         await db.execute(
             select(ReportDocumentAsset).where(
@@ -325,9 +325,9 @@ async def encrypt_document_recovery(
     doc_id: str,
     payload: ReportRecoveryEncryptRequest,
     db: AsyncSession = Depends(get_db),
-    _user: User | None = Depends(require_report_access),
+    _user: User = Depends(require_report_access),
 ):
-    await _get_document_or_404(db, doc_id)
+    await require_resource_permission(db, "document", doc_id, _user, "edit")
     # Encrypt a non-empty envelope so empty documents can also be recovered.
     envelope = json.dumps(
         {
@@ -355,9 +355,9 @@ async def decrypt_document_recovery(
     doc_id: str,
     payload: ReportRecoveryCiphertextRequest,
     db: AsyncSession = Depends(get_db),
-    _user: User | None = Depends(require_report_access),
+    _user: User = Depends(require_report_access),
 ):
-    await _get_document_or_404(db, doc_id)
+    await require_resource_permission(db, "document", doc_id, _user, "view")
     if not payload.ciphertext.startswith("enc:v1:"):
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="La copia local no es válida.")
     decrypted = decrypt_note(payload.ciphertext)
@@ -386,7 +386,7 @@ async def decrypt_document_recovery(
 CANVAS_REF_RE = re.compile(r"canvas://([A-Za-z0-9-]+)(?:\.svg)?")
 
 
-async def _resolve_canvas_assets(source: str, db: AsyncSession) -> tuple[str, dict[str, bytes]]:
+async def _resolve_canvas_assets(source: str, db: AsyncSession, user: User) -> tuple[str, dict[str, bytes]]:
     """Resolve canvas://<id> references in Typst source into local SVG files."""
     canvas_ids = sorted(set(CANVAS_REF_RE.findall(source)))
     if not canvas_ids:
@@ -396,10 +396,13 @@ async def _resolve_canvas_assets(source: str, db: AsyncSession) -> tuple[str, di
         await db.execute(
             select(ReportCanvas).where(
                 ReportCanvas.id.in_(canvas_ids),
-                ReportCanvas.is_deleted == False,  # noqa: E712
+                _visible_resource_filter(ReportCanvas, "canvas", user),
             )
         )
     ).scalars().all()
+
+    if len(rows) != len(canvas_ids):
+        raise HTTPException(status_code=404, detail="No se encontró un lienzo disponible para este informe.")
 
     extra_files: dict[str, bytes] = {}
     id_to_filename: dict[str, str] = {}
@@ -530,9 +533,9 @@ async def _resolve_document_assets(
 
 
 async def _resolve_typst_assets(
-    document_id: str | None, source: str, db: AsyncSession
+    document_id: str | None, source: str, db: AsyncSession, user: User
 ) -> tuple[str, dict[str, bytes]]:
-    source, canvas_files = await _resolve_canvas_assets(source, db)
+    source, canvas_files = await _resolve_canvas_assets(source, db, user)
     source, document_files = await _resolve_document_assets(document_id, source, db)
     return source, {**canvas_files, **document_files}
 
@@ -564,10 +567,12 @@ def _build_typst_project_bundle(source: str, assets: dict[str, bytes]) -> bytes:
 async def compile_document_preview(
     payload: TypstCompileRequest,
     db: AsyncSession = Depends(get_db),
-    _user: User | None = Depends(require_report_access),
+    _user: User = Depends(require_report_access),
 ):
+    if payload.document_id:
+        await require_resource_permission(db, "document", payload.document_id, _user, "view")
     source = prepare_typst_source(payload.source)
-    resolved_source, extra_files = await _resolve_typst_assets(payload.document_id, source, db)
+    resolved_source, extra_files = await _resolve_typst_assets(payload.document_id, source, db, _user)
     result = await run_in_threadpool(compile_typst_source, resolved_source, "svg", extra_files)
     return TypstCompileResponse(
         ok=result.ok,
@@ -581,7 +586,7 @@ async def compile_document_preview(
 async def get_document(
     doc_id: str,
     db: AsyncSession = Depends(get_db),
-    _user: User | None = Depends(require_report_access),
+    _user: User = Depends(require_report_access),
 ):
     doc = (
         await db.execute(
@@ -593,6 +598,7 @@ async def get_document(
     ).scalar_one_or_none()
     if not doc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Documento no encontrado.")
+    await require_resource_permission(db, "document", doc_id, _user, "view")
     return _doc_detail(doc)
 
 
@@ -601,7 +607,7 @@ async def update_document(
     doc_id: str,
     payload: ReportDocumentUpdate,
     db: AsyncSession = Depends(get_db),
-    _user: User | None = Depends(require_report_access),
+    _user: User = Depends(require_report_access),
 ):
     doc = (
         await db.execute(
@@ -613,6 +619,17 @@ async def update_document(
     ).scalar_one_or_none()
     if not doc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Documento no encontrado.")
+    await require_resource_permission(db, "document", doc_id, _user, "edit")
+
+    has_collaboration_state = await db.scalar(select(ReportCollaborationState.id).where(
+            ReportCollaborationState.resource_type == "document",
+            ReportCollaborationState.resource_id == doc_id,
+        ))
+    if has_collaboration_state and any(value is not None for value in (payload.title, payload.status, payload.source)):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="El contenido y el estado se guardan mediante la sesión colaborativa; sincroniza el editor antes de volver a guardar.",
+        )
 
     if payload.title is not None:
         doc.title = payload.title.strip()
@@ -637,7 +654,7 @@ async def update_document(
 async def delete_document(
     doc_id: str,
     db: AsyncSession = Depends(get_db),
-    _user: User | None = Depends(require_report_access),
+    _user: User = Depends(require_report_access),
 ):
     doc = (
         await db.execute(
@@ -649,6 +666,7 @@ async def delete_document(
     ).scalar_one_or_none()
     if not doc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Documento no encontrado.")
+    await require_resource_permission(db, "document", doc_id, _user, "manage")
 
     doc.is_deleted = True
     doc.deleted_at = utc_now()
@@ -660,7 +678,7 @@ async def export_document_pdf(
     doc_id: str,
     payload: TypstCompileRequest | None = None,
     db: AsyncSession = Depends(get_db),
-    _user: User | None = Depends(require_report_access),
+    _user: User = Depends(require_report_access),
 ):
     doc = (
         await db.execute(
@@ -672,13 +690,14 @@ async def export_document_pdf(
     ).scalar_one_or_none()
     if not doc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Documento no encontrado.")
+    await require_resource_permission(db, "document", doc_id, _user, "view")
 
     source = (
         payload.source
         if payload is not None
         else (decrypt_note(doc.encrypted_source) if doc.encrypted_source else "")
     )
-    resolved_source, extra_files = await _resolve_typst_assets(doc_id, prepare_typst_source(source or ""), db)
+    resolved_source, extra_files = await _resolve_typst_assets(doc_id, prepare_typst_source(source or ""), db, _user)
     result = await run_in_threadpool(compile_typst_source, resolved_source, "pdf", extra_files)
     if not result.ok or not result.pdf_bytes:
         raise HTTPException(
@@ -701,7 +720,7 @@ async def export_document_format(
     redact_for_client: bool = False,
     payload: TypstCompileRequest | None = None,
     db: AsyncSession = Depends(get_db),
-    _user: User | None = Depends(require_report_access),
+    _user: User = Depends(require_report_access),
 ):
     fmt = format.lower().strip()
     if fmt not in {"pdf", "html", "typ", "typst_zip"}:
@@ -722,6 +741,7 @@ async def export_document_format(
     ).scalar_one_or_none()
     if not doc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Documento no encontrado.")
+    await require_resource_permission(db, "document", doc_id, _user, "view")
 
     source = (
         payload.source
@@ -741,6 +761,7 @@ async def export_document_format(
         doc_id,
         prepare_typst_source(source or "", redact_for_client=redact_for_client),
         db,
+        _user,
     )
     if fmt == "typst_zip":
         bundle = await run_in_threadpool(_build_typst_project_bundle, resolved_source, extra_files)
@@ -781,16 +802,17 @@ def _extract_signals(text: str) -> tuple[set[str], set[str], set[str]]:
 async def get_document_correlations(
     doc_id: str,
     db: AsyncSession = Depends(get_db),
-    _user: User | None = Depends(require_report_access),
+    _user: User = Depends(require_report_access),
 ):
     rows = (
         await db.execute(
-            select(ReportDocument).where(ReportDocument.is_deleted == False)  # noqa: E712
+            select(ReportDocument).where(_visible_resource_filter(ReportDocument, "document", _user))
         )
     ).scalars().all()
     target = next((r for r in rows if r.id == doc_id), None)
     if not target:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Documento no encontrado.")
+    await require_resource_permission(db, "document", doc_id, _user, "view")
 
     target_src = decrypt_note(target.encrypted_source) if target.encrypted_source else ""
     t_cves, t_cwes, t_ips = _extract_signals(target_src or "")
@@ -845,12 +867,12 @@ async def get_document_correlations(
 @router.get("/canvases", response_model=list[ReportCanvasSummaryOut])
 async def list_canvases(
     db: AsyncSession = Depends(get_db),
-    _user: User | None = Depends(require_report_access),
+    _user: User = Depends(require_report_access),
 ):
     rows = (
         await db.execute(
             select(ReportCanvas)
-            .where(ReportCanvas.is_deleted == False)  # noqa: E712
+            .where(_visible_resource_filter(ReportCanvas, "canvas", _user))
             .order_by(desc(ReportCanvas.updated_at))
         )
     ).scalars().all()
@@ -861,7 +883,7 @@ async def list_canvases(
 async def create_canvas(
     payload: ReportCanvasCreate,
     db: AsyncSession = Depends(get_db),
-    user: User | None = Depends(require_report_access),
+    user: User = Depends(require_report_edit_access),
 ):
     scene_json = payload.scene_json if payload.scene_json is not None else "{}"
     canvas = ReportCanvas(
@@ -885,7 +907,7 @@ async def create_canvas(
 async def get_canvas(
     canvas_id: str,
     db: AsyncSession = Depends(get_db),
-    _user: User | None = Depends(require_report_access),
+    _user: User = Depends(require_report_access),
 ):
     canvas = (
         await db.execute(
@@ -897,6 +919,7 @@ async def get_canvas(
     ).scalar_one_or_none()
     if not canvas:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lienzo no encontrado.")
+    await require_resource_permission(db, "canvas", canvas_id, _user, "view")
     return _canvas_detail(canvas)
 
 
@@ -905,7 +928,7 @@ async def update_canvas(
     canvas_id: str,
     payload: ReportCanvasUpdate,
     db: AsyncSession = Depends(get_db),
-    _user: User | None = Depends(require_report_access),
+    _user: User = Depends(require_report_access),
 ):
     canvas = (
         await db.execute(
@@ -917,6 +940,17 @@ async def update_canvas(
     ).scalar_one_or_none()
     if not canvas:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lienzo no encontrado.")
+    await require_resource_permission(db, "canvas", canvas_id, _user, "edit")
+
+    has_collaboration_state = await db.scalar(select(ReportCollaborationState.id).where(
+            ReportCollaborationState.resource_type == "canvas",
+            ReportCollaborationState.resource_id == canvas_id,
+        ))
+    if has_collaboration_state and any(value is not None for value in (payload.title, payload.scene_json, payload.element_count)):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="El lienzo se guarda mediante la sesión colaborativa; sincroniza antes de volver a guardar.",
+        )
 
     if payload.title is not None:
         canvas.title = payload.title.strip()
@@ -945,7 +979,7 @@ async def update_canvas(
 async def delete_canvas(
     canvas_id: str,
     db: AsyncSession = Depends(get_db),
-    _user: User | None = Depends(require_report_access),
+    _user: User = Depends(require_report_access),
 ):
     canvas = (
         await db.execute(
@@ -957,6 +991,7 @@ async def delete_canvas(
     ).scalar_one_or_none()
     if not canvas:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lienzo no encontrado.")
+    await require_resource_permission(db, "canvas", canvas_id, _user, "manage")
 
     canvas.is_deleted = True
     canvas.deleted_at = utc_now()

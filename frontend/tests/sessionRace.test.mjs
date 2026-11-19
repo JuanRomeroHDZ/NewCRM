@@ -26,6 +26,8 @@ test('un 401 tardío no invalida una sesión de bóveda o usuario renovada', asy
     globalThis.fetch = () => new Promise((resolve) => { finish = resolve; });
     const pending = request();
     setter(newToken);
+    // Ignore notifications from the explicit token changes above.
+    events.length = 0;
     finish(new Response('', { status: 401 }));
     await assert.rejects(pending);
     assert.equal(getter(), newToken);
@@ -40,4 +42,29 @@ test('un 401 de la sesión actual sigue invalidándola', async () => {
   await assert.rejects(client.c2Api.getService());
   assert.equal(client.getApiVaultToken(), null);
   assert.deepEqual(events, ['vault_locked']);
+});
+
+test('la Papelera distingue la bóveda bloqueada de la cuenta vencida', async () => {
+  const originalFetch = globalThis.fetch;
+  try {
+    for (const [scope, expected, userToken, vaultToken, event] of [
+      ['vault', /La bóveda se bloqueó/, 'current-user', null, 'vault_locked'],
+      ['user', /sesión de usuario terminó/, null, 'current-vault', 'core_user_session_expired'],
+    ]) {
+      client.setApiUserToken('current-user');
+      client.setApiVaultToken('current-vault');
+      events.length = 0;
+      globalThis.fetch = async () => new Response('', {
+        status: 401, headers: { 'X-Auth-Scope': scope },
+      });
+      await assert.rejects(client.api.getTrash(), expected);
+      assert.equal(client.getApiUserToken(), userToken);
+      assert.equal(client.getApiVaultToken(), vaultToken);
+      assert.ok(events.includes(event));
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
+    client.setApiUserToken(null);
+    client.setApiVaultToken(null);
+  }
 });

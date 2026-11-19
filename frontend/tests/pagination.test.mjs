@@ -100,3 +100,20 @@ test('los métodos legacy conservan llamadas sin paginación para consumidores e
     globalThis.fetch = originalFetch;
   }
 });
+
+test('comparte solo las lecturas en curso y vuelve a consultar después', async () => {
+  const originalFetch = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls += 1;
+    return new Response('[]', { status: 200 });
+  };
+  try {
+    await Promise.all([api.listReportDocuments(), api.listReportDocuments()]);
+    assert.equal(calls, 1);
+    await api.listReportDocuments();
+    assert.equal(calls, 2);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

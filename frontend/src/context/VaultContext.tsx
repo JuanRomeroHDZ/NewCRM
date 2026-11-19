@@ -1,3 +1,4 @@
+import type { CoreUser } from '../types';
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { VaultStatus, ExchangeRate, PaymentMethod, ScopeFilter, EntityScope, RuntimeConfig, RuntimeCurrencyOption } from '../types';
 import { api, setApiVaultToken, getApiVaultToken, getApiUserToken, setApiUserToken } from '../lib/api';
@@ -38,8 +39,10 @@ interface Toast {
 }
 
 interface VaultContextType {
+  operator: CoreUser | null | undefined;
   // Vault status
   isSetup: boolean;
+  setupCodeRequired: boolean;
   isUnlocked: boolean;
   draftRecoveryKey: CryptoKey | null;
   enableDraftRecovery: (password: string) => Promise<void>;
@@ -65,7 +68,7 @@ interface VaultContextType {
   lockVault: () => Promise<void>;
   recordVaultActivity: () => Promise<{ remaining_seconds: number; account_active: boolean | null }>;
   panicLock: () => Promise<void>;
-  setupMasterPassword: (password: string) => Promise<void>;
+  setupMasterPassword: (password: string, setupCode?: string) => Promise<void>;
   copyToClipboard: (text: string, label?: string) => Promise<boolean>;
   refreshVaultStatus: () => Promise<void>;
 
@@ -163,6 +166,7 @@ function normalizeAccentColor(value: string | undefined): string {
 
 export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isSetup, setIsSetup] = useState<boolean>(true);
+  const [setupCodeRequired, setSetupCodeRequired] = useState(false);
   const [isUnlocked, setIsUnlocked] = useState<boolean>(false);
   const [draftRecoveryKey, setDraftRecoveryKey] = useState<CryptoKey | null>(null);
   useEffect(() => { if (!isUnlocked) setDraftRecoveryKey(null); }, [isUnlocked]);
@@ -226,12 +230,36 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [editingPayment, setEditingPayment] = useState<PaymentMethod | undefined>();
 
+  const [operator, setOperator] = useState<CoreUser | null | undefined>(undefined);
+  useEffect(() => {
+    let generation = 0;
+    const refresh = () => {
+      const request = ++generation;
+      if (!getApiUserToken()) {
+        setOperator(null);
+        return;
+      }
+      setOperator(undefined);
+      void api.getCurrentUser().then(
+        (user) => { if (request === generation) setOperator(user); },
+        () => { if (request === generation) setOperator(null); },
+      );
+    };
+    refresh();
+    window.addEventListener('lessso-user-session-changed', refresh);
+    return () => {
+      generation++;
+      window.removeEventListener('lessso-user-session-changed', refresh);
+    };
+  }, []);
+
   // Exchange rate, runtime config & data reload
   const [exchangeRate, setExchangeRate] = useState<ExchangeRate | null>(null);
   const [runtimeConfig, setRuntimeConfig] = useState<RuntimeConfig | null>(null);
   const [runtimeConfigLoading, setRuntimeConfigLoading] = useState(false);
   const [runtimeConfigError, setRuntimeConfigError] = useState<string | null>(null);
   const runtimeConfigRequest = useRef(0);
+  const exchangeRateRequest = useRef(0);
   const vaultStatusRequests = useRef(createRequestSequence());
   const [dataVersion, setDataVersion] = useState(0);
 
@@ -339,6 +367,7 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       if (!vaultStatusRequests.current.isCurrent(requestVersion)) return;
       setVaultStatusError(null);
       setIsSetup(status.is_setup);
+      setSetupCodeRequired(Boolean(status.setup_code_required));
       setIsUnlocked(status.is_unlocked);
       setRemainingSeconds(status.remaining_seconds);
       setTimeoutMinutes(status.timeout_minutes);
@@ -360,9 +389,10 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, []);
 
   const refreshExchangeRate = useCallback(async () => {
+    const requestId = ++exchangeRateRequest.current;
     try {
       const rate = await api.getExchangeRate();
-      setExchangeRate(rate);
+      if (requestId === exchangeRateRequest.current) setExchangeRate(rate);
     } catch (err) {
       console.error('Error fetching exchange rate:', err);
     }
@@ -421,7 +451,8 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, [refreshVaultStatus]);
 
   useEffect(() => {
-    if (!isUnlocked) {
+    if (!isUnlocked || !operator || operator.must_change_password) {
+      exchangeRateRequest.current += 1;
       runtimeConfigRequest.current += 1;
       setExchangeRate(null);
       setRuntimeConfig(null);
@@ -431,7 +462,7 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
     refreshExchangeRate();
     refreshRuntimeConfig();
-  }, [isUnlocked, refreshExchangeRate, refreshRuntimeConfig]);
+  }, [isUnlocked, operator, refreshExchangeRate, refreshRuntimeConfig]);
 
   const supportedCurrencies: RuntimeCurrencyOption[] =
     runtimeConfig?.currencies && runtimeConfig.currencies.length > 0
@@ -615,8 +646,8 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  const setupMasterPassword = async (password: string) => {
-    const res = await api.setupMasterPassword(password);
+  const setupMasterPassword = async (password: string, setupCode?: string) => {
+    const res = await api.setupMasterPassword(password, setupCode);
     vaultStatusRequests.current.invalidate();
     let recoveryKey: CryptoKey | null = null;
     try { recoveryKey = await deriveDraftKey(password); } catch { showToast('No está disponible la recuperación local cifrada de informes en este navegador.', 'warning'); }
@@ -742,7 +773,9 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   return (
     <VaultContext.Provider
       value={{
+        operator,
         isSetup,
+        setupCodeRequired,
         isUnlocked,
         draftRecoveryKey,
         enableDraftRecovery,

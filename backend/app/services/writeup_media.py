@@ -13,7 +13,7 @@ from app.config import settings
 from app.security.crypto import decrypt_bytes, encrypt_bytes
 
 
-ALLOWED_SOURCE_IMAGE_FORMATS = {"PNG", "JPEG", "WEBP", "BMP", "TIFF", "GIF"}
+ALLOWED_SOURCE_IMAGE_FORMATS = {"PNG", "JPEG", "WEBP", "BMP", "TIFF", "GIF", "AVIF"}
 ALLOWED_VIDEO_EXTENSIONS = {".mp4", ".webm", ".mov", ".mkv"}
 VIDEO_EXTENSION_TO_MIME = {
     ".mp4": ("video/mp4", "mp4"),
@@ -26,6 +26,8 @@ SUPPORTED_OUTPUT_FORMATS = {
     "png": ("PNG", "image/png", ".png"),
     "jpeg": ("JPEG", "image/jpeg", ".jpg"),
 }
+MAX_IMAGE_PIXELS = 40_000_000
+MAX_ANIMATED_DECODE_PIXELS = 120_000_000
 SAFE_FILENAME_RE = re.compile(r"[^a-zA-Z0-9._-]+")
 
 
@@ -88,7 +90,7 @@ def _optimize_animated_image(opened: Image.Image, raw_bytes: bytes, original_fil
 
     src_fmt = (opened.format or "").upper()
     out_buffer = io.BytesIO()
-    if src_fmt == "WEBP":
+    if src_fmt in {"WEBP", "AVIF"}:
         frames[0].save(
             out_buffer,
             format="WEBP",
@@ -119,6 +121,8 @@ def _optimize_animated_image(opened: Image.Image, raw_bytes: bytes, original_fil
         mime_type, ext = "image/gif", ".gif"
 
     optimized_bytes = out_buffer.getvalue()
+    if len(optimized_bytes) > settings.WRITEUP_MAX_IMAGE_BYTES:
+        raise HTTPException(status_code=413, detail="La imagen procesada excede el límite de almacenamiento.")
     sha256_hex = hashlib.sha256(optimized_bytes).hexdigest()
     return OptimizedAssetPayload(
         filename=sanitize_asset_filename(original_filename, ext),
@@ -146,17 +150,23 @@ def optimize_and_encrypt_image(raw_bytes: bytes, original_filename: str | None =
             detail=f"La imagen excede el límite configurado de {settings.WRITEUP_MAX_IMAGE_BYTES} bytes.",
         )
 
-    Image.MAX_IMAGE_PIXELS = 40_000_000
-
     try:
         with Image.open(io.BytesIO(raw_bytes)) as opened:
+            pixels = opened.width * opened.height
+            if pixels > MAX_IMAGE_PIXELS:
+                raise HTTPException(status_code=413, detail="La imagen excede el límite de 40 megapíxeles.")
             detected_format = (opened.format or "").upper()
             if detected_format not in ALLOWED_SOURCE_IMAGE_FORMATS:
                 raise HTTPException(
                     status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-                    detail="Formato no permitido. Usa PNG, JPEG, WebP, GIF, BMP, TIFF o video MP4/WebM.",
+                    detail="Formato no permitido. Usa PNG, JPEG, WebP, GIF, BMP, TIFF o AVIF.",
                 )
             if getattr(opened, "is_animated", False) and getattr(opened, "n_frames", 1) > 1:
+                frames = min(opened.n_frames, settings.WRITEUP_MAX_GIF_FRAMES)
+                ratio = min(1, settings.WRITEUP_MAX_ANIM_DIM / max(opened.size))
+                if (pixels * frames > MAX_ANIMATED_DECODE_PIXELS
+                        or pixels * ratio**2 * frames > MAX_IMAGE_PIXELS):
+                    raise HTTPException(status_code=413, detail="La animación excede el límite de procesamiento.")
                 return _optimize_animated_image(opened, raw_bytes, original_filename)
 
             transposed = ImageOps.exif_transpose(opened)
@@ -193,8 +203,13 @@ def optimize_and_encrypt_image(raw_bytes: bytes, original_filename: str | None =
     elif pil_format == "PNG":
         save_kwargs = {"optimize": True}
 
+    if pil_format == "WEBP" and (detected_format == "PNG" or has_alpha):
+        save_kwargs.update(lossless=True, exact=True)
+    normalized.info.clear()
     normalized.save(out_buffer, format=pil_format, **save_kwargs)
     optimized_bytes = out_buffer.getvalue()
+    if len(optimized_bytes) > settings.WRITEUP_MAX_IMAGE_BYTES:
+        raise HTTPException(status_code=413, detail="La imagen procesada excede el límite de almacenamiento.")
     sha256_hex = hashlib.sha256(optimized_bytes).hexdigest()
     encrypted_blob = encrypt_bytes(optimized_bytes)
 
@@ -228,6 +243,8 @@ def _probe_video_dimensions(input_path: str) -> tuple[int, int]:
         res = subprocess.run(
             [
                 ffprobe_bin,
+                "-protocol_whitelist",
+                "file",
                 "-v",
                 "error",
                 "-select_streams",
@@ -293,6 +310,8 @@ def convert_video_bytes_to_gif(
         proc = subprocess.run(
             [
                 ffmpeg_bin,
+                "-protocol_whitelist",
+                "file",
                 "-y",
                 "-t",
                 str(settings.WRITEUP_MAX_VIDEO_SECONDS),
@@ -366,6 +385,8 @@ def optimize_and_encrypt_video(raw_bytes: bytes, original_filename: str | None =
             width, height = _probe_video_dimensions(in_path)
             remux_cmd = [
                 ffmpeg_bin,
+                "-protocol_whitelist",
+                "file",
                 "-y",
                 "-i",
                 in_path,

@@ -19,7 +19,7 @@ async def _authorized_headers(db_session, vault_token: str, role: str, username:
 
 
 @pytest.mark.asyncio
-async def test_graph_preserves_relationships_and_recovery_cycles(client, auth_token):
+async def test_graph_preserves_relationships_and_recovery_cycles(client, db_session, auth_token):
     headers = {"X-Vault-Token": auth_token}
     first = await client.post("/api/v1/emails", headers=headers, json={"address": "uno@example.test"})
     second = await client.post("/api/v1/emails", headers=headers, json={
@@ -50,6 +50,13 @@ async def test_graph_preserves_relationships_and_recovery_cycles(client, auth_to
     assert graph["cycles_detected"]
     assert f"email_{first.json()['id']}" in graph["critical_nodes"]
 
+    operator_headers = await _authorized_headers(db_session, auth_token, "operator", "graph_operator")
+    response = await client.get("/api/v1/graph", headers=operator_headers)
+    assert response.status_code == 200
+    restricted_graph = response.json()
+    assert {node["type"] for node in restricted_graph["nodes"]} == {"email", "platform", "prospect"}
+    assert {link["type"] for link in restricted_graph["links"]} == {"recovery", "child", "prospect"}
+
 
 @pytest.mark.asyncio
 async def test_activity_and_trash_restore_preserve_existing_record(client, db_session, auth_token):
@@ -70,7 +77,9 @@ async def test_activity_and_trash_restore_preserve_existing_record(client, db_se
     detail = await client.get(f"/api/v1/prospects/{prospect_id}", headers=headers)
     assert detail.status_code == 200
     assert detail.json()["notes"] == "Nota ficticia conservada"
-    activity = await client.get("/api/v1/audit/logs", headers=headers)
+    assert (await client.get("/api/v1/audit/logs", headers=headers)).status_code == 403
+    admin = await _authorized_headers(db_session, auth_token, "business_admin", "restore_admin")
+    activity = await client.get("/api/v1/audit/logs", headers=admin)
     assert activity.status_code == 200
     actions = {event["action"] for event in activity.json()["items"] if event["entity_id"] == prospect_id}
     assert {"create", "delete", "restore"}.issubset(actions)
