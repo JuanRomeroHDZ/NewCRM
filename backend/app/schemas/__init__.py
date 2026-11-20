@@ -1053,6 +1053,7 @@ class UserResponse(BaseModel):
     is_active: bool
     is_totp_enabled: bool
     must_change_password: bool
+    is_login_locked: bool = False
     created_at: Any = None
 
 class UserLoginResponse(BaseModel):

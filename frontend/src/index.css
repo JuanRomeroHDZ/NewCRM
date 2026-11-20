@@ -1096,6 +1096,12 @@ details[open] > summary:is(.ui-action-toggle, .ui-action-secondary, .ui-action-i
 
 .ui-nav-action[aria-current="page"] { background: #252b29; color: #fff; }
 
+#nav-group-ajustes .ui-nav-action[aria-current="page"] {
+  background: color-mix(in oklab, var(--brand-accent, #0f766e) 22%, #252b29);
+  box-shadow: inset 3px 0 0 var(--brand-accent, #0f766e);
+  font-weight: 600;
+}
+
 .writeups-view .writeup-list-row {
   display: block;
   border: 0;

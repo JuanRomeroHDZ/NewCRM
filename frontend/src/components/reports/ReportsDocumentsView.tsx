@@ -137,7 +137,23 @@ export const ReportsDocumentsView: React.FC = () => {
   const [newDocumentTitle, setNewDocumentTitle] = useState('Nuevo informe');
   const [newDocumentTemplateId, setNewDocumentTemplateId] = useState('technical');
 
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isDesktop, setIsDesktop] = useState(() => window.matchMedia('(min-width: 1024px)').matches);
+  const [desktopListOpen, setDesktopListOpen] = useState(true);
+  const [mobileListOpen, setMobileListOpen] = useState(false);
+  const isSidebarOpen = isDesktop ? desktopListOpen : mobileListOpen;
+  const setIsSidebarOpen = isDesktop ? setDesktopListOpen : setMobileListOpen;
+  const documentListRef = useAuditedDialog(!isDesktop && mobileListOpen, () => setMobileListOpen(false));
+
+  useEffect(() => {
+    const media = window.matchMedia('(min-width: 1024px)');
+    const update = () => {
+      setIsDesktop(media.matches);
+      if (media.matches) setMobileListOpen(false);
+    };
+    update();
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, []);
   const [paneMode, setPaneMode] = useState<DocumentPaneMode>('split');
   const [redactForClient, setRedactForClient] = useState(false);
   const [quickSnippetId, setQuickSnippetId] = useState('');
@@ -283,7 +299,10 @@ export const ReportsDocumentsView: React.FC = () => {
 
   const selectDocumentWithGuard = useCallback(
     async (nextId: string) => {
-      if (nextId === selectedId) return;
+      if (nextId === selectedId) {
+        setMobileListOpen(false);
+        return;
+      }
       if (hasUnsavedChanges && collaboration.canEdit && collaboration.status === 'connected') {
         try {
           await collaboration.checkpoint(false, 'manual');
@@ -293,6 +312,7 @@ export const ReportsDocumentsView: React.FC = () => {
         }
       }
       setSelectedId(nextId);
+      setMobileListOpen(false);
     },
     [collaboration.canEdit, collaboration.checkpoint, collaboration.status, hasUnsavedChanges, selectedId, showToast]
   );
@@ -471,6 +491,7 @@ export const ReportsDocumentsView: React.FC = () => {
         source: template.source,
       });
       setIsCreateFormOpen(false);
+      setMobileListOpen(false);
       setNewDocumentTitle('Nuevo informe');
       showToast('Documento creado.', 'success');
       await loadDocuments(created.id);
@@ -809,128 +830,147 @@ export const ReportsDocumentsView: React.FC = () => {
   }
 
   return (
-    <div className="flex h-[calc(100dvh-5.5rem)] min-h-[420px] min-w-0 flex-col gap-4 lg:min-h-[540px] lg:flex-row">
+    <div className="flex h-full min-h-0 min-w-0 gap-4 overflow-hidden">
       {isSidebarOpen && (
-        <aside className="flex w-full lg:w-72 max-h-60 lg:max-h-none shrink-0 flex-col rounded-xl border border-obsidian-border bg-obsidian-panel min-h-0">
-          <div className="flex items-center justify-between gap-2 border-b border-obsidian-border px-4 py-3">
-            <div className="flex items-center gap-2 min-w-0">
-              <FileText className="h-[18px] w-[18px] shrink-0 text-obsidian-muted" />
-              <h2 className="truncate font-heading text-sm font-semibold text-white">Documentos</h2>
+        <>
+          {!isDesktop && (
+            <div aria-hidden="true" onClick={() => setMobileListOpen(false)} className="fixed inset-0 z-40 bg-obsidian-bg/75" />
+          )}
+          <div
+            ref={documentListRef}
+            id="report-document-list"
+            role={isDesktop ? 'complementary' : 'dialog'}
+            aria-modal={isDesktop ? undefined : true}
+            aria-labelledby="report-document-list-title"
+            className="fixed inset-y-0 left-0 z-50 flex min-h-0 w-80 max-w-[calc(100%-1rem)] flex-col border-r border-obsidian-border bg-obsidian-panel lg:static lg:z-auto lg:w-72 lg:shrink-0 lg:rounded-xl lg:border"
+          >
+            <div className="flex shrink-0 items-center justify-between gap-2 border-b border-obsidian-border px-3 py-3">
+              <div className="flex min-w-0 items-center gap-2">
+                {!isDesktop && (
+                  <button type="button" className="ui-action-icon shrink-0" aria-label="Cerrar lista de documentos" onClick={() => setMobileListOpen(false)}>
+                    <PanelLeftClose className="size-4" aria-hidden="true" />
+                  </button>
+                )}
+                <FileText className="h-[18px] w-[18px] shrink-0 text-obsidian-muted" />
+                <h2 id="report-document-list-title" className="truncate font-heading text-sm font-semibold text-white">Documentos</h2>
+              </div>
+              {/* [Acción principal] Crea un nuevo documento Typst. */}
+              <button
+                type="button"
+                onClick={() => setIsCreateFormOpen((open) => !open)}
+                aria-expanded={isCreateFormOpen}
+                aria-controls="create-report-document-form"
+                className="ui-action-primary !px-3 text-xs"
+              >
+                <Plus className={`h-4 w-4 ${isCreateFormOpen ? 'rotate-45' : ''}`} />
+                <span>{isCreateFormOpen ? 'Cerrar' : 'Nuevo'}</span>
+              </button>
             </div>
-            {/* [Acción principal] Crea un nuevo documento Typst. */}
-            <button
-              type="button"
-              onClick={() => setIsCreateFormOpen((open) => !open)}
-              aria-expanded={isCreateFormOpen}
-              aria-controls="create-report-document-form"
-              className="ui-action-primary !px-3 text-xs"
-            >
-              <Plus className={`h-4 w-4 ${isCreateFormOpen ? 'rotate-45' : ''}`} />
-              <span>{isCreateFormOpen ? 'Cerrar' : 'Nuevo'}</span>
-            </button>
-          </div>
 
-          <div className="border-b border-obsidian-border px-3 py-2.5">
-            <label htmlFor="doc-search" className="sr-only">
-              Buscar documentos
-            </label>
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-obsidian-muted" />
-              <input
-                id="doc-search"
-                type="search"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Buscar documento"
-                className="w-full min-h-11 rounded-lg border border-obsidian-border bg-obsidian-surface py-2 pl-9 pr-3 text-sm text-white placeholder:text-obsidian-muted focus:border-obsidian-accent focus:outline-none"
-              />
-            </div>
-          </div>
-
-          {isCreateFormOpen && (
-            <form
-              id="create-report-document-form"
-              onSubmit={(event) => { event.preventDefault(); void handleCreateDocument(); }}
-              className="space-y-3 border-b border-obsidian-border p-3"
-            >
-              <div className="space-y-1.5">
-                <label htmlFor="new-report-title" className="block text-xs font-medium text-obsidian-muted">Título</label>
+            <div className="shrink-0 border-b border-obsidian-border px-3 py-2.5">
+              <label htmlFor="doc-search" className="sr-only">
+                Buscar documentos
+              </label>
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-obsidian-muted" />
                 <input
-                  id="new-report-title"
-                  value={newDocumentTitle}
-                  onChange={(event) => setNewDocumentTitle(event.target.value)}
-                  maxLength={200}
-                  required
-                  className="min-h-11 w-full rounded-lg border border-obsidian-border bg-obsidian-surface px-3 text-sm text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent"
+                  id="doc-search"
+                  type="search"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Buscar documento"
+                  className="w-full min-h-11 rounded-lg border border-obsidian-border bg-obsidian-surface py-2 pl-9 pr-3 text-sm text-white placeholder:text-obsidian-muted focus:border-obsidian-accent focus:outline-none"
                 />
               </div>
-              <div className="space-y-1.5">
-                <label htmlFor="new-report-template" className="block text-xs font-medium text-obsidian-muted">Plantilla</label>
-                <select
-                  id="new-report-template"
-                  value={newDocumentTemplateId}
-                  onChange={(event) => setNewDocumentTemplateId(event.target.value)}
-                  className="h-11 w-full rounded-lg border border-obsidian-border bg-obsidian-surface px-3 text-sm text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent"
-                >
-                  {TYPST_DOCUMENT_TEMPLATES.map((template) => (
-                    <option key={template.id} value={template.id}>{template.label}</option>
-                  ))}
-                </select>
-                <p className="text-xs text-obsidian-muted">
-                  {getTypstDocumentTemplate(newDocumentTemplateId).description}
-                </p>
-              </div>
-              <div className="flex justify-end gap-2">
-                <button type="button" onClick={() => setIsCreateFormOpen(false)} className="ui-action-secondary">Cancelar</button>
-                <button type="submit" className="ui-action-primary">Crear documento</button>
-              </div>
-            </form>
-          )}
+            </div>
 
-          <div className="flex-1 overflow-y-auto divide-y divide-obsidian-border">
-            {isLoadingList ? (
-              <ReportLoadingSkeleton label="Cargando documentos…" />
-            ) : listLoadError ? (
-              <div role="alert" className="space-y-3 p-4 text-sm text-obsidian-errorText">
-                <p>{listLoadError}</p>
-                <button
-                  type="button"
-                  onClick={() => void loadDocuments()}
-                  className="ui-action-secondary min-h-11 !px-3 text-xs"
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+              {isCreateFormOpen && (
+                <form
+                  id="create-report-document-form"
+                  onSubmit={(event) => { event.preventDefault(); void handleCreateDocument(); }}
+                  className="space-y-3 border-b border-obsidian-border p-3"
                 >
-                  Reintentar
-                </button>
-              </div>
-            ) : filteredDocuments.length === 0 ? (
-              <div className="p-4 text-sm text-obsidian-muted">
-                {documents.length === 0 ? 'Aún no hay documentos creados.' : 'Sin coincidencias.'}
-              </div>
-            ) : (
-              filteredDocuments.map((item) => {
-                const isSelected = item.id === selectedId;
-                return (
-                  <div
-                    key={item.id}
-                    className={`flex items-center justify-between gap-2 px-4 py-3 transition-colors ${
-                      isSelected ? 'bg-obsidian-surface text-white' : 'hover:bg-obsidian-surface/60 text-obsidian-muted'
-                    }`}
-                  >
+                  <div className="space-y-1.5">
+                    <label htmlFor="new-report-title" className="block text-xs font-medium text-obsidian-muted">Título</label>
+                    <input
+                      id="new-report-title"
+                      value={newDocumentTitle}
+                      onChange={(event) => setNewDocumentTitle(event.target.value)}
+                      maxLength={200}
+                      required
+                      className="min-h-11 w-full rounded-lg border border-obsidian-border bg-obsidian-surface px-3 text-sm text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label htmlFor="new-report-template" className="block text-xs font-medium text-obsidian-muted">Plantilla</label>
+                    <select
+                      id="new-report-template"
+                      value={newDocumentTemplateId}
+                      onChange={(event) => setNewDocumentTemplateId(event.target.value)}
+                      className="h-11 w-full rounded-lg border border-obsidian-border bg-obsidian-surface px-3 text-sm text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent"
+                    >
+                      {TYPST_DOCUMENT_TEMPLATES.map((template) => (
+                        <option key={template.id} value={template.id}>{template.label}</option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-obsidian-muted">
+                      {getTypstDocumentTemplate(newDocumentTemplateId).description}
+                    </p>
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <button type="button" onClick={() => setIsCreateFormOpen(false)} className="ui-action-secondary">Cancelar</button>
+                    <button type="submit" className="ui-action-primary">Crear documento</button>
+                  </div>
+                </form>
+              )}
+
+              <div className="divide-y divide-obsidian-border">
+                {isLoadingList ? (
+                  <ReportLoadingSkeleton label="Cargando documentos…" />
+                ) : listLoadError ? (
+                  <div role="alert" className="space-y-3 p-4 text-sm text-obsidian-errorText">
+                    <p>{listLoadError}</p>
                     <button
                       type="button"
-                      onClick={() => void selectDocumentWithGuard(item.id)}
-                      className="min-w-0 min-h-11 flex-1 rounded text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-accent"
+                      onClick={() => void loadDocuments()}
+                      className="ui-action-secondary min-h-11 !px-3 text-xs"
                     >
-                      <div className="truncate text-sm font-medium text-white">{item.title}</div>
-                      <div className="mt-0.5 text-xs text-obsidian-muted">
-                        {STATUS_LABELS[item.status] || item.status} · {formatApiDateTime(item.updated_at)}
-                      </div>
+                      Reintentar
                     </button>
                   </div>
-                );
-              })
-            )}
+                ) : filteredDocuments.length === 0 ? (
+                  <div className="p-4 text-sm text-obsidian-muted">
+                    {documents.length === 0 ? 'Aún no hay documentos creados.' : 'Sin coincidencias.'}
+                  </div>
+                ) : (
+                  filteredDocuments.map((item) => {
+                    const isSelected = item.id === selectedId;
+                    return (
+                      <div
+                        key={item.id}
+                        className={`flex items-center justify-between gap-2 px-4 py-3 transition-colors ${
+                          isSelected ? 'bg-obsidian-surface text-white' : 'hover:bg-obsidian-surface/60 text-obsidian-muted'
+                        }`}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => void selectDocumentWithGuard(item.id)}
+                          className="min-w-0 min-h-11 flex-1 rounded text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-obsidian-accent"
+                        >
+                          <div className="truncate text-sm font-medium text-white">{item.title}</div>
+                          <div className="mt-0.5 text-xs text-obsidian-muted">
+                            {STATUS_LABELS[item.status] || item.status} · {formatApiDateTime(item.updated_at)}
+                          </div>
+                        </button>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
           </div>
-        </aside>
+        </>
       )}
 
       <section className="relative flex min-w-0 flex-1 flex-col rounded-xl border border-obsidian-border bg-obsidian-panel min-h-0">
@@ -939,6 +979,9 @@ export const ReportsDocumentsView: React.FC = () => {
             <button
               type="button"
               onClick={() => setIsSidebarOpen((prev) => !prev)}
+              aria-expanded={isSidebarOpen}
+              aria-controls={isSidebarOpen ? 'report-document-list' : undefined}
+              aria-haspopup={isDesktop ? undefined : 'dialog'}
               aria-label={isSidebarOpen ? 'Ocultar lista de documentos' : 'Mostrar lista de documentos'}
               className="ui-action-icon"
             >
@@ -1290,9 +1333,9 @@ export const ReportsDocumentsView: React.FC = () => {
             <div className="flex flex-1 flex-col md:flex-row min-h-0 min-w-0 divide-y md:divide-y-0 md:divide-x divide-obsidian-border">
               <div
                 aria-hidden={paneMode === 'preview'}
-                className={`${paneMode === 'preview' ? 'hidden' : 'flex'} min-w-0 flex-1 flex-col bg-obsidian-bg`}
+                className={`${paneMode === 'preview' ? 'hidden' : 'flex'} min-h-0 min-w-0 flex-1 flex-col bg-obsidian-bg`}
               >
-                  <div className="flex min-w-0 items-center gap-2 border-b border-obsidian-border px-2 py-1.5 text-xs text-obsidian-muted">
+                  <div className="flex min-w-0 shrink-0 items-center gap-2 border-b border-obsidian-border px-2 py-1.5 text-xs text-obsidian-muted">
                     <div className="min-w-0 flex-1 overflow-x-auto" role="toolbar" aria-label="Herramientas de edición Typst">
                       <div className="flex w-max items-center gap-2 py-0.5">
                         <span className="shrink-0 px-2 text-xs text-obsidian-muted">Documentos · Typst</span>
@@ -1436,7 +1479,7 @@ export const ReportsDocumentsView: React.FC = () => {
               </div>
 
               {paneMode !== 'edit' && (
-                <div className="flex min-w-0 flex-1 flex-col bg-obsidian-bg">
+                <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-obsidian-bg">
                   <div ref={setPreviewToolbar} className="flex shrink-0 flex-wrap items-center gap-2 border-b border-obsidian-border px-3 py-1.5 text-xs text-obsidian-muted">
                     <span>
                       Vista previa

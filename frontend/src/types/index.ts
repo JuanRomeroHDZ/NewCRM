@@ -540,6 +540,7 @@ export interface CoreUser {
   is_active: boolean;
   is_totp_enabled: boolean;
   must_change_password: boolean;
+  is_login_locked?: boolean;
   created_at?: string;
 }
 

@@ -22,7 +22,8 @@ function parseColonias(value: string): { values: string[]; error: string | null 
   return { values, error: null };
 }
 
-export const RuntimeConfigSection: React.FC = () => {
+export const RuntimeConfigSection: React.FC<{ section: 'network' | 'reports' }> = ({ section }) => {
+  const isNetwork = section === 'network';
   const {
     runtimeConfig,
     runtimeConfigLoading,
@@ -140,50 +141,49 @@ export const RuntimeConfigSection: React.FC = () => {
       showToast('Carga la configuración actual antes de guardar.', 'warning');
       return;
     }
-    const localeValue = locale.trim();
-    if (!/^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/.test(localeValue) || localeValue.length > 35) {
-      showToast('Escribe un formato regional válido, por ejemplo es-MX.', 'error');
-      return;
-    }
-    if (!defaultCity.trim() || !defaultZone || !defaultSector) {
-      showToast('Completa ciudad, zona y sector predeterminados.', 'error');
-      return;
-    }
-    if (!mapZones.some((zone) => zone.slug === defaultZone) || !mapZones.some((zone) => zone.slug === fullBoundsZone)) {
-      showToast('Selecciona zonas que sigan disponibles en la lista.', 'error');
-      return;
-    }
-    if (!runtimeConfig.map_sectors.some((sector) => sector.id === defaultSector)) {
-      showToast('Selecciona un sector disponible para el mapa.', 'error');
-      return;
-    }
-    const lat = Number(centerLat);
-    const lon = Number(centerLon);
-    const parsedZoom = Number(zoom);
-    if (!centerLat.trim() || !Number.isFinite(lat) || lat < -90 || lat > 90) {
-      showToast('La latitud debe estar entre -90 y 90.', 'error');
-      return;
-    }
-    if (!centerLon.trim() || !Number.isFinite(lon) || lon < -180 || lon > 180) {
-      showToast('La longitud debe estar entre -180 y 180.', 'error');
-      return;
-    }
-    if (!Number.isInteger(parsedZoom) || parsedZoom < 1 || parsedZoom > 20) {
-      showToast('El acercamiento debe ser un número entero entre 1 y 20.', 'error');
-      return;
-    }
-    const invalidZone = mapZones.find((zone) => {
-      const parsed = parseColonias(zone.colonias.join(', '));
-      return parsed.error !== null;
-    });
-    if (invalidZone) {
-      showToast(`Revisa las colonias de ${invalidZone.zone}.`, 'error');
-      return;
-    }
-
-    setSaving(true);
-    try {
-      await api.updateRuntimeConfig({
+    const payload: Parameters<typeof api.updateRuntimeConfig>[0] = {};
+    if (isNetwork) {
+      const localeValue = locale.trim();
+      if (!/^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/.test(localeValue) || localeValue.length > 35) {
+        showToast('Escribe un formato regional válido, por ejemplo es-MX.', 'error');
+        return;
+      }
+      if (!defaultCity.trim() || !defaultZone || !defaultSector) {
+        showToast('Completa ciudad, zona y sector predeterminados.', 'error');
+        return;
+      }
+      if (!mapZones.some((zone) => zone.slug === defaultZone) || !mapZones.some((zone) => zone.slug === fullBoundsZone)) {
+        showToast('Selecciona zonas que sigan disponibles en la lista.', 'error');
+        return;
+      }
+      if (!runtimeConfig.map_sectors.some((sector) => sector.id === defaultSector)) {
+        showToast('Selecciona un sector disponible para el mapa.', 'error');
+        return;
+      }
+      const lat = Number(centerLat);
+      const lon = Number(centerLon);
+      const parsedZoom = Number(zoom);
+      if (!centerLat.trim() || !Number.isFinite(lat) || lat < -90 || lat > 90) {
+        showToast('La latitud debe estar entre -90 y 90.', 'error');
+        return;
+      }
+      if (!centerLon.trim() || !Number.isFinite(lon) || lon < -180 || lon > 180) {
+        showToast('La longitud debe estar entre -180 y 180.', 'error');
+        return;
+      }
+      if (!Number.isInteger(parsedZoom) || parsedZoom < 1 || parsedZoom > 20) {
+        showToast('El acercamiento debe ser un número entero entre 1 y 20.', 'error');
+        return;
+      }
+      const invalidZone = mapZones.find((zone) => {
+        const parsed = parseColonias(zone.colonias.join(', '));
+        return parsed.error !== null;
+      });
+      if (invalidZone) {
+        showToast(`Revisa las colonias de ${invalidZone.zone}.`, 'error');
+        return;
+      }
+      Object.assign(payload, {
         currencies: SYSTEM_CURRENCIES.map((currency) => ({ ...currency })),
         currency_config: {
           base_currency: 'MXN',
@@ -201,19 +201,27 @@ export const RuntimeConfigSection: React.FC = () => {
           tile_url_template: runtimeConfig.map_defaults.tile_url_template,
           attribution: runtimeConfig.map_defaults.attribution,
         },
-        map_zones: mapZones,
+        map_zones: mapZones
+      });
+    } else {
+      Object.assign(payload, {
         writeup_defaults: {
           organization_name: organizationName.trim(),
           watermark_default: watermark.trim(),
-        },
+        }
       });
+    }
+
+    setSaving(true);
+    try {
+      await api.updateRuntimeConfig(payload);
       const refreshed = await refreshRuntimeConfig();
       triggerDataReload();
       if (!refreshed) {
         showToast('Se guardó, pero no se pudo actualizar la vista. Reintenta la carga.', 'warning');
         return;
       }
-      showToast('Configuración de moneda, mapa e informes guardada.', 'success');
+      showToast(isNetwork ? 'Configuración regional guardada.' : 'Ajustes de reportes guardados.', 'success');
     } catch (error: any) {
       showToast(error?.message || 'No se pudo guardar la configuración.', 'error');
     } finally {
@@ -228,9 +236,9 @@ export const RuntimeConfigSection: React.FC = () => {
     <form id="runtime-config-form" onSubmit={handleSave} className="min-w-0 space-y-4 rounded-xl border border-obsidian-border bg-obsidian-panel p-3 sm:space-y-4 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-obsidian-border pb-3">
         <div className="flex min-w-0 items-center gap-2">
-          <Globe size={18} className="shrink-0 text-obsidian-muted" aria-hidden="true" />
-          <h3 className="text-sm font-bold text-white">Monedas y mapa</h3>
-          <InfoTooltip content="Configura el formato de moneda y la ubicación de búsqueda." />
+          {isNetwork ? <Globe size={18} className="shrink-0 text-obsidian-muted" aria-hidden="true" /> : <FileText size={18} className="shrink-0 text-obsidian-muted" aria-hidden="true" />}
+          <h3 className="text-sm font-bold text-white">{isNetwork ? 'Monedas y mapa' : 'Reportes e informes'}</h3>
+          {isNetwork && <InfoTooltip content="Configura el formato de moneda y la ubicación de búsqueda." />}
         </div>
       </div>
 
@@ -256,7 +264,7 @@ export const RuntimeConfigSection: React.FC = () => {
         <p role="status" className="text-xs text-obsidian-muted">Preparando configuración…</p>
       )}
 
-      <fieldset disabled={configUnavailable || saving} className="min-w-0 space-y-4 border-0 p-0 disabled:opacity-60">
+      {isNetwork ? <fieldset disabled={configUnavailable || saving} className="min-w-0 space-y-4 border-0 p-0 disabled:opacity-60">
         <section className="space-y-3 text-xs">
           <h4 className="font-semibold text-white">Monedas y formato</h4>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -359,12 +367,7 @@ export const RuntimeConfigSection: React.FC = () => {
           </div>
         </section>
 
-      </fieldset>
-    </form>
-        <section id="settings-writeups" tabIndex={-1} aria-labelledby="settings-writeups-heading" className="scroll-mt-4 space-y-3 rounded-xl border border-obsidian-border bg-obsidian-panel p-4 text-xs focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent sm:p-5">
-          <h3 id="settings-writeups-heading" className="flex items-center gap-2 text-sm font-semibold text-white">
-            <FileText size={18} className="text-obsidian-muted" aria-hidden="true" /> Reportes e informes
-          </h3>
+      </fieldset> : (
           <fieldset disabled={configUnavailable || saving} className="min-w-0 border-0 p-0 disabled:opacity-60">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
@@ -377,14 +380,15 @@ export const RuntimeConfigSection: React.FC = () => {
             </div>
           </div>
           </fieldset>
-        </section>
-        {/* [Acción principal] Guarda monedas, zonas del mapa y ajustes de reportes en una sola acción. */}
+      )}
+        {/* [Acción principal] Guarda los ajustes del apartado abierto. */}
         <div className="flex justify-end">
           <button type="submit" form="runtime-config-form" disabled={saving || configUnavailable} className="ui-action-primary">
             <Save size={16} aria-hidden="true" />
-            <span>{saving ? 'Guardando…' : 'Guardar configuración regional y reportes'}</span>
+            <span>{saving ? 'Guardando…' : 'Guardar cambios'}</span>
           </button>
         </div>
+    </form>
     </div>
   );
 };

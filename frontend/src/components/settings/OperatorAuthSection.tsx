@@ -37,6 +37,7 @@ export const OperatorAuthSection: React.FC = () => {
   const [bootstrapAttempt, setBootstrapAttempt] = useState(0);
   const [showBootstrapForm, setShowBootstrapForm] = useState(false);
   const [bootstrapError, setBootstrapError] = useState<string | null>(null);
+  const [showCreateUserForm, setShowCreateUserForm] = useState(false);
   const [createUserError, setCreateUserError] = useState<string | null>(null);
   const [bootstrapLoading, setBootstrapLoading] = useState(false);
   const [bootstrapUsername, setBootstrapUsername] = useState('');
@@ -360,7 +361,7 @@ export const OperatorAuthSection: React.FC = () => {
     setUserMgmtLoading(true);
     try {
       await api.updateUser(userId, payload);
-      showToast('Permisos de operador actualizados.', 'success');
+      showToast(payload.unlock ? 'Bloqueo de inicio de sesión restablecido.' : 'Cuenta actualizada.', 'success');
       await loadUsersIfOwner(currentUser);
     } catch (err: any) {
       showToast(err.message || 'No se pudo actualizar el operador.', 'error');
@@ -399,32 +400,11 @@ export const OperatorAuthSection: React.FC = () => {
           <UserCheck size={18} className="text-obsidian-muted" aria-hidden="true" />
           <h3 className="text-sm font-bold text-white">Cuentas del equipo</h3>
         </div>
-        {/* [Acción secundaria] Cerrar la sesión del operador actual. */}
-        {currentUser && (
-          <button
-            type="button"
-            onClick={handleOperatorLogout}
-            className="ui-action-secondary"
-          >
-            <LogOut size={16} aria-hidden="true" />
-            <span>Cerrar sesión</span>
-          </button>
-        )}
       </div>
 
-      <p className="text-xs text-obsidian-muted leading-relaxed">
-        La contraseña de la bóveda desbloquea los datos cifrados. La cuenta del equipo tiene otra contraseña y determina tus permisos, incluido el acceso de propietario a Red y Lab.
-      </p>
-
-      <div aria-label="Pasos de acceso" className="border-t border-obsidian-border pt-3 text-xs leading-relaxed text-obsidian-muted">
-        <p className="font-semibold text-white">Pasos para comenzar</p>
-        <ol className="mt-2 list-inside list-decimal space-y-1">
-          <li>Bóveda: {isUnlocked ? 'desbloqueada' : 'crea o desbloquea la bóveda con su contraseña'}.</li>
-          <li>Cuenta: {loadingSession ? 'comprobando sesión' : currentUser ? `sesión iniciada como ${currentUser.username} (${ROLE_LABELS[currentUser.role] || currentUser.role})` : bootstrapChecking ? 'comprobando si puedes crear el propietario' : bootstrapStatusError ? 'estado de propietario no disponible' : bootstrapAvailable ? 'crea la cuenta de propietario más abajo' : 'inicia sesión con tu cuenta'}.</li>
-          <li>Contraseña de cuenta: {currentUser?.must_change_password ? 'cambia la contraseña temporal para continuar' : currentUser ? 'lista para usar' : 'cámbiala al iniciar sesión si es provisional'}.</li>
-        </ol>
-        {currentUser && currentUser.role !== 'owner' && <p className="mt-2">Red y Lab requiere una cuenta de propietario. Pide acceso al propietario de esta instalación.</p>}
-      </div>
+      {!currentUser && <p className="text-xs leading-relaxed text-obsidian-muted">
+        Usa tu cuenta del equipo para iniciar sesión. La contraseña de la bóveda protege los datos cifrados.
+      </p>}
       {bootstrapStatusError && isUnlocked && !currentUser && (
         <div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-obsidian-border p-3 text-xs text-obsidian-text">
           <span>{bootstrapStatusError}</span>
@@ -671,6 +651,228 @@ export const OperatorAuthSection: React.FC = () => {
               Para crear la cuenta administradora inicial, cierra esta sesión y selecciona Crear cuenta.
             </p>
           )}
+          {/* Owner User Management */}
+          {currentUser.role === 'owner' && !currentUser.must_change_password && (
+            <div className="space-y-3 border-b border-obsidian-border pb-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2 text-xs font-semibold text-white">
+                  <Users size={16} className="text-obsidian-muted" aria-hidden="true" />
+                  <span>Cuentas del equipo ({usersList.length})</span>
+                </div>
+                {usersList.length > 0 && (
+                  <div className="relative w-full sm:w-56">
+                    <Search size={16} className="absolute left-2.5 top-2 text-obsidian-muted" aria-hidden="true" />
+                    <input
+                      id="op-user-search"
+                      type="text"
+                      value={userSearch}
+                      onChange={(e) => setUserSearch(e.target.value)}
+                      maxLength={INPUT_LIMITS.SEARCH}
+                      aria-label="Buscar cuenta por nombre, usuario o correo"
+                      placeholder="Buscar cuentas..."
+                      className="w-full min-h-11 pl-8 pr-12 rounded-lg bg-obsidian-bg border border-obsidian-border text-white text-xs focus:outline-none focus:border-obsidian-accent"
+                    />
+                    {userSearch && (
+                      <button
+                        type="button"
+                        onClick={() => setUserSearch('')}
+                        aria-label="Limpiar búsqueda de cuentas"
+                        className="ui-action-icon absolute right-1 top-1/2 -translate-y-1/2"
+                      >
+                        <X size={16} aria-hidden="true" />
+                      </button>
+                    )}
+                  </div>
+                )}
+                <button type="button" className="ui-action-icon" aria-label="Actualizar lista de cuentas"
+                  title="Actualizar lista de cuentas" disabled={usersLoading || userMgmtLoading}
+                  onClick={() => void loadUsersIfOwner(currentUser)}>
+                  <RefreshCw size={16} aria-hidden="true" />
+                </button>
+                <button type="button" className="ui-action-primary" aria-expanded={showCreateUserForm}
+                  aria-controls={showCreateUserForm ? 'op-create-user' : undefined}
+                  onClick={() => {
+                    setShowCreateUserForm(!showCreateUserForm);
+                    setCreateUserError(null);
+                  }}>
+                  <UserPlus size={16} aria-hidden="true" />
+                  {showCreateUserForm ? 'Cerrar formulario' : 'Nueva cuenta'}
+                </button>
+              </div>
+
+              {showCreateUserForm && (
+                <form id="op-create-user" onSubmit={handleCreateUser} className="grid min-w-0 gap-3 sm:grid-cols-2">
+                  <div>
+                    <label htmlFor="op-new-username" className="mb-1 block text-xs text-obsidian-muted">Nombre de usuario</label>
+                    <input
+                      id="op-new-username"
+                      required
+                      minLength={3}
+                      type="text"
+                      value={newUsername}
+                      onChange={(e) => setNewUsername(e.target.value)}
+                      placeholder="usuario"
+                      maxLength={64}
+                      className="w-full min-h-11 px-3 py-2 rounded-lg bg-obsidian-bg border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-obsidian-accent"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="op-new-email" className="mb-1 block text-xs text-obsidian-muted">Correo electrónico</label>
+                    <input
+                      id="op-new-email"
+                      required
+                      type="email"
+                      value={newEmail}
+                      onChange={(e) => setNewEmail(e.target.value)}
+                      placeholder="correo@empresa.com"
+                      maxLength={INPUT_LIMITS.EMAIL}
+                      className="w-full min-h-11 px-3 py-2 rounded-lg bg-obsidian-bg border border-obsidian-border text-white text-xs focus:outline-none focus:border-obsidian-accent"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="op-new-fullname" className="mb-1 block text-xs text-obsidian-muted">Nombre completo</label>
+                    <input
+                      id="op-new-fullname"
+                      required
+                      minLength={2}
+                      type="text"
+                      value={newFullName}
+                      onChange={(e) => setNewFullName(e.target.value)}
+                      placeholder="Nombre completo"
+                      maxLength={128}
+                      className="w-full min-h-11 px-3 py-2 rounded-lg bg-obsidian-bg border border-obsidian-border text-white text-xs focus:outline-none focus:border-obsidian-accent"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="op-new-role" className="mb-1 block text-xs text-obsidian-muted">Rol</label>
+                    <select
+                      id="op-new-role"
+                      value={newRole}
+                      onChange={(e) => setNewRole(e.target.value as CoreUserRole)}
+                      className="w-full min-h-11 px-3 py-2 rounded-lg bg-obsidian-bg border border-obsidian-border text-white text-xs focus:outline-none focus:border-obsidian-accent"
+                    >
+                      {Object.entries(ROLE_LABELS).map(([role, label]) => (
+                        <option key={role} value={role}>{label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  {/* [Acción principal] Crear una cuenta con los permisos elegidos. */}
+                  <button
+                    type="submit"
+                    disabled={userMgmtLoading}
+                    className="ui-action-primary justify-self-end sm:col-span-2"
+                  >
+                    <UserPlus size={16} aria-hidden="true" />
+                    <span>Crear cuenta</span>
+                  </button>
+                </form>
+              )}
+
+              {createUserError && <p role="alert" className="text-xs text-rose-300">{createUserError}</p>}
+
+              {createdTempPassword && (
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-obsidian-border p-3 text-xs">
+                  <span className="text-obsidian-text break-words">
+                    Contraseña temporal generada (muéstrala una sola vez):{' '}
+                    <code className="font-mono text-white select-all break-all">{createdTempPassword}</code>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={copyTempPassword}
+                    className="ui-action-secondary"
+                  >
+                    {copiedTempPwd ? <Check size={16} aria-hidden="true" /> : <Copy size={16} aria-hidden="true" />}
+                    <span>{copiedTempPwd ? 'Copiada' : 'Copiar'}</span>
+                  </button>
+                </div>
+              )}
+
+              {usersError ? (
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-obsidian-border p-3 text-xs text-obsidian-text">
+                  <span>{usersError}</span>
+                  <button
+                    type="button"
+                    onClick={() => loadUsersIfOwner(currentUser)}
+                    className="ui-action-secondary"
+                  >
+                    <RefreshCw size={16} aria-hidden="true" />
+                    <span>Reintentar</span>
+                  </button>
+                </div>
+              ) : usersLoading && usersList.length === 0 ? (
+                <div className="text-xs text-obsidian-muted py-2" role="status">
+                  Cargando operadores...
+                </div>
+              ) : usersList.length === 0 ? (
+                <div className="py-3 text-xs text-obsidian-muted text-center">
+                  No hay operadores adicionales registrados todavía.
+                </div>
+              ) : filteredUsers.length === 0 ? (
+                <div className="py-3 text-xs text-obsidian-muted text-center space-y-2">
+                  <div>Sin operadores que coincidan con "{userSearch}".</div>
+                  <button
+                    type="button"
+                    onClick={() => setUserSearch('')}
+                    className="ui-action-secondary"
+                  >
+                    Limpiar búsqueda
+                  </button>
+                </div>
+              ) : (
+                <div className="divide-y divide-obsidian-border/70 text-xs">
+                  {filteredUsers.map((u) => {
+                    const isSelf = u.id === currentUser.id;
+                    return (
+                      <div key={u.id} className="flex flex-wrap items-center justify-between gap-2 py-3">
+                        <div className="min-w-0">
+                          <span className="font-semibold text-white">{u.full_name}</span>{' '}
+                          <span className="text-obsidian-muted font-mono">@{u.username}</span>{' '}
+                          <span className="text-obsidian-muted break-all">({u.email})</span>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          {isSelf ? <span className="text-obsidian-muted">Tu cuenta</span> : <>
+                            <select
+                              value={u.role}
+                              aria-label={`Rol de ${u.username}`}
+                              disabled={userMgmtLoading}
+                              onChange={(e) => handleUpdateUser(u.id, { role: e.target.value as CoreUserRole })}
+                              className="min-h-[44px] px-3 py-2 rounded bg-obsidian-bg border border-obsidian-border text-white text-[11px] disabled:opacity-50"
+                            >
+                              {Object.entries(ROLE_LABELS).map(([role, label]) => (
+                                <option key={role} value={role}>{label}</option>
+                              ))}
+                            </select>
+                            {/* [Estado seleccionable] Cambia si la cuenta puede iniciar sesión. */}
+                            <button
+                              type="button"
+                              disabled={userMgmtLoading}
+                              onClick={() => handleUpdateUser(u.id, { is_active: !u.is_active })}
+                              aria-pressed={u.is_active}
+                              aria-label={`${u.is_active ? 'Desactivar' : 'Activar'} la cuenta de ${u.username}`}
+                              className="ui-action-toggle"
+                            >
+                              {u.is_active ? 'Activo' : 'Inactivo'}
+                            </button>
+                            {u.is_login_locked && <button
+                              type="button"
+                              disabled={userMgmtLoading}
+                              onClick={() => handleUpdateUser(u.id, { unlock: true })}
+                              className="ui-action-secondary"
+                              title="Restablecer el bloqueo por intentos fallidos"
+                            >
+                              <Unlock size={16} aria-hidden="true" />
+                              <span>Restablecer bloqueo</span>
+                            </button>}
+                          </>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+          <h4 className="text-sm font-semibold text-white">Mi cuenta y seguridad</h4>
           <div className="flex flex-wrap items-center justify-between gap-2 text-xs pb-3 border-b border-obsidian-border/70">
             <div className="space-y-0.5 min-w-0">
               <div className="font-semibold text-white break-words">
@@ -694,7 +896,7 @@ export const OperatorAuthSection: React.FC = () => {
             </div>
           )}
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2">
             {/* Password Change */}
             <form onSubmit={handleChangePassword} className="space-y-3">
               <div className="flex items-center gap-2 text-xs font-semibold text-white">
@@ -742,7 +944,7 @@ export const OperatorAuthSection: React.FC = () => {
                   className="w-full min-h-[44px] px-3 py-2 rounded-xl bg-obsidian-bg border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-obsidian-accent"
                 />
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 {currentUser.is_totp_enabled && (
                   <>
                     <label htmlFor="op-pwd-totp" className="sr-only">
@@ -763,10 +965,10 @@ export const OperatorAuthSection: React.FC = () => {
                 {/* [Acción principal] Aplicar el cambio de contraseña. */}
                 <button
                   type="submit"
-                  disabled={pwdLoading}
+                  disabled={pwdLoading || !currentPwd || !newPwd || (currentUser.is_totp_enabled && !pwdTotp)}
                   className="ui-action-primary"
                 >
-                  {pwdLoading ? 'Actualizando...' : 'Actualizar contraseña'}
+                  {pwdLoading ? 'Cambiando…' : 'Cambiar contraseña'}
                 </button>
               </div>
             </form>
@@ -839,217 +1041,17 @@ export const OperatorAuthSection: React.FC = () => {
             </div>
           </div>
 
-          {/* Owner User Management */}
-          {currentUser.role === 'owner' && (
-            <div className="pt-3 border-t border-obsidian-border space-y-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-center gap-2 text-xs font-semibold text-white">
-                  <Users size={16} className="text-obsidian-muted" aria-hidden="true" />
-                  <span>Cuentas del equipo ({usersList.length})</span>
-                </div>
-                {usersList.length > 0 && (
-                  <div className="relative w-full sm:w-56">
-                    <Search size={16} className="absolute left-2.5 top-2 text-obsidian-muted" aria-hidden="true" />
-                    <input
-                      id="op-user-search"
-                      type="text"
-                      value={userSearch}
-                      onChange={(e) => setUserSearch(e.target.value)}
-                      maxLength={INPUT_LIMITS.SEARCH}
-                      aria-label="Buscar cuenta por nombre, usuario o correo"
-                      placeholder="Buscar cuentas..."
-                      className="w-full min-h-11 pl-8 pr-12 rounded-lg bg-obsidian-bg border border-obsidian-border text-white text-xs focus:outline-none focus:border-obsidian-accent"
-                    />
-                    {userSearch && (
-                      <button
-                        type="button"
-                        onClick={() => setUserSearch('')}
-                        aria-label="Limpiar búsqueda de cuentas"
-                        className="ui-action-icon absolute right-1 top-1/2 -translate-y-1/2"
-                      >
-                        <X size={16} aria-hidden="true" />
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {currentUser.must_change_password && (
-                <p role="status" className="text-xs text-amber-200">
-                  Cambia primero la contraseña temporal para administrar cuentas del equipo.
-                </p>
-              )}
-
-              <fieldset disabled={currentUser.must_change_password} className="min-w-0 border-0 p-0 m-0 disabled:opacity-50">
-                <form onSubmit={handleCreateUser} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2">
-                <div>
-                  <label htmlFor="op-new-username" className="sr-only">Nombre de usuario</label>
-                  <input
-                    id="op-new-username"
-                    required
-                    minLength={3}
-                    type="text"
-                    value={newUsername}
-                    onChange={(e) => setNewUsername(e.target.value)}
-                    placeholder="usuario"
-                    maxLength={64}
-                    className="w-full min-h-11 px-3 py-2 rounded-lg bg-obsidian-bg border border-obsidian-border text-white text-xs font-mono focus:outline-none focus:border-obsidian-accent"
-                  />
-                </div>
-                <div>
-                  <label htmlFor="op-new-email" className="sr-only">Correo electrónico</label>
-                  <input
-                    id="op-new-email"
-                    required
-                    type="email"
-                    value={newEmail}
-                    onChange={(e) => setNewEmail(e.target.value)}
-                    placeholder="correo@empresa.com"
-                    maxLength={INPUT_LIMITS.EMAIL}
-                    className="w-full min-h-11 px-3 py-2 rounded-lg bg-obsidian-bg border border-obsidian-border text-white text-xs focus:outline-none focus:border-obsidian-accent"
-                  />
-                </div>
-                <div>
-                  <label htmlFor="op-new-fullname" className="sr-only">Nombre completo</label>
-                  <input
-                    id="op-new-fullname"
-                    required
-                    minLength={2}
-                    type="text"
-                    value={newFullName}
-                    onChange={(e) => setNewFullName(e.target.value)}
-                    placeholder="Nombre completo"
-                    maxLength={128}
-                    className="w-full min-h-11 px-3 py-2 rounded-lg bg-obsidian-bg border border-obsidian-border text-white text-xs focus:outline-none focus:border-obsidian-accent"
-                  />
-                </div>
-                <div>
-                  <label htmlFor="op-new-role" className="sr-only">Permisos de la cuenta</label>
-                  <select
-                    id="op-new-role"
-                    value={newRole}
-                    onChange={(e) => setNewRole(e.target.value as CoreUserRole)}
-                    className="w-full min-h-11 px-3 py-2 rounded-lg bg-obsidian-bg border border-obsidian-border text-white text-xs focus:outline-none focus:border-obsidian-accent"
-                  >
-                    {Object.entries(ROLE_LABELS).map(([role, label]) => (
-                      <option key={role} value={role}>{label}</option>
-                    ))}
-                  </select>
-                </div>
-                {/* [Acción principal] Crear una cuenta con los permisos elegidos. */}
-                <button
-                  type="submit"
-                  disabled={userMgmtLoading}
-                  className="ui-action-primary sm:col-span-2 lg:col-span-1"
-                >
-                  <UserPlus size={16} aria-hidden="true" />
-                  <span>Crear cuenta</span>
-                </button>
-                </form>
-              </fieldset>
-
-              {createUserError && <p role="alert" className="text-xs text-rose-300">{createUserError}</p>}
-
-              {createdTempPassword && (
-                <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-obsidian-border p-3 text-xs">
-                  <span className="text-obsidian-text break-words">
-                    Contraseña temporal generada (muéstrala una sola vez):{' '}
-                    <code className="font-mono text-white select-all break-all">{createdTempPassword}</code>
-                  </span>
-                  <button
-                    type="button"
-                    onClick={copyTempPassword}
-                    className="ui-action-secondary"
-                  >
-                    {copiedTempPwd ? <Check size={16} aria-hidden="true" /> : <Copy size={16} aria-hidden="true" />}
-                    <span>{copiedTempPwd ? 'Copiada' : 'Copiar'}</span>
-                  </button>
-                </div>
-              )}
-
-              {usersError ? (
-                <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-obsidian-border p-3 text-xs text-obsidian-text">
-                  <span>{usersError}</span>
-                  <button
-                    type="button"
-                    onClick={() => loadUsersIfOwner(currentUser)}
-                    className="ui-action-secondary"
-                  >
-                    <RefreshCw size={16} aria-hidden="true" />
-                    <span>Reintentar</span>
-                  </button>
-                </div>
-              ) : usersLoading && usersList.length === 0 ? (
-                <div className="text-xs text-obsidian-muted py-2" role="status">
-                  Cargando operadores...
-                </div>
-              ) : usersList.length === 0 ? (
-                <div className="py-3 text-xs text-obsidian-muted text-center">
-                  No hay operadores adicionales registrados todavía.
-                </div>
-              ) : filteredUsers.length === 0 ? (
-                <div className="py-3 text-xs text-obsidian-muted text-center space-y-2">
-                  <div>Sin operadores que coincidan con "{userSearch}".</div>
-                  <button
-                    type="button"
-                    onClick={() => setUserSearch('')}
-                    className="ui-action-secondary"
-                  >
-                    Limpiar búsqueda
-                  </button>
-                </div>
-              ) : (
-                <div className="divide-y divide-obsidian-border/70 text-xs">
-                  {filteredUsers.map((u) => {
-                    const isSelf = u.id === currentUser.id;
-                    return (
-                      <div key={u.id} className="flex flex-wrap items-center justify-between gap-2 py-3">
-                        <div className="min-w-0">
-                          <span className="font-semibold text-white">{u.full_name}</span>{' '}
-                          <span className="text-obsidian-muted font-mono">@{u.username}</span>{' '}
-                          <span className="text-obsidian-muted break-all">({u.email})</span>
-                        </div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <select
-                            value={u.role}
-                            aria-label={`Rol de ${u.username}`}
-                            disabled={isSelf || userMgmtLoading}
-                            onChange={(e) => handleUpdateUser(u.id, { role: e.target.value as CoreUserRole })}
-                            className="min-h-[44px] px-3 py-2 rounded bg-obsidian-bg border border-obsidian-border text-white text-[11px] disabled:opacity-50"
-                          >
-                            {Object.entries(ROLE_LABELS).map(([role, label]) => (
-                              <option key={role} value={role}>{label}</option>
-                            ))}
-                          </select>
-                          {/* [Estado seleccionable] Cambia si la cuenta puede iniciar sesión. */}
-                          <button
-                            type="button"
-                            disabled={isSelf || userMgmtLoading}
-                            onClick={() => handleUpdateUser(u.id, { is_active: !u.is_active })}
-                            aria-pressed={u.is_active}
-                            aria-label={`${u.is_active ? 'Desactivar' : 'Activar'} la cuenta de ${u.username}`}
-                            className="ui-action-toggle"
-                          >
-                            {u.is_active ? 'Activo' : 'Inactivo'}
-                          </button>
-                          <button
-                            type="button"
-                            disabled={userMgmtLoading}
-                            onClick={() => handleUpdateUser(u.id, { unlock: true })}
-                            className="ui-action-secondary"
-                            title="Desbloquear intentos fallidos"
-                          >
-                            <Unlock size={16} aria-hidden="true" />
-                            <span>Desbloquear</span>
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
+          <div className="flex justify-end border-t border-obsidian-border pt-3">
+            {/* [Acción secundaria] Cerrar la sesión del operador actual. */}
+            <button
+              type="button"
+              onClick={handleOperatorLogout}
+              className="ui-action-secondary"
+            >
+              <LogOut size={16} aria-hidden="true" />
+              <span>Cerrar sesión</span>
+            </button>
+          </div>
         </div>
       )}
     </div>

@@ -34,6 +34,10 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, onupdate=utc_now)
 
+    @property
+    def is_login_locked(self) -> bool:
+        return self.locked_until is not None and self.locked_until > utc_now()
+
     sessions: Mapped[list["DbSession"]] = relationship("DbSession", back_populates="user", cascade="all, delete-orphan")
 
 

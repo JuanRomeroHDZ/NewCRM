@@ -105,6 +105,7 @@ const typstTheme = EditorView.theme({
   '&': { height: '100%', minHeight: '100%', backgroundColor: '#080A0A', color: '#FFFFFF' },
   '.cm-scroller': {
     overflow: 'auto',
+    overscrollBehavior: 'contain',
     fontFamily: '"JetBrains Mono", Menlo, Consolas, monospace',
     lineHeight: '1.6',
   },
@@ -289,5 +290,5 @@ export const TypstCodeEditor = forwardRef<TypstCodeEditorHandle, TypstCodeEditor
     view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: value } });
   }, [value]);
 
-  return <div ref={hostRef} className="h-full min-h-[240px] min-w-0 overflow-hidden bg-obsidian-bg" />;
+  return <div ref={hostRef} className="min-h-0 min-w-0 flex-1 overflow-hidden bg-obsidian-bg" />;
 });

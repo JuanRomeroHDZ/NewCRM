@@ -37,6 +37,7 @@ frontend/dist/
 frontend/public/excalidraw-assets/
 backend/bin/
 /.tools/k6/
+/.tools/security/
 .npm
 .eslintcache
 

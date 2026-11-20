@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useLayoutEffect, useRef } from 'react';
 import {
   Settings, Lock, Key, Shield, Download, Upload, Save,
   Palette, Clock, Target
@@ -10,17 +10,7 @@ import { INPUT_LIMITS } from '../../lib/validation';
 import { OperatorAuthSection } from '../settings/OperatorAuthSection';
 import { RuntimeConfigSection } from '../settings/RuntimeConfigSection';
 
-const sectionTargets: Partial<Record<SectionType, string>> = {
-  settings_appearance: 'settings-appearance',
-  settings_session: 'settings-session',
-  settings_limits: 'settings-limits',
-  settings_access: 'settings-access',
-  settings_network: 'settings-network',
-  settings_writeups: 'settings-writeups',
-  settings_tools: 'settings-tools',
-  settings_backup: 'settings-backup',
-  settings_team: 'settings-team',
-};
+const preferenceSections = ['settings', 'settings_appearance', 'settings_session', 'settings_limits', 'settings_access'] as const satisfies readonly SectionType[];
 
 export const SettingsView: React.FC = () => {
   const {
@@ -52,30 +42,15 @@ export const SettingsView: React.FC = () => {
   const [vaultSettingsError, setVaultSettingsError] = useState<string | null>(null);
   const vaultSettingsGeneration = useRef(0);
 
-  useEffect(() => {
-    const targetId = sectionTargets[activeSection];
-    if (!targetId || !isUnlocked) return;
-    const navigate = () => {
-      const target = document.getElementById(targetId);
-      if (!target) return false;
-      target.scrollIntoView({ behavior: 'instant', block: 'start' });
-      target.focus({ preventScroll: true });
-      return true;
-    };
-    if (navigate()) return;
-    // Report settings arrive asynchronously. Stop waiting if the user starts scrolling.
-    const main = document.getElementById('settings-appearance')?.closest('main');
-    if (!main) return;
-    const observer = new MutationObserver(() => {
-      if (navigate()) observer.disconnect();
-    });
-    const cancel = () => observer.disconnect();
-    observer.observe(main, { childList: true, subtree: true });
-    main.addEventListener('scroll', cancel, { passive: true, once: true });
-    return () => {
-      cancel();
-      main.removeEventListener('scroll', cancel);
-    };
+  const workspaceRef = useRef<HTMLDivElement>(null);
+  const showPreferences = preferenceSections.some((section) => section === activeSection);
+  const showAppearance = activeSection === 'settings' || activeSection === 'settings_appearance';
+  const showSession = activeSection === 'settings' || activeSection === 'settings_session';
+  const showLimits = activeSection === 'settings' || activeSection === 'settings_limits';
+  const showAccess = activeSection === 'settings_access';
+
+  useLayoutEffect(() => {
+    workspaceRef.current?.closest('main')?.scrollTo({ top: 0, left: 0, behavior: 'instant' });
   }, [activeSection, isUnlocked]);
 
   useEffect(() => {
@@ -160,25 +135,29 @@ export const SettingsView: React.FC = () => {
     setIsSaving(true);
     try {
       const capNum = budgetCapAmount.trim() === '' ? 0 : Number(budgetCapAmount);
-      if (!Number.isFinite(capNum) || capNum < 0 || capNum > INPUT_LIMITS.BUDGET_CAP) {
+      if (showLimits && (!Number.isFinite(capNum) || capNum < 0 || capNum > INPUT_LIMITS.BUDGET_CAP)) {
         showToast(`Ingresa un presupuesto entre 0 y ${INPUT_LIMITS.BUDGET_CAP.toLocaleString(locale)}.`, 'error');
         return;
       }
-      const payload: any = {
-        vault_timeout_minutes: localTimeout,
-        clipboard_clear_seconds: localClipboard,
-        allow_reveal_passwords: localReveal,
-        search_hotkey: localHotkey,
-        accent_color: localAccent,
-        canvas_style: 'plain',
-        password_rotation_days_root: rotationRootDays,
-        password_rotation_days_secondary: rotationSecondaryDays,
-        max_followup_attempts: maxFollowupAttempts,
-        budget_cap_amount: capNum,
-        budget_cap_currency: budgetCapCurrency,
+      const payload = {
+        ...(showAppearance && { accent_color: localAccent, canvas_style: 'plain' }),
+        ...(showSession && {
+          vault_timeout_minutes: localTimeout,
+          clipboard_clear_seconds: localClipboard,
+          allow_reveal_passwords: localReveal,
+          search_hotkey: localHotkey,
+        }),
+        ...(showLimits && {
+          password_rotation_days_root: rotationRootDays,
+          password_rotation_days_secondary: rotationSecondaryDays,
+          max_followup_attempts: maxFollowupAttempts,
+          budget_cap_amount: capNum,
+          budget_cap_currency: budgetCapCurrency,
+        }),
+        ...(showAccess && { new_master_password: newMasterPassword, current_master_password: currentMasterPassword }),
       };
 
-      if (newMasterPassword) {
+      if (showAccess) {
         if (newMasterPassword.length < 8) {
           showToast('La nueva contraseña debe tener al menos 8 caracteres.', 'error');
           return;
@@ -191,19 +170,21 @@ export const SettingsView: React.FC = () => {
           showToast('Las contraseñas de acceso no coinciden.', 'error');
           return;
         }
-        payload.new_master_password = newMasterPassword;
-        payload.current_master_password = currentMasterPassword;
       }
 
       await api.updateSettings(payload);
-      setAccentColor(localAccent);
-      setCanvasStyle('plain');
+      if (showAppearance) {
+        setAccentColor(localAccent);
+        setCanvasStyle('plain');
+      }
       await refreshVaultStatus();
       triggerDataReload();
-      setNewMasterPassword('');
-      setConfirmMasterPassword('');
-      setCurrentMasterPassword('');
-      showToast('Ajustes de seguridad, presupuesto y preferencias guardados.', 'success');
+      if (showAccess) {
+        setNewMasterPassword('');
+        setConfirmMasterPassword('');
+        setCurrentMasterPassword('');
+      }
+      showToast(showAccess ? 'Contraseña de la bóveda actualizada.' : 'Ajustes guardados.', 'success');
     } catch (err: any) {
       showToast(err?.message || 'Error al guardar ajustes.', 'error');
     } finally {
@@ -234,24 +215,24 @@ export const SettingsView: React.FC = () => {
   const currencySelectOptions = ['MXN', 'USD'];
 
   return (
-    <div className="mx-auto max-w-4xl min-w-0 space-y-4 p-3 sm:space-y-4 sm:p-4 animate-fadeIn">
-      <div className="flex items-center gap-2 min-w-0">
+    <div ref={workspaceRef} className="mx-auto max-w-4xl min-w-0 space-y-4 p-3 sm:p-4">
+      {activeSection === 'settings' && <div className="flex items-center gap-2 min-w-0">
         <Settings className="text-obsidian-muted flex-shrink-0" size={18} aria-hidden="true" />
         <h2 className="text-base font-bold text-white tracking-tight">
           Preferencias
         </h2>
         <InfoTooltip
           title="Preferencias"
-          content="Apariencia, acceso, seguridad, presupuesto y mapa."
+          content="Apariencia, sesión, recordatorios y límites."
         />
-      </div>
+      </div>}
 
-      {vaultSettingsLoading && (
+      {showPreferences && vaultSettingsLoading && (
         <p role="status" className="rounded-lg border border-obsidian-border bg-obsidian-panel px-3 py-2 text-xs text-obsidian-muted">
           Cargando tus ajustes…
         </p>
       )}
-      {vaultSettingsError && (
+      {showPreferences && vaultSettingsError && (
         <div role="alert" className="flex flex-wrap items-center justify-between gap-2 py-2 text-xs text-rose-200">
           <span>No se cargaron tus ajustes. Para evitar reemplazarlos con valores iniciales, vuelve a intentarlo antes de guardar.</span>
           <button type="button" onClick={() => void loadVaultSettings()} className="ui-action-secondary shrink-0">
@@ -260,9 +241,9 @@ export const SettingsView: React.FC = () => {
         </div>
       )}
 
-      <form onSubmit={handleSavePreferences} className="space-y-4 sm:space-y-4">
+      {showPreferences && <form onSubmit={handleSavePreferences} className="space-y-4 sm:space-y-4">
         {/* Visual Customization (Notion & Obsidian aesthetics) */}
-        <section id="settings-appearance" tabIndex={-1} className="min-w-0 scroll-mt-4 space-y-3 border-b border-obsidian-border pb-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent">
+        {showAppearance && <section id="settings-appearance" tabIndex={-1} className="min-w-0 scroll-mt-4 space-y-3 border-b border-obsidian-border pb-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent">
           <h3 className="text-sm font-bold text-white flex items-center gap-2">
             <Palette size={16} className="text-obsidian-muted" aria-hidden="true" />
             <span>Apariencia</span>
@@ -297,10 +278,10 @@ export const SettingsView: React.FC = () => {
               <span className="font-mono text-xs text-obsidian-muted">{localAccent.toUpperCase()}</span>
             </div>
           </div>
-        </section>
+        </section>}
 
         {/* Security Parameters */}
-        <div id="settings-session" tabIndex={-1} className="min-w-0 scroll-mt-4 space-y-4 rounded-xl border border-obsidian-border bg-obsidian-panel p-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent sm:p-4">
+        {showSession && <div id="settings-session" tabIndex={-1} className="min-w-0 scroll-mt-4 space-y-4 rounded-xl border border-obsidian-border bg-obsidian-panel p-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent sm:p-4">
           <div className="flex items-center gap-2">
             <Shield size={16} className="text-obsidian-muted" aria-hidden="true" />
             <h3 className="text-sm font-bold text-white">Sesión y Portapapeles</h3>
@@ -385,10 +366,10 @@ export const SettingsView: React.FC = () => {
               </div>
             </div>
           </div>
-        </div>
+        </div>}
 
         {/* Reglas de Rotación, Papelera Híbrida, Presupuesto y Seguimiento */}
-        <div id="settings-limits" tabIndex={-1} className="min-w-0 scroll-mt-4 space-y-5 rounded-xl border border-obsidian-border bg-obsidian-panel p-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent sm:p-6">
+        {showLimits && <div id="settings-limits" tabIndex={-1} className="min-w-0 scroll-mt-4 space-y-5 rounded-xl border border-obsidian-border bg-obsidian-panel p-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent sm:p-6">
           <div className="flex items-center gap-2">
             <Clock size={16} className="text-obsidian-muted" aria-hidden="true" />
             <h3 className="text-sm font-bold text-white">
@@ -488,10 +469,10 @@ export const SettingsView: React.FC = () => {
               </div>
             </div>
           </div>
-        </div>
+        </div>}
 
         {/* Change Master Password */}
-        <div id="settings-access" tabIndex={-1} className="min-w-0 scroll-mt-4 space-y-4 rounded-xl border border-obsidian-border bg-obsidian-panel p-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent sm:p-6">
+        {showAccess && <div id="settings-access" tabIndex={-1} className="min-w-0 scroll-mt-4 space-y-4 rounded-xl border border-obsidian-border bg-obsidian-panel p-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent sm:p-6">
           <div className="flex items-center gap-2">
             <Key size={16} className="text-obsidian-muted" aria-hidden="true" />
             <h3 className="text-sm font-bold text-white">Cambiar contraseña de acceso</h3>
@@ -551,23 +532,23 @@ export const SettingsView: React.FC = () => {
               />
             </div>
           </div>
-        </div>
+        </div>}
 
         {/* [Acción principal] Guardar los cambios de las preferencias. */}
         <div className="flex justify-end">
           <button
             type="submit"
-            disabled={isSaving || vaultSettingsLoading || Boolean(vaultSettingsError)}
+            disabled={isSaving || vaultSettingsLoading || Boolean(vaultSettingsError) || (showAccess && !newMasterPassword)}
             className="ui-action-primary"
           >
             <Save size={16} aria-hidden="true" />
-            <span>{isSaving ? 'Guardando...' : 'Guardar cambios'}</span>
+            <span>{isSaving ? 'Guardando…' : showAccess ? 'Cambiar contraseña' : 'Guardar cambios'}</span>
           </button>
         </div>
-      </form>
+      </form>}
 
-      <section id="settings-network" tabIndex={-1} className="scroll-mt-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent">
-        <RuntimeConfigSection />
+      {(activeSection === 'settings_network' || activeSection === 'settings_writeups') && <RuntimeConfigSection section={activeSection === 'settings_network' ? 'network' : 'reports'} />}
+      {activeSection === 'settings_network' && <section id="settings-network" tabIndex={-1} className="scroll-mt-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent">
         <div className="mt-4 space-y-2 border-t border-obsidian-border pt-4">
           <h3 className="text-sm font-semibold text-obsidian-text">Certificado HTTPS</h3>
           <p className="max-w-prose text-sm text-obsidian-muted">
@@ -575,9 +556,9 @@ export const SettingsView: React.FC = () => {
             Ahí puedes consultar el vencimiento y renovar el certificado del servidor usando la misma autoridad local.
           </p>
         </div>
-      </section>
+      </section>}
 
-      <section id="settings-tools" tabIndex={-1} aria-labelledby="settings-tools-heading" className="scroll-mt-4 rounded-xl border border-obsidian-border bg-obsidian-panel p-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent">
+      {activeSection === 'settings_tools' && <section id="settings-tools" tabIndex={-1} aria-labelledby="settings-tools-heading" className="scroll-mt-4 rounded-xl border border-obsidian-border bg-obsidian-panel p-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent">
         <h3 id="settings-tools-heading" className="text-sm font-bold text-white">Herramientas</h3>
         {/* [Acción secundaria] Abrir las herramientas sin cambiar datos directamente. */}
         <div className="mt-3 flex flex-wrap gap-2">
@@ -585,10 +566,10 @@ export const SettingsView: React.FC = () => {
           <button type="button" onClick={openEmergencyKit} className="ui-action-secondary">Hoja de recuperación</button>
           <button type="button" onClick={openPasswordGen} className="ui-action-secondary">Generar contraseña</button>
         </div>
-      </section>
+      </section>}
 
       {/* Backup & Import/Export Section */}
-      <div id="settings-backup" tabIndex={-1} className="scroll-mt-4 divide-y divide-obsidian-border border-y border-obsidian-border focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent">
+      {activeSection === 'settings_backup' && <div id="settings-backup" tabIndex={-1} className="scroll-mt-4 divide-y divide-obsidian-border border-y border-obsidian-border focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent">
         {/* Import */}
         <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 py-4">
           <div className="flex min-w-0 items-center gap-2">
@@ -622,11 +603,11 @@ export const SettingsView: React.FC = () => {
             <span>Descargar respaldo</span>
           </button>
         </div>
-      </div>
+      </div>}
 
-      <section id="settings-team" tabIndex={-1} className="scroll-mt-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent">
+      {activeSection === 'settings_team' && <section id="settings-team" tabIndex={-1} className="scroll-mt-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent">
         <OperatorAuthSection />
-      </section>
+      </section>}
     </div>
   );
 };

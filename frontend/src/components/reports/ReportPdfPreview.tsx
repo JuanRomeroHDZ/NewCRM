@@ -10,13 +10,16 @@ type Destination = string | unknown[];
 type OutlineItem = NonNullable<Awaited<ReturnType<PDFDocumentProxy['getOutline']>>>[number];
 type PageLink = { destination?: Destination; url?: string; rect: [number, number, number, number] };
 type Layout = 'single' | 'spread' | 'grid' | 'continuous';
+type PageJump = { number: number; offset: number; direction?: -1 | 1 };
 const PAGES_PER_LAYOUT = { single: 1, spread: 2, grid: 4, continuous: 1 } as const;
 
-const PdfPage = memo(function PdfPage({ pdf, number, eager, zoom, navigate }: {
+const PdfPage = memo(function PdfPage({ pdf, number, eager, zoom, navigate, turn }: {
   pdf: PDFDocumentProxy; number: number; eager: boolean; zoom: number; navigate: (destination: Destination) => void;
+  turn?: PageJump;
 }) {
   const frame = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
+  const animatedTurn = useRef<PageJump | undefined>(undefined);
   const [nearby, setNearby] = useState(eager);
   const [size, setSize] = useState([595, 842]);
   const [ready, setReady] = useState(false);
@@ -81,6 +84,26 @@ const PdfPage = memo(function PdfPage({ pdf, number, eager, zoom, navigate }: {
     };
   }, [eager, nearby, number, pdf, zoom]);
 
+  useLayoutEffect(() => {
+    if (!ready || !turn?.direction || !frame.current || animatedTurn.current === turn) return;
+    animatedTurn.current = turn;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const direction = turn.direction;
+    const animation = frame.current.animate([
+      {
+        transformOrigin: direction > 0 ? 'left center' : 'right center',
+        transform: `perspective(1400px) translateX(${direction * 6}px) rotateY(${direction * -6}deg)`,
+        opacity: 0.85,
+      },
+      {
+        transformOrigin: direction > 0 ? 'left center' : 'right center',
+        transform: 'none',
+        opacity: 1,
+      },
+    ], { duration: 180, easing: 'cubic-bezier(0.23, 1, 0.32, 1)' });
+    return () => animation.cancel();
+  }, [ready, turn]);
+
   return (
     <div ref={frame} data-pdf-page={number} className="relative mx-auto w-full bg-white"
       style={{ aspectRatio: `${size[0]} / ${size[1]}`, maxWidth: 820 * zoom / 100 }}>
@@ -127,7 +150,7 @@ export default function ReportPdfPreview({ blob, toolbar, controls, scrollArea }
   const [zoom, setZoom] = useState(100);
   const position = useRef(0);
   const jumpScrollTop = useRef<number | null>(null);
-  const [jump, setJump] = useState<{ number: number; offset: number } | null>(null);
+  const [jump, setJump] = useState<PageJump | null>(null);
   const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null);
   const [outline, setOutline] = useState<OutlineItem[]>([]);
   const [layout, setLayout] = useState<Layout>('single');
@@ -217,11 +240,11 @@ export default function ReportPdfPreview({ blob, toolbar, controls, scrollArea }
     };
   }, [layout, pdf, scrollArea]);
 
-  const move = useCallback((number: number, offset = 0) => {
+  const move = useCallback((number: number, offset = 0, direction?: PageJump['direction']) => {
     position.current += 1;
     setNavigationError(false);
     setPage(number);
-    setJump({ number, offset });
+    setJump({ number, offset, direction });
   }, []);
 
   const navigate = useCallback((destination: Destination) => {
@@ -254,6 +277,7 @@ export default function ReportPdfPreview({ blob, toolbar, controls, scrollArea }
   if (error) return <p role="alert" className="text-sm text-obsidian-errorText">No se pudo mostrar este PDF.</p>;
   if (!pdf) return <p role="status" className="text-sm text-obsidian-muted">Cargando PDF…</p>;
   const step = PAGES_PER_LAYOUT[layout];
+  const turnPages = layout === 'single' || layout === 'spread';
   const start = page - ((page - 1) % step);
   const shown = Math.min(step, count - start + 1);
   const numbers = layout === 'continuous' ? Array.from({ length: count }, (_, i) => i + 1)
@@ -284,12 +308,12 @@ export default function ReportPdfPreview({ blob, toolbar, controls, scrollArea }
         <div className="flex flex-wrap items-center gap-2 border-b border-obsidian-border px-3 py-1.5">
           <div className="flex flex-wrap items-center gap-1" role="group" aria-label="Páginas del PDF">
             <button type="button" className="ui-action-icon" disabled={start <= 1}
-              onClick={() => move(Math.max(1, start - step))} aria-label="Página anterior"><ChevronLeft className="size-4" aria-hidden="true" /></button>
+              onClick={(event) => move(Math.max(1, start - step), 0, turnPages && event.detail > 0 ? -1 : undefined)} aria-label="Página anterior"><ChevronLeft className="size-4" aria-hidden="true" /></button>
             <span className="text-xs tabular-nums text-obsidian-muted" role="status">
               {`Página ${start}${shown > 1 ? `–${start + shown - 1}` : ''} de ${count}`}
             </span>
             <button type="button" className="ui-action-icon" disabled={start + step > count}
-              onClick={() => move(start + step)} aria-label="Página siguiente"><ChevronRight className="size-4" aria-hidden="true" /></button>
+              onClick={(event) => move(start + step, 0, turnPages && event.detail > 0 ? 1 : undefined)} aria-label="Página siguiente"><ChevronRight className="size-4" aria-hidden="true" /></button>
           </div>
           <div className="ms-auto flex flex-wrap items-center gap-1" role="group" aria-label="Zoom del PDF">
             <button type="button" className="ui-action-icon" disabled={zoom <= 50}
@@ -308,7 +332,7 @@ export default function ReportPdfPreview({ blob, toolbar, controls, scrollArea }
       {navigationError && <p role="status" className="text-xs text-obsidian-muted">Este enlace no apunta a una página disponible.</p>}
       <div className="report-pdf-layout">
         <div ref={pages} className={step > 1 ? 'report-pdf-spread grid grid-cols-1 items-start gap-3' : 'space-y-4'} style={{ width: `${zoom}%`, marginInline: zoom <= 100 ? 'auto' : undefined }}>
-          {numbers.map((number) => <PdfPage key={number} pdf={pdf} number={number} eager={layout !== 'continuous'} zoom={zoom} navigate={navigate} />)}
+          {numbers.map((number) => <PdfPage key={number} pdf={pdf} number={number} eager={layout !== 'continuous'} zoom={zoom} navigate={navigate} turn={turnPages ? jump ?? undefined : undefined} />)}
         </div>
       </div>
     </div>
