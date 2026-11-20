@@ -182,8 +182,10 @@ jobs:
           python -m app.migrate
           python - <<'PY'
           import asyncio
+          from alembic.script import ScriptDirectory
           from sqlalchemy import text
           from app.database import engine
+          from app.migrate import _alembic_config
 
           async def verify():
               async with engine.connect() as connection:
@@ -194,7 +196,7 @@ jobs:
                   revision = await connection.execute(text("SELECT version_num FROM alembic_version"))
                   assert note.scalar_one().startswith("enc:v1:")
                   assert marker.scalar_one() == "legacy_plaintext_notes_v1"
-                  assert revision.scalar_one() == "20261118_0005"
+                  assert revision.scalar_one() == ScriptDirectory.from_config(_alembic_config()).get_current_head()
               await engine.dispose()
 
           asyncio.run(verify())
@@ -214,21 +216,23 @@ jobs:
           try:
               command.downgrade(_alembic_config(), "base")
           except RuntimeError as exc:
-              assert "irreversible" in str(exc).lower()
+              assert "respaldo" in str(exc).lower() or "irreversible" in str(exc).lower()
           else:
               raise AssertionError("The adopted schema must refuse destructive downgrade.")
           PY
           python - <<'PY'
           import asyncio
+          from alembic.script import ScriptDirectory
           from sqlalchemy import text
           from app.database import engine
+          from app.migrate import _alembic_config
 
           async def verify():
               async with engine.connect() as connection:
                   email = await connection.execute(text("SELECT address FROM email_accounts WHERE id='legacy-record'"))
                   revision = await connection.execute(text("SELECT version_num FROM alembic_version"))
                   assert email.scalar_one() == "preserve@example.test"
-                  assert revision.scalar_one() == "20261118_0005"
+                  assert revision.scalar_one() == ScriptDirectory.from_config(_alembic_config()).get_current_head()
               await engine.dispose()
 
           asyncio.run(verify())
@@ -277,8 +281,10 @@ jobs:
           python -m app.migrate
           python - <<'PY'
           import asyncio
+          from alembic.script import ScriptDirectory
           from sqlalchemy import inspect, text
           from app.database import engine
+          from app.migrate import _alembic_config
 
           async def verify():
               async with engine.connect() as connection:
@@ -288,7 +294,7 @@ jobs:
                   """))
                   assert result.one() == ("Existing quote", "borrador", None, None)
                   revision = await connection.execute(text("SELECT version_num FROM alembic_version"))
-                  assert revision.scalar_one() == "20261118_0005"
+                  assert revision.scalar_one() == ScriptDirectory.from_config(_alembic_config()).get_current_head()
                   indexes = await connection.run_sync(lambda conn: inspect(conn).get_indexes("prospects"))
                   assert any(index["column_names"] == ["followup_due_date"] for index in indexes)
               await engine.dispose()

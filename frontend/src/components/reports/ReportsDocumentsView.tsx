@@ -157,6 +157,7 @@ export const ReportsDocumentsView: React.FC = () => {
   const [exportFormat, setExportFormat] = useState<'pdf' | 'html' | 'typ' | 'typst_zip'>('pdf');
   const [pdfControls, setPdfControls] = useState<HTMLDivElement | null>(null);
   const [previewToolbar, setPreviewToolbar] = useState<HTMLDivElement | null>(null);
+  const previewScrollArea = useRef<HTMLDivElement>(null);
   const [previewFormat, setPreviewFormat] = useState<'svg' | 'pdf' | 'html'>('svg');
   const [formatPreview, setFormatPreview] = useState<{ value: string | Blob; error: boolean } | null>(null);
   const exportOperation = useRef<number>(0);
@@ -1436,7 +1437,7 @@ export const ReportsDocumentsView: React.FC = () => {
 
               {paneMode !== 'edit' && (
                 <div className="flex min-w-0 flex-1 flex-col bg-obsidian-bg">
-                  <div ref={setPreviewToolbar} className="flex flex-wrap items-center gap-2 border-b border-obsidian-border px-3 py-1.5 text-xs text-obsidian-muted">
+                  <div ref={setPreviewToolbar} className="flex shrink-0 flex-wrap items-center gap-2 border-b border-obsidian-border px-3 py-1.5 text-xs text-obsidian-muted">
                     <span>
                       Vista previa
                     </span>
@@ -1449,7 +1450,8 @@ export const ReportsDocumentsView: React.FC = () => {
                   </div>
 
                   <div ref={setPdfControls} className="shrink-0 empty:hidden" />
-                  <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
+                  <div ref={previewScrollArea} role="region" aria-label="Contenido de la vista previa" tabIndex={0}
+                    className="min-h-0 flex-1 space-y-6 overflow-auto overscroll-contain p-4 focus-visible:-outline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-obsidian-accent sm:p-6">
                     {previewFormat !== 'svg' ? (
                       !formatPreview || formatPreview.error ? (
                         <p role={formatPreview?.error ? 'alert' : 'status'} className="text-sm text-obsidian-muted">
@@ -1458,7 +1460,7 @@ export const ReportsDocumentsView: React.FC = () => {
                       ) : formatPreview.value instanceof Blob ? (
                         <Suspense fallback={<p role="status" className="text-sm text-obsidian-muted">Cargando visor PDF…</p>}>
                           {previewToolbar && pdfControls && (
-                            <ReportPdfPreview blob={formatPreview.value} toolbar={previewToolbar} controls={pdfControls} />
+                            <ReportPdfPreview blob={formatPreview.value} toolbar={previewToolbar} controls={pdfControls} scrollArea={previewScrollArea} />
                           )}
                         </Suspense>
                       ) : (

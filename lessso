@@ -9,22 +9,39 @@ if (( EUID == 0 )); then
 fi
 
 RUNTIME_FILE=.env.runtime
+. ./scripts/host_dependencies.sh
 
 check_dependencies() {
   for dependency in python3 openssl docker flock; do
     if ! command -v "$dependency" >/dev/null 2>&1; then
-      echo "Falta $dependency. Instálalo antes de iniciar LESSSO." >&2
+      echo "Falta $dependency. Elige Instalación inicial para revisar los requisitos de tu sistema." >&2
       return 1
     fi
   done
   if ! docker compose version >/dev/null 2>&1; then
-    echo 'Falta Docker Compose v2 o posterior. Instala el complemento Docker Compose.' >&2
+    echo 'Falta Docker Compose v2 o posterior. Elige Instalación inicial.' >&2
     return 1
   fi
-  if ! docker info >/dev/null 2>&1; then
-    echo 'Docker no está disponible para este usuario. Inicia Docker y comprueba sus permisos con docker info.' >&2
+  if ! docker info --format '{{.ServerVersion}}' >/dev/null; then
+    echo 'Comprueba que Docker esté iniciado y que tu sesión tenga acceso. En una instalación nueva, consulta https://docs.docker.com/engine/install/linux-postinstall/.' >&2
     return 1
   fi
+}
+
+check_build_dependencies() {
+  local docker_platform
+  if ! docker buildx version >/dev/null 2>&1; then
+    echo 'Falta Docker Buildx. Elige Instalación inicial.' >&2
+    return 1
+  fi
+  docker_platform="$(docker info --format '{{.OSType}}/{{.Architecture}}')" || return 1
+  case "$docker_platform" in
+    linux/x86_64|linux/amd64|linux/aarch64|linux/arm64) ;;
+    *)
+      printf 'Docker usa %s. Las imágenes de LESSSO requieren contenedores Linux amd64 o arm64.\n' "$docker_platform" >&2
+      return 1
+      ;;
+  esac
 }
 
 # Lee solo una variable simple de .env; no ejecuta ni muestra sus secretos.
@@ -312,6 +329,10 @@ PY
 
 verify_installation() (
   require_installation || exit 1
+  if ! command -v python3 >/dev/null; then
+    echo 'Falta Python 3 para verificar HTTPS. Elige Instalación inicial.' >&2
+    exit 1
+  fi
   read_connection
   if ! browser_safe_port "$HTTPS_PORT" || ! python3 scripts/lan_address.py --validate "$HOST_BIND_IP"; then
     echo 'Revisa la IP y el puerto HTTPS en Configuración.' >&2
@@ -322,7 +343,7 @@ verify_installation() (
 )
 
 install_crm() (
-  check_dependencies && lock_project || exit 1
+  prepare_host_dependencies && check_dependencies && check_build_dependencies && lock_project || exit 1
   if [[ ! -e .env && ! -L .env ]]; then
     # Never generate new keys over a checkout whose containers still exist.
     local existing
@@ -348,6 +369,7 @@ PYENV
 
   ensure_runtime_db_password || exit 1
   read_connection
+  validate_connection || exit 1
   docker compose config --quiet || exit 1
   mkdir -p -m 750 c2-runtime || exit 1
 
@@ -401,7 +423,7 @@ PYENV
 
 start_crm() (
   local mode="$1"
-  check_dependencies && require_installation && lock_project || exit 1
+  check_dependencies && check_build_dependencies && require_installation && lock_project || exit 1
   ensure_runtime_db_password || exit 1
   read_connection
   local -a compose=(docker compose)

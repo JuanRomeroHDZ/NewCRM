@@ -13,7 +13,7 @@ from app.security.crypto import NOTE_ENC_PREFIX, decrypt_note
 def test_migration_graph_has_one_current_head():
     config = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
     scripts = ScriptDirectory.from_config(config)
-    assert scripts.get_current_head() == "20261118_0005"
+    assert scripts.get_current_head() == "20261119_0008"
     assert len(scripts.get_heads()) == 1
 
 

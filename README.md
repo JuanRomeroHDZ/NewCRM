@@ -13,7 +13,7 @@ El CRM funciona por sí solo y no inicia C2. C2 es un servicio opcional, indepen
 
 ## Instalación y arranque
 
-En Ubuntu o Debian necesitas Docker Engine con Compose v2, Python 3, OpenSSL y `flock` (util-linux). Usa tu cuenta habitual con acceso a Docker.
+Usa tu cuenta habitual con acceso a Docker. La instalación inicial muestra la distribución detectada. En Debian, Ubuntu y Parrot puede instalar con tu autorización Python 3, OpenSSL, util-linux y Docker con Compose v2 o posterior y Buildx. Si falta Docker y APT no ofrece esos paquetes, el menú puede añadir el repositorio oficial con una confirmación adicional. En Parrot usa la versión base de Debian. El motor debe ejecutar contenedores Linux en amd64 o arm64. [Instrucciones de Docker por distribución](https://docs.docker.com/engine/install/)
 
 1. Abre una terminal en la carpeta del proyecto y ejecuta `./lessso`.
 2. En un equipo nuevo, elige **Instalación inicial**. El menú crea `.env` a partir de la plantilla y prepara los certificados locales. Conserva `.env` y una copia segura de sus claves.

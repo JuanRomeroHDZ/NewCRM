@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import { BookOpen, ChevronLeft, ChevronRight, Minus, Plus } from 'lucide-react';
 import { getDocument, GlobalWorkerOptions, type PDFDocumentProxy, type RenderTask } from 'pdfjs-dist';
@@ -12,7 +12,7 @@ type PageLink = { destination?: Destination; url?: string; rect: [number, number
 type Layout = 'single' | 'spread' | 'grid' | 'continuous';
 const PAGES_PER_LAYOUT = { single: 1, spread: 2, grid: 4, continuous: 1 } as const;
 
-function PdfPage({ pdf, number, eager, zoom, navigate }: {
+const PdfPage = memo(function PdfPage({ pdf, number, eager, zoom, navigate }: {
   pdf: PDFDocumentProxy; number: number; eager: boolean; zoom: number; navigate: (destination: Destination) => void;
 }) {
   const frame = useRef<HTMLDivElement>(null);
@@ -102,7 +102,7 @@ function PdfPage({ pdf, number, eager, zoom, navigate }: {
       })}
     </div>
   );
-}
+});
 
 function PdfOutline({ items, navigate }: { items: OutlineItem[]; navigate: (destination: Destination) => void }) {
   return (
@@ -120,10 +120,13 @@ function PdfOutline({ items, navigate }: { items: OutlineItem[]; navigate: (dest
   );
 }
 
-export default function ReportPdfPreview({ blob, toolbar, controls }: { blob: Blob; toolbar: HTMLElement; controls: HTMLElement }) {
+export default function ReportPdfPreview({ blob, toolbar, controls, scrollArea }: {
+  blob: Blob; toolbar: HTMLElement; controls: HTMLElement; scrollArea: RefObject<HTMLDivElement>;
+}) {
   const pages = useRef<HTMLDivElement>(null);
   const [zoom, setZoom] = useState(100);
   const position = useRef(0);
+  const jumpScrollTop = useRef<number | null>(null);
   const [jump, setJump] = useState<{ number: number; offset: number } | null>(null);
   const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null);
   const [outline, setOutline] = useState<OutlineItem[]>([]);
@@ -138,10 +141,14 @@ export default function ReportPdfPreview({ blob, toolbar, controls }: { blob: Bl
     let disposed = false;
     let loading: ReturnType<typeof getDocument> | undefined;
     setPage(1);
+    setJump(null);
     setPdf(null);
     setError(false);
     setOutline([]);
     setNavigationError(false);
+    setShowOutline(false);
+    jumpScrollTop.current = null;
+    scrollArea.current?.scrollTo({ top: 0, left: 0, behavior: 'instant' });
     position.current += 1;
     void blob.arrayBuffer().then(async (bytes) => {
       if (disposed) return;
@@ -157,20 +164,62 @@ export default function ReportPdfPreview({ blob, toolbar, controls }: { blob: Bl
       position.current += 1;
       void loading?.destroy().catch(() => undefined);
     };
-  }, [blob]);
+  }, [blob, scrollArea]);
 
-  useEffect(() => {
-    if (!jump || !pages.current) return;
-    const pageElement = pages.current.querySelector(`[data-pdf-page="${jump.number}"]`);
-    const scroller = pages.current.closest('.overflow-y-auto');
+  useLayoutEffect(() => {
+    if (!jump || !pdf) return;
+    const pageElement = pages.current?.querySelector(`[data-pdf-page="${jump.number}"]`);
+    const scroller = scrollArea.current;
     if (pageElement && scroller) {
       const bounds = pageElement.getBoundingClientRect();
       scroller.scrollTo({ top: scroller.scrollTop + bounds.top - scroller.getBoundingClientRect().top
         + bounds.height * jump.offset - 12, behavior: 'instant' });
+      jumpScrollTop.current = scroller.scrollTop;
     }
-  }, [jump]);
+  }, [jump, pdf, scrollArea]);
+
+  useEffect(() => {
+    const scroller = scrollArea.current;
+    const pageList = pages.current;
+    if (!scroller || !pageList || layout !== 'continuous') return;
+
+    let frame = 0;
+    const syncPage = () => {
+      if (frame) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        // At the end of the document, a jump can be clamped by the viewport.
+        if (scroller.scrollTop === jumpScrollTop.current) return;
+        jumpScrollTop.current = null;
+        const { children } = pageList;
+        if (!children.length || scroller.scrollHeight <= scroller.clientHeight) return;
+        if (scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 1) {
+          setPage(children.length);
+          return;
+        }
+
+        // Pages follow document order. Find the first page that reaches the reading area.
+        const readingTop = scroller.getBoundingClientRect().top + 12;
+        let first = 0;
+        let last = children.length - 1;
+        while (first < last) {
+          const middle = Math.floor((first + last) / 2);
+          if (children[middle].getBoundingClientRect().bottom <= readingTop) first = middle + 1;
+          else last = middle;
+        }
+        setPage(first + 1);
+      });
+    };
+    scroller.addEventListener('scroll', syncPage, { passive: true });
+    return () => {
+      scroller.removeEventListener('scroll', syncPage);
+      cancelAnimationFrame(frame);
+    };
+  }, [layout, pdf, scrollArea]);
 
   const move = useCallback((number: number, offset = 0) => {
+    position.current += 1;
+    setNavigationError(false);
     setPage(number);
     setJump({ number, offset });
   }, []);
@@ -215,7 +264,10 @@ export default function ReportPdfPreview({ blob, toolbar, controls }: { blob: Bl
       {createPortal(
         <>
           <select aria-label="Disposición del PDF" className="report-form-control report-preview-select" value={layout}
-            onChange={(event) => setLayout(event.target.value as Layout)}>
+            onChange={(event) => {
+              setLayout(event.target.value as Layout);
+              move(page);
+            }}>
             <option value="single">Una página</option>
             <option value="spread">Dos páginas</option>
             <option value="grid">Cuatro páginas</option>
@@ -227,26 +279,29 @@ export default function ReportPdfPreview({ blob, toolbar, controls }: { blob: Bl
         </>,
         toolbar,
       )}
+      {/* [Navegación] Paginación y zoom permanecen visibles mientras se desplaza el PDF. */}
       {createPortal(
         <div className="flex flex-wrap items-center gap-2 border-b border-obsidian-border px-3 py-1.5">
+          <div className="flex flex-wrap items-center gap-1" role="group" aria-label="Páginas del PDF">
             <button type="button" className="ui-action-icon" disabled={start <= 1}
               onClick={() => move(Math.max(1, start - step))} aria-label="Página anterior"><ChevronLeft className="size-4" aria-hidden="true" /></button>
             <span className="text-xs tabular-nums text-obsidian-muted" role="status">
-              {layout === 'continuous' ? `${count} páginas` : `Página ${start}${shown > 1 ? `–${start + shown - 1}` : ''} de ${count}`}
+              {`Página ${start}${shown > 1 ? `–${start + shown - 1}` : ''} de ${count}`}
             </span>
             <button type="button" className="ui-action-icon" disabled={start + step > count}
               onClick={() => move(start + step)} aria-label="Página siguiente"><ChevronRight className="size-4" aria-hidden="true" /></button>
-            <div className="ml-auto flex items-center gap-1" role="group" aria-label="Zoom del PDF">
-              <button type="button" className="ui-action-icon" disabled={zoom <= 50}
-                onClick={() => setZoom(zoom - 25)} aria-label="Alejar"><Minus className="size-4" aria-hidden="true" /></button>
-              <button type="button" className="ui-action-secondary tabular-nums" title="Restablecer zoom"
-                aria-label={`Zoom ${zoom} %, restablecer a 100 %`} onClick={() => setZoom(100)}>{zoom} %</button>
-              <button type="button" className="ui-action-icon" disabled={zoom >= 200}
-                onClick={() => setZoom(zoom + 25)} aria-label="Acercar"><Plus className="size-4" aria-hidden="true" /></button>
-            </div>
-          </div>,
-          controls,
-        )}
+          </div>
+          <div className="ms-auto flex flex-wrap items-center gap-1" role="group" aria-label="Zoom del PDF">
+            <button type="button" className="ui-action-icon" disabled={zoom <= 50}
+              onClick={() => setZoom(zoom - 25)} aria-label="Alejar"><Minus className="size-4" aria-hidden="true" /></button>
+            <button type="button" className="ui-action-secondary tabular-nums" title="Restablecer zoom"
+              aria-label={`Zoom ${zoom} %, restablecer a 100 %`} onClick={() => setZoom(100)}>{zoom} %</button>
+            <button type="button" className="ui-action-icon" disabled={zoom >= 200}
+              onClick={() => setZoom(zoom + 25)} aria-label="Acercar"><Plus className="size-4" aria-hidden="true" /></button>
+          </div>
+        </div>,
+        controls,
+      )}
       {showOutline && <nav aria-label="Índice del PDF" className="max-h-64 overflow-auto border-b border-obsidian-border pb-2">
         <PdfOutline items={outline} navigate={navigate} />
       </nav>}
